@@ -1,0 +1,1587 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1910">Arithmetic coding</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Arithmetic coding</h1>
+<hr/>
+
+<p><strong>Arithmetic coding</strong> is a form of <a href="entropy_encoding" title="wikilink">entropy encoding</a> used in <a href="lossless_data_compression" title="wikilink">lossless data compression</a>. Normally, a string of characters such as the words "hello there" is represented using a fixed number of bits per character, as in the <a href="American_Standard_Code_for_Information_Interchange" title="wikilink">ASCII</a> code. When a string is converted to arithmetic encoding, frequently used characters will be stored with fewer bits and not-so-frequently occurring characters will be stored with more bits, resulting in fewer bits used in total. Arithmetic coding differs from other forms of entropy encoding, such as <a href="Huffman_coding" title="wikilink">Huffman coding</a>, in that rather than separating the input into component symbols and replacing each with a code, arithmetic coding encodes the entire message into a single number, a fraction <em>n</em> where (0.0 ≤ <em>n</em> 3 (in arithmetic coding the numbers are between 0 and 1). The next step is to encode this <a href="Ternary_numeral_system" title="wikilink">ternary</a> number using a fixed-point binary number of sufficient precision to recover it, such as 0.0010110010<sub>2</sub> — this is only 10 bits; 2 bits are saved in comparison with naïve block encoding. This is feasible for long sequences because there are efficient, in-place algorithms for converting the base of arbitrarily precise numbers.</p>
+
+<p>To decode the value, knowing the original string had length 6, one can simply convert back to base 3, round to 6 digits, and recover the string.</p>
+<h3 id="defining-a-model">Defining a model</h3>
+
+<p>In general, arithmetic coders can produce near-optimal output for any given set of symbols and probabilities (the optimal value is −log<em><sub>2</sub>P</em> bits for each symbol of probability <em>P</em>, see <a href="source_coding_theorem" title="wikilink">source coding theorem</a>). Compression algorithms that use arithmetic coding start by determining a <a href="model_(abstract)" title="wikilink">model</a> of the data – basically a prediction of what patterns will be found in the symbols of the message. The more accurate this prediction is, the closer to optimal the output will be.</p>
+
+<p><strong>Example</strong>: a simple, static model for describing the output of a particular monitoring instrument over time might be:</p>
+<ul>
+<li>60% chance of symbol NEUTRAL</li>
+<li>20% chance of symbol POSITIVE</li>
+<li>10% chance of symbol NEGATIVE</li>
+<li>10% chance of symbol END-OF-DATA. <em>(The presence of this symbol means that the stream will be 'internally terminated', as is fairly common in data compression; when this symbol appears in the data stream, the decoder will know that the entire stream has been decoded.)</em></li>
+</ul>
+
+<p>Models can also handle alphabets other than the simple four-symbol set chosen for this example. More sophisticated models are also possible: <em>higher-order</em> modelling changes its estimation of the current probability of a symbol based on the symbols that precede it (the <em>context</em>), so that in a model for English text, for example, the percentage chance of "u" would be much higher when it follows a "Q" or a "q". Models can even be <em><a href="adaptive_coding" title="wikilink">adaptive</a></em>, so that they continually change their prediction of the data based on what the stream actually contains. The decoder must have the same model as the encoder.</p>
+<h3 id="encoding-and-decoding-overview">Encoding and decoding: overview</h3>
+
+<p>In general, each step of the encoding process, except for the very last, is the same; the encoder has basically just three pieces of data to consider:</p>
+<ul>
+<li>The next symbol that needs to be encoded</li>
+<li>The current <a href="interval_(mathematics)" title="wikilink">interval</a> (at the very start of the encoding process, the interval is set to [0,1), but that will change)</li>
+<li>The probabilities the model assigns to each of the various symbols that are possible at this stage (as mentioned earlier, higher-order or adaptive models mean that these probabilities are not necessarily the same in each step.)</li>
+</ul>
+
+<p>The encoder divides the current interval into sub-intervals, each representing a fraction of the current interval proportional to the probability of that symbol in the current context. Whichever interval corresponds to the actual symbol that is next to be encoded becomes the interval used in the next step.</p>
+
+<p><strong>Example</strong>: for the four-symbol model above:</p>
+<ul>
+<li>the interval for NEUTRAL would be [0, 0.6)</li>
+<li>the interval for POSITIVE would be [0.6, 0.8)</li>
+<li>the interval for NEGATIVE would be [0.8, 0.9)</li>
+<li>the interval for END-OF-DATA would be [0.9, 1).</li>
+</ul>
+
+<p>When all symbols have been encoded, the resulting interval unambiguously identifies the sequence of symbols that produced it. Anyone who has the same final interval and model that is being used can reconstruct the symbol sequence that must have entered the encoder to result in that final interval.</p>
+
+<p>It is not necessary to transmit the final interval, however; it is only necessary to transmit <em>one fraction</em> that lies within that interval. In particular, it is only necessary to transmit enough digits (in whatever base) of the fraction so that all fractions that begin with those digits fall into the final interval; this will guarantee that the resulting code is a <a href="prefix_code" title="wikilink">prefix code</a>.</p>
+<h3 id="encoding-and-decoding-example">Encoding and decoding: example</h3>
+
+<p> Consider the process for decoding a message encoded with the given four-symbol model. The message is encoded in the fraction 0.538 (using decimal for clarity, instead of binary; also assuming that there are only as many digits as needed to decode the message.)</p>
+
+<p>The process starts with the same interval used by the encoder: [0,1), and using the same model, dividing it into the same four sub-intervals that the encoder must have. The fraction 0.538 falls into the sub-interval for NEUTRAL, [0, 0.6); this indicates that the first symbol the encoder read must have been NEUTRAL, so this is the first symbol of the message.</p>
+
+<p>Next divide the interval [0, 0.6) into sub-intervals:</p>
+<ul>
+<li>the interval for NEUTRAL would be [0, 0.36), <em>60% of [0, 0.6)</em>.</li>
+<li>the interval for POSITIVE would be [0.36, 0.48), <em>20% of [0, 0.6)</em>.</li>
+<li>the interval for NEGATIVE would be [0.48, 0.54), <em>10% of [0, 0.6)</em>.</li>
+<li>the interval for END-OF-DATA would be [0.54, 0.6), <em>10% of [0, 0.6)</em>.</li>
+</ul>
+
+<p>Since .538 is within the interval [0.48, 0.54), the second symbol of the message must have been NEGATIVE.</p>
+
+<p>Again divide our current interval into sub-intervals:</p>
+<ul>
+<li>the interval for NEUTRAL would be [0.48, 0.516).</li>
+<li>the interval for POSITIVE would be [0.516, 0.528).</li>
+<li>the interval for NEGATIVE would be [0.528, 0.534).</li>
+<li>the interval for END-OF-DATA would be [0.534, 0.540).</li>
+</ul>
+
+<p>Now 0.538 falls within the interval of the END-OF-DATA symbol; therefore, this must be the next symbol. Since it is also the internal termination symbol, it means the decoding is complete. If the stream is not internally terminated, there needs to be some other way to indicate where the stream stops. Otherwise, the decoding process could continue forever, mistakenly reading more symbols from the fraction than were in fact encoded into it.</p>
+<h3 id="sources-of-inefficiency">Sources of inefficiency</h3>
+
+<p>The message 0.538 in the previous example could have been encoded by the equally short fractions 0.534, 0.535, 0.536, 0.537 or 0.539. This suggests that the use of decimal instead of binary introduced some inefficiency. This is correct; the information content of a three-digit decimal is approximately 9.966 <a href="bit" title="wikilink">bits</a>; the same message could have been encoded in the binary fraction 0.10001010 (equivalent to 0.5390625 decimal) at a cost of only 8 bits. (The final zero must be specified in the binary fraction, or else the message would be ambiguous without external information such as compressed stream size.)</p>
+
+<p>This 8 bit output is larger than the information content, or <a href="information_entropy" title="wikilink">entropy</a> of the message, which is</p>
+
+<p>
+
+<math display="block" id="Arithmetic_coding:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+    <mo>-</mo>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>p</mi>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <msub>
+       <mi>log</mi>
+       <mn>2</mn>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mn>0.6</mn>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mn>0.1</mn>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mn>0.1</mn>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mn>7.381</mn>
+    <mtext>bits</mtext>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <minus></minus>
+      <sum></sum>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <log></log>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>p</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <minus></minus>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <log></log>
+         <cn type="integer">2</cn>
+        </apply>
+        <cn type="float">0.6</cn>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <log></log>
+        <cn type="integer">2</cn>
+       </apply>
+       <cn type="float">0.1</cn>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <log></log>
+        <cn type="integer">2</cn>
+       </apply>
+       <cn type="float">0.1</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <cn type="float">7.381</cn>
+      <mtext>bits</mtext>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sum-\log_{2}(p_{i})=-\log_{2}(0.6)-\log_{2}(0.1)-\log_{2}(0.1)=7.381\text{ bits}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>But an integer number of bits must be used, so an encoder for this message would use at least 8 bits, on average, which is achieved by the coding method, resulting in a message 8.4% larger than the minimum. This inefficiency of at most 1 bit becomes less significant as the message size grows.</p>
+
+<p>Moreover, the claimed symbol probabilities were [0.6, 0.2, 0.1, 0.1], but the actual frequencies in this example are [0.33, 0, 0.33, 0.33]. If the intervals are readjusted for these frequencies, the entropy of the message would be 4.755 bits and the same NEUTRAL NEGATIVE ENDOFDATA message could be encoded as intervals [0, 1/3); [1/9, 2/9); [5/27, 6/27); and a binary interval of [0.00101111011, 0.00111000111). This is also an example of how statistical coding methods like arithmetic encoding can produce an output message that is larger than the input message, especially if the probability model is off.</p>
+<h2 id="adaptive-arithmetic-coding">Adaptive arithmetic coding</h2>
+
+<p>One advantage of arithmetic coding over other similar methods of data compression is the convenience of adaptation. <em>Adaptation</em> is the changing of the frequency (or probability) tables while processing the data. The decoded data matches the original data as long as the frequency table in decoding is replaced in the same way and in the same step as in encoding. The synchronization is, usually, based on a combination of symbols occurring during the encoding and decoding process.</p>
+<h2 id="precision-and-renormalization">Precision and renormalization</h2>
+
+<p>The above explanations of arithmetic coding contain some simplification. In particular, they are written as if the encoder first calculated the fractions representing the endpoints of the interval in full, using infinite <a href="precision_(arithmetic)" title="wikilink">precision</a>, and only converted the fraction to its final form at the end of encoding. Rather than try to simulate infinite precision, most arithmetic coders instead operate at a fixed limit of precision which they know the decoder will be able to match, and round the calculated fractions to their nearest equivalents at that precision. An example shows how this would work if the model called for the interval [0,1) to be divided into thirds, and this was approximated with 8 bit precision. Note that since now the precision is known, so are the binary ranges we'll be able to use.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Symbol</p></th>
+<th style="text-align: left;">
+<p>Probability (expressed as fraction)</p></th>
+<th style="text-align: left;">
+<p>Interval reduced to eight-bit precision (as fractions)</p></th>
+<th style="text-align: left;">
+<p>Interval reduced to eight-bit precision (in binary)</p></th>
+<th style="text-align: left;">
+<p>Range in binary</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>A</p></td>
+<td style="text-align: left;">
+<p>1/3</p></td>
+<td style="text-align: left;">
+<p>[0, 85/256)</p></td>
+<td style="text-align: left;">
+<p>[0.00000000, 0.01010101)</p></td>
+<td style="text-align: left;">
+<p>00000000 – 01010100</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>B</p></td>
+<td style="text-align: left;">
+<p>1/3</p></td>
+<td style="text-align: left;">
+<p>[85/256, 171/256)</p></td>
+<td style="text-align: left;">
+<p>[0.01010101, 0.10101011)</p></td>
+<td style="text-align: left;">
+<p>01010101 – 10101010</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>C</p></td>
+<td style="text-align: left;">
+<p>1/3</p></td>
+<td style="text-align: left;">
+<p>[171/256, 1)</p></td>
+<td style="text-align: left;">
+<p>[0.10101011, 1.00000000)</p></td>
+<td style="text-align: left;">
+<p>10101011 – 11111111</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>A process called <em>renormalization</em> keeps the finite precision from becoming a limit on the total number of symbols that can be encoded. Whenever the range is reduced to the point where all values in the range share certain beginning digits, those digits are sent to the output. For however many digits of precision the computer <em>can</em> handle, it is now handling fewer than that, so the existing digits are shifted left, and at the right, new digits are added to expand the range as widely as possible. Note that this result occurs in two of the three cases from our previous example.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Symbol</p></th>
+<th style="text-align: left;">
+<p>Probability</p></th>
+<th style="text-align: left;">
+<p>Range</p></th>
+<th style="text-align: left;">
+<p>Digits that can be sent to output</p></th>
+<th style="text-align: left;">
+<p>Range after renormalization</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>A</p></td>
+<td style="text-align: left;">
+<p>1/3</p></td>
+<td style="text-align: left;">
+<p><strong>0</strong>0000000 – <strong>0</strong>1010100</p></td>
+<td style="text-align: left;">
+<p><strong>0</strong></p></td>
+<td style="text-align: left;">
+<p>0000000<strong>0</strong> – 1010100<strong>1</strong></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>B</p></td>
+<td style="text-align: left;">
+<p>1/3</p></td>
+<td style="text-align: left;">
+<p>01010101 – 10101010</p></td>
+<td style="text-align: left;">
+<p>None</p></td>
+<td style="text-align: left;">
+<p>01010101 – 10101010</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>C</p></td>
+<td style="text-align: left;">
+<p>1/3</p></td>
+<td style="text-align: left;">
+<p><strong>1</strong>0101011 – <strong>1</strong>1111111</p></td>
+<td style="text-align: left;">
+<p><strong>1</strong></p></td>
+<td style="text-align: left;">
+<p>0101011<strong>0</strong> – 1111111<strong>1</strong></p></td>
+</tr>
+</tbody>
+</table>
+<h2 id="arithmetic-coding-as-a-generalized-change-of-radix">Arithmetic coding as a generalized change of radix</h2>
+
+<p>Recall that in the case where the symbols had equal probabilities, arithmetic coding could be implemented by a simple change of base, or radix. In general, arithmetic (and range) coding may be interpreted as a <em>generalized</em> change of <a class="uri" href="radix" title="wikilink">radix</a>. For example, we may look at any sequence of symbols:</p>
+
+<p>
+
+<math display="block" id="Arithmetic_coding:1">
+ <semantics>
+  <mrow>
+   <mi>D</mi>
+   <mi>A</mi>
+   <mi>B</mi>
+   <mi>D</mi>
+   <mi>D</mi>
+   <mi>B</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>D</ci>
+    <ci>A</ci>
+    <ci>B</ci>
+    <ci>D</ci>
+    <ci>D</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   DABDDB
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>as a number in a certain base presuming that the involved symbols form an ordered set and each symbol in the ordered set denotes a sequential integer <em>A</em> = 0, <em>B</em> = 1, <em>C</em> = 2, <em>D</em> = 3, and so on. This results in the following frequencies and cumulative frequencies:</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Symbol</p></th>
+<th style="text-align: left;">
+<p>Frequency of occurrence</p></th>
+<th style="text-align: left;">
+<p>Cumulative frequency</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><em>A</em></p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><em>B</em></p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><em>D</em></p></td>
+<td style="text-align: left;">
+<p>3</p></td>
+<td style="text-align: left;">
+<p>3</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>The <em>cumulative frequency</em> is the total of all frequencies below it in a frequency distribution (a running total of frequencies).</p>
+
+<p>In a positional <a href="numeral_system" title="wikilink">numeral system</a> the radix, or base, is numerically equal to a number of different symbols used to express the number. For example, in the decimal system the number of symbols is 10, namely 0, 1, 2, 3, 4, 5, 6, 7, 8, and 9. The radix is used to express any finite integer in a presumed multiplier in polynomial form. For example, the number 457 is actually 4×10<sup>2</sup> + 5×10<sup>1</sup> + 7×10<sup>0</sup>, where base 10 is presumed but not shown explicitly.</p>
+
+<p>Initially, we will convert DABDDB into a base-6 numeral, because 6 is the length of the string. The string is first mapped into the digit string 301331, which then maps to an integer by the polynomial:</p>
+
+<p>
+
+<math display="block" id="Arithmetic_coding:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msup>
+      <mn>6</mn>
+      <mn>5</mn>
+     </msup>
+     <mo>×</mo>
+     <mn>3</mn>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mn>6</mn>
+      <mn>4</mn>
+     </msup>
+     <mo>×</mo>
+     <mn>0</mn>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mn>6</mn>
+      <mn>3</mn>
+     </msup>
+     <mo>×</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mn>6</mn>
+      <mn>2</mn>
+     </msup>
+     <mo>×</mo>
+     <mn>3</mn>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mn>6</mn>
+      <mn>1</mn>
+     </msup>
+     <mo>×</mo>
+     <mn>3</mn>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mn>6</mn>
+      <mn>0</mn>
+     </msup>
+     <mo>×</mo>
+     <mn>1</mn>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>23671</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">6</cn>
+       <cn type="integer">5</cn>
+      </apply>
+      <cn type="integer">3</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">6</cn>
+       <cn type="integer">4</cn>
+      </apply>
+      <cn type="integer">0</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">6</cn>
+       <cn type="integer">3</cn>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">6</cn>
+       <cn type="integer">2</cn>
+      </apply>
+      <cn type="integer">3</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">6</cn>
+       <cn type="integer">1</cn>
+      </apply>
+      <cn type="integer">3</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">6</cn>
+       <cn type="integer">0</cn>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <cn type="integer">23671</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   6^{5}\times 3+6^{4}\times 0+6^{3}\times 1+6^{2}\times 3+6^{1}\times 3+6^{0}%
+\times 1=23671
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The result 23671 has a length of 15 bits, which is not very close to the theoretical limit (the <a href="Entropy_(information_theory)" title="wikilink">entropy</a> of the message), which is approximately 9 bits.</p>
+
+<p>To encode a message with a length closer to the theoretical limit imposed by information theory we need to slightly generalize the classic formula for changing the radix. We will compute lower and upper bounds L and U and choose a number between them. For the computation of L we multiply each term in the above expression by the product of the frequencies of all previously occurred symbols:</p>
+
+<p>
+
+<math display="inline" id="Arithmetic_coding:3">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">L</mi>
+   <mo>=</mo>
+   <mi></mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>normal-L</ci>
+    <csymbol cd="latexml">absent</csymbol>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\mathrm{L}=
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>The difference between this polynomial and the polynomial above is that each term is multiplied by the product of the frequencies of all previously occurring symbols. More generally, L may be computed as:</p>
+
+<p>
+
+<math display="block" id="Arithmetic_coding:4">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">L</mi>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>n</mi>
+    </munderover>
+    <mrow>
+     <msup>
+      <mi>n</mi>
+      <mrow>
+       <mi>n</mi>
+       <mo>-</mo>
+       <mi>i</mi>
+      </mrow>
+     </msup>
+     <msub>
+      <mi>C</mi>
+      <mi>i</mi>
+     </msub>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+       <mrow>
+        <mi>k</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mrow>
+        <mi>i</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </munderover>
+      <msub>
+       <mi>f</mi>
+       <mi>k</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>normal-L</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>n</ci>
+       <apply>
+        <minus></minus>
+        <ci>n</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>C</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <csymbol cd="latexml">product</csymbol>
+         <apply>
+          <eq></eq>
+          <ci>k</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <minus></minus>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>f</ci>
+        <ci>k</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{L}=\sum_{i=1}^{n}n^{n-i}C_{i}{\prod_{k=1}^{i-1}f_{k}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Arithmetic_coding:5">
+ <semantics>
+  <msub>
+   <mi>C</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>C</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle C_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ are the cumulative frequencies and 
+
+<math display="inline" id="Arithmetic_coding:6">
+ <semantics>
+  <msub>
+   <mi>f</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>f</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle f_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ are the frequencies of occurrences. Indexes denote the position of the symbol in a message. In the special case where all frequencies 
+
+<math display="inline" id="Arithmetic_coding:7">
+ <semantics>
+  <msub>
+   <mi>f</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>f</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle f_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ are 1, this is the change-of-base formula.</p>
+
+<p>The upper bound U will be L plus the product of all frequencies; in this case U = L + (3 × 1 × 2 × 3 × 3 × 2) = 25002 + 108 = 25110. In general, U is given by:</p>
+
+<p>
+
+<math display="block" id="Arithmetic_coding:8">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">U</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi mathvariant="normal">L</mi>
+    <mo>+</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </munderover>
+     <msub>
+      <mi>f</mi>
+      <mi>k</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>normal-U</ci>
+    <apply>
+     <plus></plus>
+     <ci>normal-L</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <csymbol cd="latexml">product</csymbol>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>f</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{U}=\mathrm{L}+\prod_{k=1}^{n}f_{k}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Now we can choose any number from the interval [L, U) to represent the message; one convenient choice is the value with the longest possible trail of zeroes, 25100, since it allows us to achieve compression by representing the result as 251×10<sup>2</sup>. The zeroes can also be truncated, giving 251, if the length of the message is stored separately. Longer messages will tend to have longer trails of zeroes.</p>
+
+<p>To decode the integer 25100, the polynomial computation can be reversed as shown in the table below. At each stage the current symbol is identified, then the corresponding term is subtracted from the result.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Remainder</p></th>
+<th style="text-align: left;">
+<p>Identification</p></th>
+<th style="text-align: left;">
+<p>Identified symbol</p></th>
+<th style="text-align: left;">
+<p>Corrected remainder</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>25100</p></td>
+<td style="text-align: left;">
+<p>25100 / 6<sup>5</sup> = 3</p></td>
+<td style="text-align: left;">
+<p>D</p></td>
+<td style="text-align: left;">
+<p>(25100 − 6<sup>5</sup> × 3) / 3 = 590</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>590</p></td>
+<td style="text-align: left;">
+<p>590 / 6<sup>4</sup> = 0</p></td>
+<td style="text-align: left;">
+<p>A</p></td>
+<td style="text-align: left;">
+<p>(590 − 6<sup>4</sup> × 0) / 1 = 590</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>590</p></td>
+<td style="text-align: left;">
+<p>590 / 6<sup>3</sup> = 2</p></td>
+<td style="text-align: left;">
+<p>B</p></td>
+<td style="text-align: left;">
+<p>(590 − 6<sup>3</sup> × 1) / 2 = 187</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>187</p></td>
+<td style="text-align: left;">
+<p>187 / 6<sup>2</sup> = 5</p></td>
+<td style="text-align: left;">
+<p>D</p></td>
+<td style="text-align: left;">
+<p>(187 − 6<sup>2</sup> × 3) / 3 = 26</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>26</p></td>
+<td style="text-align: left;">
+<p>26 / 6<sup>1</sup> = 4</p></td>
+<td style="text-align: left;">
+<p>D</p></td>
+<td style="text-align: left;">
+<p>(26 − 6<sup>1</sup> × 3) / 3 = 2</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>2 / 6<sup>0</sup> = 2</p></td>
+<td style="text-align: left;">
+<p>B</p></td>
+<td style="text-align: left;"></td>
+</tr>
+</tbody>
+</table>
+
+<p>During decoding we take the floor after dividing by the corresponding power of 6. The result is then matched against the cumulative intervals and the appropriate symbol is selected from look up table. When the symbol is identified the result is corrected. The process is continued for the known length of the message or while the remaining result is positive. The only difference compared to the classical change-of-base is that there may be a range of values associated with each symbol. In this example, A is always 0, B is either 1 or 2, and D is any of 3, 4, 5. This is in exact accordance with our intervals that are determined by the frequencies. When all intervals are equal to 1 we have a special case of the classic base change.</p>
+<h3 id="theoretical-limit-of-compressed-message">Theoretical limit of compressed message</h3>
+
+<p>The lower bound L never exceeds <em>n</em><sup><em>n</em></sup>, where <em>n</em> is the size of the message, and so can be represented in 
+
+<math display="inline" id="Arithmetic_coding:9">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>log</mi>
+     <mn>2</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msup>
+      <mi>n</mi>
+      <mi>n</mi>
+     </msup>
+     <mo rspace="5.3pt" stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <mi>n</mi>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>n</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <log></log>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\log_{2}(n^{n})\;=\;n\log_{2}(n)
+  </annotation>
+ </semantics>
+</math>
+
+ bits. After the computation of the upper bound <em>U</em> and the reduction of the message by selecting a number from the interval [<em>L</em>, <em>U</em>) with the longest trail of zeros we can presume that this length can be reduced by 
+
+<math display="inline" id="Arithmetic_coding:10">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>log</mi>
+    <mn>2</mn>
+   </msub>
+   <mrow>
+    <mo>(</mo>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∏</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </msubsup>
+     <msub>
+      <mi>f</mi>
+      <mi>k</mi>
+     </msub>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <log></log>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\log_{2}\left(\prod_{k=1}^{n}f_{k}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ bits. Since each frequency in a product occurs exactly same number of times as the value of this frequency, we can use the size of the alphabet <em>A</em> for the computation of the product</p>
+
+<p>
+
+<math display="block" id="Arithmetic_coding:11">
+ <semantics>
+  <mrow>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>n</mi>
+    </munderover>
+    <msub>
+     <mi>f</mi>
+     <mi>k</mi>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>A</mi>
+    </munderover>
+    <msubsup>
+     <mi>f</mi>
+     <mi>k</mi>
+     <msub>
+      <mi>f</mi>
+      <mi>k</mi>
+     </msub>
+    </msubsup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>A</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>f</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>f</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \prod_{k=1}^{n}f_{k}=\prod_{k=1}^{A}f_{k}^{f_{k}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Applying log<sub>2</sub> for the estimated number of bits in the message, the final message (not counting a logarithmic overhead for the message length and frequency tables) will match the number of bits given by <a href="entropy_(information_theory)" title="wikilink">entropy</a>, which for long messages is very close to optimal:</p>
+
+<p>
+
+<math display="block" id="Arithmetic_coding:12">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>n</mi>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>-</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>A</mi>
+    </munderover>
+    <mrow>
+     <msub>
+      <mi>f</mi>
+      <mi>i</mi>
+     </msub>
+     <mrow>
+      <msub>
+       <mi>log</mi>
+       <mn>2</mn>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>f</mi>
+        <mi>i</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <log></log>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>A</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>f</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <log></log>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>f</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n\log_{2}(n)-\sum_{i=1}^{A}f_{i}\log_{2}(f_{i})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="p-adic-interpretation-of-arithmetic-coding-algorithm">p-adic interpretation of arithmetic coding algorithm</h2>
+
+<p>Arithmetic coding being expressed in terms of real numbers looks very natural and is easy to understand. It is nothing but a sequence of semi intervals each lies inside the previous one. But here is a problem – one has to use infinite precision real numbers to implement this algorithm and there is no such a thing like effective infinite precision real arithmetic. This problem was always considered as a technical one. Solution is simple - just use integers instead. There is a canonical implementation, first written in C [Witten], which was later reproduced in other languages, but no analysis of what happens to the algorithm after moving it from the real numbers to integer numbers was published. In fact, the integer variant of the algorithm looks very artificial and contains some magic rules: E1, E2 and E3. Though these rules work quite well the question remains – do they have natural mathematical explanation?</p>
+
+<p>The <a href="p-adic_number" title="wikilink">p-adic numbers</a> provides clear interpretation of the algorithm. In fact, all the intermediate data and the result can be seen as p-adic integers with p=2. The modified algorithm operates on p-adic semi intervals in the same way, as the original works with real semi intervals. For example the magic rules E1, E2 mean that the current p-adic semi interval lies completely in a p-adic ball. In this case the p-adic ball can be pushed out and p-adic semi interval rescaled. From this point of view Huffman algorithm is just a specific variant of arithmetic coding when semi intervals are always p-adic balls.</p>
+
+<p>The algorithm can be extended to arbitrary p. All E1, E2, and E3 rules work in this case too. More information on p-adic variant of arithmetic coding can be found in [Rodionov, Volkov 2007, 2010].</p>
+<h2 id="connections-with-other-compression-methods">Connections with other compression methods</h2>
+<h3 id="huffman-coding">Huffman coding</h3>
+
+<p>There is great similarity between arithmetic coding and Huffman coding – in fact, it has been shown that Huffman is just a specialized case of arithmetic coding – but because arithmetic coding translates the entire message into one number represented in <a href="radix" title="wikilink">base</a> <em>b</em>, rather than translating each symbol of the message into a series of digits in base <em>b</em>, it will sometimes approach optimal <a href="entropy_encoding" title="wikilink">entropy encoding</a> much more closely than Huffman can.</p>
+
+<p>In fact, a Huffman code corresponds closely to an arithmetic code where each of the frequencies is rounded to a nearby power of ½ — for this reason, Huffman deals relatively poorly with distributions where symbols have frequencies far from a power of ½, such as 0.75 or 0.375. This includes most distributions where there are either a small number of symbols (such as just the bits 0 and 1) or where one or two symbols dominate the rest.</p>
+
+<p>For an alphabet {a, b, c} with equal probabilities of 1/3, Huffman coding may produce the following code:</p>
+<ul>
+<li>a → <code>0</code>: 50%</li>
+<li>b → <code>10</code>: 25%</li>
+<li>c → <code>11</code>: 25%</li>
+</ul>
+
+<p>This code has an expected (2 + 2 + 1)/3 ≈ 1.667 bits per symbol for Huffman coding, an inefficiency of 5 percent compared to log<sub>2</sub>3 ≈ 1.585 bits per symbol for arithmetic coding.</p>
+
+<p>For an alphabet {0, 1} with probabilities 0.625 and 0.375, Huffman encoding treats them as though they had 0.5 probability each, assigning 1 bit to each value, which does not achieve any compression over naive block encoding. Arithmetic coding approaches the optimal compression ratio of</p>
+
+<p>
+
+<math display="block" id="Arithmetic_coding:13">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>-</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mo>-</mo>
+    <mn>0.625</mn>
+    <msub>
+     <mi>log</mi>
+     <mn>2</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>0.625</mn>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>+</mo>
+    <mo>-</mo>
+    <mn>0.375</mn>
+    <msub>
+     <mi>log</mi>
+     <mn>2</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>0.375</mn>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mo>≈</mo>
+   <mn>4.6</mn>
+   <mo lspace="0pt" rspace="3.5pt">%</mo>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <cn type="integer">1</cn>
+    <minus></minus>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <minus></minus>
+     <cn type="float">0.625</cn>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <cn type="integer">2</cn>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <cn type="float">0.625</cn>
+      <ci>normal-)</ci>
+     </cerror>
+     <plus></plus>
+     <minus></minus>
+     <cn type="float">0.375</cn>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <cn type="integer">2</cn>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <cn type="float">0.375</cn>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+    <approx></approx>
+    <cn type="float">4.6</cn>
+    <csymbol cd="latexml">percent</csymbol>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1-[-0.625\log_{2}(0.625)+-0.375\log_{2}(0.375)]\approx 4.6\%.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>When the symbol 0 has a high probability of 0.95, the difference is much greater:</p>
+
+<p>
+
+<math display="block" id="Arithmetic_coding:14">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>-</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mo>-</mo>
+    <mn>0.95</mn>
+    <msub>
+     <mi>log</mi>
+     <mn>2</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>0.95</mn>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>+</mo>
+    <mo>-</mo>
+    <mn>0.05</mn>
+    <msub>
+     <mi>log</mi>
+     <mn>2</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>0.05</mn>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mo>≈</mo>
+   <mn>71.4</mn>
+   <mo lspace="0pt" rspace="3.5pt">%</mo>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <cn type="integer">1</cn>
+    <minus></minus>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <minus></minus>
+     <cn type="float">0.95</cn>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <cn type="integer">2</cn>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <cn type="float">0.95</cn>
+      <ci>normal-)</ci>
+     </cerror>
+     <plus></plus>
+     <minus></minus>
+     <cn type="float">0.05</cn>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <cn type="integer">2</cn>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <cn type="float">0.05</cn>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+    <approx></approx>
+    <cn type="float">71.4</cn>
+    <csymbol cd="latexml">percent</csymbol>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1-[-0.95\log_{2}(0.95)+-0.05\log_{2}(0.05)]\approx 71.4\%.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>One simple way to address this weakness is to concatenate symbols to form a new alphabet in which each symbol represents a sequence of symbols in the original alphabet. In the above example, grouping sequences of three symbols before encoding would produce new "super-symbols" with the following frequencies:</p>
+<ul>
+<li><code>000</code>: 85.7%</li>
+<li><code>001</code>, <code>010</code>, <code>100</code>: 4.5% each</li>
+<li><code>011</code>, <code>101</code>, <code>110</code>: 0.24% each</li>
+<li><code>111</code>: 0.0125%</li>
+</ul>
+
+<p>With this grouping, Huffman coding averages 1.3 bits for every three symbols, or 0.433 bits per symbol, compared with one bit per symbol in the original encoding.</p>
+<h2 id="us-patents">US patents</h2>
+
+<p>A variety of specific techniques for arithmetic coding have historically been covered by US <a href="patent" title="wikilink">patents</a>, although various well-known methods have since passed into the public domain as the patents have expired. Techniques covered by patents may be essential for implementing the algorithms for arithmetic coding that are specified in some formal international standards. When this is the case, such patents are generally available for licensing under what is called "reasonable and non-discriminatory" (<a href="Reasonable_and_Non_Discriminatory_Licensing" title="wikilink">RAND</a>) licensing terms (at least as a matter of standards-committee policy). In some well-known instances, (including some involving IBM patents that have since expired), such licenses were available for free, and in other instances, licensing fees have been required. The availability of licenses under RAND terms does not necessarily satisfy everyone who might want to use the technology, as what may seem "reasonable" for a company preparing a proprietary software product may seem much less reasonable for a <a href="free_software" title="wikilink">free software</a> or <a href="open_source" title="wikilink">open source</a> project.</p>
+
+<p>At least one significant compression software program, <a class="uri" href="bzip2" title="wikilink">bzip2</a>, deliberately discontinued the use of arithmetic coding in favor of Huffman coding due to the perceived patent situation at the time. Also, encoders and decoders of the <a class="uri" href="JPEG" title="wikilink">JPEG</a> file format, which has options for both Huffman encoding and arithmetic coding, typically only support the Huffman encoding option, which was originally because of patent concerns; the result is that nearly all JPEG images in use today use Huffman encoding<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> although JPEG's arithmetic coding patents<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> have expired due to the age of the JPEG standard (the design of which was approximately completed by 1990).<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> There are some archivers like PackJPG, that can losslessly convert Huffman encoded files to ones with arithmetic coding (with custom file name .pjg), showing up to 25% size saving.</p>
+
+<p>Some US patents relating to arithmetic coding are listed below.</p>
+<ul>
+<li>
+
+<p>— (IBM) Filed 4 March 1977, Granted 24 October 1978 (Now expired)</p></li>
+<li>
+
+<p>— (IBM) Granted 25 August 1981 (Now expired)</p></li>
+<li>
+
+<p>— (IBM) Granted 21 August 1984 (Now expired)</p></li>
+<li>
+
+<p>— (IBM) Granted 4 February 1986 (Now expired)</p></li>
+<li>
+
+<p>— (IBM) Filed 15 September 1986, granted 2 January 1990 (Now expired)</p></li>
+<li>
+
+<p>— (IBM) Filed 18 November 1988, granted 27 February 1990 (Now expired)</p></li>
+<li>
+
+<p>— (IBM) Filed 3 May 1988, granted 12 June 1990 (Now expired)</p></li>
+<li>
+
+<p>— (IBM) Filed 20 July 1988, granted 19 June 1990 (Now expired)</p></li>
+<li>
+
+<p>— Filed 19 June 1989, granted 29 January 1991 (Now expired)</p></li>
+<li>
+
+<p>— (IBM) Filed 5 January 1990, granted 24 March 1992 (Now expired)</p></li>
+<li>
+
+<p>— (Ricoh) Filed 17 August 1992, granted 21 December 1993 (Now expired)</p></li>
+</ul>
+
+<p>Note: This list is not exhaustive. See the following link for a list of more patents.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> The <a href="Dirac_(codec)" title="wikilink">Dirac codec</a> uses arithmetic coding and is not patent pending.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+
+<p>Patents on arithmetic coding may exist in other jurisdictions, see <a href="software_patent" title="wikilink">software patents</a> for a discussion of the patentability of software around the world.</p>
+<h2 id="benchmarks-and-other-technical-characteristics">Benchmarks and other technical characteristics</h2>
+
+<p>Every programmatic implementation of arithmetic encoding has a different compression ratio and performance. While compression ratios vary only a little (usually under 1%),<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> the code execution time can vary by a factor of 10. Choosing the right encoder from a list of publicly available encoders is not a simple task because performance and compression ratio depend also on the type of data, particularly on the size of the alphabet (number of different symbols). One of two particular encoders may have better performance for small alphabets while the other may show better performance for large alphabets. Most encoders have limitations on the size of the alphabet and many of them are specialised for alphabets of exactly two symbols (0 and 1).</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Data_compression" title="wikilink">Data compression</a></li>
+</ul>
+<h2 id="notes">Notes</h2>
+<references>
+</references>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+<ul>
+<li>Rodionov Anatoly, Volkov Sergey (2010) “p-adic arithmetic coding” Contemporary Mathematics Volume 508, 2010 Contemporary Mathematics</li>
+<li>Rodionov Anatoly, Volkov Sergey (2007) ” p-adic arithmetic coding”, <a class="uri" href="http://arxiv.org/abs//0704.0834v1">http://arxiv.org/abs//0704.0834v1</a></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li></li>
+<li><a href="http://www.gtoal.com/wordgames/documents/arithmetic-encoding.mai">Newsgroup posting</a> with a short worked example of arithmetic encoding (integer-only).</li>
+<li><a href="http://planetmath.org/encyclopedia/ArithmeticEncoding.html">PlanetMath article on arithmetic coding</a></li>
+<li><a href="http://ezcodesample.com/reanatomy.html">Anatomy of Range Encoder</a> The article explains both range and arithmetic coding. It has also code samples for 3 different arithmetic encoders along with performance comparison.</li>
+<li><a href="http://hpl.hp.com/techreports/2004/HPL-2004-76.pdf">Introduction to Arithmetic Coding</a>. 60 pages.</li>
+<li>Eric Bodden, Malte Clasen and Joachim Kneis: <a href="http://www.sable.mcgill.ca/publications/techreports/#report2007-5">Arithmetic Coding revealed</a>. Technical Report 2007-5, Sable Research Group, McGill University.</li>
+<li><a href="http://dogma.net/markn/articles/arith/part1.htm">Arithmetic Coding + Statistical Modeling = Data Compression</a> by Mark Nelson.</li>
+<li><a href="http://marknelson.us/2014/10/19/data-compression-with-arithmetic-coding/">Data Compression With Arithmetic Coding</a> by Mark Nelson (2014)</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Lossless_compression_algorithms" title="wikilink">Category:Lossless compression algorithms</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="http://www.faqs.org/faqs/compression-faq/part1/section-17.html">1</a> What is JPEG? comp.compression Frequently Asked Questions (part 1/3)<a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><em>JPEG Still Image Data Compression Standard</em>, W. B. Pennebaker and J. L. Mitchell, Kluwer Academic Press, 1992. ISBN 0-442-01272-1<a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="http://www.faqs.org/faqs/compression-faq/part1/">2</a> comp.compression Frequently Asked Questions (part 1/3)<a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="http://lwn.net/Articles/272520/">3</a> Dirac video codec 1.0 released<a href="#fnref5">↩</a></li>
+<li id="fn6">For instance,  discuss versions of arithmetic coding based on real-number ranges, integer approximations to those ranges, and an even more restricted type of approximation that they call binary quasi-arithmetic coding. They state that the difference between real and integer versions is negligible, prove that the compression loss for their quasi-arithmetic method can be made arbitrarily small, and bound the compression loss incurred by one of their approximations as less than 0.06%. See: .<a href="#fnref6">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

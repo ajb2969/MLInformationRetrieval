@@ -1,0 +1,199 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1961">Bzip2</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Bzip2</h1>
+<hr/>
+
+<p><strong>bzip2</strong> is a <a href="free_and_open-source" title="wikilink">free and open-source</a> <a href="computer_file" title="wikilink">file</a> <a href="compression_program" title="wikilink">compression program</a> that uses the <a href="Burrows–Wheeler_transform" title="wikilink">Burrows–Wheeler algorithm</a>. It only compresses single files and is not a <a href="file_archiver" title="wikilink">file archiver</a>. It is developed and maintained by <a href="Julian_Seward" title="wikilink">Julian Seward</a>. Seward made the first public release of bzip2, version 0.15, in July 1996. The compressor's stability and popularity grew over the next several years, and Seward released version 1.0 in late 2000.</p>
+<h2 id="compression-efficiency">Compression efficiency</h2>
+
+<p>bzip2 compresses most files more effectively than the older <a href="Lempel–Ziv–Welch" title="wikilink">LZW</a> (<a href="Compress" title="wikilink">.Z</a>) and <a href="DEFLATE" title="wikilink">Deflate</a> (<a href="ZIP_(file_format)" title="wikilink">.zip</a> and <a href="gzip" title="wikilink">.gz</a>) compression algorithms, but is considerably slower. <a href="Lempel–Ziv–Markov_chain_algorithm" title="wikilink">LZMA</a> is generally more space-efficient than bzip2 at the expense of slower compression speed, while having much faster decompression.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p>bzip2 compresses data in blocks of size between 100 and 900 <a href="Kilobyte" title="wikilink">kB</a> and uses the <a href="Burrows–Wheeler_transform" title="wikilink">Burrows–Wheeler transform</a> to convert frequently-recurring character sequences into strings of identical letters. It then applies <a href="move-to-front_transform" title="wikilink">move-to-front transform</a> and <a href="Huffman_coding" title="wikilink">Huffman coding</a>. bzip2's ancestor <strong>bzip</strong> used <a href="arithmetic_coding" title="wikilink">arithmetic coding</a> instead of Huffman. The change was made because of a <a href="software_patent" title="wikilink">software patent</a> restriction.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+
+<p>bzip2 performance is asymmetric, as decompression is relatively fast. Motivated by the large CPU time required for compression, a modified version was created in 2003 called pbzip2 that supported <a href="Thread_(computer_science)" title="wikilink">multi-threading</a>, giving almost linear speed improvements on multi-CPU and multi-core computers.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> , this functionality has not been incorporated into the main project.</p>
+
+<p>Like gzip, bzip2 is only a data compressor. It is not an archiver like <a href="tar_(file_format)" title="wikilink">tar</a> or ZIP; the program itself has no facilities for multiple files, encryption or archive-splitting, but, in the <a href="Unix_philosophy" title="wikilink">UNIX tradition</a>, relies instead on separate external utilities such as tar and <a href="GNU_Privacy_Guard" title="wikilink">GnuPG</a> for these tasks.</p>
+<h2 id="compression-stack">Compression stack</h2>
+
+<p>Bzip2 uses several layers of compression techniques stacked on top of each other, which occur in the following order during compression and the reverse order during decompression:</p>
+<ol>
+<li><a href="Run-length_encoding" title="wikilink">Run-length encoding</a> (RLE) of initial data</li>
+<li><a href="Burrows–Wheeler_transform" title="wikilink">Burrows–Wheeler transform</a> (BWT) or block sorting</li>
+<li><a href="Move_to_front" title="wikilink">Move to front</a> (MTF) transform</li>
+<li>Run-length encoding (RLE) of MTF result</li>
+<li><a href="Huffman_coding" title="wikilink">Huffman coding</a></li>
+<li>Selection between multiple Huffman tables</li>
+<li>Unary <a href="base_1" title="wikilink">base 1</a> encoding of Huffman table selection</li>
+<li><a href="Delta_encoding" title="wikilink">Delta encoding</a> (Δ) of Huffman code bit-lengths</li>
+<li>Sparse <a href="bit_array" title="wikilink">bit array</a> showing which symbols are used</li>
+</ol>
+<h3 id="initial-run-length-encoding">Initial run-length encoding</h3>
+
+<p>Any sequence of 4 to 255 consecutive duplicate symbols is replaced by the first four symbols and a repeat length between 0 and 251. Thus the sequence "<code>AAAAAAABBBBCCCD</code>" is replaced with "<code>AAAA\3BBBB\0CCCD</code>", where "<code>\3</code>" and "<code>\0</code>" represent byte values 3 and 0 respectively. Runs of symbols are always transformed after four consecutive symbols, even if the run-length is set to zero, to keep the transformation reversible.</p>
+
+<p>In the worst case, it can cause an expansion of 1.25 and best case a reduction to <a class="uri" href="http://www.bzip.org/1.0.3/html/misc.html">http://www.bzip.org/1.0.3/html/misc.html</a></p>
+<h3 id="burrowswheeler-transform">Burrows–Wheeler transform</h3>
+
+<p>This is the reversible block-sort that is at the core of bzip2. The block is entirely self-contained, with input and output buffers remaining the same size—in bzip2, the operating limit for this stage is  For the block-sort, a (notional) matrix is created in which row 
+
+<math display="inline" id="Bzip2:0">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+ contains the whole of the buffer, rotated to start from the 
+
+<math display="inline" id="Bzip2:1">
+ <semantics>
+  <msup>
+   <mi>i</mi>
+   <mi>th</mi>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>i</ci>
+    <ci>th</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i^{\mathrm{th}}
+  </annotation>
+ </semantics>
+</math>
+
+ symbol. Following rotation, the rows of the matrix are sorted into alphabetic (numerical) order. A 24-bit pointer is stored marking the <em>starting position</em> for when the block is untransformed. In practice, it is not necessary to construct the full matrix; rather, the sort is performed using pointers for each position in the buffer. The output buffer is the last column of the matrix; this contains the whole buffer, but reordered so that it is likely to contain large runs of identical symbols.</p>
+<h3 id="move-to-front-transform">Move to front transform</h3>
+
+<p>Again, this transform does not alter the size of the processed block. Each of the symbols in use in the document is placed in an array. When a symbol is processed, it is replaced by its location (index) in the array and that symbol is shuffled to the front of the array. The effect is that immediately recurring symbols are replaced by zero symbols (long runs of <em>any</em> arbitrary symbol thus become runs of zero symbols), while other symbols are remapped according to their local frequency.</p>
+
+<p>A lot of "natural" data contains identical symbols that recur within a limited range (text is a good example). As the MTF transform assigns low values to symbols that reappear frequently, this results in a data stream which contains a lot of symbols in the low integer range, many of them being identical (different recurring input symbols can actually map to the same output symbol). Such data can be very efficiently encoded by any legacy compression method.</p>
+<h3 id="run-length-encoding-of-mtf-result">Run-length encoding of MTF result</h3>
+
+<p>Long strings of repeated symbols in the output (which are zeros by this time due to the move-to-front transform) are replaced by a combination of the symbol and a sequence of two special codes, RUNA and RUNB, which represent the run-length as a binary number greater than one (1). The sequence implicity starts with the first used symbol, so actual zeros are never encoded in the output. (This step in fact is done at the same time as MTF is; whenever MTF would produce zero, it instead increases a counter to then encode with RUNA and RUNB.)</p>
+
+<p>The sequence <code>0,0,0,0,0,1</code> would be represented as <code>RUNA,RUNB,1</code>; <code>RUNA</code> and <code>RUNB</code> representing the value 5 in decimal. The run-length code is terminated by reaching another normal symbol. This RLE process is more flexible than the initial RLE step, as it is able to encode arbitrarily long integers (in practice, this is usually limited by the block size, so that this step does not encode a run of more than 900000 bytes). The run-length is encoded in this fashion: assigning place values of 1 to the first bit, 2 to the second, 4 to the third, etc. in the sequence, multiply each place value in a RUNB spot by 2, and add all the resulting place values (for RUNA and RUNB values alike) together. This is similar to base-2 <a href="bijective_numeration" title="wikilink">bijective numeration</a>. Thus, the sequence <code>RUNA,RUNB</code> results in the value (1 + 2 × 2) = 5. As a more complicated example:</p>
+
+<p><code>RUNA RUNB RUNA RUNA RUNB (ABAAB)</code><br/>
+<code>   1    2    4    8   16</code><br/>
+<code>   1    4    4    8   32 = 49</code></p>
+<h3 id="huffman-coding">Huffman coding</h3>
+
+<p>This process replaces fixed length symbols in the range 0–258 with variable length codes based on the frequency of use. More frequently used codes end up shorter (2–3 bits) whilst rare codes can be allocated up to 20 bits. The codes are selected carefully so that no sequence of bits can be confused for a different code.</p>
+
+<p>The end-of-stream code is particularly interesting. If there are <em>n</em> different bytes (symbols) used in the uncompressed data, then the Huffman code will consist of two RLE codes (RUNA and RUNB), <em>n</em> − 1 symbol codes and one end-of-stream code. Because of the combined result of the MTF and RLE encodings in the previous two steps, there is never any need to explicitly reference the first symbol in the MTF table (would be zero in the ordinary MTF), thus saving one symbol for the end-of-stream marker (and explaining why only <em>n</em> − 1 symbols are coded in the Huffman tree). In the extreme case where only one symbol is used in the uncompressed data, there will be no symbol codes at all in the Huffman tree, and the entire block will consist of RUNA and RUNB (implicitly repeating the single byte) and an end-of-stream marker with value 2.</p>
+<dl>
+<dd>0: RUNA<br/>
+1: RUNB<br/>
+2–257: byte values 0–255<br/>
+258: end of stream, finish processing. (could be as low as 2).
+</dd>
+</dl>
+<h3 id="multiple-huffman-tables">Multiple Huffman tables</h3>
+
+<p>Several identically-sized Huffman tables can be used with a block if the gain from using them is greater than the cost of including the extra table. At least two (2) and up to six (6) tables can be present, with the most appropriate table being reselected before every 50 symbols processed. This has the advantage of having very responsive Huffman dynamics without having to continuously supply new tables, as would be required in <a class="uri" href="DEFLATE" title="wikilink">DEFLATE</a>. Run-length encoding in the previous step is designed to take care of codes that have an inverse probability of use higher than the shortest code Huffman code in use.</p>
+<h3 id="unary-encoding-of-huffman-table-selection">Unary encoding of Huffman table selection</h3>
+
+<p>If multiple Huffman tables are in use, the selection of each table (numbered 0..5) is done from a list by a zero-terminated bit run between one (1) and six (6) bits in length. The selection is into a <a href="Move-to-front_transform" title="wikilink">MTF</a> list of the tables. Using this feature results in a maximum expansion of around 1.015, but generally less. This expansion is likely to be greatly over-shadowed by the advantage of selecting more appropriate Huffman tables and the common-case of continuing to use the same Huffman table is represented as a single bit. Rather than unary encoding, effectively this is an extreme form of a Huffman tree where each code has half the probability of the previous code.</p>
+<h3 id="delta-encoding">Delta encoding</h3>
+
+<p>Huffman code bit-lengths are required to reconstruct each of the used <a href="canonical_Huffman_code" title="wikilink">canonical Huffman tables</a>. Each bit-length is stored as an encoded difference against the previous code bit-length. A zero-bit (0) means that the previous bit-length should be duplicated for the current code, whilst a one-bit (1) means that a further bit should be read and the bit-length incremented or decremented based on that value.</p>
+
+<p>In the common case a single bit is used per symbol per table and the worst case—going from length one (1) to length twenty (20)—would require approximately 37 bits. As a result of the earlier MTF encoding, code lengths would start at 2–3 bits long (very frequently used codes) and gradually increase, meaning that the delta format is fairly efficient—requiring around 300 bits (38 bytes) per full Huffman table.</p>
+<h3 id="sparse-bit-array">Sparse bit array</h3>
+
+<p>A bitmap is used to show which symbols are used inside the block and should be included in the Huffman trees. Binary data is likely to use all 256 symbols representable by a byte, whereas textual data may only use a small subset of available values, perhaps covering the <a class="uri" href="ASCII" title="wikilink">ASCII</a> range between 32 and 126. Storing 256 zero bits would be inefficient if they were mostly unused. A <em>sparse</em> method is used: the 256 symbols are divided up into 16 ranges and only if symbols are used within that block is a 16-bit array included. The presence of each of these 16 ranges is indicated by an additional 16-bit bit array at the front.</p>
+
+<p>The total bitmap uses between 32 and 272 bits of storage (4–34 bytes). For contrast, the <a class="uri" href="DEFLATE" title="wikilink">DEFLATE</a> algorithm would show the absence of symbols by encoding the symbols as having a (zero) bit-length with Run Length Encoding and additional Huffman coding.</p>
+<h2 id="file-format">File format</h2>
+
+<p>A <code>.bz2</code> stream consists of a 4-byte header, followed by zero or more compressed blocks, immediately followed by an end-of-stream marker containing a 32-bit CRC for the plaintext whole stream processed. The compressed blocks are bit-aligned and no padding occurs.</p>
+<pre><code>.magic:16                       = 'BZ' signature/magic number
+.version:8                      = 'h' for Bzip2 ('H'uffman coding), '0' for Bzip1 (deprecated)
+.hundred_k_blocksize:8          = '1'..'9' block-size 100 kB-900 kB (uncompressed)
+
+.compressed_magic:48            = 0x314159265359 (BCD (pi))
+.crc:32                         = checksum for this block
+.randomised:1                   = 0=&gt;normal, 1=&gt;randomised (deprecated)
+.origPtr:24                     = starting pointer into BWT for after untransform
+.huffman_used_map:16            = bitmap, of ranges of 16 bytes, present/not present
+.huffman_used_bitmaps:0..256    = bitmap, of symbols used, present/not present (multiples of 16)
+.huffman_groups:3               = 2..6 number of different Huffman tables in use
+.selectors_used:15              = number of times that the Huffman tables are swapped (each 50 bytes)
+*.selector_list:1..6            = zero-terminated bit runs (0..62) of MTF'ed Huffman table (*selectors_used)
+.start_huffman_length:5         = 0..20 starting bit length for Huffman deltas
+*.delta_bit_length:1..40        = 0=&gt;next symbol; 1=&gt;alter length
+                                                { 1=&gt;decrement length;  0=&gt;increment length } (*(symbols+2)*groups)
+.contents:2..∞                  = Huffman encoded data stream until end of block (max. 7372800 bit)
+
+.eos_magic:48                   = 0x177245385090 (BCD sqrt(pi))
+.crc:32                         = checksum for whole stream
+.padding:0..7                   = align to whole byte</code></pre>
+
+<p>Because of the first-stage RLE compression (see above), the maximum length of plaintext that a single 900 kB bzip2 block can contain is around 46 MB (45,899,236 bytes). This can occur if the whole plaintext consists entirely of repeated values (the resulting <code>.bz2</code> file in this case is 46 bytes long). An even smaller file of 40 bytes can be achieved by using an input containing entirely values of 251, an apparent compression ratio of 1147480.9:1.</p>
+<h2 id="implementations">Implementations</h2>
+
+<p>In addition to <a href="Julian_Seward" title="wikilink">Julian Seward</a>'s original reference implementation, the following programs support bzip2 format.</p>
+<ul>
+<li><a class="uri" href="7-Zip" title="wikilink">7-Zip</a>: Written by <a href="Igor_Pavlov_(Computer_programmer)" title="wikilink">Igor Pavlov</a> in <a class="uri" href="C++" title="wikilink">C++</a>, the 7-Zip suite contains a bzip2 encoder/decoder which is freely licensed. 7-Zip comes with multi-threading support.</li>
+<li><a href="http://www.landley.net/code/">micro-bzip2</a>: A version by <a href="Rob_Landley" title="wikilink">Rob Landley</a> designed for reduced compiled code size and available under the GNU <a class="uri" href="LGPL" title="wikilink">LGPL</a>.</li>
+<li><a href="http://compression.ca/pbzip2/">PBZIP2</a>: Parallel <a href="POSIX_Threads" title="wikilink">pthreads</a>-based implementation in <a class="uri" href="C++" title="wikilink">C++</a> by Jeff Gilchrist (and <a href="http://www.leszer.net/index.php/my-software.html">Windows version</a>).</li>
+<li><a href="http://bzip2smp.sourceforge.net/">bzip2smp</a>: A modification to <code>libbzip2</code> that has <a href="Symmetric_multiprocessing" title="wikilink">SMP</a> parallelisation <cite>"hacked in"</cite> by Konstantin Isakov.</li>
+<li><a href="http://home.student.utwente.nl/n.werensteijn/smpbzip2/">smpbzip2</a>: Another go at parallel bzip2, by Niels Werensteijn.</li>
+<li><a href="http://www.paul.sladen.org/projects/pyflate/">pyflate</a>: A pure-<a href="Python_(programming_language)" title="wikilink">Python</a> stand-alone bzip2 and <a class="uri" href="DEFLATE" title="wikilink">DEFLATE</a> (<a class="uri" href="gzip" title="wikilink">gzip</a>) decoder by Paul Sladen. Probably useful for research and prototyping, made available under the <a href="BSD_license" title="wikilink">BSD</a>/<a href="GNU_General_Public_License" title="wikilink">GPL</a>/<a href="GNU_Lesser_General_Public_License" title="wikilink">LGPL</a>, or any other <a href="Debian_Free_Software_Guidelines" title="wikilink">DFSG</a>-compatible license.</li>
+<li><a href="http://bouchez.info/delphi-bzip.html">Arnaud Bouchez's BZip</a>: Implementation using C library or optimized i386 assembler code.</li>
+<li><a href="http://lbzip2.org">lbzip2</a>: Parallel <a href="POSIX_Threads" title="wikilink">pthreads</a>-based bzip2/bunzip2 (bzip2 compressor/decompressor) filter for sequential access input/output, by László Érsek.</li>
+<li><a href="http://compression.ca/mpibzip2/">mpibzip2</a>: An <a href="Message_Passing_Interface" title="wikilink">MPI</a>-enabled implementation that compresses/decompresses in parallel, by Jeff Gilchrist, available under a BSD-style license.</li>
+<li><a href="http://commons.apache.org/compress/">Apache Commons Compress</a> Apache Commons Compress project contains Java implementations of Bzip2 compressor and decompressor.</li>
+<li><a href="http://code.google.com/p/jbzip2/">jbzip2</a>: A Java implementation of bzip2 made available under the <a href="MIT_license" title="wikilink">MIT license</a></li>
+<li><a href="http://dotnetzip.codeplex.com/">DotNetZip</a>: Includes a C# implementation of bzip2, derived from the Java implementation in Apache Commons Compress. Includes a multi-threaded .NET bzip2 encoder/decoder library, and a bzip2 command-line tool in managed code.</li>
+<li><a href="https://www.noemax.com/dotnetcompression/">DotNetCompression</a>: A streaming implementation of bzip2 in managed C# that conforms to the API of System.IO.Compression and includes assemblies for <a href=".NET_Framework" title="wikilink">.NET Framework</a>, <a href=".NET_Compact_Framework" title="wikilink">.NET Compact Framework</a>, <a class="uri" href="Xamarin" title="wikilink">Xamarin</a>.<a class="uri" href="iOS" title="wikilink">iOS</a>, <a class="uri" href="Xamarin" title="wikilink">Xamarin</a>.<a href="Android_(operating_system)" title="wikilink">Android</a>, <a class="uri" href="Xamarin" title="wikilink">Xamarin</a>.<a href="Mac_OS" title="wikilink">Mac</a>, <a href="Windows_Phone" title="wikilink">Windows Phone</a>, <a href="Xbox_360" title="wikilink">Xbox 360</a>, <a class="uri" href="Silverlight" title="wikilink">Silverlight</a>, <a href="Mono_(software)" title="wikilink">Mono</a> and as a Portable Class Library.</li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Comparison_of_archive_formats" title="wikilink">Comparison of archive formats</a></li>
+<li><a href="List_of_archive_formats" title="wikilink">List of archive formats</a></li>
+<li><a href="List_of_file_archivers" title="wikilink">List of file archivers</a></li>
+<li><a href="Comparison_of_file_archivers" title="wikilink">Comparison of file archivers</a></li>
+<li><a href="List_of_Unix_programs" title="wikilink">List of Unix programs</a></li>
+<li><a class="uri" href="rzip" title="wikilink">rzip</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li></li>
+<li><a href="http://www.linfo.org/bzip2.html">The bzip2 Command</a> - by The Linux Information Project (LINFO)</li>
+<li><a href="http://gnuwin32.sourceforge.net/packages/bzip2.htm">bzip2 for Windows</a></li>
+<li><a href="http://cgpgroup.com/index.asp?PgToLd=WBZIP2">Graphical bzip2 for Windows</a>(WBZip2)</li>
+<li><a href="http://persephone.cps.unizar.es/~spd/bzip2/">MacBzip2</a> (for Classic <a href="Mac_OS" title="wikilink">Mac OS</a>; under <a href="Mac_OS_X" title="wikilink">Mac OS X</a>, the standard bzip2 is available at the command line)</li>
+<li><a href="http://www.mediawiki.org/wiki/Dbzip2#Feature_comparison">Feature comparison and benchmarks</a> for different kinds of parallel bzip2 implementations available</li>
+<li><a href="http://www.c10n.info/archives/352">4 Parallel bzip2 Implementations</a> at The Data Compression News Blog</li>
+<li><a href="http://ibiblio.org/pub/linux/utils/compress/bzip-0.21.ELF.tgz">The original bzip compressor</a> - may be restricted by patents</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Lossless_compression_algorithms" title="wikilink">Category:Lossless compression algorithms</a> <a href="Category:Free_data_compression_software" title="wikilink">Category:Free data compression software</a> <a href="Category:Unix_archivers_and_compression-related_utilities" title="wikilink">Category:Unix archivers and compression-related utilities</a> <a href="Category:Archive_formats" title="wikilink">Category:Archive formats</a> <a href="Category:Cross-platform_software" title="wikilink">Category:Cross-platform software</a> <a href="Category:1996_software" title="wikilink">Category:1996 software</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a class="uri" href="http://compressionratings.com/comp.cgi?7-zip+9.12b++bzip2+1.0.5++gzip+1.3.3+-5">http://compressionratings.com/comp.cgi?7-zip+9.12b++bzip2+1.0.5++gzip+1.3.3+-5</a><a href="#fnref1">↩</a></li>
+<li id="fn2"> - section "How does it relate to your previous offering (bzip-0.21) ?"<a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+</ol>
+</section>
+</body>
+</html>
