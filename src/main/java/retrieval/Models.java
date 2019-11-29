@@ -89,7 +89,7 @@ abstract public class Models {
                 }
                 terms.put(term, new Entry(quantity, documents));
             }
-
+            br.close();
             return terms;
         } catch (IOException e) {
             e.printStackTrace();

@@ -35,7 +35,6 @@ public class Index {
                 String line;
                 Map<String, Integer> wordOccurrences = Maps.newHashMap();
                 int metaDataCounter = 0;
-                String title = "";
                 int season = 0;
                 while ((line = br.readLine()) != null) {
                     if (metaDataCounter == 1) {
@@ -83,6 +82,7 @@ public class Index {
 
                     metaDataCounter++;
                 }
+                br.close();
                 doc_index.put(f.getName(), wordOccurrences);
                 totalTokens.put(f.getName(), sum.intValue());
                 titleToSeason.put(f.getName(), season);
@@ -145,6 +145,7 @@ public class Index {
             bw.write("\n");
             bw.flush();
         }
+        bw.close();
     }
 
     private static void writeEpisodeIndex(HashMap<String, Integer> index, String path) throws IOException {
@@ -155,6 +156,7 @@ public class Index {
             bw.write("\n");
             bw.flush();
         }
+        bw.close();
     }
 
     private static void writeSizeIndex(HashMap<String, Integer> index) throws IOException {
@@ -165,6 +167,7 @@ public class Index {
             bw.write("\n");
             bw.flush();
         }
+        bw.close();
     }
 
     private static void writePositionIndex(HashMap<String, HashMap<String,
@@ -185,6 +188,7 @@ public class Index {
             }
             bw.write("\n");
         }
+        bw.close();
     }
 
     public static ArrayList<Integer> readQueryPositions(ArrayList<String> terms, String docName) throws IOException {
@@ -200,7 +204,6 @@ public class Index {
         }
         ArrayList<Integer> positions = new ArrayList<>();
         for(String selected: selectedLines) {
-            String token = selected.split("\t")[0];
             String[] filePositionsLine = selected.split("\t");
             for(int i = 1; i < filePositionsLine.length; i++) {
                 if (filePositionsLine[i].split(":")[0].equals(docName)) {

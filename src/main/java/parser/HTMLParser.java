@@ -16,17 +16,15 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 class HTMLParser {
-    private static final String HTML_LOCATION = System.getProperty("user.dir") + "/data/transcripts.html";
+    static final String HTML_LOCATION = System.getProperty("user.dir") + "/data/transcripts.html";
     private static final String HTML_TRANSCRIPT_ID = "mw-content-text";
     private static final String HTML_TOC_ID = "transcripts-toc";
     private static final Set<String> IGNORED_TAGS = ImmutableSet.of("p", "div", "noscript", "h3", "h4");
     private Map<String, Integer> titleToSeason = Maps.newHashMap();
 
-    Document getDocument() {
-        File transcriptsFile = new File(HTML_LOCATION);
-
+    Document getDocument(File document) {
         try {
-            return Jsoup.parse(transcriptsFile, "UTF-8");
+            return Jsoup.parse(document, "UTF-8");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

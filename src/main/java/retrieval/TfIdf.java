@@ -167,6 +167,7 @@ public class TfIdf extends Models {
                 for(int line = 0; line < lines.size(); line++) {
                     vectorSpace[line] = lines.get(line);
                 }
+                fileReader.close();
                 return vectorSpace;
             } catch (IOException e) {
                 e.printStackTrace();
