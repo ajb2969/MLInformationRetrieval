@@ -1,0 +1,4136 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1913">Feature selection</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Feature selection</h1>
+<hr/>
+
+<p>In <a href="machine_learning" title="wikilink">machine learning</a> and <a class="uri" href="statistics" title="wikilink">statistics</a>, <strong>feature selection</strong>, also known as <strong>variable selection</strong>, <strong>attribute selection</strong> or <strong>variable subset selection</strong>, is the process of selecting a subset of relevant features (variables, predictors) for use in model construction. Feature selection techniques are used for three reasons:</p>
+
+<p>:* simplification of models to make them easier to interpret by researchers/users,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p>:* shorter training times,</p>
+
+<p>:* enhanced generalisation by reducing <a class="uri" href="overfitting" title="wikilink">overfitting</a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a>(formally, reduction of <a href="Bias-variance_tradeoff" title="wikilink">variance</a>) The central premise when using a feature selection technique is that the data contains many features that are either <em>redundant</em> or <em>irrelevant</em>, and can thus be removed without incurring much loss of information.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> <em>Redundant</em> or <em>irrelevant</em> features are two distinct notions, since one relevant feature may be redundant in the presence of another relevant feature with which it is strongly correlated.</p>
+
+<p>Feature selection techniques is to be distinguished from <a href="feature_extraction" title="wikilink">feature extraction</a>. Feature extraction creates new features from functions of the original features, whereas feature selection returns a subset of the features. Feature selection techniques are often used in domains where there are many features and comparatively few samples (or data points). The archetypal case is the use of feature selection in analysing <a href="DNA_microarray" title="wikilink">DNA microarrays</a>, where there are many thousands of features, and a few tens to hundreds of samples.</p>
+<h2 id="introduction">Introduction</h2>
+
+<p>A feature selection algorithm can be seen as the combination of a search technique for proposing new feature subsets, along with an evaluation measure which scores the different feature subsets. The simplest algorithm is to test each possible subset of features finding the one which minimises the error rate. This is an exhaustive search of the space, and is computationally intractable for all but the smallest of feature sets. The choice of evaluation metric heavily influences the algorithm, and it is these evaluation metrics which distinguish between the three main categories of feature selection algorithms: wrappers, filters and embedded methods.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>Wrapper methods use a predictive model to score feature subsets. Each new subset is used to train a model, which is tested on a hold-out set. Counting the number of mistakes made on that hold-out set (the error rate of the model) gives the score for that subset. As wrapper methods train a new model for each subset, they are very computationally intensive, but usually provide the best performing feature set for that particular type of model.</p>
+
+<p>Filter methods use a proxy measure instead of the error rate to score a feature subset. This measure is chosen to be fast to compute, whilst still capturing the usefulness of the feature set. Common measures include the <a href="mutual_information" title="wikilink">mutual information</a>,<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> the <a href="pointwise_mutual_information" title="wikilink">pointwise mutual information</a>,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> <a href="Pearson_product-moment_correlation_coefficient" title="wikilink">Pearson product-moment correlation coefficient</a>, inter/intra class distance or the scores of <a href="Statistical_hypothesis_testing" title="wikilink">significance tests</a> for each class/feature combinations.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a><a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> Filters are usually less computationally intensive than wrappers, but they produce a feature set which is not tuned to a specific type of predictive model. This lack of tuning means a feature set from a filter is more general than the set from a wrapper, usually giving lower prediction performance than a wrapper. However the feature set doesn't contain the assumptions of a prediction model, and so is more useful for exposing the relationships between the features. Many filters provide a feature ranking rather than an explicit best feature subset, and the cut off point in the ranking is chosen via <a href="Cross-validation_(statistics)" title="wikilink">cross-validation</a>. Filter methods have also been used as a preprocessing step for wrapper methods, allowing a wrapper to be used on larger problems.</p>
+
+<p>Embedded methods are a catch-all group of techniques which perform feature selection as part of the model construction process. The exemplar of this approach is the <a href="Least_squares#Regularized_versions" title="wikilink">LASSO</a> method for constructing a linear model, which penalises the regression coefficients, shrinking many of them to zero. Any features which have non-zero regression coefficients are 'selected' by the LASSO algorithm. Improvements to the LASSO include Bolasso which bootstraps samples,<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> and FeaLect which scores all the features based on combinatorial analysis of regression coefficients.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> One other popular approach is the Recursive Feature Elimination algorithm, commonly used with <a href="Support_Vector_Machines" title="wikilink">Support Vector Machines</a> to repeatedly construct a model and remove features with low weights. These approaches tend to be between filters and wrappers in terms of computational complexity.</p>
+
+<p>In statistics, the most popular form of feature selection is <a href="stepwise_regression" title="wikilink">stepwise regression</a>, which is a wrapper technique. It is a <a href="greedy_algorithm" title="wikilink">greedy algorithm</a> that adds the best feature (or deletes the worst feature) at each round. The main control issue is deciding when to stop the algorithm. In machine learning, this is typically done by <a href="Cross-validation_(statistics)" title="wikilink">cross-validation</a>. In statistics, some criteria are optimized. This leads to the inherent problem of nesting. More robust methods have been explored, such as <a href="branch_and_bound" title="wikilink">branch and bound</a> and piecewise linear network.</p>
+<h2 id="subset-selection">Subset selection</h2>
+
+<p>Subset selection evaluates a subset of features as a group for suitability. Subset selection algorithms can be broken up into Wrappers, Filters and Embedded. Wrappers use a search algorithm to search through the space of possible features and evaluate each subset by running a model on the subset. Wrappers can be computationally expensive and have a risk of over fitting to the model. Filters are similar to Wrappers in the search approach, but instead of evaluating against a model, a simpler filter is evaluated. Embedded techniques are embedded in and specific to a model.</p>
+
+<p>Many popular search approaches use <a href="greedy_algorithm" title="wikilink">greedy</a> <a href="hill_climbing" title="wikilink">hill climbing</a>, which iteratively evaluates a candidate subset of features, then modifies the subset and evaluates if the new subset is an improvement over the old. Evaluation of the subsets requires a scoring <a href="Metric_(mathematics)" title="wikilink">metric</a> that grades a subset of features. Exhaustive search is generally impractical, so at some implementor (or operator) defined stopping point, the subset of features with the highest score discovered up to that point is selected as the satisfactory feature subset. The stopping criterion varies by algorithm; possible criteria include: a subset score exceeds a threshold, a program's maximum allowed run time has been surpassed, etc.</p>
+
+<p>Alternative search-based techniques are based on <a href="targeted_projection_pursuit" title="wikilink">targeted projection pursuit</a> which finds low-dimensional projections of the data that score highly: the features that have the largest projections in the lower-dimensional space are then selected.</p>
+
+<p>Search approaches include:</p>
+<ul>
+<li>Exhaustive</li>
+<li>Best first</li>
+<li><a href="Simulated_annealing" title="wikilink">Simulated annealing</a></li>
+<li><a href="Genetic_algorithm" title="wikilink">Genetic algorithm</a></li>
+<li><a href="Greedy_algorithm" title="wikilink">Greedy</a> forward selection</li>
+<li><a href="Greedy_algorithm" title="wikilink">Greedy</a> backward elimination</li>
+<li><a href="Targeted_projection_pursuit" title="wikilink">Targeted projection pursuit</a></li>
+<li>Scatter Search<ref>F.C. Garcia-Lopez, M. Garcia-Torres, B. Melian, J.A. Moreno-Perez, J.M. Moreno-Vega. Solving feature subset selection problem by a Parallel Scatter Search, <em>European Journal of Operational Research</em>, vol. 169, no. 2, pp. 477–489, 2006.</ref></li>
+</ul>
+
+<p></p>
+<ul>
+<li>Variable Neighborhood Search<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></li>
+</ul>
+
+<p>Two popular filter metrics for classification problems are <a class="uri" href="correlation" title="wikilink">correlation</a> and <a href="mutual_information" title="wikilink">mutual information</a>, although neither are true <a href="metric_(mathematics)" title="wikilink">metrics</a> or 'distance measures' in the mathematical sense, since they fail to obey the <a href="triangle_inequality" title="wikilink">triangle inequality</a> and thus do not compute any actual 'distance' – they should rather be regarded as 'scores'. These scores are computed between a candidate feature (or set of features) and the desired output category. There are, however, true metrics that are a simple function of the mutual information;<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> see <a href="mutual_information#Metric" title="wikilink">here</a>.</p>
+
+<p>Other available filter metrics include:</p>
+<ul>
+<li>Class separability
+<ul>
+<li>Error probability</li>
+<li>Inter-class distance</li>
+<li>Probabilistic distance</li>
+<li><a href="Entropy_(Information_theory)" title="wikilink">Entropy</a></li>
+</ul></li>
+<li>Consistency-based feature selection</li>
+<li>Correlation-based feature selection</li>
+</ul>
+<h2 id="optimality-criteria">Optimality criteria</h2>
+
+<p>The choice of optimality criteria is difficult as there are multiple objectives in a feature selection task. Many common ones incorporate a measure of accuracy, penalised by the number of features selected (e.g. the <a href="Bayesian_information_criterion" title="wikilink">Bayesian information criterion</a>). The oldest are <a href="Mallows's_Cp" title="wikilink">Mallows's <em>C<sub>p</sub></em></a> statistic and <a href="Akaike_information_criterion" title="wikilink">Akaike information criterion</a> (AIC). These add variables if the <a href="Student's_t-test" title="wikilink"><em>t</em>-statistic</a> is bigger than 
+
+<math display="inline" id="Feature_selection:0">
+ <semantics>
+  <msqrt>
+   <mn>2</mn>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{2}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Other criteria are <a href="Bayesian_information_criterion" title="wikilink">Bayesian information criterion</a> (BIC) which uses 
+
+<math display="inline" id="Feature_selection:1">
+ <semantics>
+  <msqrt>
+   <mrow>
+    <mi>log</mi>
+    <mi>n</mi>
+   </mrow>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{\log{n}}
+  </annotation>
+ </semantics>
+</math>
+
+, <a href="minimum_description_length" title="wikilink">minimum description length</a> (MDL) which asymptotically uses 
+
+<math display="inline" id="Feature_selection:2">
+ <semantics>
+  <msqrt>
+   <mrow>
+    <mi>log</mi>
+    <mi>n</mi>
+   </mrow>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{\log{n}}
+  </annotation>
+ </semantics>
+</math>
+
+, Bonnferroni / <a href="Risk_Inflation_Criterion" title="wikilink">RIC</a> which use 
+
+<math display="inline" id="Feature_selection:3">
+ <semantics>
+  <msqrt>
+   <mrow>
+    <mn>2</mn>
+    <mrow>
+     <mi>log</mi>
+     <mi>p</mi>
+    </mrow>
+   </mrow>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <apply>
+      <log></log>
+      <ci>p</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{2\log{p}}
+  </annotation>
+ </semantics>
+</math>
+
+, maximum dependency feature selection, and a variety of new criteria that are motivated by <a href="false_discovery_rate" title="wikilink">false discovery rate</a> (FDR) which use something close to 
+
+<math display="inline" id="Feature_selection:4">
+ <semantics>
+  <msqrt>
+   <mrow>
+    <mn>2</mn>
+    <mrow>
+     <mi>log</mi>
+     <mfrac>
+      <mi>p</mi>
+      <mi>q</mi>
+     </mfrac>
+    </mrow>
+   </mrow>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <apply>
+      <log></log>
+      <apply>
+       <divide></divide>
+       <ci>p</ci>
+       <ci>q</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{2\log{\frac{p}{q}}}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h2 id="structure-learning">Structure Learning</h2>
+
+<p>Filter feature selection is a specific case of a more general paradigm called Structure Learning. Feature selection finds the relevant feature set for a specific target variable whereas structure learning finds the relationships between all the variables, usually by expressing these relationships as a graph. The most common structure learning algorithms assume the data is generated by a <a href="Bayesian_Network" title="wikilink">Bayesian Network</a>, and so the structure is a directed graphical model. The optimal solution to the filter feature selection problem is the <a href="Markov_blanket" title="wikilink">Markov blanket</a> of the target node, and in a Bayesian Network, there is a unique Markov Blanket for each node.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h2 id="minimum-redundancy-maximum-relevance-mrmr-feature-selection">Minimum-redundancy-maximum-relevance (mRMR) feature selection</h2>
+
+<p>Peng <em>et al.</em><a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> proposed a feature selection method that can use either mutual information, correlation, or distance/similarity scores to select features. The aim is to penalise a feature's relevancy by its redundancy in the presence of the other selected features. The relevance of a feature set <em>S</em> for the class <em>c</em> is defined by the average value of all mutual information values between the individual feature <em>f<sub>i</sub></em> and the class <em>c</em> as follows:</p>
+
+<p>
+
+<math display="inline" id="Feature_selection:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>D</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>S</mi>
+     <mo>,</mo>
+     <mi>c</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <mi>S</mi>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mfrac>
+    <mrow>
+     <msub>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <msub>
+        <mi>f</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>∈</mo>
+       <mi>S</mi>
+      </mrow>
+     </msub>
+     <mrow>
+      <mi>I</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>f</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>;</mo>
+       <mi>c</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>D</ci>
+     <interval closure="open">
+      <ci>S</ci>
+      <ci>c</ci>
+     </interval>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <apply>
+       <abs></abs>
+       <ci>S</ci>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <in></in>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>f</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>S</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <list>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>f</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>c</ci>
+       </list>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D(S,c)=\frac{1}{|S|}\sum_{f_{i}\in S}I(f_{i};c)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The redundancy of all features in the set <em>S</em> is the average value of all mutual information values between the feature <em>f<sub>i</sub></em> and the feature <em>f<sub>j</sub></em>:</p>
+
+<p>
+
+<math display="inline" id="Feature_selection:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>R</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>S</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <msup>
+      <mrow>
+       <mo stretchy="false">|</mo>
+       <mi>S</mi>
+       <mo stretchy="false">|</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mfrac>
+    <mrow>
+     <msub>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>f</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>,</mo>
+        <msub>
+         <mi>f</mi>
+         <mi>j</mi>
+        </msub>
+       </mrow>
+       <mo>∈</mo>
+       <mi>S</mi>
+      </mrow>
+     </msub>
+     <mrow>
+      <mi>I</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>f</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>;</mo>
+       <msub>
+        <mi>f</mi>
+        <mi>j</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>R</ci>
+     <ci>S</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <abs></abs>
+        <ci>S</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <in></in>
+        <list>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>f</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>f</ci>
+          <ci>j</ci>
+         </apply>
+        </list>
+        <ci>S</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <list>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>f</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>f</ci>
+         <ci>j</ci>
+        </apply>
+       </list>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R(S)=\frac{1}{|S|^{2}}\sum_{f_{i},f_{j}\in S}I(f_{i};f_{j})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The mRMR criterion is a combination of two measures given above and is defined as follows:</p>
+
+<p>
+
+<math display="inline" id="Feature_selection:7">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>mRMR</mi>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>max</mi>
+      <mi>S</mi>
+     </msub>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <mrow>
+        <mfrac>
+         <mn>1</mn>
+         <mrow>
+          <mo stretchy="false">|</mo>
+          <mi>S</mi>
+          <mo stretchy="false">|</mo>
+         </mrow>
+        </mfrac>
+        <mrow>
+         <msub>
+          <mo largeop="true" symmetric="true">∑</mo>
+          <mrow>
+           <msub>
+            <mi>f</mi>
+            <mi>i</mi>
+           </msub>
+           <mo>∈</mo>
+           <mi>S</mi>
+          </mrow>
+         </msub>
+         <mrow>
+          <mi>I</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <msub>
+            <mi>f</mi>
+            <mi>i</mi>
+           </msub>
+           <mo>;</mo>
+           <mi>c</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mfrac>
+         <mn>1</mn>
+         <msup>
+          <mrow>
+           <mo stretchy="false">|</mo>
+           <mi>S</mi>
+           <mo stretchy="false">|</mo>
+          </mrow>
+          <mn>2</mn>
+         </msup>
+        </mfrac>
+        <mrow>
+         <msub>
+          <mo largeop="true" symmetric="true">∑</mo>
+          <mrow>
+           <mrow>
+            <msub>
+             <mi>f</mi>
+             <mi>i</mi>
+            </msub>
+            <mo>,</mo>
+            <msub>
+             <mi>f</mi>
+             <mi>j</mi>
+            </msub>
+           </mrow>
+           <mo>∈</mo>
+           <mi>S</mi>
+          </mrow>
+         </msub>
+         <mrow>
+          <mi>I</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <msub>
+            <mi>f</mi>
+            <mi>i</mi>
+           </msub>
+           <mo>;</mo>
+           <msub>
+            <mi>f</mi>
+            <mi>j</mi>
+           </msub>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>mRMR</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <max></max>
+      <ci>S</ci>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <apply>
+         <abs></abs>
+         <ci>S</ci>
+        </apply>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <in></in>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>f</ci>
+           <ci>i</ci>
+          </apply>
+          <ci>S</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <list>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>f</ci>
+           <ci>i</ci>
+          </apply>
+          <ci>c</ci>
+         </list>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <abs></abs>
+          <ci>S</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <in></in>
+          <list>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>f</ci>
+            <ci>i</ci>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>f</ci>
+            <ci>j</ci>
+           </apply>
+          </list>
+          <ci>S</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <list>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>f</ci>
+           <ci>i</ci>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>f</ci>
+           <ci>j</ci>
+          </apply>
+         </list>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{mRMR}=\max_{S}\left[\frac{1}{|S|}\sum_{f_{i}\in S}I(f_{i};c)-\frac{1}{%
+|S|^{2}}\sum_{f_{i},f_{j}\in S}I(f_{i};f_{j})\right].
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Suppose that there are <em>n</em> full-set features. Let <em>x<sub>i</sub></em> be the set membership <a href="indicator_function" title="wikilink">indicator function</a> for feature <em>f<sub>i</sub></em>, so that <em>x<sub>i</sub></em>=1 indicates presence and <em>x<sub>i</sub></em>=0 indicates absence of the feature <em>f<sub>i</sub></em> in the globally optimal feature set. Let <em>c<sub>i</sub>=I(f<sub>i</sub>;c)</em> and <em>a<sub>ij</sub>=I(f<sub>i</sub>;f<sub>j</sub>)</em>. The above may then be written as an optimization problem:</p>
+
+<p>
+
+<math display="inline" id="Feature_selection:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>mRMR</mi>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>max</mi>
+      <mrow>
+       <mi>x</mi>
+       <mo>∈</mo>
+       <msup>
+        <mrow>
+         <mo stretchy="false">{</mo>
+         <mn>0</mn>
+         <mo>,</mo>
+         <mn>1</mn>
+         <mo stretchy="false">}</mo>
+        </mrow>
+        <mi>n</mi>
+       </msup>
+      </mrow>
+     </msub>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <mfrac>
+        <mrow>
+         <mstyle displaystyle="false">
+          <msubsup>
+           <mo largeop="true" symmetric="true">∑</mo>
+           <mrow>
+            <mi>i</mi>
+            <mo>=</mo>
+            <mn>1</mn>
+           </mrow>
+           <mi>n</mi>
+          </msubsup>
+         </mstyle>
+         <mrow>
+          <msub>
+           <mi>c</mi>
+           <mi>i</mi>
+          </msub>
+          <msub>
+           <mi>x</mi>
+           <mi>i</mi>
+          </msub>
+         </mrow>
+        </mrow>
+        <mrow>
+         <mstyle displaystyle="false">
+          <msubsup>
+           <mo largeop="true" symmetric="true">∑</mo>
+           <mrow>
+            <mi>i</mi>
+            <mo>=</mo>
+            <mn>1</mn>
+           </mrow>
+           <mi>n</mi>
+          </msubsup>
+         </mstyle>
+         <msub>
+          <mi>x</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+       </mfrac>
+       <mo>-</mo>
+       <mfrac>
+        <mrow>
+         <mstyle displaystyle="false">
+          <msubsup>
+           <mo largeop="true" symmetric="true">∑</mo>
+           <mrow>
+            <mrow>
+             <mi>i</mi>
+             <mo>,</mo>
+             <mi>j</mi>
+            </mrow>
+            <mo>=</mo>
+            <mn>1</mn>
+           </mrow>
+           <mi>n</mi>
+          </msubsup>
+         </mstyle>
+         <mrow>
+          <msub>
+           <mi>a</mi>
+           <mrow>
+            <mi>i</mi>
+            <mi>j</mi>
+           </mrow>
+          </msub>
+          <msub>
+           <mi>x</mi>
+           <mi>i</mi>
+          </msub>
+          <msub>
+           <mi>x</mi>
+           <mi>j</mi>
+          </msub>
+         </mrow>
+        </mrow>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mstyle displaystyle="false">
+            <msubsup>
+             <mo largeop="true" symmetric="true">∑</mo>
+             <mrow>
+              <mi>i</mi>
+              <mo>=</mo>
+              <mn>1</mn>
+             </mrow>
+             <mi>n</mi>
+            </msubsup>
+           </mstyle>
+           <msub>
+            <mi>x</mi>
+            <mi>i</mi>
+           </msub>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mfrac>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>mRMR</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <max></max>
+      <apply>
+       <in></in>
+       <ci>x</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <set>
+         <cn type="integer">0</cn>
+         <cn type="integer">1</cn>
+        </set>
+        <ci>n</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <divide></divide>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <sum></sum>
+          <ci>n</ci>
+         </apply>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>c</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>x</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <sum></sum>
+          <ci>n</ci>
+         </apply>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <sum></sum>
+          <ci>n</ci>
+         </apply>
+         <apply>
+          <eq></eq>
+          <list>
+           <ci>i</ci>
+           <ci>j</ci>
+          </list>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>a</ci>
+          <apply>
+           <times></times>
+           <ci>i</ci>
+           <ci>j</ci>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>x</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>x</ci>
+          <ci>j</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <sum></sum>
+           <ci>n</ci>
+          </apply>
+          <apply>
+           <eq></eq>
+           <ci>i</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>x</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{mRMR}=\max_{x\in\{0,1\}^{n}}\left[\frac{\sum^{n}_{i=1}c_{i}x_{i}}{\sum%
+^{n}_{i=1}x_{i}}-\frac{\sum^{n}_{i,j=1}a_{ij}x_{i}x_{j}}{(\sum^{n}_{i=1}x_{i})%
+^{2}}\right].
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The mRMR algorithm is an approximation of the theoretically optimal maximum-dependency feature selection algorithm that maximizes the mutual information between the joint distribution of the selected features and the classification variable. As mRMR approximates the combinatorial estimation problem with a series of much smaller problems, each of which only involves two variables, it thus uses pairwise joint probabilities which are more robust. In certain situations the algorithm may underestimate the usefulness of features as it has no way to measure interactions between features which can increase relevancy. This can lead to poor performance<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> when the features are individually useless, but are useful when combined (a pathological case is found when the class is a <a href="parity_function" title="wikilink">parity function</a> of the features). Overall the algorithm is more efficient (in terms of the amount of data required) than the theoretically optimal max-dependency selection, yet produces a feature set with little pairwise redundancy.</p>
+
+<p>mRMR is an instance of a large class of filter methods which trade off between relevancy and redundancy in different ways.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a><a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<h3 id="global-optimization-formulations">Global optimization formulations</h3>
+
+<p>mRMR is a typical example of an incremental greedy strategy for feature selection: once a feature has been selected, it cannot be deselected at a later stage. While mRMR could be optimized using floating search to reduce some features, it might also be reformulated as a global quadratic programing optimization problem as follows:<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> 
+
+<math display="inline" id="Feature_selection:9">
+ <semantics>
+  <mrow>
+   <mi>QPFS</mi>
+   <mo>:</mo>
+   <msub>
+    <mi>min</mi>
+    <mi>𝐱</mi>
+   </msub>
+   <mrow>
+    <mo>{</mo>
+    <mi>α</mi>
+    <msup>
+     <mi>𝐱</mi>
+     <mi>T</mi>
+    </msup>
+    <mi>H</mi>
+    <mi>𝐱</mi>
+    <mo>-</mo>
+    <msup>
+     <mi>𝐱</mi>
+     <mi>T</mi>
+    </msup>
+    <mi>F</mi>
+    <mo>}</mo>
+   </mrow>
+   <mpadded width="+5pt">
+    <mtext>s.t.</mtext>
+   </mpadded>
+   <msubsup>
+    <mo largeop="true" symmetric="true">∑</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>n</mi>
+   </msubsup>
+   <msub>
+    <mi>x</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mn>1</mn>
+   <mo>,</mo>
+   <msub>
+    <mi>x</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>≥</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">QPFS</csymbol>
+    <ci>normal-:</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <min></min>
+     <ci>𝐱</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>T</ci>
+     </apply>
+     <csymbol cd="unknown">H</csymbol>
+     <csymbol cd="unknown">x</csymbol>
+     <minus></minus>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>T</ci>
+     </apply>
+     <csymbol cd="unknown">F</csymbol>
+     <ci>normal-}</ci>
+    </cerror>
+    <ci></ci>
+    <mtext>s.t.</mtext>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <eq></eq>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>i</ci>
+    </apply>
+    <eq></eq>
+    <cn type="integer">1</cn>
+    <ci>normal-,</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>i</ci>
+    </apply>
+    <geq></geq>
+    <cn type="integer">0</cn>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{QPFS}:\min_{\mathbf{x}}\left\{\alpha\mathbf{x}^{T}H\mathbf{x}-\mathbf{%
+x}^{T}F\right\}\quad\mbox{s.t.}\ \sum_{i=1}^{n}x_{i}=1,x_{i}\geq 0
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Feature_selection:10">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>F</mi>
+    <mrow>
+     <mi>n</mi>
+     <mo>×</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <msup>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mrow>
+      <mi>I</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>f</mi>
+        <mn>1</mn>
+       </msub>
+       <mo>;</mo>
+       <mi>c</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <mrow>
+      <mi>I</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>f</mi>
+        <mi>n</mi>
+       </msub>
+       <mo>;</mo>
+       <mi>c</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi>T</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>F</ci>
+     <apply>
+      <times></times>
+      <ci>n</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <list>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <list>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>f</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <ci>c</ci>
+       </list>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <list>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>f</ci>
+         <ci>n</ci>
+        </apply>
+        <ci>c</ci>
+       </list>
+      </apply>
+     </list>
+     <ci>T</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F_{n\times 1}=[I(f_{1};c),\ldots,I(f_{n};c)]^{T}
+  </annotation>
+ </semantics>
+</math>
+
+ is the vector of feature relevancy assuming there are 
+
+<math display="inline" id="Feature_selection:11">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ features in total, 
+
+<math display="inline" id="Feature_selection:12">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>H</mi>
+    <mrow>
+     <mi>n</mi>
+     <mo>×</mo>
+     <mi>n</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mrow>
+      <mi>I</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>f</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>;</mo>
+       <msub>
+        <mi>f</mi>
+        <mi>j</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mrow>
+     <mrow>
+      <mi>i</mi>
+      <mo>,</mo>
+      <mi>j</mi>
+     </mrow>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>H</ci>
+     <apply>
+      <times></times>
+      <ci>n</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <list>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>f</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>f</ci>
+         <ci>j</ci>
+        </apply>
+       </list>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <list>
+       <ci>i</ci>
+       <ci>j</ci>
+      </list>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>normal-…</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H_{n\times n}=[I(f_{i};f_{j})]_{i,j=1\ldots n}
+  </annotation>
+ </semantics>
+</math>
+
+ is the matrix of feature pairwise redundancy, and 
+
+<math display="inline" id="Feature_selection:13">
+ <semantics>
+  <msub>
+   <mi>𝐱</mi>
+   <mrow>
+    <mi>n</mi>
+    <mo>×</mo>
+    <mn>1</mn>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐱</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{n\times 1}
+  </annotation>
+ </semantics>
+</math>
+
+ represents relative feature weights. QPFS is solved via quadratic programming. It is recently shown that QFPS is biased towards features with smaller entropy,<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a> due to its placement of the feature self redundancy term 
+
+<math display="inline" id="Feature_selection:14">
+ <semantics>
+  <mrow>
+   <mi>I</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>f</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>;</mo>
+    <msub>
+     <mi>f</mi>
+     <mi>i</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>I</ci>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>i</ci>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I(f_{i};f_{i})
+  </annotation>
+ </semantics>
+</math>
+
+ on the diagonal of 
+
+<math display="inline" id="Feature_selection:15">
+ <semantics>
+  <mi>H</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>H</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Another global formulation for the mutual information based feature selection problem is based on the conditional relevancy:<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a> 
+
+<math display="inline" id="Feature_selection:16">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>SPEC</mi>
+    <mi>CMI</mi>
+   </msub>
+   <mo>:</mo>
+   <msub>
+    <mi>max</mi>
+    <mi>𝐱</mi>
+   </msub>
+   <mrow>
+    <mo>{</mo>
+    <msup>
+     <mi>𝐱</mi>
+     <mi>T</mi>
+    </msup>
+    <mi>Q</mi>
+    <mi>𝐱</mi>
+    <mo>}</mo>
+   </mrow>
+   <mpadded width="+5pt">
+    <mtext>s.t.</mtext>
+   </mpadded>
+   <mo>∥</mo>
+   <mi>𝐱</mi>
+   <mo>∥</mo>
+   <mo>=</mo>
+   <mn>1</mn>
+   <mo>,</mo>
+   <msub>
+    <mi>x</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>≥</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>SPEC</ci>
+     <ci>CMI</ci>
+    </apply>
+    <ci>normal-:</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <max></max>
+     <ci>𝐱</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>T</ci>
+     </apply>
+     <csymbol cd="unknown">Q</csymbol>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-}</ci>
+    </cerror>
+    <ci></ci>
+    <mtext>s.t.</mtext>
+    <csymbol cd="latexml">parallel-to</csymbol>
+    <csymbol cd="unknown">x</csymbol>
+    <csymbol cd="latexml">parallel-to</csymbol>
+    <eq></eq>
+    <cn type="integer">1</cn>
+    <ci>normal-,</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>i</ci>
+    </apply>
+    <geq></geq>
+    <cn type="integer">0</cn>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{SPEC_{CMI}}:\max_{\mathbf{x}}\left\{\mathbf{x}^{T}Q\mathbf{x}\right\}%
+\quad\mbox{s.t.}\ \|\mathbf{x}\|=1,x_{i}\geq 0
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Feature_selection:17">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>Q</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>i</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>I</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>f</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>;</mo>
+     <mi>c</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>Q</ci>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>I</ci>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>f</ci>
+       <ci>i</ci>
+      </apply>
+      <ci>c</ci>
+     </list>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q_{ii}=I(f_{i};c)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Feature_selection:18">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>Q</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>j</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mi>I</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>f</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>;</mo>
+    <mi>c</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>f</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>,</mo>
+   <mi>i</mi>
+   <mo>≠</mo>
+   <mi>j</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>Q</ci>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+    <eq></eq>
+    <csymbol cd="unknown">I</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">c</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <ci>normal-,</ci>
+    <csymbol cd="unknown">i</csymbol>
+    <neq></neq>
+    <csymbol cd="unknown">j</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q_{ij}=I(f_{i};c|f_{j}),i\neq j
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>An advantage of 
+
+<math display="inline" id="Feature_selection:19">
+ <semantics>
+  <msub>
+   <mi>SPEC</mi>
+   <mi>CMI</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>SPEC</ci>
+    <ci>CMI</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{SPEC_{CMI}}
+  </annotation>
+ </semantics>
+</math>
+
+ is that it can be solved simply via finding the dominant eigenvector of 
+
+<math display="inline" id="Feature_selection:20">
+ <semantics>
+  <mi>Q</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Q</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q
+  </annotation>
+ </semantics>
+</math>
+
+, thus is very scalable. 
+
+<math display="inline" id="Feature_selection:21">
+ <semantics>
+  <msub>
+   <mi>SPEC</mi>
+   <mi>CMI</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>SPEC</ci>
+    <ci>CMI</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{SPEC_{CMI}}
+  </annotation>
+ </semantics>
+</math>
+
+ also handles second-order feature interaction.</p>
+
+<p>For high-dimensional and small sample data (e.g., dimensionality &gt; 10^5 and the number of samples M. Yamada, W. Jitkrittum, L. Sigal, E. P. Xing, M. Sugiyama, High-Dimensional Feature Selection by Feature-Wise Non-Linear Lasso. Neural Computation, vol.26, no.1, pp.185-207, 2014. HSIC Lssso optimization problem is given as</p>
+
+<p>
+
+<math display="inline" id="Feature_selection:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>HSICLasso</mi>
+    <mo>:</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mrow>
+        <mrow>
+         <mrow>
+          <msub>
+           <mi>min</mi>
+           <mi>𝐱</mi>
+          </msub>
+          <mfrac>
+           <mn>1</mn>
+           <mn>2</mn>
+          </mfrac>
+         </mrow>
+         <mrow>
+          <msubsup>
+           <mo largeop="true" symmetric="true">∑</mo>
+           <mrow>
+            <mrow>
+             <mi>k</mi>
+             <mo>,</mo>
+             <mi>l</mi>
+            </mrow>
+            <mo>=</mo>
+            <mn>1</mn>
+           </mrow>
+           <mi>n</mi>
+          </msubsup>
+          <mrow>
+           <msub>
+            <mi>x</mi>
+            <mi>k</mi>
+           </msub>
+           <msub>
+            <mi>x</mi>
+            <mi>l</mi>
+           </msub>
+           <mtext>HSIC</mtext>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <msub>
+             <mi>f</mi>
+             <mi>k</mi>
+            </msub>
+            <mo>,</mo>
+            <msub>
+             <mi>f</mi>
+             <mi>l</mi>
+            </msub>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo>-</mo>
+        <mrow>
+         <msubsup>
+          <mo largeop="true" symmetric="true">∑</mo>
+          <mrow>
+           <mi>k</mi>
+           <mo>=</mo>
+           <mn>1</mn>
+          </mrow>
+          <mi>n</mi>
+         </msubsup>
+         <mrow>
+          <msub>
+           <mi>x</mi>
+           <mi>k</mi>
+          </msub>
+          <mtext>HSIC</mtext>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <msub>
+            <mi>f</mi>
+            <mi>k</mi>
+           </msub>
+           <mo>,</mo>
+           <mi>c</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mi>λ</mi>
+        <msub>
+         <mrow>
+          <mo>∥</mo>
+          <mi>𝐱</mi>
+          <mo>∥</mo>
+         </mrow>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo rspace="12.5pt">,</mo>
+      <mrow>
+       <mpadded width="+5pt">
+        <mtext>s.t.</mtext>
+       </mpadded>
+       <msub>
+        <mi>x</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+      <mo>,</mo>
+      <mi mathvariant="normal">…</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>x</mi>
+       <mi>n</mi>
+      </msub>
+     </mrow>
+     <mo>≥</mo>
+     <mn>0</mn>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <ci>HSICLasso</ci>
+    <apply>
+     <geq></geq>
+     <list>
+      <apply>
+       <plus></plus>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <min></min>
+           <ci>𝐱</ci>
+          </apply>
+          <apply>
+           <divide></divide>
+           <cn type="integer">1</cn>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <sum></sum>
+            <apply>
+             <eq></eq>
+             <list>
+              <ci>k</ci>
+              <ci>l</ci>
+             </list>
+             <cn type="integer">1</cn>
+            </apply>
+           </apply>
+           <ci>n</ci>
+          </apply>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>x</ci>
+            <ci>k</ci>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>x</ci>
+            <ci>l</ci>
+           </apply>
+           <mtext>HSIC</mtext>
+           <interval closure="open">
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>f</ci>
+             <ci>k</ci>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>f</ci>
+             <ci>l</ci>
+            </apply>
+           </interval>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <sum></sum>
+           <apply>
+            <eq></eq>
+            <ci>k</ci>
+            <cn type="integer">1</cn>
+           </apply>
+          </apply>
+          <ci>n</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>x</ci>
+           <ci>k</ci>
+          </apply>
+          <mtext>HSIC</mtext>
+          <interval closure="open">
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>f</ci>
+            <ci>k</ci>
+           </apply>
+           <ci>c</ci>
+          </interval>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>λ</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <csymbol cd="latexml">norm</csymbol>
+          <ci>𝐱</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <mtext>s.t.</mtext>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>n</ci>
+      </apply>
+     </list>
+     <cn type="integer">0</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{HSICLasso}:\min_{\mathbf{x}}\frac{1}{2}\sum_{k,l=1}^{n}x_{k}x_{l}{%
+\mbox{HSIC}}(f_{k},f_{l})-\sum_{k=1}^{n}x_{k}{\mbox{HSIC}}(f_{k},c)+\lambda\|%
+\mathbf{x}\|_{1},\quad\mbox{s.t.}\ x_{1},\ldots,x_{n}\geq 0,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Feature_selection:23">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mtext>HSIC</mtext>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>f</mi>
+      <mi>k</mi>
+     </msub>
+     <mo>,</mo>
+     <mi>c</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mtext>tr</mtext>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msup>
+       <mover accent="true">
+        <mi>𝐊</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>k</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msup>
+      <mover accent="true">
+       <mi>𝐋</mi>
+       <mo stretchy="false">¯</mo>
+      </mover>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <mtext>HSIC</mtext>
+     <interval closure="open">
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>f</ci>
+       <ci>k</ci>
+      </apply>
+      <ci>c</ci>
+     </interval>
+    </apply>
+    <apply>
+     <times></times>
+     <mtext>tr</mtext>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <ci>normal-¯</ci>
+        <ci>𝐊</ci>
+       </apply>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <ci>normal-¯</ci>
+       <ci>𝐋</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mbox{HSIC}}(f_{k},c)=\mbox{tr}(\bar{\mathbf{K}}^{(k)}\bar{\mathbf{L}})
+  </annotation>
+ </semantics>
+</math>
+
+ is a kernel-based independence measure called the (empirical) Hilbert-Schmidt independence criterion (HSIC), 
+
+<math display="inline" id="Feature_selection:24">
+ <semantics>
+  <mrow>
+   <mtext>tr</mtext>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>⋅</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <mtext>tr</mtext>
+    <ci>normal-⋅</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mbox{tr}(\cdot)
+  </annotation>
+ </semantics>
+</math>
+
+ denotes the trace, 
+
+<math display="inline" id="Feature_selection:25">
+ <semantics>
+  <mi>λ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>λ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda
+  </annotation>
+ </semantics>
+</math>
+
+ is the reguralization parameter, 
+
+<math display="inline" id="Feature_selection:26">
+ <semantics>
+  <mrow>
+   <msup>
+    <mover accent="true">
+     <mi>𝐊</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mi>𝚪</mi>
+    <msup>
+     <mi>𝐊</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>k</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mi>𝚪</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>𝐊</ci>
+     </apply>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>𝚪</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝐊</ci>
+      <ci>k</ci>
+     </apply>
+     <ci>𝚪</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{\mathbf{K}}^{(k)}=\mathbf{\Gamma}\mathbf{K}^{(k)}\mathbf{\Gamma}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Feature_selection:27">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>𝐋</mi>
+    <mo stretchy="false">¯</mo>
+   </mover>
+   <mo>=</mo>
+   <mrow>
+    <mi>𝚪</mi>
+    <mi>𝐋</mi>
+    <mi>𝚪</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-¯</ci>
+     <ci>𝐋</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>𝚪</ci>
+     <ci>𝐋</ci>
+     <ci>𝚪</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{\mathbf{L}}=\mathbf{\Gamma}\mathbf{L}\mathbf{\Gamma}
+  </annotation>
+ </semantics>
+</math>
+
+ are input and output centered Gram matrices, 
+
+<math display="inline" id="Feature_selection:28">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>K</mi>
+    <mrow>
+     <mi>i</mi>
+     <mo>,</mo>
+     <mi>j</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <mi>K</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>u</mi>
+      <mrow>
+       <mi>k</mi>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>u</mi>
+      <mrow>
+       <mi>k</mi>
+       <mo>,</mo>
+       <mi>j</mi>
+      </mrow>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>K</ci>
+      <ci>k</ci>
+     </apply>
+     <list>
+      <ci>i</ci>
+      <ci>j</ci>
+     </list>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>K</ci>
+     <interval closure="open">
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>u</ci>
+       <list>
+        <ci>k</ci>
+        <ci>i</ci>
+       </list>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>u</ci>
+       <list>
+        <ci>k</ci>
+        <ci>j</ci>
+       </list>
+      </apply>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K^{(k)}_{i,j}=K(u_{k,i},u_{k,j})
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Feature_selection:29">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>L</mi>
+    <mrow>
+     <mi>i</mi>
+     <mo>,</mo>
+     <mi>j</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>c</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>c</mi>
+      <mi>j</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>L</ci>
+     <list>
+      <ci>i</ci>
+      <ci>j</ci>
+     </list>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <interval closure="open">
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>c</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>c</ci>
+       <ci>j</ci>
+      </apply>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L_{i,j}=L(c_{i},c_{j})
+  </annotation>
+ </semantics>
+</math>
+
+ are Gram matrices, 
+
+<math display="inline" id="Feature_selection:30">
+ <semantics>
+  <mrow>
+   <mi>K</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>u</mi>
+    <mo>,</mo>
+    <msup>
+     <mi>u</mi>
+     <mo>′</mo>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>K</ci>
+    <interval closure="open">
+     <ci>u</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>u</ci>
+      <ci>normal-′</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K(u,u^{\prime})
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Feature_selection:31">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>c</mi>
+    <mo>,</mo>
+    <msup>
+     <mi>c</mi>
+     <mo>′</mo>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>L</ci>
+    <interval closure="open">
+     <ci>c</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>c</ci>
+      <ci>normal-′</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(c,c^{\prime})
+  </annotation>
+ </semantics>
+</math>
+
+ are kernel functions, 
+
+<math display="inline" id="Feature_selection:32">
+ <semantics>
+  <mrow>
+   <mi>𝚪</mi>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>𝐈</mi>
+     <mi>m</mi>
+    </msub>
+    <mo>-</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <mi>m</mi>
+     </mfrac>
+     <msub>
+      <mn>𝟏</mn>
+      <mi>m</mi>
+     </msub>
+     <msubsup>
+      <mn>𝟏</mn>
+      <mi>m</mi>
+      <mi>T</mi>
+     </msubsup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝚪</ci>
+    <apply>
+     <minus></minus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐈</ci>
+      <ci>m</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>m</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <cn type="integer">1</cn>
+       <ci>m</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <cn type="integer">1</cn>
+        <ci>m</ci>
+       </apply>
+       <ci>T</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\Gamma}=\mathbf{I}_{m}-\frac{1}{m}\mathbf{1}_{m}\mathbf{1}_{m}^{T}
+  </annotation>
+ </semantics>
+</math>
+
+ is the centering matrix, 
+
+<math display="inline" id="Feature_selection:33">
+ <semantics>
+  <msub>
+   <mi>𝐈</mi>
+   <mi>m</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐈</ci>
+    <ci>m</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{I}_{m}
+  </annotation>
+ </semantics>
+</math>
+
+ is the 
+
+<math display="inline" id="Feature_selection:34">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+-dimensional identity matrix (m: the number of samples), 
+
+<math display="inline" id="Feature_selection:35">
+ <semantics>
+  <msub>
+   <mn>𝟏</mn>
+   <mi>m</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <cn type="integer">1</cn>
+    <ci>m</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{1}_{m}
+  </annotation>
+ </semantics>
+</math>
+
+ is the 
+
+<math display="inline" id="Feature_selection:36">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+-dimensional vector with all ones, and 
+
+<math display="inline" id="Feature_selection:37">
+ <semantics>
+  <mrow>
+   <mo>∥</mo>
+   <mo>⋅</mo>
+   <msub>
+    <mo>∥</mo>
+    <mn>1</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="latexml">parallel-to</csymbol>
+    <ci>normal-⋅</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <csymbol cd="latexml">parallel-to</csymbol>
+     <cn type="integer">1</cn>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \|\cdot\|_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ is the 
+
+<math display="inline" id="Feature_selection:38">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">ℓ</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-ℓ</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ell_{1}
+  </annotation>
+ </semantics>
+</math>
+
+-norm. HSIC always takes a non-negative value, and is zero if and only if two random variables are statistically independent when a universal reproducing kernel such as the Gaussian kernel is used.</p>
+
+<p>The HSIC Lasso can be written as</p>
+
+<p>
+
+<math display="inline" id="Feature_selection:39">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>HSICLasso</mi>
+    <mo>:</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mrow>
+        <mrow>
+         <msub>
+          <mi>min</mi>
+          <mi>𝐱</mi>
+         </msub>
+         <mfrac>
+          <mn>1</mn>
+          <mn>2</mn>
+         </mfrac>
+        </mrow>
+        <msubsup>
+         <mrow>
+          <mo>∥</mo>
+          <mrow>
+           <mover accent="true">
+            <mi>𝐋</mi>
+            <mo stretchy="false">¯</mo>
+           </mover>
+           <mo>-</mo>
+           <mrow>
+            <msubsup>
+             <mo largeop="true" symmetric="true">∑</mo>
+             <mrow>
+              <mi>k</mi>
+              <mo>=</mo>
+              <mn>1</mn>
+             </mrow>
+             <mi>n</mi>
+            </msubsup>
+            <mrow>
+             <msub>
+              <mi>x</mi>
+              <mi>k</mi>
+             </msub>
+             <msup>
+              <mover accent="true">
+               <mi>𝐊</mi>
+               <mo stretchy="false">¯</mo>
+              </mover>
+              <mrow>
+               <mo stretchy="false">(</mo>
+               <mi>k</mi>
+               <mo stretchy="false">)</mo>
+              </mrow>
+             </msup>
+            </mrow>
+           </mrow>
+          </mrow>
+          <mo>∥</mo>
+         </mrow>
+         <mi>F</mi>
+         <mn>2</mn>
+        </msubsup>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mi>λ</mi>
+        <msub>
+         <mrow>
+          <mo>∥</mo>
+          <mi>𝐱</mi>
+          <mo>∥</mo>
+         </mrow>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo rspace="12.5pt">,</mo>
+      <mrow>
+       <mpadded width="+5pt">
+        <mtext>s.t.</mtext>
+       </mpadded>
+       <msub>
+        <mi>x</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+      <mo>,</mo>
+      <mi mathvariant="normal">…</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>x</mi>
+       <mi>n</mi>
+      </msub>
+     </mrow>
+     <mo>≥</mo>
+     <mn>0</mn>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <ci>HSICLasso</ci>
+    <apply>
+     <geq></geq>
+     <list>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <min></min>
+          <ci>𝐱</ci>
+         </apply>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="latexml">norm</csymbol>
+           <apply>
+            <minus></minus>
+            <apply>
+             <ci>normal-¯</ci>
+             <ci>𝐋</ci>
+            </apply>
+            <apply>
+             <apply>
+              <csymbol cd="ambiguous">superscript</csymbol>
+              <apply>
+               <csymbol cd="ambiguous">subscript</csymbol>
+               <sum></sum>
+               <apply>
+                <eq></eq>
+                <ci>k</ci>
+                <cn type="integer">1</cn>
+               </apply>
+              </apply>
+              <ci>n</ci>
+             </apply>
+             <apply>
+              <times></times>
+              <apply>
+               <csymbol cd="ambiguous">subscript</csymbol>
+               <ci>x</ci>
+               <ci>k</ci>
+              </apply>
+              <apply>
+               <csymbol cd="ambiguous">superscript</csymbol>
+               <apply>
+                <ci>normal-¯</ci>
+                <ci>𝐊</ci>
+               </apply>
+               <ci>k</ci>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>F</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>λ</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <csymbol cd="latexml">norm</csymbol>
+          <ci>𝐱</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <mtext>s.t.</mtext>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>n</ci>
+      </apply>
+     </list>
+     <cn type="integer">0</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{HSICLasso}:\min_{\mathbf{x}}\frac{1}{2}\|\bar{\mathbf{L}}-\sum_{k=1}^{%
+n}x_{k}\bar{\mathbf{K}}^{(k)}\|^{2}_{F}+\lambda\|\mathbf{x}\|_{1},\quad\mbox{s%
+.t.}\ x_{1},\ldots,x_{n}\geq 0,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Feature_selection:40">
+ <semantics>
+  <mrow>
+   <mo>∥</mo>
+   <mo>⋅</mo>
+   <msub>
+    <mo>∥</mo>
+    <mi>F</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="latexml">parallel-to</csymbol>
+    <ci>normal-⋅</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <csymbol cd="latexml">parallel-to</csymbol>
+     <ci>F</ci>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \|\cdot\|_{F}
+  </annotation>
+ </semantics>
+</math>
+
+ is the Frobenius norm. The optimization problem is a Lasso problem, and thus it can be efficiently solved with a state-of-the-art Lasso solver such as the dual augmented Lagrangian method.</p>
+<h2 id="correlation-feature-selection">Correlation feature selection</h2>
+
+<p>The Correlation Feature Selection (CFS) measure evaluates subsets of features on the basis of the following hypothesis: "Good feature subsets contain features highly correlated with the classification, yet uncorrelated to each other".<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a><a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a> The following equation gives the merit of a feature subset <em>S</em> consisting of <em>k</em> features:</p>
+
+<p>
+
+<math display="inline" id="Feature_selection:41">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>M</mi>
+     <mi>e</mi>
+     <mi>r</mi>
+     <mi>i</mi>
+     <msub>
+      <mi>t</mi>
+      <msub>
+       <mi>S</mi>
+       <mi>k</mi>
+      </msub>
+     </msub>
+    </mrow>
+    <mo>=</mo>
+    <mfrac>
+     <mrow>
+      <mi>k</mi>
+      <mover accent="true">
+       <msub>
+        <mi>r</mi>
+        <mrow>
+         <mi>c</mi>
+         <mi>f</mi>
+        </mrow>
+       </msub>
+       <mo>¯</mo>
+      </mover>
+     </mrow>
+     <msqrt>
+      <mrow>
+       <mi>k</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi>k</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>k</mi>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mover accent="true">
+         <msub>
+          <mi>r</mi>
+          <mrow>
+           <mi>f</mi>
+           <mi>f</mi>
+          </mrow>
+         </msub>
+         <mo>¯</mo>
+        </mover>
+       </mrow>
+      </mrow>
+     </msqrt>
+    </mfrac>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>M</ci>
+     <ci>e</ci>
+     <ci>r</ci>
+     <ci>i</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>S</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>k</ci>
+      <apply>
+       <ci>normal-¯</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>r</ci>
+        <apply>
+         <times></times>
+         <ci>c</ci>
+         <ci>f</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <root></root>
+      <apply>
+       <plus></plus>
+       <ci>k</ci>
+       <apply>
+        <times></times>
+        <ci>k</ci>
+        <apply>
+         <minus></minus>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <apply>
+         <ci>normal-¯</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>r</ci>
+          <apply>
+           <times></times>
+           <ci>f</ci>
+           <ci>f</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Merit_{S_{k}}=\frac{k\overline{r_{cf}}}{\sqrt{k+k(k-1)\overline{r_{ff}}}}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Here, 
+
+<math display="inline" id="Feature_selection:42">
+ <semantics>
+  <mover accent="true">
+   <msub>
+    <mi>r</mi>
+    <mrow>
+     <mi>c</mi>
+     <mi>f</mi>
+    </mrow>
+   </msub>
+   <mo>¯</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-¯</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>r</ci>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <ci>f</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \overline{r_{cf}}
+  </annotation>
+ </semantics>
+</math>
+
+ is the average value of all feature-classification correlations, and 
+
+<math display="inline" id="Feature_selection:43">
+ <semantics>
+  <mover accent="true">
+   <msub>
+    <mi>r</mi>
+    <mrow>
+     <mi>f</mi>
+     <mi>f</mi>
+    </mrow>
+   </msub>
+   <mo>¯</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-¯</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>r</ci>
+     <apply>
+      <times></times>
+      <ci>f</ci>
+      <ci>f</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \overline{r_{ff}}
+  </annotation>
+ </semantics>
+</math>
+
+ is the average value of all feature-feature correlations. The CFS criterion is defined as follows:</p>
+
+<p>
+
+<math display="inline" id="Feature_selection:44">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>CFS</mi>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>max</mi>
+      <msub>
+       <mi>S</mi>
+       <mi>k</mi>
+      </msub>
+     </msub>
+     <mrow>
+      <mo>[</mo>
+      <mfrac>
+       <mrow>
+        <msub>
+         <mi>r</mi>
+         <mrow>
+          <mi>c</mi>
+          <msub>
+           <mi>f</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+        </msub>
+        <mo>+</mo>
+        <msub>
+         <mi>r</mi>
+         <mrow>
+          <mi>c</mi>
+          <msub>
+           <mi>f</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+        </msub>
+        <mo>+</mo>
+        <mi mathvariant="normal">⋯</mi>
+        <mo>+</mo>
+        <msub>
+         <mi>r</mi>
+         <mrow>
+          <mi>c</mi>
+          <msub>
+           <mi>f</mi>
+           <mi>k</mi>
+          </msub>
+         </mrow>
+        </msub>
+       </mrow>
+       <msqrt>
+        <mrow>
+         <mi>k</mi>
+         <mo>+</mo>
+         <mrow>
+          <mn>2</mn>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <msub>
+             <mi>r</mi>
+             <mrow>
+              <msub>
+               <mi>f</mi>
+               <mn>1</mn>
+              </msub>
+              <msub>
+               <mi>f</mi>
+               <mn>2</mn>
+              </msub>
+             </mrow>
+            </msub>
+            <mo>+</mo>
+            <mi mathvariant="normal">⋯</mi>
+            <mo>+</mo>
+            <msub>
+             <mi>r</mi>
+             <mrow>
+              <msub>
+               <mi>f</mi>
+               <mi>i</mi>
+              </msub>
+              <msub>
+               <mi>f</mi>
+               <mi>j</mi>
+              </msub>
+             </mrow>
+            </msub>
+            <mo>+</mo>
+            <mi mathvariant="normal">⋯</mi>
+            <mo>+</mo>
+            <msub>
+             <mi>r</mi>
+             <mrow>
+              <msub>
+               <mi>f</mi>
+               <mi>k</mi>
+              </msub>
+              <msub>
+               <mi>f</mi>
+               <mn>1</mn>
+              </msub>
+             </mrow>
+            </msub>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+       </msqrt>
+      </mfrac>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>CFS</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <max></max>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>S</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>r</ci>
+        <apply>
+         <times></times>
+         <ci>c</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>f</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>r</ci>
+        <apply>
+         <times></times>
+         <ci>c</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>f</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+       <ci>normal-⋯</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>r</ci>
+        <apply>
+         <times></times>
+         <ci>c</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>f</ci>
+          <ci>k</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <root></root>
+       <apply>
+        <plus></plus>
+        <ci>k</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">2</cn>
+         <apply>
+          <plus></plus>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>r</ci>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>f</ci>
+             <cn type="integer">1</cn>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>f</ci>
+             <cn type="integer">2</cn>
+            </apply>
+           </apply>
+          </apply>
+          <ci>normal-⋯</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>r</ci>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>f</ci>
+             <ci>i</ci>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>f</ci>
+             <ci>j</ci>
+            </apply>
+           </apply>
+          </apply>
+          <ci>normal-⋯</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>r</ci>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>f</ci>
+             <ci>k</ci>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>f</ci>
+             <cn type="integer">1</cn>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{CFS}=\max_{S_{k}}\left[\frac{r_{cf_{1}}+r_{cf_{2}}+\cdots+r_{cf_{k}}}{%
+\sqrt{k+2(r_{f_{1}f_{2}}+\cdots+r_{f_{i}f_{j}}+\cdots+r_{f_{k}f_{1}})}}\right].
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The 
+
+<math display="inline" id="Feature_selection:45">
+ <semantics>
+  <msub>
+   <mi>r</mi>
+   <mrow>
+    <mi>c</mi>
+    <msub>
+     <mi>f</mi>
+     <mi>i</mi>
+    </msub>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>r</ci>
+    <apply>
+     <times></times>
+     <ci>c</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r_{cf_{i}}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Feature_selection:46">
+ <semantics>
+  <msub>
+   <mi>r</mi>
+   <mrow>
+    <msub>
+     <mi>f</mi>
+     <mi>i</mi>
+    </msub>
+    <msub>
+     <mi>f</mi>
+     <mi>j</mi>
+    </msub>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>r</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r_{f_{i}f_{j}}
+  </annotation>
+ </semantics>
+</math>
+
+ variables are referred to as correlations, but are not necessarily <a href="Pearson_product-moment_correlation_coefficient" title="wikilink">Pearson's correlation coefficient</a> or <a href="Spearman's_rank_correlation_coefficient" title="wikilink">Spearman's ρ</a>. Dr. Mark Hall's dissertation uses neither of these, but uses three different measures of relatedness, <a href="minimum_description_length" title="wikilink">minimum description length</a> (MDL), <a href="Mutual_Information#Normalized_variants" title="wikilink">symmetrical uncertainty</a>, and <a href="Relief_(feature_selection)" title="wikilink">relief</a>.</p>
+
+<p>Let <em>x<sub>i</sub></em> be the set membership <a href="indicator_function" title="wikilink">indicator function</a> for feature <em>f<sub>i</sub></em>; then the above can be rewritten as an optimization problem:</p>
+
+<p>
+
+<math display="inline" id="Feature_selection:47">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>CFS</mi>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>max</mi>
+      <mrow>
+       <mi>x</mi>
+       <mo>∈</mo>
+       <msup>
+        <mrow>
+         <mo stretchy="false">{</mo>
+         <mn>0</mn>
+         <mo>,</mo>
+         <mn>1</mn>
+         <mo stretchy="false">}</mo>
+        </mrow>
+        <mi>n</mi>
+       </msup>
+      </mrow>
+     </msub>
+     <mrow>
+      <mo>[</mo>
+      <mfrac>
+       <msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mstyle displaystyle="false">
+           <msubsup>
+            <mo largeop="true" symmetric="true">∑</mo>
+            <mrow>
+             <mi>i</mi>
+             <mo>=</mo>
+             <mn>1</mn>
+            </mrow>
+            <mi>n</mi>
+           </msubsup>
+          </mstyle>
+          <mrow>
+           <msub>
+            <mi>a</mi>
+            <mi>i</mi>
+           </msub>
+           <msub>
+            <mi>x</mi>
+            <mi>i</mi>
+           </msub>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+       <mrow>
+        <mrow>
+         <mstyle displaystyle="false">
+          <msubsup>
+           <mo largeop="true" symmetric="true">∑</mo>
+           <mrow>
+            <mi>i</mi>
+            <mo>=</mo>
+            <mn>1</mn>
+           </mrow>
+           <mi>n</mi>
+          </msubsup>
+         </mstyle>
+         <msub>
+          <mi>x</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+        <mo>+</mo>
+        <mrow>
+         <mstyle displaystyle="false">
+          <msub>
+           <mo largeop="true" symmetric="true">∑</mo>
+           <mrow>
+            <mi>i</mi>
+            <mo>≠</mo>
+            <mi>j</mi>
+           </mrow>
+          </msub>
+         </mstyle>
+         <mrow>
+          <mn>2</mn>
+          <msub>
+           <mi>b</mi>
+           <mrow>
+            <mi>i</mi>
+            <mi>j</mi>
+           </mrow>
+          </msub>
+          <msub>
+           <mi>x</mi>
+           <mi>i</mi>
+          </msub>
+          <msub>
+           <mi>x</mi>
+           <mi>j</mi>
+          </msub>
+         </mrow>
+        </mrow>
+       </mrow>
+      </mfrac>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>CFS</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <max></max>
+      <apply>
+       <in></in>
+       <ci>x</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <set>
+         <cn type="integer">0</cn>
+         <cn type="integer">1</cn>
+        </set>
+        <ci>n</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <sum></sum>
+          <ci>n</ci>
+         </apply>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>a</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>x</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <sum></sum>
+          <ci>n</ci>
+         </apply>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <neq></neq>
+          <ci>i</ci>
+          <ci>j</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <cn type="integer">2</cn>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>b</ci>
+          <apply>
+           <times></times>
+           <ci>i</ci>
+           <ci>j</ci>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>x</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>x</ci>
+          <ci>j</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{CFS}=\max_{x\in\{0,1\}^{n}}\left[\frac{(\sum^{n}_{i=1}a_{i}x_{i})^{2}}%
+{\sum^{n}_{i=1}x_{i}+\sum_{i\neq j}2b_{ij}x_{i}x_{j}}\right].
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The combinatorial problems above are, in fact, mixed 0–1 <a href="linear_programming" title="wikilink">linear programming</a> problems that can be solved by using <a href="branch-and-bound_algorithm" title="wikilink">branch-and-bound algorithms</a>.<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a></p>
+<h2 id="regularized-trees">Regularized trees</h2>
+
+<p>The features from a decision tree or a tree ensemble are shown to be redundant. A recent method called regularized tree<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a> can be used for feature subset selection. Regularized trees penalize using a variable similar to the variables selected at previous tree nodes for splitting the current node. Regularized trees only need build one tree model (or one tree ensemble model) and thus are computationally efficient.</p>
+
+<p>Regularized trees naturally handle numerical and categorical features, interactions and nonlinearities. They are invariant to attribute scales (units) and insensitive to outliers, and thus, require little data preprocessing such as normalization. Regularized random forest (RRF) (<a href="http://cran.r-project.org/web/packages/RRF/index.html">RRF</a>) is one type of regularized trees. The guided RRF is an enhanced RRF which is guided by the importance scores from an ordinary random forest.</p>
+<h2 id="overview-on-metaheuristics-methods">Overview on metaheuristics methods</h2>
+
+<p>A <a class="uri" href="metaheuristic" title="wikilink">metaheuristic</a> is a general description of an algorithm dedicated to solve difficult (typically NP-hard problem) optimisation problems for which there is no classical solving methods. Generally, a metaheuristic is a stochastics algorithm tending to reach a global optima. There are many metaheuristics, from a simple local search to a complex global search algorithm.</p>
+<h3 id="main-principles">Main principles</h3>
+
+<p>The feature selection methods are typically presented in three classes based on how they combine the selection algorithm and the model building</p>
+<h4 id="filter-method">Filter Method</h4>
+
+<p>Filter type methods select variables regardless of the model. They are based only on general features like the correlation with the variable to predict. Filter methods suppress the least interesting variables. The others variables will be part of a the model classification, a regression used to classify or a data prediction. These methods are particularly effective in computation time and robust to overfitting.<a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a></p>
+
+<p>However, filter methods tend to select redundant variables because they do not consider the relationships between variables. Therefore, they are mainly used as a pre-process method.</p>
+<figure><b>(Figure)</b>
+<figcaption>Filter Method for feature selection</figcaption>
+</figure>
+<h4 id="wrapper-method">Wrapper Method</h4>
+
+<p>Wrapper methods evaluate subsets of variables which allows, unlike filter approaches, to detect the possible interactions between variables.<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a> The two main disadvantages of these methods are :</p>
+<ul>
+<li>The increasing overfitting risk when the number of observations is insufficient.</li>
+<li>The significant computation time when the number of variables is large.</li>
+</ul>
+<figure><b>(Figure)</b>
+<figcaption>Wrapper Method for Feature selection</figcaption>
+</figure>
+<h4 id="embedded-method">Embedded Method</h4>
+
+<p>Recently, embedded methods have been proposed to reduce the classification of learning. They try to combine the advantages of both previous methods. The learning algorithm takes advantage of its own variable selection algorithm. So, it needs to know preliminary what a good selection is, which limits their exploitation.<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a></p>
+<figure><b>(Figure)</b>
+<figcaption>Embedded method for Feature selection</figcaption>
+</figure>
+<h3 id="application-of-feature-selection-metaheuristics">Application of feature selection metaheuristics</h3>
+
+<p>This is a survey of the application of feature selection metaheuristics lately used in the literature. This survey was realized by J. Hammon in her thesis.<a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a></p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Application</p></th>
+<th style="text-align: left;">
+<p>Algorithm</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>classifier</p></th>
+<th style="text-align: left;">
+<p>Evaluation Function</p></th>
+<th style="text-align: left;">
+<p>Ref</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>SNPs</p></td>
+<td style="text-align: left;">
+<p>Feature Selection Feature Similarity</p></td>
+<td style="text-align: left;">
+<p>Filter</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>r<sup>2</sup></p></td>
+<td style="text-align: left;">
+<p>Phuong 2005 <a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>SNPs</p></td>
+<td style="text-align: left;">
+<p>Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Decision Tree</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (10-fold)</p></td>
+<td style="text-align: left;">
+<p>Shah 2004 <a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>SNPs</p></td>
+<td style="text-align: left;">
+<p>HillClimbing</p></td>
+<td style="text-align: left;">
+<p>Filter + Wrapper</p></td>
+<td style="text-align: left;">
+<p>Naive Bayesian</p></td>
+<td style="text-align: left;">
+<p>Predicted residual sum of squares</p></td>
+<td style="text-align: left;">
+<p>Long 2007 <a class="footnoteRef" href="#fn31" id="fnref31"><sup>31</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>SNPs</p></td>
+<td style="text-align: left;">
+<p>Simuleating Annealing</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>Naive bayesian</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (5-fold)</p></td>
+<td style="text-align: left;">
+<p>Ustunkar 2011 <a class="footnoteRef" href="#fn32" id="fnref32"><sup>32</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Segments parole</p></td>
+<td style="text-align: left;">
+<p>Ants colony</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Artificial Neural Network</p></td>
+<td style="text-align: left;">
+<p>MSE</p></td>
+<td style="text-align: left;">
+<p>Al-ani 2005 <a class="footnoteRef" href="#fn33" id="fnref33"><sup>33</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Marketing</p></td>
+<td style="text-align: left;">
+<p>Simulated Annealing</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Regression</p></td>
+<td style="text-align: left;">
+<p>AIC, r<sup>2</sup></p></td>
+<td style="text-align: left;">
+<p>Meiri 2006 <a class="footnoteRef" href="#fn34" id="fnref34"><sup>34</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Economy</p></td>
+<td style="text-align: left;">
+<p>Simulated Annealing, Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Regression</p></td>
+<td style="text-align: left;">
+<p>BIC</p></td>
+<td style="text-align: left;">
+<p>Kapetanios 2005 <a class="footnoteRef" href="#fn35" id="fnref35"><sup>35</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Spectral Mass</p></td>
+<td style="text-align: left;">
+<p>Genectic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Multiple Regression Linear, Partial Least Square</p></td>
+<td style="text-align: left;">
+<p>root-mean-square error of prediction</p></td>
+<td style="text-align: left;">
+<p>Broadhurst 2007 <a class="footnoteRef" href="#fn36" id="fnref36"><sup>36</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Tabu Search + PSO</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Support Vector Machine, K Nearest Neighbor</p></td>
+<td style="text-align: left;">
+<p>Euclidian Distance</p></td>
+<td style="text-align: left;">
+<p>Chuang 2009 <a class="footnoteRef" href="#fn37" id="fnref37"><sup>37</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>PSO + Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Support Vector Machine</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (10-fold)</p></td>
+<td style="text-align: left;">
+<p>Alba 2007 <a class="footnoteRef" href="#fn38" id="fnref38"><sup>38</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Genetic Algorithm + Iterated Local Search</p></td>
+<td style="text-align: left;">
+<p>Embedded</p></td>
+<td style="text-align: left;">
+<p>Support Vector Machine</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (10-fold)</p></td>
+<td style="text-align: left;">
+<p>Duval 2009 <a class="footnoteRef" href="#fn39" id="fnref39"><sup>39</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Iterated Local Search</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Regression</p></td>
+<td style="text-align: left;">
+<p>Posterior Probability</p></td>
+<td style="text-align: left;">
+<p>Hans 2007 <a class="footnoteRef" href="#fn40" id="fnref40"><sup>40</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>K Nearest Neighbor</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (Leave-one-out cross-validation)</p></td>
+<td style="text-align: left;">
+<p>Jirapech-Umpai 2005 <a class="footnoteRef" href="#fn41" id="fnref41"><sup>41</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Hybrid Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>K Nearest Neighbor</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (Leave-one-out cross-validation)</p></td>
+<td style="text-align: left;">
+<p>Oh 2004 <a class="footnoteRef" href="#fn42" id="fnref42"><sup>42</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Support Vector Machine</p></td>
+<td style="text-align: left;">
+<p>Sensibility Specificity</p></td>
+<td style="text-align: left;">
+<p>Xuan 2011 <a class="footnoteRef" href="#fn43" id="fnref43"><sup>43</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>All paired, Support Vector Machine</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (Leave-one-out cross-validation)</p></td>
+<td style="text-align: left;">
+<p>Peng 2003 <a class="footnoteRef" href="#fn44" id="fnref44"><sup>44</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Embedded</p></td>
+<td style="text-align: left;">
+<p>Support Vector Machine</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (10-fold)</p></td>
+<td style="text-align: left;">
+<p>Hernandez 2007 <a class="footnoteRef" href="#fn45" id="fnref45"><sup>45</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Hybrid</p></td>
+<td style="text-align: left;">
+<p>Support Vector Machine</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (Leave-one-out cross-validation)</p></td>
+<td style="text-align: left;">
+<p>Huerta 2006 <a class="footnoteRef" href="#fn46" id="fnref46"><sup>46</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Genetic Algorithm</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>Support Vector Machine</p></td>
+<td style="text-align: left;">
+<p>Classification accuracy (10-fold)</p></td>
+<td style="text-align: left;">
+<p>Muni 2006 <a class="footnoteRef" href="#fn47" id="fnref47"><sup>47</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Microarray</p></td>
+<td style="text-align: left;">
+<p>Genetic Algorithm</p></td>
+<td style="text-align: left;">
+<p>Wrapper</p></td>
+<td style="text-align: left;">
+<p>Support Vector Machine</p></td>
+<td style="text-align: left;">
+<p>EH-DIALL, CLUMP</p></td>
+<td style="text-align: left;">
+<p>Jourdan 2004 <a class="footnoteRef" href="#fn48" id="fnref48"><sup>48</sup></a></p></td>
+</tr>
+</tbody>
+</table>
+<h2 id="feature-selection-embedded-in-learning-algorithms">Feature selection embedded in learning algorithms</h2>
+
+<p>Some learning algorithms perform feature selection as part of their overall operation. These include:</p>
+<ul>
+<li>
+
+<p>-regularisation techniques, such as sparse regression, LASSO, and -SVM</p></li>
+<li><a href="http://arxiv.org/abs/1201.1587">Regularized trees</a> e.g. regularized random forest implemented in the <a href="http://cran.r-project.org/web/packages/RRF/index.html">RRF</a> package</li>
+<li><a href="Decision_tree_learning" title="wikilink">Decision tree</a></li>
+<li><a href="Memetic_algorithm" title="wikilink">Memetic algorithm</a></li>
+<li><a href="Random_multinomial_logit" title="wikilink">Random multinomial logit</a> (RMNL)</li>
+<li>Auto-encoding networks with a bottleneck-layer</li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Cluster_analysis" title="wikilink">Cluster analysis</a></li>
+<li><a href="Dimensionality_reduction" title="wikilink">Dimensionality reduction</a></li>
+<li><a href="Feature_extraction" title="wikilink">Feature extraction</a></li>
+<li><a href="Data_mining" title="wikilink">Data mining</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="http://www.public.asu.edu/~jtang20/publication/feature_selection_for_classification.pdf">Feature Selection for Classification: A Review</a> (Survey,2014)</li>
+<li><a href="http://www.public.asu.edu/~jtang20/publication/FSClustering.pdf">Feature Selection for Clustering: A Review</a> (Survey,2013)</li>
+<li><a href="http://featureselection.asu.edu/featureselection_techreport.pdf">Tutorial Outlining Feature Selection Algorithms, Arizona State University</a></li>
+<li><a href="http://jmlr.csail.mit.edu/papers/special/feature03.html">JMLR Special Issue on Variable and Feature Selection</a></li>
+<li>[<a class="uri" href="http://www.springer.com/west/home?SGWID=4-102-22-33327495-0&amp;changeHeader">http://www.springer.com/west/home?SGWID=4-102-22-33327495-0&amp;changeHeader;</a>;=true&amp;referer;=www.wkap.nl&amp;SHORTCUT;=www.springer.com/prod/b/0-7923-8198-X Feature Selection for Knowledge Discovery and Data Mining] (Book)</li>
+<li><a href="http://jmlr.csail.mit.edu/papers/volume3/guyon03a/guyon03a.pdf">An Introduction to Variable and Feature Selection</a> (Survey)</li>
+<li><a href="http://ieeexplore.ieee.org/iel5/69/30435/01401889.pdf">Toward integrating feature selection algorithms for classification and clustering</a> (Survey)</li>
+<li><a href="http://library.utia.cas.cz/separaty/2010/RO/somol-efficient%20feature%20subset%20selection%20and%20subset%20size%20optimization.pdf">Efficient Feature Subset Selection and Subset Size Optimization</a> (Survey, 2010)</li>
+<li><a href="http://www.ijcai.org/papers07/Papers/IJCAI07-187.pdf">Searching for Interacting Features</a></li>
+<li><a href="http://www.autonlab.org/icml_documents/camera-ready/107_Feature_Subset_Selec.pdf">Feature Subset Selection Bias for Classification Learning</a></li>
+<li>Y. Sun, S. Todorovic, S. Goodison, <a href="http://plaza.ufl.edu/sunyijun/PAMI2.htm">Local Learning Based Feature Selection for High-dimensional Data Analysis</a>, <em>IEEE Transactions on Pattern Analysis and Machine Intelligence</em>, vol. 32, no. 9, pp. 1610–1626, 2010.</li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.mathworks.com/matlabcentral/fileexchange/47129-information-theoretic-feature-selection">A comprehensive package for Mutual Information based feature selection in Matlab</a></li>
+<li><a href="http://featureselection.asu.edu/software.php">Feature Selection Package, Arizona State University (Matlab Code)</a></li>
+<li><a href="http://www.clopinet.com/isabelle/Projects/NIPS2003/">NIPS challenge 2003</a> (see also <a href="Conference_on_Neural_Information_Processing_Systems" title="wikilink">NIPS</a>)</li>
+<li><a href="http://paul.luminos.nl/documents/show_document.php?d=198">Naive Bayes implementation with feature selection in Visual Basic</a> (includes executable and source code)</li>
+<li><a href="http://penglab.janelia.org/proj/mRMR/index.htm">Minimum-redundancy-maximum-relevance (mRMR) feature selection program</a></li>
+<li><a href="http://mloss.org/software/view/386/">FEAST</a> (Open source Feature Selection algorithms in C and MATLAB)</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Model_selection" title="wikilink">Category:Model selection</a> <a href="Category:Dimension_reduction" title="wikilink">Category:Dimension reduction</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"></li>
+<li id="fn6"></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11">F.C. Garcia-Lopez, M. Garcia-Torres, B. Melian, J.A. Moreno-Perez, J.M. Moreno-Vega. Solving Feature Subset Selection Problem by a Hybrid Metaheuristic. In <em>First International Workshop on Hybrid Metaheuristics</em>, pp. 59–68, 2004.<a href="#fnref11">↩</a></li>
+<li id="fn12">Alexander Kraskov, Harald Stögbauer, Ralph G. Andrzejak, and <a href="Peter_Grassberger" title="wikilink">Peter Grassberger</a>, "Hierarchical Clustering Based on Mutual Information", (2003) <em><a href="http://arxiv.org/abs/q-bio/0311039">ArXiv q-bio/0311039</a></em><a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+<li id="fn14"> <a href="http://penglab.janelia.org/proj/mRMR/index.htm">Program</a><a href="#fnref14">↩</a></li>
+<li id="fn15">Brown, G., Pocock, A., Zhao, M.-J., Lujan, M. (2012). "Conditional Likelihood Maximisation: A Unifying Framework for Information Theoretic Feature Selection", In the Journal of Machine Learning Research (JMLR). <a href="http://www.jmlr.org/papers/volume13/brown12a/brown12a.pdf">1</a><a href="#fnref15">↩</a></li>
+<li id="fn16"></li>
+<li id="fn17">Nguyen, H., Franke, K., Petrovic, S. (2010). "Towards a Generic Feature-Selection Measure for Intrusion Detection", In Proc. International Conference on Pattern Recognition (ICPR), Istanbul, Turkey. <a href="https://www.researchgate.net/publication/220928649_Towards_a_Generic_Feature-Selection_Measure_for_Intrusion_Detection?ev=prf_pub">2</a><a href="#fnref17">↩</a></li>
+<li id="fn18"><a href="#fnref18">↩</a></li>
+<li id="fn19"></li>
+<li id="fn20">Nguyen X. Vinh, Jeffrey Chan, Simone Romano and James Bailey, "Effective Global Approaches for Mutual Information based Feature Selection". Proceeedings of the 20th ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD'14), August 24–27, New York City, 2014. "<a href="http://people.eng.unimelb.edu.au/baileyj/papers/frp0038-Vinh.pdf">3</a>"<a href="#fnref20">↩</a></li>
+<li id="fn21">M. Hall 1999, <a href="http://www.cs.waikato.ac.nz/~mhall/thesis.pdf">Correlation-based Feature Selection for Machine Learning</a><a href="#fnref21">↩</a></li>
+<li id="fn22">Senliol, Baris, et al. "Fast Correlation Based Filter (FCBF) with a different search strategy." Computer and Information Sciences, 2008. ISCIS'08. 23rd International Symposium on. IEEE, 2008. [<a class="uri" href="http://ieeexplore.ieee.org/xpl/articleDetails.jsp?tp">http://ieeexplore.ieee.org/xpl/articleDetails.jsp?tp</a>=&amp;arnumber;=4717949]<a href="#fnref22">↩</a></li>
+<li id="fn23">Hai Nguyen, Katrin Franke, and Slobodan Petrovic, Optimizing a class of feature selection measures, Proceedings of the NIPS 2009 Workshop on Discrete Optimization in Machine Learning: Submodularity, Sparsity &amp; Polyhedra (DISCML), Vancouver, Canada, December 2009. <a href="https://www.researchgate.net/publication/231175763_Optimizing_a_Class_of_Feature_Selection_Measures?ev=prf_pub">4</a><a href="#fnref23">↩</a></li>
+<li id="fn24">H. Deng, G. Runger, "<a href="https://sites.google.com/site/houtaodeng/publications/FSRegularizedTrees.pdf?attredirects=0">Feature Selection via Regularized Trees</a>", Proceedings of the 2012 International Joint Conference on Neural Networks (IJCNN), IEEE, 2012<a href="#fnref24">↩</a></li>
+<li id="fn25">J. Hammon. Optimisation combinatoire pour la sélection de variables en régression en grande dimension : Application en génétique animale. November 2013<a href="#fnref25">↩</a></li>
+<li id="fn26">T. M. Phuong, Z. Lin et R. B. Altman. Choosing SNPs using feature selection. Proceedings / IEEE Computational Systems Bioinformatics Conference, CSB. IEEE Computational Systems Bioinformatics Conference, pages 301-309, 2005. PMID 16447987.<a href="#fnref26">↩</a></li>
+<li id="fn27">B. Duval, J.-K. Hao et J. C. Hernandez Hernandez. A memetic algorithm for gene selection and molecular classification of an cancer. In Proceedings of the 11th Annual conference on Genetic and evolutionary computation, GECCO '09, pages 201-208, New York, NY, USA, 2009. ACM.<a href="#fnref27">↩</a></li>
+<li id="fn28"></li>
+<li id="fn29"></li>
+<li id="fn30">S. C. Shah et A. Kusiak. Data mining and genetic algorithm based gene/SNP selection. Artificial intelligence in medicine, vol. 31, no. 3, pages 183-196, July 2004. PMID 15302085.<a href="#fnref30">↩</a></li>
+<li id="fn31">N. Long, D. Gianola, G. J.M Rosa et K. A Weigel. Dimension redu ction and variable selection for genomic selection : application to predicting milk yield in Holsteins. Journal of Animal Breeding and Genetics, vol. 128, no. 4, pages 247-257, August 2011.<a href="#fnref31">↩</a></li>
+<li id="fn32">G. Ustunkar, S. Ozogur-Akyuz, G. W. Weber, C. M. Friedrich et Yesim Aydin Son. Selection of representative SNP sets for genome-wide association studies : a metaheuristic approach. Optimization Letters, November 2011.<a href="#fnref32">↩</a></li>
+<li id="fn33">A. Al-ani. Ant Colony Optimization for Feature Subset Selection. In Proceedings of World Academy of Science, Engineering and Technology, pages 35-38, 2005.<a href="#fnref33">↩</a></li>
+<li id="fn34">R. Meiri et J. Zahavi. Using simulated annealing to optimize the feature selection problem in marketing applications. European Journal of Operational Research, vol. 171, no. 3, pages 842-858, Juin 2006<a href="#fnref34">↩</a></li>
+<li id="fn35">G. Kapetanios. Variable Selection using Non-Standard Optimisation of Information Criteria. Working Paper 533, Queen Mary, University of London, School of Economics and Finance, 2005.<a href="#fnref35">↩</a></li>
+<li id="fn36">D. Broadhurst, R. Goodacre, A. Jones, J. J. Rowland et D. B. Kell. Genetic algorithms as a method for variable selection in multiple linear regression and partial least squares regression, with applications to pyrolysis mass spectrometry. Analytica Chimica Acta, vol. 348, no. 1-3, pages 71-86, August 1997.<a href="#fnref36">↩</a></li>
+<li id="fn37">L.-Y. Chuang, C.-H. Yang et C.-H. Yang. Tabu search and binary particle swarm optimization for feature selection using microarray data. Journal of computational biology : a journal of computational molecular cell biology, vol. 16, no. 12, pages 1689-1703, Décembre 2009. PMID 20047491<a href="#fnref37">↩</a></li>
+<li id="fn38">E. Alba, J. Garia-Nieto, L. Jourdan et E.-G. Talbi. Gene Selection in Cancer Classification using PSO-SVM and GA-SVM Hybrid Algorithms. Congress on Evolutionary Computation, Singapor : Singapore (2007), 2007<a href="#fnref38">↩</a></li>
+<li id="fn39"></li>
+<li id="fn40">C. Hans, A. Dobra et M. West. Shotgun stochastic search for 'large p' regression. Journal of the American Statistical Association, 2007.<a href="#fnref40">↩</a></li>
+<li id="fn41">T. Jirapech-Umpai et S. Aitken. Feature selection and classification for microarray data analysis : Evolutionary methods for identifying predictive genes. BMC bioinformatics, vol. 6, no. 1, page 148, 2005.<a href="#fnref41">↩</a></li>
+<li id="fn42">I. S. Oh, J. S. Lee et B. R. Moon. Hybrid genetic algorithms for feature selection. IEEE Transactions on Pattern Analysis and Machine Intelligence, vol. 26, no. 11, pages 1424-1437, November 2004.<a href="#fnref42">↩</a></li>
+<li id="fn43">P. Xuan, M. Z. Guo, J.Wang, C. Y.Wang, X. Y. Liu et Y. Liu. Genetic algorithm-based efficient feature selection for classification of pre-miRNAs. Genetics and Molecular Research : GMR, vol. 10, no. 2, pages 588-603, 2011. PMID 21491369.<a href="#fnref43">↩</a></li>
+<li id="fn44">S. Peng. Molecular classification of cancer types from microarray data using the combination of genetic algorithms and support vector machines. FEBS Letters, vol. 555, no. 2, pages 358-362, December 2003.<a href="#fnref44">↩</a></li>
+<li id="fn45">J. C. H. Hernandez, B. Duval et J.-K. Hao. A genetic embedded approach for gene selection and classification of microarray data. In Proceedings of the 5th European conference on Evolutionary computation, machine learning and data mining in bioinformatics, EvoBIO'07, pages 90-101, Berlin, Heidelberg, 2007. SpringerVerlag.<a href="#fnref45">↩</a></li>
+<li id="fn46">E. B. Huerta, B. Duval et J.-K. Hao. A hybrid GA/SVM approach for gene selection and classification of microarray data. evoworkshops 2006, LNCS, vol. 3907, pages 34-44, 2006.<a href="#fnref46">↩</a></li>
+<li id="fn47">D. P. Muni, N. R. Pal et J. Das. Genetic programming for simultaneous feature selection and classifier design. IEEE Transactions on Systems, Man, and Cybernetics, Part B : Cybernetics, vol. 36, no. 1, pages 106-117, February 2006.<a href="#fnref47">↩</a></li>
+<li id="fn48">L. Jourdan, C. Dhaenens et E.-G. Talbi. Linkage disequilibrium study with a parallel adaptive GA. International Journal of Foundations of Computer Science, 2004.<a href="#fnref48">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

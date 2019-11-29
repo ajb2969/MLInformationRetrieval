@@ -1,0 +1,913 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="763">Data-flow analysis</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Data-flow analysis</h1>
+<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</body></html>
+<body>
+<hr/>
+
+<p><strong>Data-flow analysis</strong> is a technique for gathering information about the possible set of values calculated at various points in a <a href="computer_program" title="wikilink">computer program</a>. A program's <a href="control_flow_graph" title="wikilink">control flow graph</a> (CFG) is used to determine those parts of a program to which a particular value assigned to a variable might propagate. The information gathered is often used by <a href="compiler" title="wikilink">compilers</a> when <a href="optimizing_compiler" title="wikilink">optimizing</a> a program. A canonical example of a data-flow analysis is <a href="reaching_definitions" title="wikilink">reaching definitions</a>.</p>
+
+<p>A simple way to perform data-flow analysis of programs is to set up data-flow equations for each <a href="node_(computer_science)" title="wikilink">node</a> of the control flow graph and solve them by repeatedly calculating the output from the input locally at each node until the whole system stabilizes, i.e., it reaches a <a class="uri" href="fixpoint" title="wikilink">fixpoint</a>. This general approach was developed by <a href="Gary_Kildall" title="wikilink">Gary Kildall</a> while teaching at the <a href="Naval_Postgraduate_School" title="wikilink">Naval Postgraduate School</a>.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h2 id="basic-principles">Basic principles</h2>
+
+<p>It is the process of collecting information about the way the variables are used, defined in the program. Data-flow analysis attempts to obtain particular information at each point in a procedure. Usually, it is enough to obtain this information at the boundaries of <a href="basic_block" title="wikilink">basic blocks</a>, since from that it is easy to compute the information at points in the basic block. In forward flow analysis, the exit state of a block is a function of the block's entry state. This function is the composition of the effects of the statements in the block. The entry state of a block is a function of the exit states of its predecessors. This yields a set of data-flow equations:</p>
+
+<p>For each block b:</p>
+
+<p>
+
+<math display="block" id="Data-flow_analysis:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>o</mi>
+    <mi>u</mi>
+    <msub>
+     <mi>t</mi>
+     <mi>b</mi>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>t</mi>
+    <mi>r</mi>
+    <mi>a</mi>
+    <mi>n</mi>
+    <msub>
+     <mi>s</mi>
+     <mi>b</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>i</mi>
+      <msub>
+       <mi>n</mi>
+       <mi>b</mi>
+      </msub>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>o</ci>
+     <ci>u</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <ci>b</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>r</ci>
+     <ci>a</ci>
+     <ci>n</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>b</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <ci>b</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   out_{b}=trans_{b}(in_{b})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Data-flow_analysis:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>i</mi>
+    <msub>
+     <mi>n</mi>
+     <mi>b</mi>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>j</mi>
+    <mi>o</mi>
+    <mi>i</mi>
+    <msub>
+     <mi>n</mi>
+     <mrow>
+      <mi>p</mi>
+      <mo>∈</mo>
+      <mrow>
+       <mi>p</mi>
+       <mi>r</mi>
+       <mi>e</mi>
+       <msub>
+        <mi>d</mi>
+        <mi>b</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>o</mi>
+      <mi>u</mi>
+      <msub>
+       <mi>t</mi>
+       <mi>p</mi>
+      </msub>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>n</ci>
+      <ci>b</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>j</ci>
+     <ci>o</ci>
+     <ci>i</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>n</ci>
+      <apply>
+       <in></in>
+       <ci>p</ci>
+       <apply>
+        <times></times>
+        <ci>p</ci>
+        <ci>r</ci>
+        <ci>e</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>d</ci>
+         <ci>b</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>o</ci>
+      <ci>u</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>t</ci>
+       <ci>p</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   in_{b}=join_{p\in pred_{b}}(out_{p})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>In this, 
+
+<math display="inline" id="Data-flow_analysis:2">
+ <semantics>
+  <mrow>
+   <mi>t</mi>
+   <mi>r</mi>
+   <mi>a</mi>
+   <mi>n</mi>
+   <msub>
+    <mi>s</mi>
+    <mi>b</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>t</ci>
+    <ci>r</ci>
+    <ci>a</ci>
+    <ci>n</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>b</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   trans_{b}
+  </annotation>
+ </semantics>
+</math>
+
+ is the <strong>transfer function</strong> of the block 
+
+<math display="inline" id="Data-flow_analysis:3">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+. It works on the entry state 
+
+<math display="inline" id="Data-flow_analysis:4">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <msub>
+    <mi>n</mi>
+    <mi>b</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>i</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <ci>b</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   in_{b}
+  </annotation>
+ </semantics>
+</math>
+
+, yielding the exit state 
+
+<math display="inline" id="Data-flow_analysis:5">
+ <semantics>
+  <mrow>
+   <mi>o</mi>
+   <mi>u</mi>
+   <msub>
+    <mi>t</mi>
+    <mi>b</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>o</ci>
+    <ci>u</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>t</ci>
+     <ci>b</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   out_{b}
+  </annotation>
+ </semantics>
+</math>
+
+. The <a href="Join_(mathematics)" title="wikilink">join operation</a> 
+
+<math display="inline" id="Data-flow_analysis:6">
+ <semantics>
+  <mrow>
+   <mi>j</mi>
+   <mi>o</mi>
+   <mi>i</mi>
+   <mi>n</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>j</ci>
+    <ci>o</ci>
+    <ci>i</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   join
+  </annotation>
+ </semantics>
+</math>
+
+ combines the exit states of the predecessors 
+
+<math display="inline" id="Data-flow_analysis:7">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mi>p</mi>
+    <mi>r</mi>
+    <mi>e</mi>
+    <msub>
+     <mi>d</mi>
+     <mi>b</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>p</ci>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <ci>r</ci>
+     <ci>e</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>d</ci>
+      <ci>b</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p\in pred_{b}
+  </annotation>
+ </semantics>
+</math>
+
+ of 
+
+<math display="inline" id="Data-flow_analysis:8">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+, yielding the entry state of 
+
+<math display="inline" id="Data-flow_analysis:9">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>After solving this set of equations, the entry and/or exit states of the blocks can be used to derive properties of the program at the block boundaries. The transfer function of each statement separately can be applied to get information at a point inside a basic block.</p>
+
+<p>Each particular type of data-flow analysis has its own specific transfer function and join operation. Some data-flow problems require backward flow analysis. This follows the same plan, except that the transfer function is applied to the exit state yielding the entry state, and the join operation works on the entry states of the successors to yield the exit state.</p>
+
+<p>The <a href="entry_point" title="wikilink">entry point</a> (in forward flow) plays an important role: Since it has no predecessors, its entry state is well defined at the start of the analysis. For instance, the set of local variables with known values is empty. If the control flow graph does not contain cycles (there were no explicit or implicit <a href="Control_flow#Loops" title="wikilink">loops</a> in the procedure) solving the equations is straightforward. The control flow graph can then be <a href="topological_sort" title="wikilink">topologically sorted</a>; running in the order of this sort, the entry states can be computed at the start of each block, since all predecessors of that block have already been processed, so their exit states are available. If the control flow graph does contain cycles, a more advanced algorithm is required.</p>
+<h2 id="an-iterative-algorithm">An iterative algorithm</h2>
+
+<p>The most common way of solving the data-flow equations is by using an iterative algorithm. It starts with an approximation of the in-state of each block. The out-states are then computed by applying the transfer functions on the in-states. From these, the in-states are updated by applying the join operations. The latter two steps are repeated until we reach the so-called <strong>fixpoint</strong>: the situation in which the in-states (and the out-states in consequence) do not change.</p>
+
+<p>A basic algorithm for solving data-flow equations is the <strong>round-robin iterative algorithm</strong>:</p>
+<dl>
+<dd>for <em>i</em> ← 1 to <em>N</em>
+<dl>
+<dd><em>initialize node i</em>
+</dd>
+</dl>
+</dd>
+<dd>while (<em>sets are still changing</em>)
+<dl>
+<dd>for <em>i</em> ← 1 to <em>N</em>
+<dl>
+<dd><em>recompute sets at node i</em>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd>
+</dl>
+<h3 id="convergence">Convergence</h3>
+
+<p>To be usable, the iterative approach should actually reach a fixpoint. This can be guaranteed by imposing constraints on the combination of the value domain of the states, the transfer functions and the join operation.</p>
+
+<p>The value domain should be a <a href="partial_order" title="wikilink">partial order</a> with <strong>finite height</strong> (i.e., there are no infinite ascending chains 
+
+<math display="inline" id="Data-flow_analysis:10">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ x_2  Furthermore, it depends, whether the data-flow equations are used for forward or backward data-flow analysis over the CFG. Intuitively, in a forward flow problem, it would be fastest if all predecessors of a block have been processed before the block itself, since then the iteration will use the latest information. In the absence of loops it is possible to order the blocks in such a way that the correct out-states are computed by processing each block only once.</p>
+
+<p>In the following, a few iteration orders for solving data-flow equations are discussed (a related concept to iteration order of a <a href="control_flow_graph" title="wikilink">CFG</a> is <a href="tree_traversal" title="wikilink">tree traversal</a> of a <a href="Tree_(graph_theory)" title="wikilink">tree</a>).</p>
+<ul>
+<li><strong>Random order</strong> - This iteration order is not aware whether the data-flow equations solve a forward or backward data-flow problem. Therefore, the performance is relatively poor compared to specialized iteration orders.</li>
+</ul>
+<ul>
+<li><strong><a class="uri" href="Postorder" title="wikilink">Postorder</a></strong> - This is a typical iteration order for backward data-flow problems. In <em>postorder iteration</em>, a node is visited after all its successor nodes have been visited. Typically, the <em>postorder iteration</em> is implemented with the <strong>depth-first</strong> strategy.</li>
+</ul>
+<ul>
+<li><strong><a href="depth-first_search#Vertex_orderings" title="wikilink">Reverse postorder</a></strong> - This is a typical iteration order for forward data-flow problems. In <strong>reverse-postorder iteration</strong>, a node is visited before any of its successor nodes has been visited, except when the successor is reached by a back edge. (Note that this is not the same as <a href="depth-first_search#Vertex_orderings" title="wikilink">preorder</a>.)</li>
+</ul>
+<h3 id="initialization">Initialization</h3>
+
+<p>The initial value of the in-states is important to obtain correct and accurate results. If the results are used for compiler optimizations, they should provide <strong>conservative</strong> information, i.e. when applying the information, the program should not change semantics. The iteration of the fixpoint algorithm will take the values in the direction of the maximum element. Initializing all blocks with the maximum element is therefore not useful. At least one block starts in a state with a value less than the maximum. The details depend on the data-flow problem. If the minimum element represents totally conservative information, the results can be used safely even during the data-flow iteration. If it represents the most accurate information, fixpoint should be reached before the results can be applied.</p>
+<h2 id="examples">Examples</h2>
+
+<p>The following are examples of properties of computer programs that can be calculated by data-flow analysis. Note that the properties calculated by data-flow analysis are typically only approximations of the real properties. This is because data-flow analysis operates on the syntactical structure of the CFG without simulating the exact control flow of the program. However, to be still useful in practice, a data-flow analysis algorithm is typically designed to calculate an upper respectively lower approximation of the real program properties.</p>
+<h3 id="forward-analysis">Forward Analysis</h3>
+
+<p>The <a href="reaching_definition" title="wikilink">reaching definition</a> analysis calculates for each program point the set of definitions that may potentially reach this program point.</p>
+<div class="sourceCode"><table class="sourceCode text numberLines"><tr class="sourceCode"><td class="lineNumbers"><pre>1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="sourceCode"><pre><code class="sourceCode">  if b==4 then
+     a = 5;
+  else 
+     a = 3;
+  endif
+ 
+  if  a &lt; 4 then
+     ...</code></pre></td></tr></table></div>
+
+<p>The reaching definition of variable "a" at line 7 is the set of assignments a=5 at line 2 and a=3 at line 4. </p>
+<h3 id="backward-analysis">Backward Analysis</h3>
+
+<p>The <a href="live_variable_analysis" title="wikilink">live variable analysis</a> calculates for each program point the variables that may be potentially read afterwards before their next write update. The result is typically used by <a href="dead_code_elimination" title="wikilink">dead code elimination</a> to remove statements that assign to a variable whose value is not used afterwards.</p>
+
+<p>The out-state of a block is the set of variables that are live at the end of the block. Its in-state is the set of variable that is live at the start of it. The out-state is the union of the in-states of the blocks successors. The transfer function of a statement is applied by making the variables that are written dead, then making the variables that are read live.</p>
+
+<p>Initial Code:</p>
+
+<p><code>b1: a = 3; </code><br/>
+<code>    b = 5;</code><br/>
+<code>    d = 4;</code><br/>
+<code>    x = 100;</code><br/>
+<code>    if a &gt; b then</code><br/>
+<code>b2:    c = a + b;</code><br/>
+<code>       d = 2;</code><br/>
+<code>b3: endif</code><br/>
+<code>    c = 4;</code><br/>
+<code>    return b * d + c;</code></p>
+
+<p>Backward Analysis:</p>
+
+<p><code>// in: {}</code><br/>
+<code>b1: a = 3; </code><br/>
+<code>    b = 5;</code><br/>
+<code>    d = 4;</code><br/>
+<code>    x = 100; //x is never being used later thus not in the out set {a,b,d}</code><br/>
+<code>    if a &gt; b then</code><br/>
+<code>// out: {a,b,d}    //union of all (in) successors of b1 =&gt; b2: {a,b}, and b3:{b,d}  </code><br/>
+<br/>
+<code>// in: {a,b}</code><br/>
+<code>b2: c = a + b;</code><br/>
+<code>    d = 2;</code><br/>
+<code>// out: {b,d}</code><br/>
+<br/>
+<code>// in: {b,d}</code><br/>
+<code>b3: endif</code><br/>
+<code>    c = 4;</code><br/>
+<code>    return b * d + c;</code><br/>
+<code>// out:{}</code></p>
+
+<p>The in-state of b3 only contains <em>b</em> and <em>d</em>, since <em>c</em> has been written. The out-state of b1 is the union of the in-states of b2 and b3. The definition of <em>c</em> in b2 can be removed, since <em>c</em> is not live immediately after the statement.</p>
+
+<p>Solving the data-flow equations starts with initializing all in-states and out-states to the empty set. The work list is initialized by inserting the exit point (b3) in the work list (typical for backward flow). Its computed in-state differs from the previous one, so its predecessors b1 and b2 are inserted and the process continues. The progress is summarized in the table below.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>processing</p></th>
+<th style="text-align: left;">
+<p>out-state</p></th>
+<th style="text-align: left;">
+<p>old in-state</p></th>
+<th style="text-align: left;">
+<p>new in-state</p></th>
+<th style="text-align: left;">
+<p>work list</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>b3</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{b,d}</p></td>
+<td style="text-align: left;">
+<p>(b1,b2)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>b1</p></td>
+<td style="text-align: left;">
+<p>{b,d}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>(b2)</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>b2</p></td>
+<td style="text-align: left;">
+<p>{b,d}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{a,b}</p></td>
+<td style="text-align: left;">
+<p>(b1)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>b1</p></td>
+<td style="text-align: left;">
+<p>{a,b,d}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>()</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>Note that b1 was entered in the list before b2, which forced processing b1 twice (b1 was re-entered as predecessor of b2). Inserting b2 before b1 would have allowed earlier completion.</p>
+
+<p>Initializing with the empty set is an optimistic initialization: all variables start out as dead. Note that the out-states cannot shrink from one iteration to the next, although the out-state can be smaller than the in-state. This can be seen from the fact that after the first iteration the out-state can only change by a change of the in-state. Since the in-state starts as the empty set, it can only grow in further iterations.</p>
+<h2 id="other-approaches">Other approaches</h2>
+
+<p>In 2002, Markus Mohnen described a new method of data-flow analysis that does not require the explicit construction of a data-flow graph,<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> instead relying on <a href="abstract_interpretation" title="wikilink">abstract interpretation</a> of the program and keeping a working set of program counters. At each conditional branch, both targets are added to the working set. Each path is followed for as many instructions as possible (until end of program or until it has looped with no changes), and then removed from the set and the next program counter retrieved.</p>
+<h2 id="bit-vector-problems">Bit vector problems</h2>
+
+<p>The examples above are problems in which the data-flow value is a set, e.g. the set of <a href="reaching_definitions" title="wikilink">reaching definitions</a> (Using a bit for a definition position in the program), or the set of live variables. These sets can be represented efficiently as <strong>bit vectors</strong>, in which each bit represents set membership of one particular element. Using this representation, the join and transfer functions can be implemented as bitwise logical operations. The join operation is typically union or intersection, implemented by bitwise <em>logical or</em> and <em>logical and</em>. The transfer function for each block can be decomposed in so-called <em>gen</em> and <em>kill</em> sets.</p>
+
+<p>As an example, in live-variable analysis, the join operation is union. The <em>kill</em> set is the set of variables that are written in a block, whereas the <em>gen</em> set is the set of variables that are read without being written first. The data-flow equations become</p>
+
+<p>
+
+<math display="inline" id="Data-flow_analysis:11">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>o</mi>
+    <mi>u</mi>
+    <msub>
+     <mi>t</mi>
+     <mi>b</mi>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mo largeop="true" mathsize="160%" stretchy="false" symmetric="true">⋃</mo>
+     <mrow>
+      <mi>s</mi>
+      <mo>∈</mo>
+      <mrow>
+       <mi>s</mi>
+       <mi>u</mi>
+       <mi>c</mi>
+       <msub>
+        <mi>c</mi>
+        <mi>b</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </msub>
+    <mrow>
+     <mi>i</mi>
+     <msub>
+      <mi>n</mi>
+      <mi>s</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>o</ci>
+     <ci>u</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <ci>b</ci>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <union></union>
+      <apply>
+       <in></in>
+       <ci>s</ci>
+       <apply>
+        <times></times>
+        <ci>s</ci>
+        <ci>u</ci>
+        <ci>c</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>c</ci>
+         <ci>b</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <ci>s</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   out_{b}=\bigcup_{s\in succ_{b}}in_{s}
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Data-flow_analysis:12">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>i</mi>
+    <msub>
+     <mi>n</mi>
+     <mi>b</mi>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mrow>
+       <mi>o</mi>
+       <mi>u</mi>
+       <msub>
+        <mi>t</mi>
+        <mi>b</mi>
+       </msub>
+      </mrow>
+      <mo>-</mo>
+      <mrow>
+       <mi>k</mi>
+       <mi>i</mi>
+       <mi>l</mi>
+       <msub>
+        <mi>l</mi>
+        <mi>b</mi>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>∪</mo>
+    <mrow>
+     <mi>g</mi>
+     <mi>e</mi>
+     <msub>
+      <mi>n</mi>
+      <mi>b</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>n</ci>
+      <ci>b</ci>
+     </apply>
+    </apply>
+    <apply>
+     <union></union>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>o</ci>
+       <ci>u</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <ci>b</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>k</ci>
+       <ci>i</ci>
+       <ci>l</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>l</ci>
+        <ci>b</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>g</ci>
+      <ci>e</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <ci>b</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   in_{b}=(out_{b}-kill_{b})\cup gen_{b}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>In logical operations, this reads as</p>
+<dl>
+<dd>out(b) = 0
+</dd>
+<dd>for s in succ(b)
+<dl>
+<dd>out(b) = out(b) or in(s)
+</dd>
+</dl>
+</dd>
+<dd>in(b) = (out(b) and not kill(b)) or gen(b)
+</dd>
+</dl>
+<h2 id="sensitivities">Sensitivities</h2>
+
+<p>Data-flow analysis is inherently flow-sensitive. Data-flow analysis is typically path-insensitive, though it is possible to define data-flow equations that yield a path-sensitive analysis.</p>
+<ul>
+<li>A <strong>flow-sensitive</strong> analysis takes into account the order of statements in a program. For example, a flow-insensitive pointer alias analysis may determine "variables <em>x</em> and <em>y</em> may refer to the same location", while a flow-sensitive analysis may determine "after statement 20, variables <em>x</em> and <em>y</em> may refer to the same location".</li>
+<li>A <strong>path-sensitive</strong> analysis computes different pieces of analysis information dependent on the predicates at conditional branch instructions. For instance, if a branch contains a condition <em>x&gt;0</em>, then on the <em>fall-through</em> path, the analysis would assume that <em>x0</em> holds.</li>
+<li>A <strong>context-sensitive</strong> analysis is an <em>interprocedural</em> analysis that considers the calling context when analyzing the target of a function call. In particular, using context information one can <em>jump back</em> to the original call site, whereas without that information, the analysis information has to be propagated back to all possible call sites, potentially losing precision.</li>
+</ul>
+<h2 id="list-of-data-flow-analyses">List of data-flow analyses</h2>
+<ul>
+<li><a href="Reaching_definitions" title="wikilink">Reaching definitions</a></li>
+<li><a href="Liveness_analysis" title="wikilink">Liveness analysis</a></li>
+<li><a href="Definite_assignment_analysis" title="wikilink">Definite assignment analysis</a></li>
+<li><a href="Available_expression" title="wikilink">Available expression</a></li>
+<li><a href="Constant_propagation" title="wikilink">Constant propagation</a></li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a class="uri" href="XLT86" title="wikilink">XLT86</a></li>
+<li><a href="Control_flow_analysis" title="wikilink">Control flow analysis</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li>Cooper, Keith D. and Torczon, Linda. <em>Engineering a Compiler</em>. Morgan Kaufmann. 2005.</li>
+<li>Muchnick, Steven S. <em>Advanced Compiler Design and Implementation</em>. Morgan Kaufmann. 1997.</li>
+<li>Hecht, Matthew S. <em>Flow Analysis of Computer Programs</em>. Elsevier North-Holland Inc. 1977.</li>
+<li><a href="http://www.cse.iitb.ac.in/~uday/dfaBook-web">Khedker, Uday P. Sanyal, Amitabha Karkare, Bageshri. <em>Data Flow Analysis: Theory and Practice</em></a>, CRC Press (Taylor and Francis Group). 2009.</li>
+<li><a href="Flemming_Nielson" title="wikilink">Flemming Nielson</a>, <a href="Hanne_Riis_Nielson" title="wikilink">Hanne Riis Nielson</a>, <a href="Chris_Hankin" title="wikilink">Chris Hankin</a>. <em>Principles of Program Analysis</em>. Springer. 2005.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Compiler_optimizations" title="wikilink">Category:Compiler optimizations</a> <a href="Category:Data-flow_analysis" title="wikilink"> </a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+</ol>
+</section>
+</body>
+

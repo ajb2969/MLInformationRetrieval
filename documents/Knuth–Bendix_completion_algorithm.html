@@ -1,0 +1,2520 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1913">Knuth–Bendix completion algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Knuth–Bendix completion algorithm</h1>
+<hr/>
+
+<p>The <strong>Knuth–Bendix completion algorithm</strong> (named after <a href="Donald_E._Knuth" title="wikilink">Donald Knuth</a> and Peter Bendix<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a>) is a <a href="semidecidable" title="wikilink">semi-decision</a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> <a class="uri" href="algorithm" title="wikilink">algorithm</a> for transforming a set of <a href="equation" title="wikilink">equations</a> (over <a href="term_(mathematics)" title="wikilink">terms</a>) into a <a href="Confluence_(term_rewriting)" title="wikilink">confluent</a> <a href="term_rewriting_system" title="wikilink">term rewriting system</a>. When the algorithm succeeds, it effectively solves the <a href="word_problem_(mathematics)" title="wikilink">word problem</a> for the specified <a class="uri" href="algebra" title="wikilink">algebra</a>.</p>
+
+<p><a href="Buchberger's_algorithm" title="wikilink">Buchberger's algorithm</a> for computing <a href="Gröbner_basis" title="wikilink">Gröbner bases</a> is a very similar algorithm. Although developed independently, it may also be seen as the instantiation of Knuth–Bendix algorithm in the theory of <a href="polynomial_ring" title="wikilink">polynomial rings</a>.</p>
+<h2 id="introduction">Introduction</h2>
+
+<p>For a set <em>E</em> of equations, its <strong>deductive closure</strong> (↔) is the set of all equations that can be derived by applying equations from <em>E</em> in any order. Formally, <em>E</em> is considered a <a href="binary_relation" title="wikilink">binary relation</a>, (→<sub><em>E</em></sub>) is its <a href="rewrite_closure" title="wikilink">rewrite closure</a>, and (↔) is the <a href="equivalence_closure" title="wikilink">equivalence closure</a> of (→<sub><em>E</em></sub>). For a set <em>R</em> of rewrite rules, its <strong>deductive closure</strong> (→ ∘ ←) is the set of all equations than can be confirmed by applying rules from <em>R</em> left-to-right to both sides until they are literally equal. Formally, <em>R</em> is again viewed as binary relation, (→<sub><em>R</em></sub>) is its rewrite closure, (←<sub><em>R</em></sub>) is its <a href="converse_relation" title="wikilink">converse</a>, and (→ ∘ ←) is the <a href="relation_composition" title="wikilink">relation composition</a> of their <a href="reflexive_transitive_closure" title="wikilink">reflexive transitive closures</a> (→ and ←).</p>
+
+<p>For example, if <em>E</em> = { 1⋅<em>x</em> = <em>x</em>, <em>x</em><sup>−1</sup>⋅<em>x</em> = 1, (<em>x</em>⋅<em>y</em>)⋅<em>z</em> = <em>x</em>⋅(<em>y</em>⋅<em>z</em>) } are the <a href="Group_(mathematics)" title="wikilink">group</a> axioms, the derivation chain</p>
+<dl>
+<dd><em>a</em><sup>−1</sup>⋅(<em>a</em>⋅<em>b</em>)   ↔   (<em>a</em><sup>−1</sup>⋅<em>a</em>)⋅<em>b</em>   ↔    1⋅<em>b</em>   ↔   <em>b</em>
+</dd>
+</dl>
+
+<p>demonstrates that <em>a</em><sup>−1</sup>⋅(<em>a</em>⋅<em>b</em>) ↔ <em>b</em> is a member of <em>E</em>'s deductive closure. If <em>R</em> = { 1⋅<em>x</em> → <em>x</em>, <em>x</em><sup>−1</sup>⋅<em>x</em> → 1, (<em>x</em>⋅<em>y</em>)⋅<em>z</em> → <em>x</em>⋅(<em>y</em>⋅<em>z</em>) } is a "rewrite rule" version of <em>E</em>, the derivation chains</p>
+<dl>
+<dd>(<em>a</em><sup>−1</sup>⋅<em>a</em>)⋅<em>b</em>   →   1⋅<em>b</em>   →   <em>b</em>       and       <em>b</em>   ←   <em>b</em>⋅1
+</dd>
+</dl>
+
+<p>demonstrate that (<em>a</em><sup>−1</sup>⋅<em>a</em>)⋅<em>b</em> →∘← <em>b</em>⋅1 is a member of <em>R</em>'s deductive closure. However, there is no way to derive <em>a</em><sup>−1</sup>⋅(<em>a</em>⋅<em>b</em>) →∘← <em>b</em> similar to above, since a right-to-left application of the rule (<em>x</em>⋅<em>y</em>)⋅<em>z</em> → <em>x</em>⋅(<em>y</em>⋅<em>z</em>) is not allowed.</p>
+
+<p>The Knuth–Bendix algorithm takes a set <em>E</em> of equations between <a href="term_(logic)" title="wikilink">terms</a>, and a <a href="reduction_ordering" title="wikilink">reduction ordering</a> (&gt;) on the set of all terms, and attempts to construct a confluent and terminating term rewriting system <em>R</em> that has the same deductive closure as <em>E</em>. While proving consequences from <em>E</em> often requires human intuition, proving consequences from <em>R</em> does not. For more details, see <a href="Confluence_(abstract_rewriting)#Motivating_examples" title="wikilink">Confluence (abstract rewriting)#Motivating examples</a>, which gives an example proof from group theory, performed both using <em>E</em> and using <em>R</em>.</p>
+<h2 id="rules">Rules</h2>
+
+<p>Given a set <em>E</em> of equations between <a href="term_(logic)" title="wikilink">terms</a>, the following inference rules can be used to transform it into an equivalent <a href="convergent_term_rewrite_system" title="wikilink">convergent term rewrite system</a> (if possible):<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> They are based on a user-given <a href="reduction_ordering" title="wikilink">reduction ordering</a> (&gt;) on the set of all terms; it is lifted to a well-founded ordering (▻) on the set of rewrite rules by defining (<em>s</em> → <em>t</em>) ▻ (<em>l</em> → <em>r</em>) if</p>
+<ul>
+<li><em>s</em> <a href="encompassment_ordering" title="wikilink">&gt;<sub>e</sub></a> <em>l</em>, or</li>
+<li><em>s</em> and <em>l</em> are <a href="variant_(logic)" title="wikilink">literally similar</a> and <em>t</em> &gt; <em>r</em>.</li>
+</ul>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><strong>Delete</strong></p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em>∪{<em>s</em> = <em>s</em>}</p></td>
+<td style="text-align: left;">
+<p>, <em>R</em> ›</p></td>
+<td style="text-align: left;">
+<p>⊢</p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em></p></td>
+<td style="text-align: left;">
+<p>, <em>R</em> ›</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><strong>Compose</strong>        </p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em></p></td>
+<td style="text-align: left;">
+<p>, <em>R</em>∪{<em>s</em> → <em>t</em>} ›        </p></td>
+<td style="text-align: left;">
+<p>⊢        </p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em></p></td>
+<td style="text-align: left;">
+<p>, <em>R</em>∪{<em>s</em> → <em>u</em>} ›        </p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><strong>Simplify</strong></p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em>∪{<em>s</em> = <em>t</em>}</p></td>
+<td style="text-align: left;">
+<p>, <em>R</em> ›</p></td>
+<td style="text-align: left;">
+<p>⊢</p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em>∪{<em>s</em> = <em>u</em>}</p></td>
+<td style="text-align: left;">
+<p>, <em>R</em> ›</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><strong>Orient</strong></p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em>∪{<em>s</em> = <em>t</em>}</p></td>
+<td style="text-align: left;">
+<p>, <em>R</em> ›</p></td>
+<td style="text-align: left;">
+<p>⊢</p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em></p></td>
+<td style="text-align: left;">
+<p>, <em>R</em>∪{<em>s</em> → <em>t</em>} ›</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><strong>Collapse</strong></p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em></p></td>
+<td style="text-align: left;">
+<p>, <em>R</em>∪{<em>s</em> → <em>t</em>} ›</p></td>
+<td style="text-align: left;">
+<p>⊢</p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em>∪{<em>u</em> = <em>t</em>}</p></td>
+<td style="text-align: left;">
+<p>, <em>R</em> ›</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><strong>Deduce</strong></p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em></p></td>
+<td style="text-align: left;">
+<p>, <em>R</em> ›</p></td>
+<td style="text-align: left;">
+<p>⊢</p></td>
+<td style="text-align: left;">
+<p>‹ <em>E</em>∪{<em>s</em> = <em>t</em>}</p></td>
+<td style="text-align: left;">
+<p>, <em>R</em> ›</p></td>
+</tr>
+</tbody>
+</table>
+<h2 id="example">Example</h2>
+
+<p>The following example run, obtained from the <a href="E_theorem_prover" title="wikilink">E theorem prover</a>, computes a completion of the (additive) group axioms as in Knuth, Bendix (1970). It starts with the three initial equations for the group (neutral element 0, inverse elements, associativity), using <code>f(X,Y)</code> for <em>X</em>+<em>Y</em>, and <code>i(X)</code> for −<em>X</em>. The 10 equations marked with "final" represent the resulting convergent rewrite system. "pm" is short for "paramodulation", implementing <em>deduce</em>. Critical pair computation is an instance of paramodulation for equational unit clauses. "rw" is rewriting, implementing <em>compose</em>, <em>collapse</em>, and <em>simplify</em>. Orienting of equations is done implicitly and not recorded.</p>
+<pre class="e"><code>      1 :  : [++equal(f(X1,0), X1)] : initial("GROUP.lop", at_line_9_column_1)
+      2 :  : [++equal(f(X1,i(X1)), 0)] : initial("GROUP.lop", at_line_12_column_1)
+      3 :  : [++equal(f(f(X1,X2),X3), f(X1,f(X2,X3)))] : initial("GROUP.lop", at_line_15_column_1)
+      5 :  : [++equal(f(X1,X2), f(X1,f(0,X2)))] : pm(3,1)
+      6 :  : [++equal(f(X1,f(X2,i(f(X1,X2)))), 0)] : pm(2,3)
+      7 :  : [++equal(f(0,X2), f(X1,f(i(X1),X2)))] : pm(3,2)
+     27 :  : [++equal(f(X1,0), f(0,i(i(X1))))] : pm(7,2)
+     36 :  : [++equal(X1, f(0,i(i(X1))))] : rw(27,1)
+     46 :  : [++equal(f(X1,X2), f(X1,i(i(X2))))] : pm(5,36)
+     52 :  : [++equal(f(0,X1), X1)] : rw(36,46)
+     60 :  : [++equal(i(0), 0)] : pm(2,52)
+     63 :  : [++equal(i(i(X1)), f(0,X1))] : pm(46,52)
+     64 :  : [++equal(f(X1,f(i(X1),X2)), X2)] : rw(7,52)
+     67 :  : [++equal(i(i(X1)), X1)] : rw(63,52)
+     74 :  : [++equal(f(i(X1),X1), 0)] : pm(2,67)
+     79 :  : [++equal(f(0,X2), f(i(X1),f(X1,X2)))] : pm(3,74)
+     83 :  : [++equal(X2, f(i(X1),f(X1,X2)))] : rw(79,52)
+    134 :  : [++equal(f(i(X1),0), f(X2,i(f(X1,X2))))] : pm(83,6)
+    151 :  : [++equal(i(X1), f(X2,i(f(X1,X2))))] : rw(134,1)
+    165 :  : [++equal(f(i(X1),i(X2)), i(f(X2,X1)))] : pm(83,151)
+    239 :  : [++equal(f(X1,0), X1)] : 1 : 'final'
+    240 :  : [++equal(f(X1,i(X1)), 0)] : 2 : 'final'
+    241 :  : [++equal(f(f(X1,X2),X3), f(X1,f(X2,X3)))] : 3 : 'final'
+    242 :  : [++equal(f(0,X1), X1)] : 52 : 'final'
+    243 :  : [++equal(i(0), 0)] : 60 : 'final'
+    244 :  : [++equal(i(i(X1)), X1)] : 67 : 'final'
+    245 :  : [++equal(f(i(X1),X1), 0)] : 74 : 'final'
+    246 :  : [++equal(f(X1,f(i(X1),X2)), X2)] : 64 : 'final'
+    247 :  : [++equal(f(i(X1),f(X1,X2)), X2)] : 83 : 'final'
+    248 :  : [++equal(i(f(X1,X2)), f(i(X2),i(X1)))] : 165 : 'final'</code></pre>
+
+<p>See also <a href="Word_problem_(mathematics)" title="wikilink">Word problem (mathematics)</a> for another presentation of this example.</p>
+<h2 id="string-rewriting-systems-in-group-theory">String rewriting systems in group theory</h2>
+
+<p>An important case in <a href="computational_group_theory" title="wikilink">computational group theory</a> are string rewriting systems which can be used to give canonical labels to elements or <a href="coset" title="wikilink">cosets</a> of a <a href="finitely_presented_group" title="wikilink">finitely presented group</a> as products of the <a href="Generating_set_of_a_group" title="wikilink">generators</a>. This special case is the focus of this section.</p>
+<h3 id="motivation-in-group-theory">Motivation in group theory</h3>
+
+<p>The <a href="critical_pair_lemma" title="wikilink">critical pair lemma</a> states that a term rewriting system is <a href="confluence_(term_rewriting)" title="wikilink">locally confluent</a> (or weakly confluent) if and only if all its <a href="critical_pair_(logic)" title="wikilink">critical pairs</a> are convergent. Furthermore, we have <a href="Newman's_lemma" title="wikilink">Newman's lemma</a> which states that if an (abstract) rewriting system is <a href="normal_form_(term_rewriting)" title="wikilink">strongly normalizing</a> and weakly confluent, then the rewriting system is confluent. So, if we can add rules to the term rewriting system in order to force all critical pairs to be convergent while maintaining the strong normalizing property, then this will force the resultant rewriting system to be confluent.</p>
+
+<p>Consider a <a href="finitely_presented_monoid" title="wikilink">finitely presented monoid</a> 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:0">
+ <semantics>
+  <mrow>
+   <mi>M</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">⟨</mo>
+    <mi>X</mi>
+    <mo>∣</mo>
+    <mi>R</mi>
+    <mo stretchy="false">⟩</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>M</ci>
+    <apply>
+     <csymbol cd="latexml">inner-product</csymbol>
+     <ci>X</ci>
+     <ci>R</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M=\langle X\mid R\rangle
+  </annotation>
+ </semantics>
+</math>
+
+ where X is a finite set of generators and R is a set of defining relations on X. Let X<sup>*</sup> be the set of all words in X (i.e. the free monoid generated by X). Since the relations R generate an equivalence relation on X*, one can consider elements of M to be the equivalence classes of X<sup>*</sup> under R. For each class <em>{w<sub>1</sub>, w<sub>2</sub>, ... }</em> it is desirable to choose a standard representative <em>w<sub>k</sub></em>. This representative is called the <strong>canonical</strong> or <strong>normal form</strong> for each word <em>w<sub>k</sub></em> in the class. If there is a computable method to determine for each <em>w<sub>k</sub></em> its normal form <em>w<sub>i</sub></em> then the word problem is easily solved. A confluent rewriting system allows one to do precisely this.</p>
+
+<p>Although the choice of a canonical form can theoretically be made in an arbitrary fashion this approach is generally not computable. (Consider that an equivalence relation on a language can produce an infinite number of infinite classes.) If the language is <a class="uri" href="well-ordered" title="wikilink">well-ordered</a> then the order  B and A → B. Since  W_1 &gt; ... &gt; W_n where W_n is irreducible under the rewriting system. However, depending on the rules that are applied at each W<sub>i</sub> → W<sub>i+1</sub> it is possible to end up with two different irreducible reductions W<sub>n</sub> ≠ W'<sub>m</sub> of W. However, if the rewriting system given by the relations is converted to a confluent rewriting system via the Knuth–Bendix algorithm, then all reductions are guaranteed to produce the same irreducible word, namely the normal form for that word.</p>
+<h3 id="description-of-the-algorithm-for-finitely-presented-monoids">Description of the algorithm for finitely presented monoids</h3>
+
+<p>Suppose we are given a <a href="presentation_of_a_group" title="wikilink">presentation</a> 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:1">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mi>X</mi>
+   <mo>∣</mo>
+   <mi>R</mi>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">inner-product</csymbol>
+    <ci>X</ci>
+    <ci>R</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle X\mid R\rangle
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:2">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+ is a set of <a href="generating_set_of_a_group" title="wikilink">generators</a> and 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:3">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ is a set of <a href="Relation_(mathematics)" title="wikilink">relations</a> giving the rewriting system. Suppose further that we have a reduction ordering 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:4">
+ <semantics>
+  <mo><</mo>
+  <annotation-xml encoding="MathML-Content">
+   <lt></lt>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   <
+  </annotation>
+ </semantics>
+</math>
+
+ among the words generated by 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:5">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+(e.g., <a href="shortlex_order" title="wikilink">shortlex order</a>). For each relation 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:6">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>Q</mi>
+    <mi>i</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>Q</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}=Q_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ in 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:7">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+, suppose 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:8">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>Q</mi>
+    <mi>i</mi>
+   </msub>
+   <mo><</mo>
+   <msub>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <lt></lt>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>Q</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q_{i}<P_{i}
+  </annotation>
+ </semantics>
+</math>
+
+. Thus we begin with the set of reductions 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:9">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>→</mo>
+   <msub>
+    <mi>Q</mi>
+    <mi>i</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>Q</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}\rightarrow Q_{i}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>First, if any relation 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:10">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>Q</mi>
+    <mi>i</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>Q</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}=Q_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ can be reduced, replace 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:11">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:12">
+ <semantics>
+  <msub>
+   <mi>Q</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>Q</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ with the reductions.</p>
+
+<p>Next, we add more reductions (that is, rewriting rules) to eliminate possible exceptions of confluence. Suppose that 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:13">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:14">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:15">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>≠</mo>
+   <mi>j</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <neq></neq>
+    <ci>i</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i\neq j
+  </annotation>
+ </semantics>
+</math>
+
+, overlap.</p>
+<ol>
+<li>Case 1: either the prefix of 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:16">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ equals the suffix of 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:17">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}
+  </annotation>
+ </semantics>
+</math>
+
+, or vice versa. In the former case, we can write 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:18">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>B</mi>
+    <mi>C</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <ci>C</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}=BC
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:19">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>A</mi>
+    <mi>B</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}=AB
+  </annotation>
+ </semantics>
+</math>
+
+; in the latter case, 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:20">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>A</mi>
+    <mi>B</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}=AB
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:21">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>B</mi>
+    <mi>C</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <ci>C</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}=BC
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+<li>Case 2: either 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:22">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ is completely contained (surrounded) in 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:23">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}
+  </annotation>
+ </semantics>
+</math>
+
+, or vice versa. In the former case, we can write 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:24">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mi>B</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}=B
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:25">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>A</mi>
+    <mi>B</mi>
+    <mi>C</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <ci>B</ci>
+     <ci>C</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}=ABC
+  </annotation>
+ </semantics>
+</math>
+
+; in the latter case, 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:26">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>A</mi>
+    <mi>B</mi>
+    <mi>C</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <ci>B</ci>
+     <ci>C</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}=ABC
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:27">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>=</mo>
+   <mi>B</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>j</ci>
+    </apply>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}=B
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+</ol>
+
+<p>Reduce the word 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:28">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mi>B</mi>
+   <mi>C</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>A</ci>
+    <ci>B</ci>
+    <ci>C</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ABC
+  </annotation>
+ </semantics>
+</math>
+
+ using 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:29">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ first, then using 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:30">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ first. Call the results 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:31">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>r</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>r</mi>
+    <mn>2</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>r</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>r</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r_{1},r_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, respectively. If 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:32">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>r</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>≠</mo>
+   <msub>
+    <mi>r</mi>
+    <mn>2</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <neq></neq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>r</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>r</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r_{1}\neq r_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, then we have an instance where confluence could fail. Hence, add the reduction 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:33">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mi>max</mi>
+      <msub>
+       <mi>r</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+     <mo>,</mo>
+     <msub>
+      <mi>r</mi>
+      <mn>2</mn>
+     </msub>
+    </mrow>
+    <mo>→</mo>
+    <mrow>
+     <mi>min</mi>
+     <msub>
+      <mi>r</mi>
+      <mn>1</mn>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <msub>
+    <mi>r</mi>
+    <mn>2</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <ci>normal-→</ci>
+     <list>
+      <apply>
+       <max></max>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>r</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>r</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </list>
+     <apply>
+      <min></min>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>r</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>r</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \max r_{1},r_{2}\rightarrow\min r_{1},r_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:34">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>After adding a rule to 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:35">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+, remove any rules in 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:36">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ that might have reducible left sides.</p>
+
+<p>Repeat the procedure until all overlapping left sides have been checked.</p>
+<h3 id="examples">Examples</h3>
+<h4 id="a-terminating-example">A terminating example</h4>
+
+<p>Consider the monoid
+
+<math display="block" id="Knuth–Bendix_completion_algorithm:37">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mrow>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>y</mi>
+   </mrow>
+   <mo>∣</mo>
+   <mrow>
+    <msup>
+     <mi>x</mi>
+     <mn>3</mn>
+    </msup>
+    <mo>=</mo>
+    <msup>
+     <mi>y</mi>
+     <mn>3</mn>
+    </msup>
+    <mo>=</mo>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>x</mi>
+       <mi>y</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mn>3</mn>
+    </msup>
+    <mo>=</mo>
+    <mn>1</mn>
+   </mrow>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">inner-product</csymbol>
+    <list>
+     <ci>x</ci>
+     <ci>y</ci>
+    </list>
+    <apply>
+     <and></and>
+     <apply>
+      <eq></eq>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>x</ci>
+       <cn type="integer">3</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>y</ci>
+       <cn type="integer">3</cn>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <share href="#.cmml">
+      </share>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <times></times>
+        <ci>x</ci>
+        <ci>y</ci>
+       </apply>
+       <cn type="integer">3</cn>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <share href="#.cmml">
+      </share>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle x,y\mid x^{3}=y^{3}=(xy)^{3}=1\rangle
+  </annotation>
+ </semantics>
+</math>
+
+. We use the <a href="shortlex_order" title="wikilink">shortlex order</a>. This is an infinite monoid but nevertheless, the Knuth–Bendix algorithm is able to solve the word problem.</p>
+
+<p>Our beginning three reductions are therefore (1) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:38">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>3</mn>
+   </msup>
+   <mo>→</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">3</cn>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{3}\rightarrow 1
+  </annotation>
+ </semantics>
+</math>
+
+, (2) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:39">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>y</mi>
+    <mn>3</mn>
+   </msup>
+   <mo>→</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <cn type="integer">3</cn>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y^{3}\rightarrow 1
+  </annotation>
+ </semantics>
+</math>
+
+, and (3) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:40">
+ <semantics>
+  <mrow>
+   <msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>x</mi>
+      <mi>y</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mn>3</mn>
+   </msup>
+   <mo>→</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <times></times>
+      <ci>x</ci>
+      <ci>y</ci>
+     </apply>
+     <cn type="integer">3</cn>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (xy)^{3}\rightarrow 1
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Consider the word 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:41">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>3</mn>
+   </msup>
+   <mi>y</mi>
+   <mi>x</mi>
+   <mi>y</mi>
+   <mi>x</mi>
+   <mi>y</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">3</cn>
+    </apply>
+    <ci>y</ci>
+    <ci>x</ci>
+    <ci>y</ci>
+    <ci>x</ci>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{3}yxyxy
+  </annotation>
+ </semantics>
+</math>
+
+. Reducing using (1), we get 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:42">
+ <semantics>
+  <mrow>
+   <mi>y</mi>
+   <mi>x</mi>
+   <mi>y</mi>
+   <mi>x</mi>
+   <mi>y</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>y</ci>
+    <ci>x</ci>
+    <ci>y</ci>
+    <ci>x</ci>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   yxyxy
+  </annotation>
+ </semantics>
+</math>
+
+. Reducing using (3), we get 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:43">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mn>2</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{2}
+  </annotation>
+ </semantics>
+</math>
+
+. Hence, we get 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:44">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+   </mrow>
+   <mo>=</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>2</mn>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   yxyxy=x^{2}
+  </annotation>
+ </semantics>
+</math>
+
+, giving the reduction rule (4) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:45">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+   </mrow>
+   <mo>→</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>2</mn>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <times></times>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   yxyxy\rightarrow x^{2}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Similarly, using 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:46">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mi>y</mi>
+   <mi>x</mi>
+   <mi>y</mi>
+   <mi>x</mi>
+   <msup>
+    <mi>y</mi>
+    <mn>3</mn>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>x</ci>
+    <ci>y</ci>
+    <ci>x</ci>
+    <ci>y</ci>
+    <ci>x</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   xyxyxy^{3}
+  </annotation>
+ </semantics>
+</math>
+
+ and reducing using (2) and (3), we get 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:47">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+   </mrow>
+   <mo>=</mo>
+   <msup>
+    <mi>y</mi>
+    <mn>2</mn>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   xyxyx=y^{2}
+  </annotation>
+ </semantics>
+</math>
+
+. Hence the reduction (5) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:48">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+   </mrow>
+   <mo>→</mo>
+   <msup>
+    <mi>y</mi>
+    <mn>2</mn>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <times></times>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   xyxyx\rightarrow y^{2}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Both of these rules obsolete (3), so we remove it.</p>
+
+<p>Next, consider 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:49">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>3</mn>
+   </msup>
+   <mi>y</mi>
+   <mi>x</mi>
+   <mi>y</mi>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">3</cn>
+    </apply>
+    <ci>y</ci>
+    <ci>x</ci>
+    <ci>y</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{3}yxyx
+  </annotation>
+ </semantics>
+</math>
+
+ by overlapping (1) and (5). Reducing we get 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:50">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>x</mi>
+     <mn>2</mn>
+    </msup>
+    <msup>
+     <mi>y</mi>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>y</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   yxyx=x^{2}y^{2}
+  </annotation>
+ </semantics>
+</math>
+
+, so we add the rule (6) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:51">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+   </mrow>
+   <mo>→</mo>
+   <mrow>
+    <msup>
+     <mi>x</mi>
+     <mn>2</mn>
+    </msup>
+    <msup>
+     <mi>y</mi>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <times></times>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>y</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   yxyx\rightarrow x^{2}y^{2}
+  </annotation>
+ </semantics>
+</math>
+
+. Considering 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:52">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mi>y</mi>
+   <mi>x</mi>
+   <mi>y</mi>
+   <msup>
+    <mi>x</mi>
+    <mn>3</mn>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>x</ci>
+    <ci>y</ci>
+    <ci>x</ci>
+    <ci>y</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   xyxyx^{3}
+  </annotation>
+ </semantics>
+</math>
+
+ by overlapping (1) and (5), we get 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:53">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>y</mi>
+     <mn>2</mn>
+    </msup>
+    <msup>
+     <mi>x</mi>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>y</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   xyxy=y^{2}x^{2}
+  </annotation>
+ </semantics>
+</math>
+
+, so we add the rule (7) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:54">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>y</mi>
+     <mn>2</mn>
+    </msup>
+    <msup>
+     <mi>x</mi>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+   <mo>→</mo>
+   <mrow>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>y</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y^{2}x^{2}\rightarrow xyxy
+  </annotation>
+ </semantics>
+</math>
+
+. These obsolete rules (4) and (5), so we remove them.</p>
+
+<p>Now, we are left with the rewriting system</p>
+<ul>
+<li>(1) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:55">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>3</mn>
+   </msup>
+   <mo>→</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">3</cn>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{3}\rightarrow 1
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>(2) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:56">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>y</mi>
+    <mn>3</mn>
+   </msup>
+   <mo>→</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <cn type="integer">3</cn>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y^{3}\rightarrow 1
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>(6) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:57">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+   </mrow>
+   <mo>→</mo>
+   <mrow>
+    <msup>
+     <mi>x</mi>
+     <mn>2</mn>
+    </msup>
+    <msup>
+     <mi>y</mi>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <times></times>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>y</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   yxyx\rightarrow x^{2}y^{2}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>(7) 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:58">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>y</mi>
+     <mn>2</mn>
+    </msup>
+    <msup>
+     <mi>x</mi>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+   <mo>→</mo>
+   <mrow>
+    <mi>x</mi>
+    <mi>y</mi>
+    <mi>x</mi>
+    <mi>y</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>y</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>x</ci>
+     <ci>y</ci>
+     <ci>x</ci>
+     <ci>y</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y^{2}x^{2}\rightarrow xyxy
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+</ul>
+
+<p>Checking the overlaps of these rules, we find no potential failures of confluence. Therefore, we have a confluent rewriting system, and the algorithm terminates successfully.</p>
+<h4 id="a-non-terminating-example">A non-terminating example</h4>
+
+<p>The order of the generators may crucially affect whether the Knuth–Bendix completion terminates. As an example, consider the <a href="free_Abelian_group" title="wikilink">free Abelian group</a> by the monoid presentation:</p>
+
+<p>
+
+<math display="block" id="Knuth–Bendix_completion_algorithm:59">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">⟨</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>y</mi>
+     <mo>,</mo>
+     <msup>
+      <mi>x</mi>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msup>
+     <mo>,</mo>
+     <mpadded width="+1.7pt">
+      <msup>
+       <mi>y</mi>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+     </mpadded>
+    </mrow>
+    <mo rspace="4.2pt" stretchy="false">|</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mi>x</mi>
+       <mi>y</mi>
+      </mrow>
+      <mo>=</mo>
+      <mrow>
+       <mi>y</mi>
+       <mi>x</mi>
+      </mrow>
+     </mrow>
+     <mo>,</mo>
+     <mrow>
+      <mrow>
+       <mi>x</mi>
+       <msup>
+        <mi>x</mi>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msup>
+      </mrow>
+      <mo>=</mo>
+      <mrow>
+       <msup>
+        <mi>x</mi>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msup>
+       <mi>x</mi>
+      </mrow>
+      <mo>=</mo>
+      <mrow>
+       <mi>y</mi>
+       <msup>
+        <mi>y</mi>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msup>
+      </mrow>
+      <mo>=</mo>
+      <mrow>
+       <msup>
+        <mi>y</mi>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msup>
+       <mi>y</mi>
+      </mrow>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">⟩</mo>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">inner-product</csymbol>
+    <list>
+     <ci>x</ci>
+     <ci>y</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>y</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </list>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <apply>
+       <times></times>
+       <ci>x</ci>
+       <ci>y</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>y</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+     <apply>
+      <and></and>
+      <apply>
+       <eq></eq>
+       <apply>
+        <times></times>
+        <ci>x</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>x</ci>
+       </apply>
+      </apply>
+      <apply>
+       <eq></eq>
+       <share href="#.cmml">
+       </share>
+       <apply>
+        <times></times>
+        <ci>y</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>y</ci>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <eq></eq>
+       <share href="#.cmml">
+       </share>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>y</ci>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>y</ci>
+       </apply>
+      </apply>
+      <apply>
+       <eq></eq>
+       <share href="#.cmml">
+       </share>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle x,y,x^{-1},y^{-1}\,|\,xy=yx,xx^{-1}=x^{-1}x=yy^{-1}=y^{-1}y=1\rangle.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The Knuth–Bendix completion with respect to lexicographic order 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:60">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mo><</mo>
+   <msup>
+    <mi>x</mi>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msup>
+   <mo><</mo>
+   <mi>y</mi>
+   <mo><</mo>
+   <msup>
+    <mi>y</mi>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <lt></lt>
+     <ci>x</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <lt></lt>
+     <share href="#.cmml">
+     </share>
+     <ci>y</ci>
+    </apply>
+    <apply>
+     <lt></lt>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>y</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x<x^{-1}<y<y^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+ finishes with a convergent system, however considering the length-lexicographic order 
+
+<math display="inline" id="Knuth–Bendix_completion_algorithm:61">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mo><</mo>
+   <mi>y</mi>
+   <mo><</mo>
+   <msup>
+    <mi>x</mi>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msup>
+   <mo><</mo>
+   <msup>
+    <mi>y</mi>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <lt></lt>
+     <ci>x</ci>
+     <ci>y</ci>
+    </apply>
+    <apply>
+     <lt></lt>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <lt></lt>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>y</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x<y<x^{-1}<y^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+ it does not finish for there are no finite convergent systems compatible with this latter order.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+<h2 id="generalizations">Generalizations</h2>
+
+<p>If Knuth–Bendix does not succeed, it will either run forever, or fail when it encounters an unorientable equation (i.e. an equation that it cannot turn into a rewrite rule). The enhanced <a href="completion_without_failure" title="wikilink">completion without failure</a> will not fail on unorientable equations and provides a <a href="semi-decision_procedure" title="wikilink">semi-decision procedure</a> for the word problem.</p>
+
+<p>The notion of <a href="logged_rewriting" title="wikilink">logged rewriting</a> discussed in the paper by Heyworth and Wensley listed below allows some recording or logging of the rewriting process as it proceeds. This is useful for computing identities among relations for presentations of groups.</p>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li></li>
+<li>C. Sims. 'Computations with finitely presented groups.' Cambridge, 1994.</li>
+<li>Anne Heyworth and C.D. Wensley. "Logged rewriting and identities among relators." <em>Groups St. Andrews 2001 in Oxford. Vol. I,</em> 256–276, London Math. Soc. Lecture Note Ser., 304, Cambridge Univ. Press, Cambridge, 2003.</li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Computational_group_theory" title="wikilink">Category:Computational group theory</a> <a href="Category:Donald_Knuth" title="wikilink">Category:Donald Knuth</a> <a href="Category:Combinatorics_on_words" title="wikilink">Category:Combinatorics on words</a> <a href="Category:Rewriting_systems" title="wikilink">Category:Rewriting systems</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="http://www.win.tue.nl/~mvdbrand/courses/seminar/0809/papers/ag-genesis.pdf">D. Knuth, "The Genesis of Attribute Grammars"</a><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3">, p. 55<a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"> Here: sect.8.1, p.293<a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

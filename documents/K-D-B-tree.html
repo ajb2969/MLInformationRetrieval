@@ -1,0 +1,171 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="947">K-D-B-tree</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>K-D-B-tree</h1>
+<hr/>
+
+<p>In <a href="computer_science" title="wikilink">computer science</a>, a <strong>K-D-B-tree</strong> (<em>k</em>-dimensional <a class="uri" href="B-tree" title="wikilink">B-tree</a>) is a tree data structure for subdividing a <em>k</em>-dimensional search space. The aim of the <strong>K-D-B-tree</strong> is to provide the search efficiency of a balanced <a href="k-d_tree" title="wikilink">k-d tree</a>, while providing the block-oriented storage of a B-tree for optimizing external memory accesses.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h2 id="informal-description">Informal description</h2>
+
+<p>Much like the <em>k</em>-d tree, a K-D-B-tree organizes points in <em>k</em>-dimensional space, useful for tasks such as range-searching and multi-dimensional database queries. K-D-B-trees subdivide space into two subspaces by comparing elements in a single domain. Using a 2-D-B-tree (2-dimensional K-D-B-tree) as an example, space is subdivided in the same manner as a <em>k</em>-d tree: using a point in just one of the domains, or axes in this case, all other values are either less than or greater than the current value, and fall to the left and right of the splitting plane respectively.</p>
+
+<p>Unlike a <em>k</em>-d tree, each half-space is not its own node. Instead, as in a B-tree, nodes in the K-D-B-tree are stored as pages and the tree stores a pointer to the root page.</p>
+<h2 id="structure">Structure</h2>
+<figure><b>(Figure)</b>
+<figcaption>The basic structure of a K-D-B-tree.</figcaption>
+</figure>
+
+<p>The K-D-B-tree contains two types of pages:</p>
+<ul>
+<li>Region pages: A collection of <em>(region, child)</em> pairs containing a description of the bounding region along with a pointer to the child page corresponding to that region.</li>
+<li>Point pages: A collection of <em>(point, location)</em> pairs. In the case of databases, <em>location</em> may point to the index of the database record, while for points in <em>k</em>-dimensional space, it can be seen as the point's coordinates in that space.</li>
+</ul>
+
+<p>Page overflows occur when inserting an element into a K-D-B-tree results in the size of a node exceeding its optimal size. Since the purpose of the K-D-B-tree is to optimize external memory accesses like those from a hard-disk, a page is considered to have overflowed or be overfilled if the size of the node exceeds the external memory page size.</p>
+
+<p>Throughout insertion/deletion operations, the K-D-B-tree maintains a certain set of properties:</p>
+<ul>
+<li>The graph is a multi-way tree. Region pages always point to child pages, and can not be empty. Point pages are the leaf nodes of the tree.</li>
+<li>Like a B-tree, the path length to the leaves of the tree is the same for all queries.</li>
+<li>The regions that make up a region page are disjoint.</li>
+<li>If the root is a region page the union of its regions is the entire search space.</li>
+<li>When the <em>child</em> of a <em>(region, child)</em> pair in a region page is also a region page, the union of all the regions in the child is <em>region</em>.</li>
+<li>Conversely in the case above, if <em>child</em> is a point page, all points in <em>child</em> must be contained in <em>region</em>.</li>
+</ul>
+<h2 id="operations-on-a-k-d-b-tree">Operations on a K-D-B-tree</h2>
+<h3 id="queries">Queries</h3>
+
+<p>Queries on a K-D-B-tree are a range search over intervals in all domains or axes in the tree. This collection of intervals is called the <em>query region</em>. In <em>k</em>-space, the <em>query region</em> can be visualized as a bounding volume around some subspace in the entire <em>k</em>-dimensional search space. A query can fall into one of three categories:</p>
+<ul>
+<li>Some intervals span an entire domain or axis, making the query a <em>partial range</em> query.</li>
+<li>Some intervals are points, the others full domains, and so the query is a <em>partial match</em> query.</li>
+<li>The intervals are all points, and so the bounding volume is also just a point. This is an <em>exact match</em> query.</li>
+</ul>
+<h4 id="algorithm">Algorithm</h4>
+<ol>
+<li>If the <em>root</em> of the tree is null, terminate, otherwise let <em>page</em> be <em>root</em>.</li>
+<li>If <em>page</em> is a point page, return every <em>point</em> in a <em>(point, location)</em> pair that lies within the <em>query region</em>.</li>
+<li>Otherwise, <em>page</em> is a region page, so for all <em>(region, child)</em> pairs where <em>region</em> and <em>query region</em> intersect, set <em>page</em> to be <em>child</em> and recurse from step 2.</li>
+</ol>
+<h3 id="insertions">Insertions</h3>
+
+<p>Since an insertion into a K-D-B-tree may require the splitting of a page in the case of a page overflow, it is important to first define the splitting operation.</p>
+<h4 id="splitting-algorithm">Splitting algorithm</h4>
+
+<p>First, a region page is split along some plane to create two new region pages, the left and right pages. These pages are filled with the regions from the old region page, and the old region page is deleted. Then, for every (<em>region</em>, <em>child</em>) in the original region page, remembering <em>child</em> is a page and <em>region</em> specifies an actual bounding region:</p>
+<ol>
+<li>If <em>region</em> lies entirely to the left of the splitting plane, add <em>(region, child)</em> to the left page.</li>
+<li>If <em>region</em> lies entirely to the right of the splitting plane, add <em>(region, child)</em> to the right page.</li>
+<li>Otherwise:
+<ol>
+<li>Recursively split <em>child</em> by the splitting plane, resulting in the pages <em>new_left_page</em> and <em>new_right_page</em></li>
+<li>Split <em>region</em> by the splitting plane, resulting in <em>left_region</em> and <em>right_region</em></li>
+<li>Add <em>(left_region, new_left_page)</em> to the left page, and <em>(right_region, new_right_page)</em> to the right page.</li>
+</ol></li>
+</ol>
+<h4 id="insertion-algorithm">Insertion algorithm</h4>
+<figure><b>(Figure)</b>
+<figcaption>The importance of choosing the correct splitting domain.</figcaption>
+</figure>
+
+<p>Using the splitting algorithm, insertions of a new <em>(point, location)</em> pair can be implemented as follows:</p>
+<ol>
+<li>If the root page is null, simply make the root page a new point page containing <em>(point, location)</em></li>
+<li>If an exact match query on <em>point</em> to find the page that ''point' should be added to. If it already exists in the page, terminate.</li>
+<li>Add <em>(point, location)</em> to the page. If the page overflows, let <em>page</em> denote that page.</li>
+<li>Let <em>old_page</em> be equal to <em>page</em>. Choose some element and a domain/axis to define a plane to split <em>page</em> by that results in two pages that will not also result in one of the pages being overfilled with the addition of a new point. Split <em>page</em> by the plane to make two new pages, <em>new_left_page</em> and <em>new_right_page</em>, and two new regions <em>left_region</em> and <em>right_region</em>.</li>
+<li>If <em>page</em> was the root page, go to step 6. Otherwise, <em>page</em> becomes the parent of <em>page</em>. Replace <em>(region, old_page)</em> in <em>page</em> with <em>(left_region, new_left_page)</em> and <em>(right_region, new_right_page)</em>. If <em>page</em> overflows, repeat step 4, otherwise terminate.</li>
+<li>Let <em>left_region</em> be the entire search space to the left of the splitting plane, and <em>right_region</em> be the search space to the right, resulting from the split in Step 4. Set the root page to be a page containing to the regions <em>left_region</em> and <em>right_region</em>.</li>
+</ol>
+
+<p>It is important to take care in the domain and element chosen to split <em>page</em> by, since it is desirable to try to balance the number of points on either side of the splitting plane. In some cases, a poor choice of splitting domain can result in undesirable splits. It is also possible that a page cannot be split by a certain domain.</p>
+<h3 id="deletions">Deletions</h3>
+
+<p>Deletions from a K-D-B-tree are incredibly simple if no minimum requirements are placed on storage utilization. Using an exact match query to find a <em>(point, location)</em> pair, we simply remove the record from the tree if it exists.</p>
+<h4 id="reorganization-algorithm">Reorganization algorithm</h4>
+
+<p>Since deletions can result in pages that contain very little data, it may be necessary to reorganize the K-D-B-tree to meet some minimum storage utilization criteria. The reorganization algorithm to be used when a page contains too little data is as follows:</p>
+<ol>
+<li>Let <em>page</em> be the parent of <em>P</em>, containing <em>(region, P)</em>.</li>
+<li>Find regions in <em>page</em> such that the regions are adjacent and the union of which forms a rectangular region. These regions are considered "joinable". Let <em>R</em> denote the set of these regions.</li>
+<li>Merge the set <em>R</em> into one page <em>S</em>, and if the <em>S</em> is overfull, repeatedly split until none of the resulting pages are overfull.</li>
+<li>Replace the set <em>R</em> of regions in <em>page</em> with the resulting pages from splitting <em>S</em>.</li>
+</ol>
+<h3 id="related-work">Related Work</h3>
+
+<p>Like in a <em>k</em>-d tree, updates in a K-D-B-tree may result in the requirement for the splitting of several nodes recursively. This is incredibly inefficient and can result in sub-optimal memory utilization as it may result in many near-empty leaves. Lomet and Salzberg proposed a structure called the <a class="uri" href="hB-tree" title="wikilink">hB-tree</a> (holey brick tree) to improve performance of K-D-B-trees by limiting the splits that occur after an insertion to only one root-to-leaf path. This was achieved by storing regions not only as rectangles, but as rectangles with a rectangle removed from the center.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+
+<p>More recently, the Bkd-tree was proposed as a means to provide the fast queries and near 100% space utilization of a static K-D-B-tree. Instead of maintaining a single tree and re-balancing, a set of 
+
+<math display="inline" id="K-D-B-tree:0">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>log</mi>
+    <mn>2</mn>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>N</mi>
+     <mo>/</mo>
+     <mi>M</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <log></log>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <divide></divide>
+     <ci>N</ci>
+     <ci>M</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log_{2}(N/M)
+  </annotation>
+ </semantics>
+</math>
+
+ K-D-B-trees are maintained and rebuilt at regular intervals.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> In this case, 
+
+<math display="inline" id="K-D-B-tree:1">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ is the size of the memory buffer in number of points.</p>
+<h3 id="references">References</h3>
+
+<p>"</p>
+
+<p><a href="Category:Computer_graphics_data_structures" title="wikilink">Category:Computer graphics data structures</a> <a href="Category:Trees_(data_structures)" title="wikilink">Category:Trees (data structures)</a> <a href="Category:Geometric_data_structures" title="wikilink">Category:Geometric data structures</a> <a href="Category:Database_index_techniques" title="wikilink">Category:Database index techniques</a> <a href="Category:Data_types" title="wikilink">Category:Data types</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

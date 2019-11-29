@@ -1,0 +1,237 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="802">Bayesian tool for methylation analysis</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Bayesian tool for methylation analysis</h1>
+<hr/>
+
+<p><strong>Bayesian tool for methylation analysis</strong>, also known as <strong>BATMAN</strong>, is a <a href="statistical_tool" title="wikilink">statistical tool</a> for analyzing <a href="methylated_DNA_immunoprecipitation" title="wikilink">methylated DNA immunoprecipitation</a> (MeDIP) profiles. It can be applied to large datasets generated using either <a class="uri" href="oligonucleotide" title="wikilink">oligonucleotide</a> arrays (MeDIP-chip) or <a href="next-generation_sequencing" title="wikilink">next-generation sequencing</a> (MeDIP-seq), providing a quantitative estimation of absolute <a class="uri" href="methylation" title="wikilink">methylation</a> state in a region of interest.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<figure><b>(Figure)</b>
+<embed src="Batman final diagram.tif" title="Batman workflow"></embed><figcaption><strong>Batman workflow</strong></figcaption>
+</figure>
+<h2 id="theory">Theory</h2>
+
+<p>MeDIP (methylated DNA immunoprecipitation) is an experimental technique used to assess <a class="uri" href="DNA" title="wikilink">DNA</a> methylation levels by using an <a class="uri" href="antibody" title="wikilink">antibody</a> to isolate methylated DNA sequences. The isolated fragments of DNA are either hybridized to a <a href="microarray_chip" title="wikilink">microarray chip</a> (MeDIP-chip) or sequenced by next-generation sequencing (MeDIP-seq). While this tells you what areas of the <a class="uri" href="genome" title="wikilink">genome</a> are methylated, it does not give absolute methylation levels. Imagine two different genomic regions, <em>A</em> and <em>B</em>. Region <em>A</em> has six CpGs (DNA methylation in mammalian <a href="somatic_cell" title="wikilink">somatic cells</a> generally occurs at CpG <a href="dinucleotide" title="wikilink">dinucleotides</a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a>), three of which are methylated. Region <em>B</em> has three CpGs, all of which are methylated. As the antibody simply recognizes <a href="methylated_DNA" title="wikilink">methylated DNA</a>, it will bind both these regions equally and subsequent steps will therefore show equal signals for these two regions. This does not give the full picture of methylation in these two regions (in region <em>A</em> only half the CpGs are methylated, whereas in region <em>B</em> all the CpGs are methylated). Therefore, to get the full picture of methylation for a given region you have to normalize the signal you get from the MeDIP experiment to the number of CpGs in the region, and this is what the Batman <a class="uri" href="algorithm" title="wikilink">algorithm</a> does. Analysing the MeDIP signal of the above example would give Batman scores of 0.5 for region <em>A</em> (i.e. the region is 50% methylated) and 1 for region <em>B</em> (i.e. The region is 100% methylated). In this way Batman converts the signals from MeDIP experiments to absolute methylation levels.</p>
+<h2 id="development-of-batman">Development of Batman</h2>
+
+<p>The core principle of the Batman algorithm is to model the effects of varying density of CpG dinucleotides, and the effect this has on MeDIP enrichment of DNA fragments. The basic assumptions of Batman:</p>
+<ol>
+<li>Almost all DNA methylation in <a href="mammal" title="wikilink">mammals</a> happens at CpG dinucleotides.</li>
+<li>Most CpG-poor regions are constitutively methylated while most CpG-rich regions (CpG islands) are constitutively unmethylated.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></li>
+<li>There are no <a href="fragment_bias" title="wikilink">fragment biases</a> in MeDIP experiment (approximate range of DNA fragment sizes is 400–700 bp).</li>
+<li>The errors on the <a class="uri" href="microarray" title="wikilink">microarray</a> are normally distributed with precision.</li>
+<li>Only methylated CpGs contribute to the observed signal.</li>
+<li>CpG methylation state is generally highly correlated over hundreds of bases,<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> so CpGs grouped together in 50- or 100-bp windows would have the same methylation state.</li>
+</ol>
+
+<p>Basic parameters in Batman:</p>
+<ol>
+<li>C<sub>cp</sub>: <a href="coupling_factor" title="wikilink">coupling factor</a> between probe p and CpG dinucleotide <em>c</em>, is defined as the fraction of DNA <a href="molecule" title="wikilink">molecules</a> hybridizing to probe <em>p</em> that contain the CpG <em>c</em>.</li>
+<li>C<sub>tot</sub> : total CpG influence parameter, is defined as the sum of coupling factors for any given probe, which provides a measure of local CpG density</li>
+<li>m<sub>c</sub> : the methylation status at position <em>c</em>, which represents the fraction of <a href="chromosome" title="wikilink">chromosomes</a> in the sample on which it is methylated. m<sub>c</sub> is considered as a <a href="continuous_variable" title="wikilink">continuous variable</a> since the majority samples used in MeDIP studies contain multiple cell-types.</li>
+</ol>
+
+<p>Based on these assumptions, the signal from the MeDIP channel of the MeDIP-chip or MeDIP-seq experiment depends on the degree of enrichment of DNA fragments overlapping that probe, which in turn depends on the amount of <a href="antibody_binding" title="wikilink">antibody binding</a>, and thus to the number of methylated CpGs on those fragments. In Batman model, the complete dataset from a MeDIP/chip experiment, A, can be represented by a statistical model in the form of the following <a href="probability_distribution" title="wikilink">probability distribution</a>:</p>
+
+<p>
+
+<math display="block" id="Bayesian_tool_for_methylation_analysis:0">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>A</mi>
+    <mo>∣</mo>
+    <mi>m</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <munder>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mi>p</mi>
+   </munder>
+   <mi>ϕ</mi>
+   <mrow>
+    <mo>(</mo>
+    <msub>
+     <mi>A</mi>
+     <mi>p</mi>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>A</mi>
+     <mtext>base</mtext>
+    </msub>
+    <mo>+</mo>
+    <mi>r</mi>
+    <munder>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mi>c</mi>
+    </munder>
+    <msub>
+     <mi>C</mi>
+     <mrow>
+      <mi>c</mi>
+      <mi>p</mi>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <msup>
+     <mi>ν</mi>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msup>
+    <mo>)</mo>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">f</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-∣</ci>
+     <csymbol cd="unknown">m</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <csymbol cd="latexml">product</csymbol>
+     <ci>p</ci>
+    </apply>
+    <csymbol cd="unknown">ϕ</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>A</ci>
+      <ci>p</ci>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>A</ci>
+      <mtext>base</mtext>
+     </apply>
+     <plus></plus>
+     <csymbol cd="unknown">r</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <ci>c</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>C</ci>
+      <apply>
+       <times></times>
+       <ci>c</ci>
+       <ci>p</ci>
+      </apply>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>ν</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <ci>normal-,</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f(A\mid m)=\prod_{p}\phi\left(A_{p}\mid A_{\text{base}}+r\sum_{c}C_{cp},\nu^{-%
+1}\right),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Bayesian_tool_for_methylation_analysis:1">
+ <semantics>
+  <mi>ϕ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϕ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \phi
+  </annotation>
+ </semantics>
+</math>
+
+(<em>x</em>|<em>μ</em>, <em>σ</em><sup>2</sup>) is a <a href="normal_distribution" title="wikilink">Gaussian</a> <a href="probability_density_function" title="wikilink">probability density function</a>. Standard <a href="Bayesian_probability" title="wikilink">Bayesian</a> techniques can be used to infer <em>f</em>(<em>m</em>|<em>A</em>), that is, the distribution of likely methylation states given one or more sets of MeDIP-chip/MeDIP-seq outputs. To solve this inference problem, Batman uses <a href="nested_sampling" title="wikilink">nested sampling</a> (http://www.inference.phy.cam.ac.uk/bayesys/) to generate 100 independent samples from <em>f</em>(<em>m</em>|<em>A</em>) for each <a href="tiled_region" title="wikilink">tiled region</a> of the genome, then summarizes the most likely methylation state in 100-bp windows by fitting beta distributions to these samples. The modes of the most likely <a href="beta_distribution" title="wikilink">beta distributions</a> were used as final methylation calls.</p>
+<h2 id="work-flow-of-batman">Work flow of Batman</h2>
+
+<p>Batman prerequisites:</p>
+<ol>
+<li>Installation: install Batman(freely available from <a class="uri" href="http://td-blade.gurdon.cam.ac.uk/software/batman/">http://td-blade.gurdon.cam.ac.uk/software/batman/</a> under the <a href="GNU_Lesser_General_Public_License" title="wikilink">GNU Lesser General Public License</a>), <a href="Apache_ANT" title="wikilink">Apache ANT</a>, <a class="uri" href="MySQL" title="wikilink">MySQL</a> <a href="database_server" title="wikilink">database server</a>, and MySQL <a href="database_connector" title="wikilink">database connector</a>.</li>
+<li>Prepare dataset: break your <a class="uri" href="dataset" title="wikilink">dataset</a> into small blocks, namely <a href="Region_of_interest" title="wikilink">regions of interest</a> (ROIs), each represented by a small number (typically about 100) probes on a microarray.</li>
+<li>Identify the database server: connect to a MySQL database server using both the MySQL administration tool, and many of the Batman programs.</li>
+<li>Initialize the Batman database: create a database on your database server.</li>
+<li>Register the experiments to be analysed.</li>
+<li>Register the <a href="array_design" title="wikilink">array design</a>: The array design (i.e. complete list of probes, with their genomic locations) should be provided as a GFF file.</li>
+<li>Load the array data.</li>
+<li>Load the genome sequence.</li>
+</ol>
+
+<p>Run Batman:</p>
+<ol>
+<li>Calibrate the Batman model: Before any data can be analysed, it is necessary to calibrate each array by estimating how much extra <a href="array_signal" title="wikilink">array signal</a> is produced by each methylated CpG. This step can give you a quick idea whether each of your arrays is giving sensible results.</li>
+<li>Sample methylation states from the Batman model: You’ll often have multiple arrays from the same experiment, and these should normally be analysed together to improve the confidence of the final calls. Each chromosome can take several days to process; therefore, if possible, run several in parallel.</li>
+<li>Summarize methylation states to generate the final calls: The “sample” files generated by Batman contain a large set of plausible methylation states for each region. For most purposes, you’ll actually want a single estimate of the likely methylation state at that position, and perhaps an estimate of how confident you can be that this is actually the correct value.</li>
+</ol>
+
+<p>Visualization of Batman Data:</p>
+<ol>
+<li>The output is in <a class="uri" href="GFF" title="wikilink">GFF</a> format. For each window, a score (range: 0–1) is given which represents a likely fraction of methylation and the <a class="uri" href="interquartile" title="wikilink">interquartile</a> range is given as an estimate of confidence.</li>
+<li>Several <a href="genome_browser" title="wikilink">genome browsers</a> are available, such as <a class="uri" href="Ensembl" title="wikilink">Ensembl</a> genome browser, which uses a colour gradient from 20 (bright yellow) to 80 (dark blue) to show the Batman methylation score for each probe in the ROI.</li>
+</ol>
+
+<p>More details related to Batman procedure can be found in Batman manual freely online from <a class="uri" href="http://td-blade.gurdon.cam.ac.uk/software/batman/batmanual-alpha-0.2.3.pdf">http://td-blade.gurdon.cam.ac.uk/software/batman/batmanual-alpha-0.2.3.pdf</a></p>
+<h2 id="limitations">Limitations</h2>
+
+<p>It may be useful to take the following points into account when considering using Batman:</p>
+<ol>
+<li>Batman is not a piece of <a class="uri" href="software" title="wikilink">software</a>; it is an algorithm performed using the <a href="Command-line_interface#Command_prompt" title="wikilink">command prompt</a>. As such it is not especially user-friendly and is quite a computationally technical process.</li>
+<li>Because it is non-commercial, there is very little support when using Batman beyond what is in the manual.</li>
+<li>It is quite time consuming (it can take several days to analyse one chromosome).</li>
+<li><a href="Copy_number_variation" title="wikilink">Copy number variation</a> (CNV) has to be accounted for. For example, the score for a region with a <a href="CNV_value" title="wikilink">CNV value</a> of 1.6 in a <a class="uri" href="cancer" title="wikilink">cancer</a> (a loss of 0.4 compared to normal) would have to be multiplied by 1.25 (=2/1.6) to compensate for the loss.</li>
+<li>One of the basic assumptions of Batman is that all DNA methylation occurs at CpG dinucleotides. While this is generally the case for <a class="uri" href="vertebrate" title="wikilink">vertebrate</a> somatic cells, there are situations where there is widespread non-CpG methylation, such as in plant cells and <a href="embryonic_stem_cell" title="wikilink">embryonic stem cells</a>.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a><a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></li>
+</ol>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Computational_science" title="wikilink">Category:Computational science</a> <a href="Category:Applications_of_Bayesian_inference" title="wikilink">Methylation analysis (Batman)</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Down, T.A. et al. A Bayesian deconvolution strategy for immunoprecipitation-based DNA methylome analysis. <em>Nature Biotechnology</em> <strong>26</strong>, 779–85 (2008).<a href="#fnref1">↩</a></li>
+<li id="fn2">Lister, R. <em>et al</em>. Human DNA <a href="methylome" title="wikilink">methylomes</a> at base resolution show widespread <a class="uri" href="epigenomic" title="wikilink">epigenomic</a> differences. <em>Nature</em> <strong>462</strong>, 315–22 (2009).<a href="#fnref2">↩</a></li>
+<li id="fn3">Bird, A. DNA methylation patterns and epigenetic memory. <em>Genes &amp; Development</em> <strong>16</strong>, 6–21 (2002).<a href="#fnref3">↩</a></li>
+<li id="fn4">Eckhardt, F. <em>et al</em>. DNA methylation profiling of human chromosomes 6, 20 and 22. <em>Nature Genetics</em> <strong>38</strong>, 1378–85 (2006).<a href="#fnref4">↩</a></li>
+<li id="fn5">Dodge, J.E., Ramsahoye, B.H., Wo, Z.G., Okano, M. &amp; Li, E. De novo methylation of MMLV provirus in embryonic stem cells: CpG versus non-CpG methylation. <em>Gene</em> <strong>289</strong>, 41–8 (2002)<a href="#fnref5">↩</a></li>
+<li id="fn6">Vanyushin, B.F. DNA methylation in plants. <em>Current Topics in Microbiology and Immunology</em> <strong>301</strong>, 67–122 (2006)<a href="#fnref6">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

@@ -1,0 +1,340 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="273">Luby transform code</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Luby transform code</h1>
+<hr/>
+
+<p>In <a href="computer_science" title="wikilink">computer science</a>, <strong>Luby transform codes (LT codes)</strong> are the first class of practical <a href="fountain_code" title="wikilink">fountain codes</a> that are near-optimal <a href="erasure_correcting_code" title="wikilink">erasure correcting codes</a>. They were invented by <a href="Michael_Luby" title="wikilink">Michael Luby</a> in 1998 and published in 2002.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Like some other <a href="fountain_code" title="wikilink">fountain codes</a>, LT codes depend on sparse <a href="bipartite_graph" title="wikilink">bipartite graphs</a> to trade reception overhead for encoding and decoding speed. The distinguishing characteristic of LT codes is in employing a particularly simple algorithm based on the <a href="exclusive_or" title="wikilink">exclusive or</a> operation (
+
+<math display="inline" id="Luby_transform_code:0">
+ <semantics>
+  <mo>⊕</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">direct-sum</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \oplus
+  </annotation>
+ </semantics>
+</math>
+
+) to encode and decode the message.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+
+<p>LT codes are <em>rateless</em> because the encoding algorithm can in principle produce an infinite number of message packets (i.e., the percentage of packets that must be received to decode the message can be arbitrarily small). They are <em>erasure correcting codes</em> because they can be used to transmit digital data reliably on an <a href="binary_erasure_channel" title="wikilink">erasure channel</a>.</p>
+
+<p>The next generation beyond LT codes are <a href="raptor_codes" title="wikilink">raptor codes</a> (see for example IETF RFC 5053 or IETF RFC 6330), which have linear time encoding and decoding. Raptor codes use two encoding stages for encoding, where the second stage is an LT encoding.</p>
+<h2 id="why-use-an-lt-code">Why use an LT code?</h2>
+
+<p>The traditional scheme for transferring data across an erasure channel depends on continuous two-way communication.</p>
+<ul>
+<li>The sender encodes and sends a packet of information.</li>
+<li>The receiver attempts to decode the received packet. If it can be decoded, the receiver sends an acknowledgment back to the transmitter. Otherwise, the receiver asks the transmitter to send the packet again.</li>
+<li>This two-way process continues until all the packets in the message have been transferred successfully.</li>
+</ul>
+
+<p>Certain networks, such as ones used for cellular wireless broadcasting, do not have a feedback channel. Applications on these networks still require reliability. <a href="Fountain_code" title="wikilink">Fountain codes</a> in general, and LT codes in particular, get around this problem by adopting an essentially one-way communication protocol.</p>
+<ul>
+<li>The sender encodes and sends packet after packet of information.</li>
+<li>The receiver evaluates each packet as it is received. If there is an error, the erroneous packet is discarded. Otherwise the packet is saved as a piece of the message.</li>
+<li>Eventually the receiver has enough valid packets to reconstruct the entire message. When the entire message has been received successfully the receiver signals that transmission is complete.</li>
+</ul>
+<h2 id="lt-encoding">LT encoding</h2>
+
+<p>The encoding process begins by dividing the uncoded message into <em>n</em> blocks of roughly equal length. Encoded packets are then produced with the help of a <a href="pseudorandom_number_generator" title="wikilink">pseudorandom number generator</a>.</p>
+<ul>
+<li>The degree <em>d</em>, 1 ≤ <em>d</em> ≤ <em>n</em>, of the next packet is chosen at random.</li>
+<li>Exactly <em>d</em> blocks from the message are randomly chosen.</li>
+<li>If <em>M</em><sub><em>i</em></sub> is the <em>i</em>th block of the message, the data portion of the next packet is computed as</li>
+</ul>
+<dl>
+<dd><dl>
+<dd><math>
+</math></dd>
+</dl>
+</dd>
+</dl>
+
+<p>M_{i_1} \oplus M_{i_2} \oplus \cdots \oplus M_{i_d}\, </p>
+<dl>
+<dd>where {<em>i</em><sub>1</sub>, <em>i</em><sub>2</sub>, …, <em>i</em><sub><em>d</em></sub>} are the randomly chosen indices for the <em>d</em> blocks included in this packet.
+</dd>
+</dl>
+<ul>
+<li>A prefix is appended to the encoded packet, defining how many blocks <em>n</em> are in the message, how many blocks <em>d</em> have been exclusive-ored into the data portion of this packet, and the list of indices {<em>i</em><sub>1</sub>, <em>i</em><sub>2</sub>, …, <em>i</em><sub><em>d</em></sub>}.</li>
+<li>Finally, some form of error-detecting code (perhaps as simple as a <a href="cyclic_redundancy_check" title="wikilink">cyclic redundancy check</a>) is applied to the packet, and the packet is transmitted.</li>
+</ul>
+
+<p>This process continues until the receiver signals that the message has been received and successfully decoded.</p>
+<h2 id="lt-decoding">LT decoding</h2>
+
+<p>The decoding process uses the "<a href="exclusive_or" title="wikilink">exclusive or</a>" operation to retrieve the encoded message.</p>
+<ul>
+<li>If the current packet isn't clean, or if it replicates a packet that has already been processed, the current packet is discarded.</li>
+<li>If the current cleanly received packet is of degree <em>d</em> &gt; 1, it is first processed against all the fully decoded blocks in the message queuing area (as described more fully in the next step), then stored in a buffer area if its reduced degree is greater than 1.</li>
+<li>When a new, clean packet of degree <em>d</em> = 1 (block <em>M</em><sub><em>i</em></sub>) is received (or the degree of the current packet is reduced to 1 by the preceding step), it is moved to the message queueing area, and then matched against all the packets of degree <em>d</em> &gt; 1 residing in the buffer. It is exclusive-ored into the data portion of any buffered packet that was encoded using <em>M</em><sub><em>i</em></sub>, the degree of that matching packet is decremented, and the list of indices for that packet is adjusted to reflect the application of <em>M</em><sub><em>i</em></sub>.</li>
+<li>When this process unlocks a block of degree <em>d</em> = 2 in the buffer, that block is reduced to degree 1 and is in its turn moved to the message queueing area, and then processed against the packets remaining in the buffer.</li>
+<li>When all <em>n</em> blocks of the message have been moved to the message queueing area, the receiver signals the transmitter that the message has been successfully decoded.</li>
+</ul>
+
+<p>This decoding procedure works because <em>A</em> 
+
+<math display="inline" id="Luby_transform_code:1">
+ <semantics>
+  <mo>⊕</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">direct-sum</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \oplus
+  </annotation>
+ </semantics>
+</math>
+
+ <em>A</em> = 0 for any bit string <em>A</em>. After <em>d</em> − 1 distinct blocks have been exclusive-ored into a packet of degree <em>d</em>, the original unencoded content of the unmatched block is all that remains. In symbols we have</p>
+
+<p>
+
+<math display="inline" id="Luby_transform_code:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo lspace="22.5pt" stretchy="false">(</mo>
+    <mrow>
+     <msub>
+      <mi>M</mi>
+      <msub>
+       <mi>i</mi>
+       <mn>1</mn>
+      </msub>
+     </msub>
+     <mo>⊕</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>⊕</mo>
+     <msub>
+      <mi>M</mi>
+      <msub>
+       <mi>i</mi>
+       <mi>d</mi>
+      </msub>
+     </msub>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>⊕</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msub>
+      <mi>M</mi>
+      <msub>
+       <mi>i</mi>
+       <mn>1</mn>
+      </msub>
+     </msub>
+     <mo>⊕</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>⊕</mo>
+     <msub>
+      <mi>M</mi>
+      <msub>
+       <mi>i</mi>
+       <mrow>
+        <mi>k</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+     </msub>
+     <mo>⊕</mo>
+     <msub>
+      <mi>M</mi>
+      <msub>
+       <mi>i</mi>
+       <mrow>
+        <mi>k</mi>
+        <mo>+</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+     </msub>
+     <mo>⊕</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>⊕</mo>
+     <msub>
+      <mi>M</mi>
+      <msub>
+       <mi>i</mi>
+       <mi>d</mi>
+      </msub>
+     </msub>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">direct-sum</csymbol>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>i</ci>
+       <ci>d</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>i</ci>
+       <apply>
+        <minus></minus>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>i</ci>
+       <apply>
+        <plus></plus>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>i</ci>
+       <ci>d</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle{}\qquad(M_{i_{1}}\oplus\dots\oplus M_{i_{d}})\oplus(M_{i_{1}}%
+\oplus\dots\oplus M_{i_{k-1}}\oplus M_{i_{k+1}}\oplus\dots\oplus M_{i_{d}})
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+<h2 id="variations">Variations</h2>
+
+<p>Several variations of the encoding and decoding processes described above are possible. For instance, instead of prefixing each packet with a list of the actual message block indices {<em>i</em><sub>1</sub>, <em>i</em><sub>2</sub>, …, <em>i</em><sub><em>d</em></sub>}, the encoder might simply send a short "key" which served as the seed for the <a href="pseudorandom_number_generator" title="wikilink">pseudorandom number generator</a> (PRNG) or index table used to construct the list of indices. Since the receiver equipped with the same RNG or index table can reliably recreate the "random" list of indices from this seed, the decoding process can be completed successfully. Alternatively, by combining a simple LT code of low average degree with a robust error-correcting code, a <a href="raptor_code" title="wikilink">raptor code</a> can be constructed that will outperform an optimized LT code in practice.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+<h2 id="optimization-of-lt-codes">Optimization of LT codes</h2>
+
+<p>There is only one parameter that can be used to optimize a straight LT code: the degree distribution function (described as a pseudorandom number generator for the degree <em>d</em> in the <strong>LT encoding</strong> section above). In practice the other "random" numbers (the list of indices { <em>i</em><sub>1</sub>, <em>i</em><sub>2</sub>, …, <em>i</em><sub><em>d</em></sub> } ) are invariably taken from a uniform distribution on [0, <em>n</em>), where <em>n</em> is the number of blocks into which the message has been divided.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>Luby himself<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> discussed the "ideal <a href="soliton_distribution" title="wikilink">soliton distribution</a>" defined by</p>
+
+<p>
+
+<math display="inline" id="Luby_transform_code:3">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">P</mi>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mi>d</mi>
+    <mo>=</mo>
+    <mn>1</mn>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <csymbol cd="unknown">d</csymbol>
+     <eq></eq>
+     <cn type="integer">1</cn>
+     <ci>normal-}</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\mathrm{P}\{d=1\}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>This degree distribution theoretically minimizes the expected number of redundant code words that will be sent before the decoding process can be completed. However the ideal soliton distribution does not work well in practice because any fluctuation around the expected behavior makes it likely that at some step in the decoding process there will be no available packet of (reduced) degree 1 so decoding will fail. Furthermore, some of the original blocks will not be xor-ed into any of the transmission packets. Therefore, in practice, a modified distribution, the "robust <a href="soliton_distribution" title="wikilink">soliton distribution</a>", is substituted for the ideal distribution. The effect of the modification is, generally, to produce more packets of very small degree (around 1) and fewer packets of degree greater than 1, except for a spike of packets at a fairly large quantity chosen to ensure that all original blocks will be included in some packet.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Online_codes" title="wikilink">Online codes</a></li>
+<li><a href="Raptor_codes" title="wikilink">Raptor codes</a></li>
+<li><a href="Tornado_codes" title="wikilink">Tornado codes</a></li>
+</ul>
+<h2 id="notes-and-references">Notes and references</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.codeproject.com/Articles/425456/Your-Digital-Fountain">"Implementation of Luby transform Code in C#"</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Coding_theory" title="wikilink">Category:Coding theory</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="http://ieeexplore.ieee.org/xpl/freeabs_all.jsp?arnumber=1181950">M.Luby, "LT Codes", The 43rd Annual IEEE Symposium on Foundations of Computer Science, 2002.</a><a href="#fnref1">↩</a></li>
+<li id="fn2">The <em>exclusive or</em> (XOR) operation, symbolized by ⊕, has the very useful property that <em>A</em> ⊕ <em>A</em> = 0, where <em>A</em> is an arbitrary string of <a href="bit" title="wikilink">bits</a>.<a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="http://switzernet.com/people/emin-gabrielyan/060112-capillary-references/ref/MacKay05.pdf">Fountain codes</a>, by D.J.C. MacKay, first published in IEEE Proc.-Commun., Vol. 152, No. 6, December 2005.<a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="http://www.netlab.tkk.fi/tutkimus/abi/publ/lt-resim-2006.pdf">Optimizing the Degree Distribution of LT Codes with an Importance Sampling Approach</a>, by Esa Hyytiä, Tuomas Tirronen, and Jorma Virtamo (2006).<a href="#fnref4">↩</a></li>
+<li id="fn5"></li>
+<li id="fn6"></li>
+</ol>
+</section>
+</body>
+</html>

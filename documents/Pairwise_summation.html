@@ -1,0 +1,883 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1729">Pairwise summation</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Pairwise summation</h1>
+<hr/>
+
+<p>In <a href="numerical_analysis" title="wikilink">numerical analysis</a>, <strong>pairwise summation</strong>, also called <strong>cascade summation</strong>, is a technique to sum a sequence of finite-<a href="arithmetic_precision" title="wikilink">precision</a> <a class="uri" href="floating-point" title="wikilink">floating-point</a> numbers that substantially reduces the accumulated <a href="round-off_error" title="wikilink">round-off error</a> compared to naively accumulating the sum in sequence.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Although there are other techniques such as <a href="Kahan_summation" title="wikilink">Kahan summation</a> that typically have even smaller round-off errors, pairwise summation is nearly as good (differing only by a logarithmic factor) while having much lower computational cost—it can be implemented so as to have nearly the same cost (and exactly the same number of arithmetic operations) as naive summation.</p>
+
+<p>In particular, pairwise summation of a sequence of <em>n</em> numbers <em>x<sub>n</sub></em> works by <a href="recursion_(computer_science)" title="wikilink">recursively</a> breaking the sequence into two halves, summing each half, and adding the two sums: a <a href="divide_and_conquer_algorithm" title="wikilink">divide and conquer algorithm</a>. Its worst-case roundoff errors grow <a href="Big_O_notation" title="wikilink">asymptotically</a> as at most <em>O</em>(ε log <em>n</em>), where ε is the <a href="machine_precision" title="wikilink">machine precision</a> (assuming a fixed <a href="condition_number" title="wikilink">condition number</a>, as discussed below).<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> In comparison, the naive technique of accumulating the sum in sequence (adding each <em>x<sub>i</sub></em> one at a time for <em>i</em> = 1, ..., <em>n</em>) has roundoff errors that grow at worst as <em>O</em>(ε<em>n</em>).<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> <a href="Kahan_summation" title="wikilink">Kahan summation</a> has a <a href="error_bound" title="wikilink">worst-case error</a> of roughly <em>O</em>(ε), independent of <em>n</em>, but requires several times more arithmetic operations.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> If the roundoff errors are random, and in particular have random signs, then they form a <a href="random_walk" title="wikilink">random walk</a> and the error growth is reduced to an average of 
+
+<math display="inline" id="Pairwise_summation:0">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>ε</mi>
+     <msqrt>
+      <mrow>
+       <mi>log</mi>
+       <mi>n</mi>
+      </mrow>
+     </msqrt>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>ε</ci>
+     <apply>
+      <root></root>
+      <apply>
+       <log></log>
+       <ci>n</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\varepsilon\sqrt{\log n})
+  </annotation>
+ </semantics>
+</math>
+
+ for pairwise summation.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+
+<p>A very similar recursive structure of summation is found in many <a href="fast_Fourier_transform" title="wikilink">fast Fourier transform</a> (FFT) algorithms, and is responsible for the same slow roundoff accumulation of those FFTs.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a><a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+
+<p>Pairwise summation is the default summation algorithm in <a class="uri" href="NumPy" title="wikilink">NumPy</a><a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> and the <a href="Julia_(programming_language)" title="wikilink">Julia technical-computing language</a>,<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> where in both cases it was found to have comparable speed to naive summation (thanks to the use of a large base case).</p>
+<h2 id="the-algorithm">The algorithm</h2>
+
+<p>In <a class="uri" href="pseudocode" title="wikilink">pseudocode</a>, the pairwise summation algorithm for an <a href="Array_data_type" title="wikilink">array</a> <em>x</em> of length <em>n</em> &gt; 0 can be written:</p>
+
+<p><em><code>s</code></em><code> = </code><strong><code>pairwise</code></strong><code>(</code><em><code>x</code></em><code>[1…</code><em><code>n</code></em><code>])</code><br/>
+<code>      if </code><em><code>n</code></em><code> ≤ </code><em><code>N</code></em><code>                    </code><em><code>base</code> <code>case:</code> <code>naive</code> <code>summation</code> <code>for</code> <code>a</code> <code>sufficiently</code> <code>small</code> <code>array</code></em><br/>
+<code>          </code><em><code>s</code></em><code> = </code><em><code>x</code></em><code>[1]</code><br/>
+<code>          for </code><em><code>i</code></em><code> = 2 to </code><em><code>n</code></em><br/>
+<code>              </code><em><code>s</code></em><code> = </code><em><code>s</code></em><code> + </code><em><code>x</code></em><code>[</code><em><code>i</code></em><code>]</code><br/>
+<code>      else                        </code><em><code>divide</code> <code>and</code> <code>conquer:</code> <code>recursively</code> <code>sum</code> <code>two</code> <code>halves</code> <code>of</code> <code>the</code> <code>array</code></em><br/>
+<code>          </code><em><code>m</code></em><code> = </code><a href="Floor_and_ceiling_functions" title="wikilink"><code>floor</code></a><code>(</code><em><code>n</code></em><code> / 2)</code><br/>
+<code>          </code><em><code>s</code></em><code> = </code><strong><code>pairwise</code></strong><code>(</code><em><code>x</code></em><code>[1…</code><em><code>m</code></em><code>]) + </code><strong><code>pairwise</code></strong><code>(</code><em><code>x</code></em><code>[</code><em><code>m</code></em><code>+1…</code><em><code>n</code></em><code>])</code><br/>
+<code>      endif</code></p>
+
+<p>For some sufficiently small <em>N</em>, this algorithm switches to a naive loop-based summation as a <a href="base_case" title="wikilink">base case</a>, whose error bound is <em>O</em>(ε). The entire sum has a worst-case error that grows asymptotically as <em>O</em>(ε log <em>n</em>) for large <em>n</em>, for a given condition number (see below).</p>
+
+<p>In an algorithm of this sort (as for <a href="Divide_and_conquer_algorithm#Choosing_the_base_cases" title="wikilink">divide and conquer algorithms</a> in general<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a>), it is desirable to use a larger base case in order to <a href="Amortized_analysis" title="wikilink">amortize</a> the overhead of the recursion. If <em>N</em> = 1, then there is roughly one recursive subroutine call for every input, but more generally there is one recursive call for (roughly) every <em>N</em>/2 inputs if the recursion stops at exactly <em>n</em> = <em>N</em>. By making <em>N</em> sufficiently large, the overhead of recursion can be made negligible (precisely this technique of a large base case for recursive summation is employed by high-performance FFT implementations<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a>).</p>
+
+<p>Regardless of <em>N</em>, exactly <em>n</em>−1 additions are performed in total, the same as for naive summation, so if the recursion overhead is made negligible then pairwise summation has essentially the same computational cost as for naive summation.</p>
+
+<p>A variation on this idea is to break the sum into <em>b</em> blocks at each recursive stage, summing each block recursively, and then summing the results, which was dubbed a "superblock" algorithm by its proposers.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> The above pairwise algorithm corresponds to <em>b</em> = 2 for every stage except for the last stage which is <em>b</em> = <em>N</em>.</p>
+<h2 id="accuracy">Accuracy</h2>
+
+<p>Suppose that one is summing <em>n</em> values <em>x</em><sub><em>i</em></sub>, for <em>i</em> = 1, ..., <em>n</em>. The exact sum is:</p>
+
+<p>
+
+<math display="block" id="Pairwise_summation:1">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>S</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>n</mi>
+    </munderover>
+    <msub>
+     <mi>x</mi>
+     <mi>i</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>S</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S_{n}=\sum_{i=1}^{n}x_{i}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>(computed with infinite precision).</p>
+
+<p>With pairwise summation for a base case <em>N</em> = 1, one instead obtains 
+
+<math display="inline" id="Pairwise_summation:2">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>S</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>+</mo>
+   <msub>
+    <mi>E</mi>
+    <mi>n</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>S</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S_{n}+E_{n}
+  </annotation>
+ </semantics>
+</math>
+
+, where the error 
+
+<math display="inline" id="Pairwise_summation:3">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{n}
+  </annotation>
+ </semantics>
+</math>
+
+ is bounded above by:<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+
+<p>
+
+<math display="block" id="Pairwise_summation:4">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>E</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+   </mrow>
+   <mo>≤</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mi>ε</mi>
+      <mrow>
+       <msub>
+        <mi>log</mi>
+        <mn>2</mn>
+       </msub>
+       <mi>n</mi>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mn>1</mn>
+      <mo>-</mo>
+      <mrow>
+       <mi>ε</mi>
+       <mrow>
+        <msub>
+         <mi>log</mi>
+         <mn>2</mn>
+        </msub>
+        <mi>n</mi>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mfrac>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </munderover>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>x</mi>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <abs></abs>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <ci>ε</ci>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <log></log>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>n</ci>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <apply>
+        <times></times>
+        <ci>ε</ci>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <log></log>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>n</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <abs></abs>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |E_{n}|\leq\frac{\varepsilon\log_{2}n}{1-\varepsilon\log_{2}n}\sum_{i=1}^{n}|x%
+_{i}|
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where ε is the <a href="machine_precision" title="wikilink">machine precision</a> of the arithmetic being employed (e.g. ε ≈ 10<sup>−16</sup> for standard <a href="double_precision" title="wikilink">double precision</a> floating point). Usually, the quantity of interest is the <a href="relative_error" title="wikilink">relative error</a> 
+
+<math display="inline" id="Pairwise_summation:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>E</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+   </mrow>
+   <mo>/</mo>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>S</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <abs></abs>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <abs></abs>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>S</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |E_{n}|/|S_{n}|
+  </annotation>
+ </semantics>
+</math>
+
+, which is therefore bounded above by:</p>
+
+<p>
+
+<math display="block" id="Pairwise_summation:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>E</mi>
+       <mi>n</mi>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>S</mi>
+       <mi>n</mi>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mfrac>
+    <mo>≤</mo>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <mi>ε</mi>
+       <mrow>
+        <msub>
+         <mi>log</mi>
+         <mn>2</mn>
+        </msub>
+        <mi>n</mi>
+       </mrow>
+      </mrow>
+      <mrow>
+       <mn>1</mn>
+       <mo>-</mo>
+       <mrow>
+        <mi>ε</mi>
+        <mrow>
+         <msub>
+          <mi>log</mi>
+          <mn>2</mn>
+         </msub>
+         <mi>n</mi>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mfrac>
+     <mrow>
+      <mo>(</mo>
+      <mfrac>
+       <mrow>
+        <msubsup>
+         <mo largeop="true" symmetric="true">∑</mo>
+         <mrow>
+          <mi>i</mi>
+          <mo>=</mo>
+          <mn>1</mn>
+         </mrow>
+         <mi>n</mi>
+        </msubsup>
+        <mrow>
+         <mo stretchy="false">|</mo>
+         <msub>
+          <mi>x</mi>
+          <mi>i</mi>
+         </msub>
+         <mo stretchy="false">|</mo>
+        </mrow>
+       </mrow>
+       <mrow>
+        <mo>|</mo>
+        <mrow>
+         <msubsup>
+          <mo largeop="true" symmetric="true">∑</mo>
+          <mrow>
+           <mi>i</mi>
+           <mo>=</mo>
+           <mn>1</mn>
+          </mrow>
+          <mi>n</mi>
+         </msubsup>
+         <msub>
+          <mi>x</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+        <mo>|</mo>
+       </mrow>
+      </mfrac>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <divide></divide>
+     <apply>
+      <abs></abs>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+     <apply>
+      <abs></abs>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>S</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <ci>ε</ci>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <log></log>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>n</ci>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <apply>
+        <times></times>
+        <ci>ε</ci>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <log></log>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>n</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <abs></abs>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <abs></abs>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <sum></sum>
+          <apply>
+           <eq></eq>
+           <ci>i</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>n</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{|E_{n}|}{|S_{n}|}\leq\frac{\varepsilon\log_{2}n}{1-\varepsilon\log_{2}n}%
+\left(\frac{\sum_{i=1}^{n}|x_{i}|}{\left|\sum_{i=1}^{n}x_{i}\right|}\right).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>In the expression for the relative error bound, the fraction (Σ|<em>x<sub>i</sub></em>|/|Σ<em>x<sub>i</sub></em>|) is the <a href="condition_number" title="wikilink">condition number</a> of the summation problem. Essentially, the condition number represents the <em>intrinsic</em> sensitivity of the summation problem to errors, regardless of how it is computed.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> The relative error bound of <em>every</em> (<a href="backwards_stable" title="wikilink">backwards stable</a>) summation method by a fixed algorithm in fixed precision (i.e. not those that use <a href="arbitrary-precision_arithmetic" title="wikilink">arbitrary-precision arithmetic</a>, nor algorithms whose memory and time requirements change based on the data), is proportional to this condition number.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> An <em>ill-conditioned</em> summation problem is one in which this ratio is large, and in this case even pairwise summation can have a large relative error. For example, if the summands <em>x<sub>i</sub></em> are uncorrelated random numbers with zero mean, the sum is a <a href="random_walk" title="wikilink">random walk</a> and the condition number will grow proportional to 
+
+<math display="inline" id="Pairwise_summation:7">
+ <semantics>
+  <msqrt>
+   <mi>n</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{n}
+  </annotation>
+ </semantics>
+</math>
+
+. On the other hand, for random inputs with nonzero mean the condition number asymptotes to a finite constant as 
+
+<math display="inline" id="Pairwise_summation:8">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>→</mo>
+   <mi mathvariant="normal">∞</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <ci>n</ci>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n\to\infty
+  </annotation>
+ </semantics>
+</math>
+
+. If the inputs are all <a class="uri" href="non-negative" title="wikilink">non-negative</a>, then the condition number is 1.</p>
+
+<p>Note that the 
+
+<math display="inline" id="Pairwise_summation:9">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>-</mo>
+   <mrow>
+    <mi>ε</mi>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msub>
+     <mi>n</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <cn type="integer">1</cn>
+    <apply>
+     <times></times>
+     <ci>ε</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <log></log>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1-\varepsilon\log_{2}n
+  </annotation>
+ </semantics>
+</math>
+
+ denominator is effectively 1 in practice, since 
+
+<math display="inline" id="Pairwise_summation:10">
+ <semantics>
+  <mrow>
+   <mi>ε</mi>
+   <mrow>
+    <msub>
+     <mi>log</mi>
+     <mn>2</mn>
+    </msub>
+    <mi>n</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>ε</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varepsilon\log_{2}n
+  </annotation>
+ </semantics>
+</math>
+
+ is much smaller than 1 until <em>n</em> becomes of order 2<sup>1/ε</sup>, which is roughly 10<sup>10<sup>15</sup></sup> in double precision.</p>
+
+<p>In comparison, the relative error bound for naive summation (simply adding the numbers in sequence, rounding at each step) grows as 
+
+<math display="inline" id="Pairwise_summation:11">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>ε</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>ε</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\varepsilon n)
+  </annotation>
+ </semantics>
+</math>
+
+ multiplied by the condition number.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a> In practice, it is much more likely that the rounding errors have a random sign, with zero mean, so that they form a random walk; in this case, naive summation has a <a href="root_mean_square" title="wikilink">root mean square</a> relative error that grows as 
+
+<math display="inline" id="Pairwise_summation:12">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>ε</mi>
+     <msqrt>
+      <mi>n</mi>
+     </msqrt>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>ε</ci>
+     <apply>
+      <root></root>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\varepsilon\sqrt{n})
+  </annotation>
+ </semantics>
+</math>
+
+ and pairwise summation as an error that grows as 
+
+<math display="inline" id="Pairwise_summation:13">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>ε</mi>
+     <msqrt>
+      <mrow>
+       <mi>log</mi>
+       <mi>n</mi>
+      </mrow>
+     </msqrt>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>ε</ci>
+     <apply>
+      <root></root>
+      <apply>
+       <log></log>
+       <ci>n</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\varepsilon\sqrt{\log n})
+  </annotation>
+ </semantics>
+</math>
+
+ on average.<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Computer_arithmetic" title="wikilink">Category:Computer arithmetic</a> <a href="Category:Numerical_analysis" title="wikilink">Category:Numerical analysis</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"></li>
+<li id="fn3"></li>
+<li id="fn4"></li>
+<li id="fn5">Manfred Tasche and Hansmartin Zeuner <em>Handbook of Analytic-Computational Methods in Applied Mathematics</em> Boca Raton, FL: CRC Press, 2000).<a href="#fnref5">↩</a></li>
+<li id="fn6"></li>
+<li id="fn7">S. G. Johnson and M. Frigo, "<a href="http://cnx.org/content/m16336/latest/">Implementing FFTs in practice</a>, in <em><a href="http://cnx.org/content/col10550/">Fast Fourier Transforms</a></em>, edited by <a href="C._Sidney_Burrus" title="wikilink">C. Sidney Burrus</a> (2008).<a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="https://github.com/numpy/numpy/pull/3685">ENH: implement pairwise summation</a>, github.com/numpy/numpy pull request #3685 (September 2013).<a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="https://github.com/JuliaLang/julia/pull/4039">RFC: use pairwise summation for sum, cumsum, and cumprod</a>, github.com/JuliaLang/julia pull request #4039 (August 2013).<a href="#fnref9">↩</a></li>
+<li id="fn10">Radu Rugina and Martin Rinard, "<a href="http://people.csail.mit.edu/rinard/paper/lcpc00.pdf">Recursion unrolling for divide and conquer programs</a>," in <em>Languages and Compilers for Parallel Computing</em>, chapter 3, pp. 34–48. <em>Lecture Notes in Computer Science</em> vol. 2017 (Berlin: Springer, 2001).<a href="#fnref10">↩</a></li>
+<li id="fn11"></li>
+<li id="fn12">Anthony M. Castaldo, R. Clint Whaley, and Anthony T. Chronopoulos, "Reducing floating-point error in dot product using the superblock family of algorithms," <em>SIAM J. Sci. Comput.</em>, vol. 32, pp. 1156–1174 (2008).<a href="#fnref12">↩</a></li>
+<li id="fn13"></li>
+<li id="fn14">L. N. Trefethen and D. Bau, <em>Numerical Linear Algebra</em> (SIAM: Philadelphia, 1997).<a href="#fnref14">↩</a></li>
+<li id="fn15"></li>
+<li id="fn16"></li>
+<li id="fn17"></li>
+</ol>
+</section>
+</body>
+</html>

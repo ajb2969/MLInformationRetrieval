@@ -1,0 +1,1293 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1259">Record linkage</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Record linkage</h1>
+<hr/>
+
+<p><strong>Record linkage</strong> (RL) refers to the task of finding <a href="Record_(database)" title="wikilink">records</a> in a data set that refer to the same <a class="uri" href="entity" title="wikilink">entity</a> across different data sources (e.g., data files, books, websites, databases). Record linkage is necessary when <a href="Join_(SQL)" title="wikilink">joining</a> data sets based on entities that may or may not share a common identifier (e.g., <a href="Relational_model" title="wikilink">database key</a>, <a href="Uniform_Resource_Identifier" title="wikilink">URI</a>, <a href="National_identification_number" title="wikilink">National identification number</a>), as may be the case due to differences in record shape, storage location, and/or curator style or preference. A data set that has undergone RL-oriented reconciliation may be referred to as being <em>cross-linked</em>. Record Linkage is called Data Linkage in many jurisdictions, but is the same process.</p>
+<h2 id="history">History</h2>
+
+<p>The initial idea of record linkage goes back to <a href="Halbert_L._Dunn" title="wikilink">Halbert L. Dunn</a> in his 1946 article titled "Record Linkage" published in the <em><a href="American_Journal_of_Public_Health" title="wikilink">American Journal of Public Health</a></em>.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Howard Borden Newcombe laid the probabilistic foundations of modern record linkage theory in a 1959 article in <em><a href="Science_(journal)" title="wikilink">Science</a></em>,<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> which were then formalized in 1969 by <a href="Ivan_Fellegi" title="wikilink">Ivan Fellegi</a> and Alan Sunter who proved that the probabilistic decision rule they described was optimal when the comparison attributes were conditionally independent. Their pioneering work "A Theory For Record Linkage"<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> remains the mathematical foundation for many record linkage applications even today.</p>
+
+<p>Since the late 1990s, various machine learning techniques have been developed that can, under favorable conditions, be used to estimate the conditional probabilities required by the Fellegi-Sunter (FS) theory. Several researchers have reported that the conditional independence assumption of the FS algorithm is often violated in practice; however, published efforts to explicitly model the conditional dependencies among the comparison attributes have not resulted in an improvement in record linkage quality. </p>
+
+<p>Record linkage can be done entirely without the aid of a computer, but the primary reasons computers are often used for record linkage are to reduce or eliminate manual review and to make results more easily reproducible. Computer matching has the advantages of allowing central supervision of processing, better quality control, speed, consistency, and better reproducibility of results.;<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<h2 id="naming-conventions">Naming conventions</h2>
+
+<p>"Record linkage" is the term used by statisticians, epidemiologists, and historians, among others, to describe the process of joining records from one data source with another that describe the same entity. Commercial mail and database applications refer to it as "merge/purge processing" or "list washing". <a href="computer_science" title="wikilink">Computer scientists</a> often refer to it as "data matching" or as the "object identity problem". Other names used to describe the same concept include: "coreference/entity/identity/name/record resolution", "entity disambiguation/linking", "duplicate detection", "deduplication", "record matching", "(reference) reconciliation", "object identification", "data/information integration", "entity resolution" and "conflation".<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> This profusion of terminology has led to few cross-references between these research communities.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a><a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+
+<p>While they share similar names, record linkage and <a href="Linked_Data" title="wikilink">Linked Data</a> are two separate concepts. Whereas record linkage focuses on the more narrow task of identifying matching entities across different data sets, Linked Data focuses on the broader methods of structuring and publishing data to facilitate the discovery of related information.</p>
+<h2 id="methods">Methods</h2>
+<h3 id="data-preprocessing">Data preprocessing</h3>
+
+<p>Record linkage is highly sensitive to the quality of the data being linked, so all data sets under consideration (particularly their key identifier fields) should ideally undergo a <a href="data_quality_assessment" title="wikilink">data quality assessment</a> prior to record linkage. Many key identifiers for the same entity can be presented quite differently between (and even within) data sets, which can greatly complicate record linkage unless understood ahead of time. For example, key identifiers for a man named William J. Smith might appear in three different data sets as so:</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Data set</p></th>
+<th style="text-align: left;">
+<p>Name</p></th>
+<th style="text-align: left;">
+<p>Date of birth</p></th>
+<th style="text-align: left;">
+<p>City of residence</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Data set 1</p></td>
+<td style="text-align: left;">
+<p>William J. Smith</p></td>
+<td style="text-align: left;">
+<p>1/2/73</p></td>
+<td style="text-align: left;">
+<p>Berkeley, California</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Data set 2</p></td>
+<td style="text-align: left;">
+<p>Smith, W. J.</p></td>
+<td style="text-align: left;">
+<p>1973.1.2</p></td>
+<td style="text-align: left;">
+<p>Berkeley, CA</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Data set 3</p></td>
+<td style="text-align: left;">
+<p>Bill Smith</p></td>
+<td style="text-align: left;">
+<p>Jan 2, 1973</p></td>
+<td style="text-align: left;">
+<p>Berkeley, Calif.</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>In this example, the different formatting styles lead to records that look different but in fact all refer to the same entity with the same logical identifier values. Most, if not all, record linkage strategies would result in more accurate linkage if these values were first <em>normalized</em> or <em>standardized</em> into a consistent format (e.g., all names are "Surname, Given name", all dates are "YYYY/MM/DD", and all cities are "Name, 2-letter state abbreviation, Country"). Standardization can be accomplished through simple rule-based <a href="data_transformation" title="wikilink">data transformations</a> or more complex procedures such as lexicon-based <a href="Tokenization_(lexical_analysis)" title="wikilink">tokenization</a> and probabilistic hidden Markov models.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> Several of the packages listed in the <em>Software Implementations</em> section provide some of these features to simplify the process of data standardization.</p>
+<h3 id="identity-resolution">Identity resolution</h3>
+
+<p><strong>Identity resolution</strong> is an operational <a class="uri" href="intelligence" title="wikilink">intelligence</a> process, typically powered by an identity resolution engine or <a class="uri" href="middleware" title="wikilink">middleware</a>, whereby organizations can connect disparate data sources with a <a href="Opinion" title="wikilink">view</a> to understanding possible identity matches and non-obvious relationships across multiple <a href="data_silos" title="wikilink">data silos</a>. It analyzes all of the <a class="uri" href="information" title="wikilink">information</a> relating to individuals and/or entities from multiple sources of data, and then applies likelihood and probability scoring to determine which identities are a match and what, if any, non-obvious relationships exist between those identities.</p>
+
+<p>Identity resolution engines are typically used to uncover <a class="uri" href="risk" title="wikilink">risk</a>, <a class="uri" href="fraud" title="wikilink">fraud</a>, and conflicts of interest, but are also useful tools for use within <a href="Customer_Data_Integration" title="wikilink">Customer Data Integration</a> (CDI) and <a href="Master_Data_Management" title="wikilink">Master Data Management</a> (MDM) requirements. Typical uses for identity resolution engines include terrorist screening, insurance fraud detection, <a href="USA_Patriot_Act" title="wikilink">USA Patriot Act</a> compliance, <a href="Organized_retail_crime" title="wikilink">Organized retail crime</a> ring detection and applicant screening.</p>
+
+<p>For example: Across different data silos - employee records, vendor data, watch lists, etc. - an organization may have several variations of an identity named ABC, which may or may not be the same individual. These entries may, in fact, appear as ABC1, ABC2, or ABC3 within those data sources. By comparing similarities between underlying attributes such as <a href="Address_(geography)" title="wikilink">address</a>, <a href="date_of_birth" title="wikilink">date of birth</a>, or <a href="social_security_number" title="wikilink">social security number</a>, the user can eliminate some possible matches and confirm others as very likely matches.</p>
+
+<p>Identity resolution engines then apply rules, based on common sense logic, to identify hidden relationships across the data. In the example above, perhaps ABC1 and ABC2 are not the same individual, but rather two distinct people who share common attributes such as address or phone number.</p>
+<h4 id="data-matching">Data Matching</h4>
+
+<p>While entity resolution solutions include data matching technology, many data matching offerings do not fit the definition of identity (or entity) resolution. Here are four factors that distinguish entity resolution from data matching, according to John Talburt, director of the <a href="Ualr" title="wikilink">UALR</a> Center for Advanced Research in Entity Resolution and Information Quality:</p>
+<ul>
+<li>Works with both structured and unstructured records, and it entails the process of extracting references when the sources are unstructured or semi-structured</li>
+<li>Uses elaborate business rules and concept models to deal with missing, conflicting, and corrupted information</li>
+<li>Utilizes non-matching, asserted linking (associate) information in addition to direct matching</li>
+<li>Uncovers non-obvious relationships and association networks (i.e. who's associated with whom)</li>
+</ul>
+
+<p>In contrast to data quality products, more powerful identity resolution engines also include a rules engine and workflow process, which apply business intelligence to the resolved identities and their relationships. These advanced technologies make automated decisions and impact business processes in real time, limiting the need for human intervention.</p>
+<h3 id="deterministic-record-linkage">Deterministic record linkage</h3>
+
+<p>The simplest kind of record linkage, called <em>deterministic</em> or <em>rules-based record linkage</em>, generates links based on the number of individual identifiers that match among the available data sets.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> Two records are said to match via a deterministic record linkage procedure if all or some identifiers (above a certain threshold) are identical. Deterministic record linkage is a good option when the entities in the data sets are identified by a common identifier, or when there are several representative identifiers (e.g., name, date of birth, and sex when identifying a person) whose quality of data is relatively high.</p>
+
+<p>As an example, consider two standardized data sets, Set A and Set B, that contain different bits of information about patients in a hospital system. The two data sets identify patients using a variety of identifiers: <a href="Social_Security_Number" title="wikilink">Social Security Number</a> (SSN), name, date of birth (DOB), sex, and <a href="ZIP_code" title="wikilink">ZIP code</a> (ZIP). The records in two data sets (identified by the "#" column) are shown below:</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Data Set</p></th>
+<th style="text-align: left;">
+<p>#</p></th>
+<th style="text-align: left;">
+<p>SSN</p></th>
+<th style="text-align: left;">
+<p>Name</p></th>
+<th style="text-align: left;">
+<p>DOB</p></th>
+<th style="text-align: left;">
+<p>Sex</p></th>
+<th style="text-align: left;">
+<p>ZIP</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Set A</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>000956723</p></td>
+<td style="text-align: left;">
+<p>Smith, William</p></td>
+<td style="text-align: left;">
+<p>1973/01/02</p></td>
+<td style="text-align: left;">
+<p>Male</p></td>
+<td style="text-align: left;">
+<p>94701</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>000956723</p></td>
+<td style="text-align: left;">
+<p>Smith, William</p></td>
+<td style="text-align: left;">
+<p>1973/01/02</p></td>
+<td style="text-align: left;">
+<p>Male</p></td>
+<td style="text-align: left;">
+<p>94703</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>3</p></td>
+<td style="text-align: left;">
+<p>000005555</p></td>
+<td style="text-align: left;">
+<p>Jones, Robert</p></td>
+<td style="text-align: left;">
+<p>1942/08/14</p></td>
+<td style="text-align: left;">
+<p>Male</p></td>
+<td style="text-align: left;">
+<p>94701</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>123001234</p></td>
+<td style="text-align: left;">
+<p>Sue, Mary</p></td>
+<td style="text-align: left;">
+<p>1972/11/19</p></td>
+<td style="text-align: left;">
+<p>Female</p></td>
+<td style="text-align: left;">
+<p>94109</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Set B</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>000005555</p></td>
+<td style="text-align: left;">
+<p>Jones, Bob</p></td>
+<td style="text-align: left;">
+<p>1942/08/14</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>Smith, Bill</p></td>
+<td style="text-align: left;">
+<p>1973/01/02</p></td>
+<td style="text-align: left;">
+<p>Male</p></td>
+<td style="text-align: left;">
+<p>94701</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>The most simple deterministic record linkage strategy would be to pick a single identifier that is assumed to be uniquely identifying, say SSN, and declare that records sharing the same value identify the same person while records not sharing the same value identify different people. In this example, deterministic linkage based on SSN would create entities based on A1 and A2; A3 and B1; and A4. While A1, A2, and B2 appear to represent the same entity, B2 would not be included into the match because it is missing a value for SSN.</p>
+
+<p>Handling exceptions such as missing identifiers involves the creation of additional record linkage rules. One such rule in the case of missing SSN might be to compare name, date of birth, sex, and ZIP code with other records in hopes of finding a match. In the above example, this rule would still not match A1/A2 with B2 because the names are still slightly different: standardization put the names into the proper (Surname, Given name) format but could not discern "Bill" as a nickname for "William". Running names through a <a href="phonetic_algorithm" title="wikilink">phonetic algorithm</a> such as <a class="uri" href="Soundex" title="wikilink">Soundex</a>, <a class="uri" href="NYSIIS" title="wikilink">NYSIIS</a>, or <a class="uri" href="metaphone" title="wikilink">metaphone</a>, can help to resolve these types of problems (though it may still stumble over surname changes as the result of marriage or divorce), but then B2 would be matched only with A1 since the ZIP code in A2 is different. Thus, another rule would need to be created to determine whether differences in particular identifiers are acceptable (such as ZIP code) and which are not (such as date of birth).</p>
+
+<p>As this example demonstrates, even a small decrease in data quality or small increase in the complexity of the data can result in a very large increase in the number of rules necessary to link records properly. Eventually, these linkage rules will become too numerous and interrelated to build without the aid of specialized software tools. In addition, linkage rules are often specific to the nature of the data sets they are designed to link together. One study was able to link the Social Security <a href="Death_Master_File" title="wikilink">Death Master File</a> with two hospital registries from the <a href="Midwestern_United_States" title="wikilink">Midwestern United States</a> using SSN, NYSIIS-encoded first name, birth month, and sex, but these rules may not work as well with data sets from other geographic regions or with data collected on younger populations.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> Thus, continuous maintenance testing of these rules is necessary to ensure they continue to function as expected as new data enter the system and need to be linked. New data that exhibit different characteristics than was initially expected could require a complete rebuilding of the record linkage rule set, which could be a very time-consuming and expensive endeavor.</p>
+<h3 id="probabilistic-record-linkage">Probabilistic record linkage</h3>
+
+<p><em>Probabilistic record linkage</em>, sometimes called <em>fuzzy matching</em> (also <em>probabilistic merging</em> or <em>fuzzy merging</em> in the context of merging of databases), takes a different approach to the record linkage problem by taking into account a wider range of potential identifiers, computing weights for each identifier based on its estimated ability to correctly identify a match or a non-match, and using these weights to calculate the probability that two given records refer to the same entity. Record pairs with probabilities above a certain threshold are considered to be matches, while pairs with probabilities below another threshold are considered to be non-matches; pairs that fall between these two thresholds are considered to be "possible matches" and can be dealt with accordingly (e.g., human reviewed, linked, or not linked, depending on the requirements). Whereas deterministic record linkage requires a series of potentially complex rules to be programmed ahead of time, probabilistic record linkage methods can be "trained" to perform well with much less human intervention.</p>
+
+<p>Many probabilistic record linkage algorithms assign match/non-match weights to identifiers by means of two probabilities called <em>u</em> and <em>m</em>. The <em>u</em> probability is the probability that an identifier in two <em>non-matching</em> records will agree purely by chance. For example, the <em>u</em> probability for birth month (where there are twelve values that are approximately uniformly distributed) is 1/12 ≈ 0.083; identifiers with values that are not uniformly distributed will have different <em>u</em> probabilities for different values (possibly including missing values). The <em>m</em> probability is the probability that an identifier in <em>matching</em> pairs will agree (or be sufficiently similar, such as strings with high <a href="Jaro-Winkler_distance" title="wikilink">Jaro-Winkler distance</a> or low <a href="Levenshtein_distance" title="wikilink">Levenshtein distance</a>). This value would be 1.0 in the case of perfect data, but given that this is rarely (if ever) true, it can instead be estimated. This estimation may be done based on prior knowledge of the data sets, by manually identifying a large number of matching and non-matching pairs to "train" the probabilistic record linkage algorithm, or by iteratively running the algorithm to obtain closer estimations of the <em>m</em> probability. If a value of 0.95 were to be estimated for the <em>m</em> probability, then the match/non-match weights for the birth month identifier would be:</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Outcome</p></th>
+<th style="text-align: left;">
+<p>Proportion of links</p></th>
+<th style="text-align: left;">
+<p>Proportion of non-links</p></th>
+<th style="text-align: left;">
+<p>Frequency ratio</p></th>
+<th style="text-align: left;">
+<p>Weight</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Match</p></td>
+<td style="text-align: left;">
+<p><em>m</em> = 0.95</p></td>
+<td style="text-align: left;">
+<p><em>u</em> ≈ 0.083</p></td>
+<td style="text-align: left;">
+<p><em>m</em>/<em>u</em> ≈ 11.4</p></td>
+<td style="text-align: left;">
+<p>ln(<em>m</em>/<em>u</em>)/ln(2) ≈ 3.51</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Non-match</p></td>
+<td style="text-align: left;">
+<p>1−<em>m</em> = 0.05</p></td>
+<td style="text-align: left;">
+<p>1-<em>u</em> ≈ 0.917</p></td>
+<td style="text-align: left;">
+<p>(1-<em>m</em>)/(1-<em>u</em>) ≈ 0.0545</p></td>
+<td style="text-align: left;">
+<p>ln((1-<em>m</em>)/(1-<em>u</em>))/ln(2) ≈ -4.20</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>The same calculations would be done for all other identifiers under consideration to find their match/non-match weights. Then, the identifiers of one record would be compared with the identifiers with every other record to compute the total weight: the <em>match</em> weight is added to the running total whenever a pair of identifiers agree, while the <em>non-match</em> weight is added (i.e. the running total decreases) whenever the pair of identifiers disagrees. The resulting total weight is then compared to the aforementioned thresholds to determine whether the pair should be linked, non-linked, or set aside for special consideration (e.g. manual validation).<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+
+<p>Determining where to set the match/non-match thresholds is a balancing act between obtaining an acceptable <a href="Sensitivity_and_specificity#Sensitivity" title="wikilink">sensitivity</a> (or <em>recall</em>, the proportion of truly matching records that are linked by the algorithm) and <a href="positive_predictive_value" title="wikilink">positive predictive value</a> (or <em>precision</em>, the proportion of records linked by the algorithm that truly do match). Various manual and automated methods are available to predict the best thresholds, and some record linkage software packages have built-in tools to help the user find the most acceptable values. Because this can be a very computationally demanding task, particularly for large data sets, a technique known as <em>blocking</em> is often used to improve efficiency. Blocking attempts to restrict comparisons to just those records for which one or more particularly discriminating identifiers agree, which has the effect of increasing the positive predictive value (precision) at the expense of sensitivity (recall).<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> For example, blocking based on a phonetically coded surname and ZIP code would reduce the total number of comparisons required and would improve the chances that linked records would be correct (since two identifiers already agree), but would potentially miss records referring to the same person whose surname or ZIP code was different (due to marriage or relocation, for instance). Blocking based on birth month, a more stable identifier that would be expected to change only in the case of data error, would provide a more modest gain in positive predictive value and loss in sensitivity, but would create only twelve distinct groups which, for extremely large data sets, may not provide much net improvement in computation speed. Thus, robust record linkage systems often use multiple blocking passes to group data in various ways in order to come up with groups of records that should be compared to each other.</p>
+<h3 id="machine-learning">Machine learning</h3>
+
+<p>In recent years, a variety of machine learning techniques have been used in record linkage. It has been recognized<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> that probabilistic record linkage is equivalent to the "<a href="Naive_Bayes" title="wikilink">Naive Bayes</a>" algorithm in the field of machine learning,<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> and suffers from the same assumption of the independence of its features (an assumption that is typically not true).<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a><a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a> Higher accuracy can often be achieved by using various other machine learning techniques, including a single-layer <a class="uri" href="perceptron" title="wikilink">perceptron</a>.<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<h2 id="mathematical-model">Mathematical model</h2>
+
+<p>In an application with two files, A and B, denote the rows (<em>records</em>) by 
+
+<math display="inline" id="Record_linkage:0">
+ <semantics>
+  <mrow>
+   <mi>α</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>α</ci>
+    <ci>a</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha(a)
+  </annotation>
+ </semantics>
+</math>
+
+ in file A and 
+
+<math display="inline" id="Record_linkage:1">
+ <semantics>
+  <mrow>
+   <mi>β</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>β</ci>
+    <ci>b</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta(b)
+  </annotation>
+ </semantics>
+</math>
+
+ in file B. Assign 
+
+<math display="inline" id="Record_linkage:2">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K
+  </annotation>
+ </semantics>
+</math>
+
+ <em>characteristics</em> to each record. The set of records that represent identical entities is defined by</p>
+
+<p>
+
+<math display="inline" id="Record_linkage:3">
+ <semantics>
+  <mrow>
+   <mi>M</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo>{</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>;</mo>
+    <mi>a</mi>
+    <mo>=</mo>
+    <mi>b</mi>
+    <mo>;</mo>
+    <mi>a</mi>
+    <mo>∈</mo>
+    <mi>A</mi>
+    <mo>;</mo>
+    <mi>b</mi>
+    <mo>∈</mo>
+    <mi>B</mi>
+    <mo>}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">M</csymbol>
+    <eq></eq>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">a</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">b</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">a</csymbol>
+     <eq></eq>
+     <csymbol cd="unknown">b</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">a</csymbol>
+     <in></in>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">b</csymbol>
+     <in></in>
+     <csymbol cd="unknown">B</csymbol>
+     <ci>normal-}</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M=\left\{(a,b);a=b;a\in A;b\in B\right\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>and the complement of set 
+
+<math display="inline" id="Record_linkage:4">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+, namely set 
+
+<math display="inline" id="Record_linkage:5">
+ <semantics>
+  <mi>U</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>U</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U
+  </annotation>
+ </semantics>
+</math>
+
+ representing different entities is defined as</p>
+
+<p>
+
+<math display="inline" id="Record_linkage:6">
+ <semantics>
+  <mrow>
+   <mi>U</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>;</mo>
+    <mi>a</mi>
+    <mo>≠</mo>
+    <mi>b</mi>
+    <mo>;</mo>
+    <mi>a</mi>
+    <mo>∈</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo>∈</mo>
+    <mi>B</mi>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">U</csymbol>
+    <eq></eq>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">a</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">b</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">a</csymbol>
+     <neq></neq>
+     <csymbol cd="unknown">b</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">a</csymbol>
+     <in></in>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">b</csymbol>
+     <in></in>
+     <csymbol cd="unknown">B</csymbol>
+     <ci>normal-}</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U=\{(a,b);a\neq b;a\in A,b\in B\}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>A vector, 
+
+<math display="inline" id="Record_linkage:7">
+ <semantics>
+  <mi>γ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>γ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma
+  </annotation>
+ </semantics>
+</math>
+
+ is defined, that contains the coded agreements and disagreements on each characteristic:</p>
+
+<p>
+
+<math display="inline" id="Record_linkage:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>γ</mi>
+    <mrow>
+     <mo>[</mo>
+     <mrow>
+      <mi>α</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>a</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>,</mo>
+     <mrow>
+      <mi>β</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>b</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>]</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mrow>
+     <msup>
+      <mi>γ</mi>
+      <mn>1</mn>
+     </msup>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <mi>α</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>a</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>,</mo>
+      <mrow>
+       <mi>β</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>b</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mrow>
+     <msup>
+      <mi>γ</mi>
+      <mi>K</mi>
+     </msup>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <mi>α</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>a</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>,</mo>
+      <mrow>
+       <mi>β</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>b</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>γ</ci>
+     <interval closure="closed">
+      <apply>
+       <times></times>
+       <ci>α</ci>
+       <ci>a</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>β</ci>
+       <ci>b</ci>
+      </apply>
+     </interval>
+    </apply>
+    <set>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>γ</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <interval closure="closed">
+       <apply>
+        <times></times>
+        <ci>α</ci>
+        <ci>a</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>β</ci>
+        <ci>b</ci>
+       </apply>
+      </interval>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>γ</ci>
+       <ci>K</ci>
+      </apply>
+      <interval closure="closed">
+       <apply>
+        <times></times>
+        <ci>α</ci>
+        <ci>a</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>β</ci>
+        <ci>b</ci>
+       </apply>
+      </interval>
+     </apply>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma\left[\alpha(a),\beta(b)\right]=\{\gamma^{1}\left[\alpha(a),\beta(b)%
+\right],...,\gamma^{K}\left[\alpha(a),\beta(b)\right]\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Record_linkage:9">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K
+  </annotation>
+ </semantics>
+</math>
+
+ is a subscript for the characteristics (sex, age, marital status, etc.) in the files. The conditional probabilities of observing a specific vector 
+
+<math display="inline" id="Record_linkage:10">
+ <semantics>
+  <mi>γ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>γ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma
+  </annotation>
+ </semantics>
+</math>
+
+ given 
+
+<math display="inline" id="Record_linkage:11">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>∈</mo>
+   <mi>M</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+    <ci>M</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (a,b)\in M
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Record_linkage:12">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>∈</mo>
+   <mi>U</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+    <ci>U</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (a,b)\in U
+  </annotation>
+ </semantics>
+</math>
+
+ are defined as</p>
+
+<p>
+
+<math display="inline" id="Record_linkage:13">
+ <semantics>
+  <mrow>
+   <mi>m</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>γ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>P</mi>
+   <mrow>
+    <mo>{</mo>
+    <mi>γ</mi>
+    <mrow>
+     <mo>[</mo>
+     <mi>α</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>,</mo>
+     <mi>β</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>b</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>]</mo>
+    </mrow>
+    <mo stretchy="false">|</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>∈</mo>
+    <mi>M</mi>
+    <mo>}</mo>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mo largeop="true" symmetric="true">∑</mo>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo>,</mo>
+      <mi>b</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>∈</mo>
+     <mi>M</mi>
+    </mrow>
+   </msub>
+   <mi>P</mi>
+   <mrow>
+    <mo>{</mo>
+    <mi>γ</mi>
+    <mrow>
+     <mo>[</mo>
+     <mi>α</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>,</mo>
+     <mi>β</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>b</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>]</mo>
+    </mrow>
+    <mo>}</mo>
+   </mrow>
+   <mo>⋅</mo>
+   <mi>P</mi>
+   <mrow>
+    <mo>[</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">|</mo>
+    <mi>M</mi>
+    <mo>]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">m</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">γ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <csymbol cd="unknown">γ</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-[</ci>
+      <csymbol cd="unknown">α</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">a</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">β</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">b</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-]</ci>
+     </cerror>
+     <ci>normal-|</ci>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">a</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">b</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <in></in>
+     <csymbol cd="unknown">M</csymbol>
+     <ci>normal-}</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <sum></sum>
+     <apply>
+      <in></in>
+      <interval closure="open">
+       <ci>a</ci>
+       <ci>b</ci>
+      </interval>
+      <ci>M</ci>
+     </apply>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <csymbol cd="unknown">γ</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-[</ci>
+      <csymbol cd="unknown">α</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">a</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">β</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">b</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-]</ci>
+     </cerror>
+     <ci>normal-}</ci>
+    </cerror>
+    <ci>normal-⋅</ci>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">a</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">b</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">M</csymbol>
+     <ci>normal-]</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m(\gamma)=P\left\{\gamma\left[\alpha(a),\beta(b)\right]|(a,b)\in M\right\}=%
+\sum_{(a,b)\in M}P\left\{\gamma\left[\alpha(a),\beta(b)\right]\right\}\cdot P%
+\left[(a,b)|M\right]
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>and</p>
+
+<p>
+
+<math display="inline" id="Record_linkage:14">
+ <semantics>
+  <mrow>
+   <mi>u</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>γ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>P</mi>
+   <mrow>
+    <mo>{</mo>
+    <mi>γ</mi>
+    <mrow>
+     <mo>[</mo>
+     <mi>α</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>,</mo>
+     <mi>β</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>b</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>]</mo>
+    </mrow>
+    <mo stretchy="false">|</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>∈</mo>
+    <mi>U</mi>
+    <mo>}</mo>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mo largeop="true" symmetric="true">∑</mo>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo>,</mo>
+      <mi>b</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>∈</mo>
+     <mi>U</mi>
+    </mrow>
+   </msub>
+   <mi>P</mi>
+   <mrow>
+    <mo>{</mo>
+    <mi>γ</mi>
+    <mrow>
+     <mo>[</mo>
+     <mi>α</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>,</mo>
+     <mi>β</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>b</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>]</mo>
+    </mrow>
+    <mo>}</mo>
+   </mrow>
+   <mo>⋅</mo>
+   <mi>P</mi>
+   <mrow>
+    <mo>[</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">|</mo>
+    <mi>U</mi>
+    <mo>]</mo>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">u</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">γ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <csymbol cd="unknown">γ</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-[</ci>
+      <csymbol cd="unknown">α</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">a</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">β</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">b</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-]</ci>
+     </cerror>
+     <ci>normal-|</ci>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">a</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">b</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <in></in>
+     <csymbol cd="unknown">U</csymbol>
+     <ci>normal-}</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <sum></sum>
+     <apply>
+      <in></in>
+      <interval closure="open">
+       <ci>a</ci>
+       <ci>b</ci>
+      </interval>
+      <ci>U</ci>
+     </apply>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <csymbol cd="unknown">γ</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-[</ci>
+      <csymbol cd="unknown">α</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">a</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">β</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">b</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-]</ci>
+     </cerror>
+     <ci>normal-}</ci>
+    </cerror>
+    <ci>normal-⋅</ci>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">a</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">b</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">U</csymbol>
+     <ci>normal-]</ci>
+    </cerror>
+    <ci>normal-,</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   u(\gamma)=P\left\{\gamma\left[\alpha(a),\beta(b)\right]|(a,b)\in U\right\}=%
+\sum_{(a,b)\in U}P\left\{\gamma\left[\alpha(a),\beta(b)\right]\right\}\cdot P%
+\left[(a,b)|U\right],
+  </annotation>
+ </semantics>
+</math>
+
+ respectively.<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a></p>
+<h2 id="applications">Applications</h2>
+<h3 id="master-data-management">Master data management</h3>
+
+<p>Most <a href="Master_data_management" title="wikilink">Master data management</a> (MDM) products use a record linkage process to identify records from different sources representing the same real-world entity. This linkage is used to create a "golden master record" containing the cleaned, reconciled data about the entity. The techniques used in MDM are the same as for record linkage generally. MDM expands this matching not only to create a "golden master record" but to infer relationships also. (i.e. a person has a same/similar surname and same/similar address, this might imply they share a household relationship).</p>
+<h3 id="data-warehousing-and-business-intelligence">Data warehousing and business intelligence</h3>
+
+<p>Record linkage plays a key role in <a href="data_warehousing" title="wikilink">data warehousing</a> and <a href="business_intelligence" title="wikilink">business intelligence</a>. Data warehouses serve to combine data from many different operational source systems into one <a href="logical_data_model" title="wikilink">logical data model</a>, which can then be subsequently fed into a business intelligence system for reporting and analytics. Each operational source system may have its own method of identifying the same entities used in the logical data model, so record linkage between the different sources becomes necessary to ensure that the information about a particular entity in one source system can be seamlessly compared with information about the same entity from another source system. Data standardization and subsequent record linkage often occur in the "transform" portion of the <a href="extract,_transform,_load" title="wikilink">extract, transform, load</a> (ETL) process.</p>
+<h3 id="historical-research">Historical research</h3>
+
+<p>Record linkage is important to social history research since most data sets, such as <a href="census" title="wikilink">census records</a> and parish registers were recorded long before the invention of <a href="National_identification_number" title="wikilink">National identification numbers</a>. When old sources are digitized, linking of data sets is a prerequisite for <a href="longitudinal_study" title="wikilink">longitudinal study</a>. This process is often further complicated by lack of standard spelling of names, family names that change according to place of dwelling, changing of administrative boundaries, and problems of checking the data against other sources. Record linkage was among the most prominent themes in the <a href="History_and_computing" title="wikilink">History and computing</a> field in the 1980s, but has since been subject to less attention in research.</p>
+<h3 id="medical-practice-and-research">Medical practice and research</h3>
+
+<p>Record linkage is an important tool in creating data required for examining the health of the public and of the health care system itself. It can be used to improve data holdings, data collection, quality assessment, and the dissemination of information. Data sources can be examined to eliminate duplicate records, to identify under-reporting and missing cases (e.g., census population counts), to create person-oriented health statistics, and to generate disease registries and health surveillance systems. Some cancer registries link various data sources (e.g., hospital admissions, pathology and clinical reports, and death registrations) to generate their registries. Record linkage is also used to create health indicators. For example, fetal and infant mortality is a general indicator of a country's socioeconomic development, public health, and maternal and child services. If infant death records are matched to birth records, it is possible to use birth variables, such as birth weight and gestational age, along with mortality data, such as cause of death, in analyzing the data. Linkages can help in follow-up studies of cohorts or other groups to determine factors such as vital status, residential status, or health outcomes. Tracing is often needed for follow-up of industrial cohorts, clinical trials, and longitudinal surveys to obtain the cause of death and/or cancer. An example of a successful and long-standing record linkage system allowing for population-based medical research is the <a href="Rochester_Epidemiology_Project" title="wikilink">Rochester Epidemiology Project</a> based in <a href="Rochester,_Minnesota" title="wikilink">Rochester, Minnesota</a>.<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a></p>
+<h2 id="criticism-of-existing-software-implementations">Criticism of existing software implementations</h2>
+
+<p>The main reasons cited are:</p>
+<ul>
+<li><strong>Project costs</strong>: costs typically in the hundreds of thousands of dollars</li>
+<li><strong>Time</strong>: lack of enough time to deal with large-scale data-cleansing software</li>
+<li><strong>Security</strong>: concerns over sharing information, giving an application access across systems, and effects on legacy systems</li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Identity_resolution" title="wikilink">Identity resolution</a></li>
+<li><a href="Linked_data" title="wikilink">Linked data</a></li>
+<li><a href="Entity-attribute-value_model" title="wikilink">Entity-attribute-value model</a></li>
+<li><a href="Entity_linking" title="wikilink">Entity linking</a></li>
+<li><a href="Named-entity_recognition" title="wikilink">Named-entity recognition</a></li>
+<li><a href="Open_data" title="wikilink">Open data</a></li>
+<li><a href="Delta_encoding" title="wikilink">Delta encoding</a></li>
+<li><a href="Data_deduplication" title="wikilink">Data deduplication</a></li>
+<li><a href="Capacity_optimization" title="wikilink">Capacity optimization</a></li>
+<li><a href="Single-instance_storage" title="wikilink">Single-instance storage</a></li>
+<li><a href="Content-addressable_storage" title="wikilink">Content-addressable storage</a></li>
+<li><a href="Schema_matching" title="wikilink">Schema matching</a></li>
+</ul>
+<h2 id="notes-and-references">Notes and references</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://pike.psu.edu/linkage/">Data Linkage Project at Penn State, USA</a></li>
+<li><a href="http://www.datadecision.com">Datadecision - Data matching online tool</a></li>
+<li><a href="http://sourceforge.net/projects/oysterer/">OYSTER Entity Resolution</a></li>
+<li><a href="http://datamining.anu.edu.au/">Febrl - Freely Extensible Biomedical Record Linkage</a></li>
+<li><a href="http://infolab.stanford.edu/serf/">Stanford Entity Resolution Framework</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Data_management" title="wikilink">Category:Data management</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a class="uri" href="http://homes.cs.washington.edu/~pedrod/papers/icdm06.pdf">http://homes.cs.washington.edu/~pedrod/papers/icdm06.pdf</a><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="http://datamining.anu.edu.au/linkage.html">Cristen, P &amp; T: Febrl - Freely extensible biomedical record linkage (Manual, release 0.3) p.9</a><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"></li>
+<li id="fn13">Wilson, D. Randall, "Beyond Probabilistic Record Linkage: Using Neural Networks and Complex Features to Improve Genealogical Record Linkage", Proceedings of International Joint Conference on Neural Networks, San Jose, California, USA, July 31 – August 5, 2011<a href="#fnref13">↩</a></li>
+<li id="fn14">Quass, Dallan, and Starkey, Paul. “Record Linkage for Genealogical Databases,” ACM SIGKDD ’03 Workshop on Data Cleaning, Record Linkage, and Object Consolidation, August 24–27, 2003, Washington, D.C.<a href="#fnref14">↩</a></li>
+<li id="fn15">Langley, Pat, Wayne Iba, and Kevin Thompson. “An Analysis of Bayesian Classifiers,” In Proceedings of the 10th National Conference on Artificial Intelligence, (AAAI-92), AAAI Press/MIT Press, Cambridge, MA, pp. 223-228, 1992.<a href="#fnref15">↩</a></li>
+<li id="fn16">Michie, D., D. Spiegelhalter, and C. Taylor. Machine Learning, Neural and Statistical Classification, Ellis Horwood, Hertfordshire, England. Book 19, 1994.<a href="#fnref16">↩</a></li>
+<li id="fn17"></li>
+<li id="fn18"></li>
+<li id="fn19"><a href="#fnref19">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

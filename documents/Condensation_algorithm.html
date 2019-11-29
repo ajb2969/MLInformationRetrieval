@@ -1,0 +1,1665 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="966">Condensation algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Condensation algorithm</h1>
+<hr/>
+
+<p>The <strong>condensation algorithm</strong> (<strong>Con</strong>ditional <strong>Dens</strong>ity Propag<strong>ation</strong>) is a <a href="computer_vision" title="wikilink">computer vision</a> algorithm. The principal application is to detect and <a href="video_tracking" title="wikilink">track</a> the contour of objects moving in a cluttered environment. Object tracking is one of the more basic and difficult aspects of computer vision and is generally a prerequisite to object recognition. Being able to identify which pixels in an image make up the contour of an object is a non-trivial problem. Condensation is a <a href="probabilistic_algorithm" title="wikilink">probabilistic algorithm</a> that attempts to solve this problem.</p>
+
+<p>The algorithm itself is described in detail by Isard and <a href="Andrew_Blake_(scientist)" title="wikilink">Blake</a> in a publication in the International Journal of Computer Vision in 1998.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> One of the most interesting facets of the algorithm is that it does not compute on every pixel of the image. Rather, pixels to process are chosen at random, and only a subset of the pixels end up being processed. Multiple hypotheses about what is moving are supported naturally by the probabilistic nature of the approach. The evaluation functions come largely from previous work in the area and include many standard statistical approaches. The original part of this work is the application of particle filter estimation techniques.</p>
+
+<p>The algorithm’s creation was inspired by the inability of <a href="Kalman_filtering" title="wikilink">Kalman filtering</a> to perform object tracking well in the presence of significant background clutter. The presence of clutter tends to produce probability distributions for the object state which are <a href="Multimodal_distribution" title="wikilink">multi-modal</a> and therefore poorly modeled by the Kalman filter. The Condensation Algorithm in its most general form requires no assumptions about the probability distributions of the object or measurements.</p>
+<h2 id="algorithm-overview">Algorithm Overview</h2>
+
+<p>The Condensation algorithm seeks to solve the problem of estimating the conformation of an object described by a <a href="Vector_(mathematics_and_physics)" title="wikilink"> vector</a> 
+
+<math display="inline" id="Condensation_algorithm:0">
+ <semantics>
+  <msub>
+   <mi>𝐱</mi>
+   <mi>𝐭</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐱</ci>
+    <ci>𝐭</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x_{t}}
+  </annotation>
+ </semantics>
+</math>
+
+ at time 
+
+<math display="inline" id="Condensation_algorithm:1">
+ <semantics>
+  <mi>t</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>t</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t
+  </annotation>
+ </semantics>
+</math>
+
+, given observations 
+
+<math display="inline" id="Condensation_algorithm:2">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>𝐳</mi>
+    <mn>𝟏</mn>
+   </msub>
+   <mo>,</mo>
+   <mi mathvariant="normal">…</mi>
+   <mo>,</mo>
+   <msub>
+    <mi>𝐳</mi>
+    <mi>𝐭</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐳</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>normal-…</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐳</ci>
+     <ci>𝐭</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{z_{1},...,z_{t}}
+  </annotation>
+ </semantics>
+</math>
+
+ of the detected features in the images up to and including the current time. The Condensation Algorithm outputs an estimate to the state <a href="Conditional_probability_distribution" title="wikilink"> conditional probability density</a> 
+
+<math display="inline" id="Condensation_algorithm:3">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mn>𝟏</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{z_{1},...,z_{t}})
+  </annotation>
+ </semantics>
+</math>
+
+ by applying a nonlinear filter based on factored sampling and can be thought of as a development of a <a href="Monte-Carlo_method" title="wikilink">Monte-Carlo method</a>.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> 
+
+<math display="inline" id="Condensation_algorithm:4">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mn>𝟏</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{z_{1},...,z_{t}})
+  </annotation>
+ </semantics>
+</math>
+
+ is a representation of the probability of possible conformations for the objects based on previous conformations and measurements. The condensation algorithm is a <a href="generative_model" title="wikilink">generative model</a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> since it models the <a href="joint_distribution" title="wikilink">joint distribution</a> of the object and the observer.</p>
+
+<p>The conditional density of the object at the current time 
+
+<math display="inline" id="Condensation_algorithm:5">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mn>𝟏</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{z_{1},...,z_{t}})
+  </annotation>
+ </semantics>
+</math>
+
+ is estimated as a weighted, time-indexed sample set 
+
+<math display="inline" id="Condensation_algorithm:6">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <msubsup>
+       <mi>s</mi>
+       <mi>t</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>n</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>s</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <ci>n</ci>
+      </list>
+      <cn type="integer">1</cn>
+     </apply>
+     <list>
+      <ci>normal-…</ci>
+      <ci>N</ci>
+     </list>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{s_{t}^{(n)},n=1,...,N\}
+  </annotation>
+ </semantics>
+</math>
+
+ with weights 
+
+<math display="inline" id="Condensation_algorithm:7">
+ <semantics>
+  <msubsup>
+   <mi>π</mi>
+   <mi>t</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>π</ci>
+     <ci>t</ci>
+    </apply>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \pi_{t}^{(n)}
+  </annotation>
+ </semantics>
+</math>
+
+. N is a parameter determining the number of sample sets chosen. A realization of 
+
+<math display="inline" id="Condensation_algorithm:8">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mn>𝟏</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{z_{1},...,z_{t}})
+  </annotation>
+ </semantics>
+</math>
+
+ is obtained by sampling with replacement from the set 
+
+<math display="inline" id="Condensation_algorithm:9">
+ <semantics>
+  <msub>
+   <mi>s</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>s</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{t}
+  </annotation>
+ </semantics>
+</math>
+
+ with probability equal to the corresponding element of 
+
+<math display="inline" id="Condensation_algorithm:10">
+ <semantics>
+  <msub>
+   <mi>π</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>π</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \pi_{t}
+  </annotation>
+ </semantics>
+</math>
+
+.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>The assumptions that object dynamics form a temporal Markov chain and that observations are <a href="Independence_(probability_theory)" title="wikilink"> independent</a> of each other and the dynamics facilitate the implementation of the Condensation Algorithm. The first assumption allows the dynamics of the object to be entirely determined by the conditional density 
+
+<math display="inline" id="Condensation_algorithm:11">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mrow>
+      <mi>𝐭</mi>
+      <mo>-</mo>
+      <mn>𝟏</mn>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <apply>
+       <minus></minus>
+       <ci>𝐭</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{x_{t-1}})
+  </annotation>
+ </semantics>
+</math>
+
+. The model of the system dynamics determined by 
+
+<math display="inline" id="Condensation_algorithm:12">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mrow>
+      <mi>𝐭</mi>
+      <mo>-</mo>
+      <mn>𝟏</mn>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <apply>
+       <minus></minus>
+       <ci>𝐭</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{x_{t-1}})
+  </annotation>
+ </semantics>
+</math>
+
+ must also be selected for the algorithm, and generally includes both <a class="uri" href="deterministic" title="wikilink">deterministic</a> and <a class="uri" href="stochastic" title="wikilink">stochastic</a> dynamics.</p>
+
+<p>The algorithm can be summarized by initialization at time 
+
+<math display="inline" id="Condensation_algorithm:13">
+ <semantics>
+  <mrow>
+   <mi>t</mi>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>t</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t=0
+  </annotation>
+ </semantics>
+</math>
+
+ and three steps at each time t:</p>
+<h3 id="initialization">Initialization</h3>
+
+<p>Form the initial sample set and weights by sampling according to the prior distribution . For example, specify as <a href="Normal_distribution" title="wikilink">Gaussian</a> and set the weights equal to each other.</p>
+<h3 id="iterative-procedure">Iterative Procedure</h3>
+<ol>
+<li>Sample with replacement N times from the set 
+
+<math display="inline" id="Condensation_algorithm:14">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <msubsup>
+       <mi>s</mi>
+       <mn>0</mn>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>n</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>s</ci>
+         <cn type="integer">0</cn>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <ci>n</ci>
+      </list>
+      <cn type="integer">1</cn>
+     </apply>
+     <list>
+      <ci>normal-…</ci>
+      <ci>N</ci>
+     </list>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{s_{0}^{(n)},n=1,...,N\}
+  </annotation>
+ </semantics>
+</math>
+
+ with probability 
+
+<math display="inline" id="Condensation_algorithm:15">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <msubsup>
+       <mi>π</mi>
+       <mn>0</mn>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>n</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>π</ci>
+         <cn type="integer">0</cn>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <ci>n</ci>
+      </list>
+      <cn type="integer">1</cn>
+     </apply>
+     <list>
+      <ci>normal-…</ci>
+      <ci>N</ci>
+     </list>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{\pi_{0}^{(n)},n=1,...,N\}
+  </annotation>
+ </semantics>
+</math>
+
+ to generate a realization of 
+
+<math display="inline" id="Condensation_algorithm:16">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mn>𝟏</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{z_{1},...,z_{t}})
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+<li>Apply the learned dynamics 
+
+<math display="inline" id="Condensation_algorithm:17">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mrow>
+      <mi>𝐭</mi>
+      <mo>-</mo>
+      <mn>𝟏</mn>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <apply>
+       <minus></minus>
+       <ci>𝐭</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{x_{t-1}})
+  </annotation>
+ </semantics>
+</math>
+
+ to each element of this new set, to generate a new set 
+
+<math display="inline" id="Condensation_algorithm:18">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <msubsup>
+    <mi>s</mi>
+    <mi>t</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>n</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>n</ci>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{s_{t}^{(n)}\}
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+<li>To take into account the current observation 
+
+<math display="inline" id="Condensation_algorithm:19">
+ <semantics>
+  <msub>
+   <mi>𝐳</mi>
+   <mi>𝐭</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐳</ci>
+    <ci>𝐭</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{z_{t}}
+  </annotation>
+ </semantics>
+</math>
+
+, set 
+
+<math display="inline" id="Condensation_algorithm:20">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>π</mi>
+    <mi>t</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>n</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>𝐳</mi>
+       <mi>𝐭</mi>
+      </msub>
+      <mo stretchy="false">|</mo>
+      <msup>
+       <mi>s</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>n</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msup>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mstyle displaystyle="false">
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>j</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>N</mi>
+      </msubsup>
+     </mstyle>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>𝐳</mi>
+       <mi>𝐭</mi>
+      </msub>
+      <mo stretchy="false">|</mo>
+      <msup>
+       <mi>s</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>j</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msup>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>π</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <csymbol cd="unknown">p</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐳</ci>
+        <ci>𝐭</ci>
+       </apply>
+       <ci>normal-|</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>s</ci>
+        <ci>n</ci>
+       </apply>
+       <ci>normal-)</ci>
+      </cerror>
+     </cerror>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <csymbol cd="unknown">p</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐳</ci>
+        <ci>𝐭</ci>
+       </apply>
+       <ci>normal-|</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>s</ci>
+        <ci>j</ci>
+       </apply>
+       <ci>normal-)</ci>
+      </cerror>
+     </cerror>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \pi_{t}^{(n)}=\frac{p(\mathbf{z_{t}}|s^{(n)})}{\sum_{j=1}^{N}p(\mathbf{z_{t}}|%
+s^{(j)})}
+  </annotation>
+ </semantics>
+</math>
+
+ for each element 
+
+<math display="inline" id="Condensation_algorithm:21">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <msubsup>
+    <mi>s</mi>
+    <mi>t</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>n</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>n</ci>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{s_{t}^{(n)}\}
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+</ol>
+
+<p>This algorithm outputs the probability distribution 
+
+<math display="inline" id="Condensation_algorithm:22">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mn>𝟏</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>𝐳</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐳</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{z_{1},...,z_{t}})
+  </annotation>
+ </semantics>
+</math>
+
+ which can be directly used to calculate the mean position of the tracked object, as well as the other <a href="Moment_(mathematics)" title="wikilink">moments</a> of the tracked object.</p>
+
+<p>Cumulative weights can instead be used to achieve a more efficient sampling.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+<h2 id="implementation-considerations">Implementation Considerations</h2>
+
+<p>Since object-tracking can be a real-time objective, consideration of algorithm efficiency becomes important. The Condensation Algorithm is relatively simple when compared to the computational intensity of the Ricatti equation required for Kalman filtering. The parameter 
+
+<math display="inline" id="Condensation_algorithm:23">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+ which determines the number of samples in the sample set will clearly hold a trade off in efficiency versus performance.</p>
+
+<p>One way to increase efficiency of the algorithm is by selecting a low degree of freedom model for representing the shape of the object. The model used by Isard 1998 is a linear parameterization of <a class="uri" href="B-splines" title="wikilink">B-splines</a> in which the splines are limited to certain configurations. Suitable configurations were found by analytically determining combinations of contours from multiple views, of the object in different poses, and through <a href="principal_component_analysis" title="wikilink">principal component analysis</a> (PCA) on the deforming object.</p>
+
+<p>Isard and Blake model the object dynamics 
+
+<math display="inline" id="Condensation_algorithm:24">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mrow>
+      <mi>𝐭</mi>
+      <mo>-</mo>
+      <mn>𝟏</mn>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <apply>
+       <minus></minus>
+       <ci>𝐭</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{x_{t-1}})
+  </annotation>
+ </semantics>
+</math>
+
+ as a second order <a href="difference_equation" title="wikilink">difference equation</a> with deterministic and stochastic components
+
+<math display="block" id="Condensation_algorithm:25">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>𝐭</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mrow>
+      <mi>𝐭</mi>
+      <mo>-</mo>
+      <mn>𝟏</mn>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>∝</mo>
+   <msup>
+    <mi>e</mi>
+    <mrow>
+     <mo>-</mo>
+     <mfrac>
+      <mn>1</mn>
+      <mn>2</mn>
+     </mfrac>
+     <mo stretchy="false">|</mo>
+     <mo stretchy="false">|</mo>
+     <msup>
+      <mi>B</mi>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>𝐱</mi>
+        <mi>𝐭</mi>
+       </msub>
+       <mo>-</mo>
+       <mover accent="true">
+        <mi>𝐱</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mo>-</mo>
+      <mi>A</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>𝐱</mi>
+        <mrow>
+         <mi>𝐭</mi>
+         <mo>-</mo>
+         <mn>𝟏</mn>
+        </mrow>
+       </msub>
+       <mo>-</mo>
+       <mover accent="true">
+        <mi>𝐱</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo stretchy="false">|</mo>
+     <msup>
+      <mo stretchy="false">|</mo>
+      <mn>2</mn>
+     </msup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>𝐭</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <apply>
+       <minus></minus>
+       <ci>𝐭</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="latexml">proportional-to</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>e</ci>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <minus></minus>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>normal-|</ci>
+      <ci>normal-|</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>B</ci>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>𝐭</ci>
+        </apply>
+        <minus></minus>
+        <apply>
+         <ci>normal-¯</ci>
+         <ci>𝐱</ci>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <minus></minus>
+       <csymbol cd="unknown">A</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <apply>
+          <minus></minus>
+          <ci>𝐭</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <minus></minus>
+        <apply>
+         <ci>normal-¯</ci>
+         <ci>𝐱</ci>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-|</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>normal-|</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>normal-)</ci>
+     </cerror>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x_{t}}|\mathbf{x_{t-1}})\propto e^{-\frac{1}{2}||B^{-1}((\mathbf{x_{%
+t}}-\mathbf{\bar{x}})-A(\mathbf{x_{t-1}}-\mathbf{\bar{x}}))||^{2})}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Condensation_algorithm:26">
+ <semantics>
+  <mover accent="true">
+   <mi>𝐱</mi>
+   <mo stretchy="false">¯</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-¯</ci>
+    <ci>𝐱</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\bar{x}}
+  </annotation>
+ </semantics>
+</math>
+
+ is the mean value of the state, and 
+
+<math display="inline" id="Condensation_algorithm:27">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Condensation_algorithm:28">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+ are matrices representing the deterministic and stochastic components of the dynamical model respectively. 
+
+<math display="inline" id="Condensation_algorithm:29">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Condensation_algorithm:30">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Condensation_algorithm:31">
+ <semantics>
+  <mover accent="true">
+   <mi>𝐱</mi>
+   <mo stretchy="false">¯</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-¯</ci>
+    <ci>𝐱</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\bar{x}}
+  </annotation>
+ </semantics>
+</math>
+
+ are estimated via <a href="Maximum_Likelihood_Estimation" title="wikilink">Maximum Likelihood Estimation</a> while the object performs typical movements.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a><a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+
+<p>The observation model 
+
+<math display="inline" id="Condensation_algorithm:32">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐳</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">z</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{z}|\mathbf{x})
+  </annotation>
+ </semantics>
+</math>
+
+ cannot be directly estimated from the data, requiring assumptions to be made in order to estimate it. Isard 1998 assumes that the clutter which may make the object not visible is a <a href="Poisson_random_process" title="wikilink">Poisson random process</a> with spatial density 
+
+<math display="inline" id="Condensation_algorithm:33">
+ <semantics>
+  <mi>λ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>λ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda
+  </annotation>
+ </semantics>
+</math>
+
+ and that any true target measurement is unbiased and normally distributed with <a href="standard_deviation" title="wikilink">standard deviation</a> 
+
+<math display="inline" id="Condensation_algorithm:34">
+ <semantics>
+  <mi>σ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>σ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The basic Condensation algorithm is used to track a single object in time. It is possible to extend the Condensation algorithm using a single probability distribution to describe the likely states of multiple objects to track multiple objects in a scene at the same time.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+
+<p>Since clutter can cause the object probability distribution to split into multiple peaks, each peak represents a hypothesis about the object configuration. Smoothing is a statistical technique of conditioning the distribution based on both past and future measurements once the tracking is complete in order to reduce the effects of multiple peaks.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> Smoothing cannot be directly done in real-time since it requires information of future measurements.</p>
+<h2 id="applications">Applications</h2>
+
+<p>The algorithm can be used for vision-based robot localization of mobile robots.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> Instead of tracking the position of an object in the scene however, the position of the camera platform is tracked. This allows the camera platform to be globally localized given a visual map of the environment.</p>
+
+<p>Extensions of the condensation algorithm have also been used to recognize human gestures in image sequences. This application of the condensation algorithm impacts the range of human-computer interactions possible. It has been used to recognize simple gestures of a user at a whiteboard to control actions such as selecting regions of the boards to print or save them.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> Other extensions have also been used for tracking multiple cars in the same scene.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+
+<p>The condensation algorithm has also been used for face recognition in a video sequence.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h2 id="resources">Resources</h2>
+
+<p>An implementation of the Condensation Algorithm in C can be found on <a href="http://www.robots.ox.ac.uk/~misard/condensation.html">Michael Isard’s website</a>.</p>
+
+<p>An implementation in Matlab can be found on the <a href="http://www.mathworks.com/matlabcentral/fileexchange/22320-conditional-density-propagation-tracker--1-dimenstional-">Mathworks File Exchange</a>.</p>
+
+<p>An example of implementation using the OpenCV library can be found on the <a href="http://answers.opencv.org/question/6985/syntax-for-particle-filter-in-opencv-243/">OpenCV forums</a>.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Particle_filter" title="wikilink">Particle filter</a> - Condensation is the application of Sampling Importance Resampling (SIR) estimation to contour tracking</li>
+</ul>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Computer_vision" title="wikilink">Category:Computer vision</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"></li>
+<li id="fn5"></li>
+<li id="fn6"></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

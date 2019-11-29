@@ -1,0 +1,545 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1384">Shared snapshot objects</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Shared snapshot objects</h1>
+<hr>In [[distributed computing]], a '''shared snapshot object''' is a type of [[data structure]], which is shared between several [[thread (computing)|threads]] or processes. For many tasks, it is important to have a [[data structure]], that can provide a consistent view of the state of the memory. In practice, it turns out that it is not possible to get such a consistent state of the memory by just accessing one [[shared register]] after another, since the values stored in individual registers can be changed at any time during this process. 
+
+<p>To solve this problem, snapshot objects store a vector of <em>n</em> components and provide the following two <a href="atomicity_(programming)" title="wikilink">atomic</a> operations: <em>update(i,v)</em> changes the value in the <em>i</em>th component to <em>v</em>, and <em>scan()</em> returns the values stored in all <em>n</em> components.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> Snapshot objects can be constructed using atomic single-writer multi-reader <a href="shared_register" title="wikilink">shared registers</a>.</p>
+
+<p>In general, one distinguishes between single-writer multi-reader (swmr) snapshot objects and multi-writer multi-reader (mwmr) snapshot objects. In a swmr snapshot object, the number of components matches the number of processes and only one process <em>P<sub>i</sub></em> is allowed to write to the memory position <em>i</em> and all the other processes are allowed to read the memory. In contrast, in a mwmr snapshot object all processes are allowed to write to all positions of the memory and are allowed to read the memory as well.</p>
+<h2 id="general">General</h2>
+
+<p>A <a href="shared_memory" title="wikilink">shared memory</a> is partitioned into multiple parts. Each of these parts holds a single data value. In the single-writer multi-reader case each process <em>P<sub>i</sub></em> has a memory position <em>i</em> assigned and only this process is allowed to write to the memory position. However, every process is allowed to read any position in the memory. In the multi-writer multi-reader case, the restriction changes and any process is allowed to change any position of the memory. Any process <em>P<sub>i</sub></em>
+<math display="inline" id="Shared_snapshot_objects:0">
+<semantics>
+<mo>∈</mo>
+<annotation-xml encoding="MathML-Content">
+<in></in>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   \in
+  </annotation>
+</semantics>
+</math>
+
+ {1,...,<em>n</em>} in an <em>n</em>-process system is able to perform two operations on the snapshot object: <em>scan()</em> and <em>update(i,v)</em>. The <em>scan</em> operation has no arguments and returns a consistent view of the memory. The <em>update(i,v)</em> operation updates the memory at the position <em>i</em> with the value <em>v</em>.</p>
+
+<p>Both types of operations are considered to occur atomically between the call by the process and the return by the memory. More generally speaking, in the data vector 
+
+<math display="inline" id="Shared_snapshot_objects:1">
+<semantics>
+<mover accent="true">
+<mi>d</mi>
+<mo>¯</mo>
+</mover>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<ci>normal-¯</ci>
+<ci>d</ci>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   \overline{d}
+  </annotation>
+</semantics>
+</math>
+
+ each entry <em>d<sub>k</sub></em> corresponds to the argument of the last <a href="linearizability" title="wikilink">linearized</a> <em>update</em> operation, which updates part <em>k</em> of the memory.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>In order to get the full benefit of shared snapshot objects, in terms of simplifications for validations and constructions, there are two other restrictions added to the construction of snapshot objects. <a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> The first restriction is an architectural one, meaning that any snapshot object is constructed only with <a href="Shared_register" title="wikilink">single-writer multi-reader registers</a> as the basic element. This is possible for single-writer multi-reader snapshots. For multi-writer multi-reader snapshot objects it is possible to use <a href="Shared_register" title="wikilink">multi-reader multi-writer registers</a>, which can in turn be constructed from single-writer multi-reader registers.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a><a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a><a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+
+<p>In distributed computing the construction of a system is driven by the goal, that the whole system is making progress during the execution. Thus, the behaviour of a process should not bring the whole system to a halt (<a href="Non-blocking_algorithm#Lock-freedom" title="wikilink">Lock-freedom</a>). The stronger version of this is the property of <a href="Non-blocking_algorithm#Wait-freedom" title="wikilink">wait-freedom</a>, meaning that no process can prevent another process from terminating its operation. More generally, this means that every operation has to terminate after a finite number of steps regardless of the behaviour of other processes. A very basic snapshot algorithm guarantees system-wide progress, but is only lock-free. It is easy to extend this algorithm, so that it is wait-free. The algorithm by Afek et al.,<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> which is presented in the section <a href="Shared_snapshot_objects#Implementation" title="wikilink">Implementation</a> has this property.</p>
+<h2 id="implementation">Implementation</h2>
+
+<p>Several methods exists to implement shared snapshot objects. The first presented algorithm provides a principal implementation of a snapshot objects. However, this implementation only provides the property of <a href="Non-blocking_algorithm#Lock-freedom" title="wikilink">lock-freedom</a>. The second presented implementation proposed by Afel et al.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> has a stronger property called <a href="Non-blocking_algorithm#Wait-freedom" title="wikilink">wait-freedom</a>. An overview of other implementations is given by Fich.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+<h3 id="basic-swmr-snapshot-algorithm">Basic swmr snapshot algorithm</h3>
+
+<p>The basic idea of this algorithm is that every process executing the <code>scan()</code> operations, reads all the memory values twice. If the algorithm reads exactly the same memory content twice, no other process changed a value in between and it can return the result. A process, which executes a <code>update(i,v)</code> operation, just update his value in the memory.</p>
+
+<p><strong><code>function</code></strong><code> scan()</code><br/>
+<code>   </code><strong><code>while</code></strong><code> </code><em><code>true</code></em><br/>
+<code>      a[1..n] := collect;</code><br/>
+<code>      b[1..n] := collect;</code><br/>
+<code>      </code><strong><code>if</code></strong><code> (∀i∈{1,..,n} location i was not changed between the reads of it during the two collects)) </code><strong><code>then</code></strong><br/>
+<code>         return b; // double collect successful</code><br/>
+<code>   </code><strong><code>loop</code></strong><br/>
+<strong><code>end</code></strong></p>
+
+<p><strong><code>function</code></strong><code> update(i,v)</code><br/>
+<code>   M[i] := v;</code><br/>
+<strong><code>end</code></strong></p>
+
+<p><a href="File:Starving_Process_in_Snapshot_object.svg" title="wikilink">thumb|upright=2|right|Fig.1: One process always updates the memory, during the double collect of the other process. Thus, the scanning-process is never able to terminate.</a> This algorithm provides a very basic implementation of snapshot objects. It guarantees that the system proceeds, while individual threads can starve due to the behaviour of individual processes. A process <em>P<sub>i</sub></em> can prevent another process <em>P<sub>j</sub></em> from terminating a <code>scan()</code> operation by always changing its value, in between the two memory collects. Thus, the algorithm is <a href="Non-blocking_algorithm#Lock-freedom" title="wikilink">lock-free</a>, but not <a href="Non-blocking_algorithm#Lock-freedom" title="wikilink">wait-free</a>. To hold this stronger the property, no process is allowed to starve due to the behavior of other processes. Figure 1 illustrates the problem. While <em>P<sub>1</sub></em> tries to execute the <code>scan()</code> operation, a second process <em>P<sub>2</sub></em> always disturbs the "double-collect". Thus, the scanning process always has to restart the operation and can never terminates and starves.</p>
+<h3 id="single-writer-multi-reader-implementation-by-afek-et-al.">Single-Writer Multi-Reader implementation by Afek et al.</h3>
+
+<p>The basic idea of the swmr snapshot algorithm by Afek et al. is that a process can detect whether another process changed its memory location and that processes help each other. In order to detect if another process changed its value, a counter is attached to each register and a process increases the counter on every update. The second idea is that, every process who updates its memory position also performs a <code>scan()</code> operation and provides its "view of the memory" in its register to other processes. A scanning process can borrow this <code>scan</code> result and return it.</p>
+<h4 id="based-on-unbounded-memory">Based on unbounded memory</h4>
+
+<p>Using this idea one can construct a <a href="Non-blocking_algorithm#Wait-freedom" title="wikilink">wait-free</a> algorithm that uses registers of unbounded size. A process performing an update operation can help a process to complete the scan. The basic idea is that if a process sees another process updating a memory location twice, that process must have executed a complete, <a href="Linearizability" title="wikilink">linearized</a>, update operation in between. To implement this, every <em>update</em> operation first performs a <em>scan</em> of the memory and then writes the snapshot value atomically together with the new value <em>v</em> and a sequence number. If a process is performing a scan of the memory and detects that a process updated the memory part twice, it can "borrow" the "embedded" scan of the update to complete the <em>scan</em> operation.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+
+<p><code> </code><strong><code>function</code></strong><code> scan()                                      // returns a consistent view of the memory</code><br/>
+<code>  </code><strong><code>for</code></strong><code> j = 1 </code><strong><code>to</code></strong><code> n </code><strong><code>do</code></strong><code> moved[j] := 0 </code><strong><code>end</code></strong><br/>
+<code>  </code><strong><code>while</code></strong><code> true </code><strong><code>do</code></strong><br/>
+<code>    a[1..n] := collect;                              // collects (data, sequence, view) triples</code><br/>
+<code>    b[1..n] := collect;                              // collects (data, sequence, view) triples</code><br/>
+<code>    </code><strong><code>if</code></strong><code> (∀j∈{1, ..., n}) (a[j].seq = b[j].seq) </code><strong><code>then</code></strong><br/>
+<code>      </code><strong><code>return</code></strong><code> (b[1].data, ..., b[n].data)             // no process changed memory</code><br/>
+<code>    '''else for ''' j = 1 </code><strong><code>to</code></strong><code> n </code><strong><code>do</code></strong><br/>
+<code>      </code><strong><code>if</code></strong><code> a[j].seq ≠ b[j].seq </code><strong><code>then</code></strong><code>                    // process moved</code><br/>
+<code>        </code><strong><code>if</code></strong><code> moved[j] = 1 </code><strong><code>then</code></strong><code>                         // process already moved before</code><br/>
+<code>          </code><strong><code>return</code></strong><code> b[j].view;</code><br/>
+<code>      </code><strong><code>else</code></strong><code> moved[j] := moved[j] + 1;</code><br/>
+<code>    </code><strong><code>end</code></strong><br/>
+<code>  </code><strong><code>end</code></strong><br/>
+<strong><code>end</code> <code>function</code></strong></p>
+
+<p><strong><code>procedure</code></strong><code> update(</code><em><code>i</code></em><code>,</code><em><code>v</code></em><code>)                       // updates the registers with the data-values, updates the sequence number, embedded scan</code><br/>
+<code>  s[1..n] := scan;                          // embedded scan</code><br/>
+<code>  r</code><sub><code>i</code></sub><code> := (v, r</code><sub><code>i</code></sub><code>.seq = r</code><sub><code>i</code></sub><code>.seq + 1, s[1..n]);</code><br/>
+<strong><code>end</code> <code>procedure</code></strong></p>
+
+<p><a href="File:Swmr_snapshot_object_linearordering.svg" title="wikilink">right|thumb|upright=2|Fig.2: Example linearization order for a single-writer multi-reader snapshot object. The first scan() can successfully perform a double-collect, while the "double-collect" of the second scan is interrupted twice by the second process. Thus, the process borrows an embedded scan. </a> Every register consists of a field for the data-value, the sequence number and a field for the result of the last embedded scan, collected before the last update. In each scan operation the process <em>P<sub>i</sub></em> can decide whether a process changed its memory using the sequence number. If there is no change to the memory during the double collect, <em>P<sub>i</sub></em> can return the result of the second scan. Once the process observes that another process updated the memory in between, it saves this information in the moved field. If a process <em>P<sub>j</sub></em> changed its memory twice during the execution of the scan(), the scanning process <em>P<sub>i</sub></em> can return the embedded scan of the updating process, which it saved in its own register during its update operation.</p>
+
+<p>These operations can be <a href="Linearizability" title="wikilink">linearized</a> by linearizing each update() operation at its to the register. The scan operation is more complicated to linearize. If the double collect of the scan operation is successful the scan operation can be linearized at the end of the second scan. In the other case - one process updated its register two times - the operation can be linearized at the time the updating process collected its embedded scan before writing its value to the register. <a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+<h4 id="based-on-bounded-memory">Based on bounded memory</h4>
+
+<p>One of the limitations of the presented algorithm is that it is based on an <a href="unbounded_memory" title="wikilink">unbounded memory</a> since the sequence number will increase constantly. To overcome this limitation, it is necessary to introduce a different way to detect whether a process has changed its memory position twice in between. Every pair of processes 
+
+<math display="inline" id="Shared_snapshot_objects:2">
+<semantics>
+<mrow>
+<mo stretchy="false">⟨</mo>
+<msub>
+<mi>P</mi>
+<mi>i</mi>
+</msub>
+<mo>,</mo>
+<msub>
+<mi>P</mi>
+<mi>j</mi>
+</msub>
+<mo stretchy="false">⟩</mo>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<list>
+<apply>
+<csymbol cd="ambiguous">subscript</csymbol>
+<ci>P</ci>
+<ci>i</ci>
+</apply>
+<apply>
+<csymbol cd="ambiguous">subscript</csymbol>
+<ci>P</ci>
+<ci>j</ci>
+</apply>
+</list>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   \langle P_{i},P_{j}\rangle
+  </annotation>
+</semantics>
+</math>
+
+ communicates using two single-writer single-reader (swsr) registers, which contains two atomic bits. Before a process starts to perform a "double collect", it copies the value of its partner process to its own register. If the scanner-process <em>P<sub>i</sub></em> observes after executing the "double-collect" that the value of the partner process <em>P<sub>j</sub></em> has changed in between it indicates that the process has performed an update operation on the memory. <a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+
+<p><code> </code><strong><code>function</code></strong><code> scan()                                                                    </code><em><code>//</code> <code>returns</code> <code>a</code> <code>consistent</code> <code>view</code> <code>of</code> <code>the</code> <code>memory</code></em><br/>
+<code>  </code><strong><code>for</code></strong><code> j=1 </code><strong><code>to</code></strong><code> n </code><strong><code>do</code></strong><code> moved[j] := 0 </code><strong><code>end</code></strong><br/>
+<code>  </code><strong><code>while</code></strong><code> true </code><strong><code>do</code></strong><br/>
+<code>    </code><strong><code>for</code></strong><code> j=1 </code><strong><code>to</code></strong><code> n </code><strong><code>do</code></strong><code> q</code><sub><code>i,j</code></sub><code> := r</code><sub><code>j</code></sub><code>.p</code><sub><code>j,i</code></sub><code> </code><strong><code>end</code></strong><br/>
+<code>    a[1..n] := collect;                                                             </code><em><code>//</code> <code>collects</code> <code>(data,</code> <code>bit-vector,</code> <code>toggle,</code> <code>view)</code> <code>triples</code></em><br/>
+<code>    b[1..n] := collect;                                                             </code><em><code>//</code> <code>collects</code> <code>(data,</code> <code>bit-vector,</code> <code>toggle,</code> <code>view)</code> <code>triples</code></em><br/>
+<code>    </code><strong><code>if</code></strong><code> (∀j∈{1, ...,n}) (a[j].p</code><sub><code>j,i</code></sub><code> = b[j].p</code><sub><code>j,i</code></sub><code> = q</code><sub><code>i,j</code></sub><code>) </code><strong><code>and</code></strong><code> a[j].toggle = b[j].toggle </code><strong><code>then</code></strong><br/>
+<code>      </code><strong><code>return</code></strong><code> (b[1].data, ..., b[n].data)                                            </code><em><code>//</code> <code>no</code> <code>process</code> <code>changed</code> <code>memory</code></em><br/>
+<code>    '''else for ''' j=1 </code><strong><code>to</code></strong><code> n </code><strong><code>do</code></strong><br/>
+<code>      </code><strong><code>if</code></strong><code> (a[j].p</code><sub><code>j,i</code></sub><code> ≠ q</code><sub><code>i,j</code></sub><code>) </code><strong><code>or</code></strong><code> (b[j].p</code><sub><code>j,i</code></sub><code> ≠ q</code><sub><code>i,j</code></sub><code>) </code><strong><code>or</code></strong><code> (a[j].toggle ≠ b[j].toggle) </code><strong><code>then</code></strong><code> </code><em><code>//</code> <code>process</code> <code>j</code> <code>performed</code> <code>an</code> <code>update</code></em><br/>
+<code>        </code><strong><code>if</code></strong><code> moved[j] = 1 </code><strong><code>then</code></strong><code>                                                       </code><em><code>//</code> <code>process</code> <code>already</code> <code>moved</code> <code>before</code></em><br/>
+<code>          </code><strong><code>return</code></strong><code> b[j].view;</code><br/>
+<code>      </code><strong><code>else</code></strong><code> moved[j] := moved[j] + 1;</code><br/>
+<code>    </code><strong><code>end</code></strong><br/>
+<code>  </code><strong><code>end</code></strong><br/>
+<strong><code>end</code> <code>function</code></strong></p>
+
+<p><strong><code>procedure</code></strong><code> update(</code><em><code>i</code></em><code>,</code><em><code>v</code></em><code>)                      </code><em><code>//</code> <code>updates</code> <code>the</code> <code>registers</code> <code>with</code> <code>the</code> <code>data-value,</code> <code>"write-state"</code> <code>of</code> <code>all</code> <code>registers,</code> <code>invert</code> <code>the</code> <code>toggle</code> <code>bit</code> <code>and</code> <code>the</code> <code>embedded</code> <code>scan</code></em><br/>
+<code>  </code><strong><code>for</code></strong><code> j = 1 </code><strong><code>to</code></strong><code> n </code><strong><code>do</code></strong><code> f[j] := ¬q</code><sub><code>j,i</code></sub><code> </code><strong><code>end</code></strong><br/>
+<code>  s[1..n] := scan;                         </code><em><code>//</code> <code>embedded</code> <code>scan</code></em><br/>
+<code>  r</code><sub><code>i</code></sub><code> := (v, f[1..n], ¬r</code><sub><code>i</code></sub><code>.toggle, s[1..n]);</code><br/>
+<strong><code>end</code> <code>procedure</code></strong></p>
+
+<p>The unbounded sequence number is replaced by two <a href="Handshaking" title="wikilink">handshake</a> <a href="bit" title="wikilink">bits</a> for every pair of processes. These handshake bits are based on swsr registers and can be expressed by an matrix <em>M</em>, where process <em>P<sub>i</sub></em> is allowed to write to row <em>i</em> and is allowed to read the handshake bits in a column <em>i</em>. Before the scanning-process performs the double-collect it collects all the handshake bits from all registers, by reading its column. Afterwards, it can decide whether a process changed its value during the double value or not. Therefore the process just has to compare the column again with the initially read handshake bits. If only one process <em>P<sub>j</sub></em> has written twice, during the collection of <em>P<sub>i</sub></em> it is possible that the handshake bits do not change during the scan. Thus, it is necessary to introduce another bit called "toggle bit", this bit is changed in every write. This makes it possible to distinguish two consecutive writes, even though no other process updated its register. This approach allows to substitute the unbounded sequence numbers with the handshake bits, without changing anything else in the scan procedure.</p>
+
+<p>While the scanning process <em>P<sub>i</sub></em> uses a handshake bit to detect whether it can use its double collect or not, other processes may also perform update operations. As a first step, they read again the handshake bits provided by the other processes, and generate the complement of them. Afterwards these processes again generate the embedded scan and save the updated data-value, the collected - complemented - handshake bits, the complemented toggle bit and the embedded scan to the register.</p>
+
+<p>Since the handshake bits equivalently replace the sequence numbers, the <a href="Linearizability" title="wikilink">linearization</a> is the same as in the unbounded memory case.</p>
+<h3 id="multi-writer-multi-reader-implementation-by-afek-et-al.">Multi-Writer Multi-Reader implementation by Afek et al.</h3>
+
+<p>The construction of multi-writer multi-reader snapshot object assumes that <em>n</em> processes are allowed to write to any location in the memory, which consists of <em>m</em> registers. So, there is no correlation, between process id and memory location anymore. Therefore it is not possible anymore to couple the handshake bits or the embedded scan with the data fields. Hence, the handshake bits, the data memory and the embedded scan cannot be stored in the same register and the write to the memory is not an atomic operation anymore. <a href="File:Multiwriter_snapshost_linearization.svg" title="wikilink">thumb|upright=2|right|Fig.3: Shows an exemplary linearization for a multi-writer multi-reader snapshot object</a> Therefore, the <code>update()</code> process has to update three different registers independently. It first has to save the handshake bits it reads, then do the embedded scan and finally saves its value to the designated memory position. Each write independently appears to be done atomically, but together they are not. The new <code>update()</code> procedure leads to some changes in the <code>scan()</code> function. It is not sufficient anymore to read the handshake bits and collect the memory content twice. In order to detect a beginning <code>update</code> process, a process has to collect the handshake bits a second time, after collecting the memory content.</p>
+
+<p>If a double-collect fails, it is now necessary that a process sees another process moving three times before borrowing the embedded scan. Figure 3 illustrates the problem. The first double-collect fails, because a <code>update</code> process started before the scan operation finishes its memory-write during the first double collect. However, the embedded scan of this write is performed and saved, before <em>P<sub>1</sub></em> starts scanning the memory and therefore no valid Linearization point. The second double-collect fails, because process <em>P<sub>2</sub></em> starts a second write and updated its handshake bits. In the swmr scenario, we would now borrow the embedded scan and return it. In the mwmr scenario, this is not possible because the embedded scan from the second <code>write</code> is still not linearized within the scan-interval (begin and end of operation). Thus, the process has to see a third change from the other process to be entirely sure that at least one embedded scan has been linearized during the scan-interval. After the third change by one process, the scanning process can borrow the old memory value without violating the linearization criterion.</p>
+<h2 id="complexity">Complexity</h2>
+
+<p>The basic presented implementation of shared snapshot objects by Afek et al. needs 
+
+<math display="inline" id="Shared_snapshot_objects:3">
+<semantics>
+<mrow>
+<mi>O</mi>
+<mrow>
+<mo stretchy="false">(</mo>
+<msup>
+<mi>n</mi>
+<mn>2</mn>
+</msup>
+<mo stretchy="false">)</mo>
+</mrow>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<times></times>
+<ci>O</ci>
+<apply>
+<csymbol cd="ambiguous">superscript</csymbol>
+<ci>n</ci>
+<cn type="integer">2</cn>
+</apply>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   O(n^{2})
+  </annotation>
+</semantics>
+</math>
+
+ memory operations. <a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> Another implementation by Anderson, which was developed independently, needs an exponential number of operations 
+
+<math display="inline" id="Shared_snapshot_objects:4">
+<semantics>
+<mrow>
+<mi>O</mi>
+<mrow>
+<mo stretchy="false">(</mo>
+<msup>
+<mn>2</mn>
+<mi>n</mi>
+</msup>
+<mo stretchy="false">)</mo>
+</mrow>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<times></times>
+<ci>O</ci>
+<apply>
+<csymbol cd="ambiguous">superscript</csymbol>
+<cn type="integer">2</cn>
+<ci>n</ci>
+</apply>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   O(2^{n})
+  </annotation>
+</semantics>
+</math>
+
+.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> There are also randomized implementations of snapshot objects based on swmr registers using 
+
+<math display="inline" id="Shared_snapshot_objects:5">
+<semantics>
+<mrow>
+<mi>O</mi>
+<mrow>
+<mo stretchy="false">(</mo>
+<mrow>
+<mi>n</mi>
+<mrow>
+<msup>
+<mi>log</mi>
+<mn>2</mn>
+</msup>
+<mi>n</mi>
+</mrow>
+</mrow>
+<mo stretchy="false">)</mo>
+</mrow>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<times></times>
+<ci>O</ci>
+<apply>
+<times></times>
+<ci>n</ci>
+<apply>
+<apply>
+<csymbol cd="ambiguous">superscript</csymbol>
+<log></log>
+<cn type="integer">2</cn>
+</apply>
+<ci>n</ci>
+</apply>
+</apply>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   O(n\log^{2}n)
+  </annotation>
+</semantics>
+</math>
+
+ operations. <a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a> Another implementation by Israeli and Shirazi, using unbounded memory, requires 
+
+<math display="inline" id="Shared_snapshot_objects:6">
+<semantics>
+<mrow>
+<mi>O</mi>
+<mrow>
+<mo stretchy="false">(</mo>
+<mrow>
+<msup>
+<mi>n</mi>
+<mrow>
+<mn>3</mn>
+<mo>/</mo>
+<mn>2</mn>
+</mrow>
+</msup>
+<mrow>
+<msup>
+<mi>log</mi>
+<mn>2</mn>
+</msup>
+<mi>n</mi>
+</mrow>
+</mrow>
+<mo stretchy="false">)</mo>
+</mrow>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<times></times>
+<ci>O</ci>
+<apply>
+<times></times>
+<apply>
+<csymbol cd="ambiguous">superscript</csymbol>
+<ci>n</ci>
+<apply>
+<divide></divide>
+<cn type="integer">3</cn>
+<cn type="integer">2</cn>
+</apply>
+</apply>
+<apply>
+<apply>
+<csymbol cd="ambiguous">superscript</csymbol>
+<log></log>
+<cn type="integer">2</cn>
+</apply>
+<ci>n</ci>
+</apply>
+</apply>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   O(n^{3/2}\log^{2}n)
+  </annotation>
+</semantics>
+</math>
+
+ operations on the memory. <a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a><a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> Israeli et al. show in a different work the lower bound of low-level operations for any update operation. The lower bound is 
+
+<math display="inline" id="Shared_snapshot_objects:7">
+<semantics>
+<mrow>
+<mi mathvariant="normal">Ω</mi>
+<mrow>
+<mo stretchy="false">(</mo>
+<mrow>
+<mi>min</mi>
+<mrow>
+<mo stretchy="false">{</mo>
+<mi>w</mi>
+<mo>,</mo>
+<mi>r</mi>
+<mo stretchy="false">}</mo>
+</mrow>
+</mrow>
+<mo stretchy="false">)</mo>
+</mrow>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<times></times>
+<ci>normal-Ω</ci>
+<apply>
+<min></min>
+<ci>w</ci>
+<ci>r</ci>
+</apply>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   \Omega(\min\{w,r\})
+  </annotation>
+</semantics>
+</math>
+
+, where <em>w</em> is the number of updaters and <em>r</em> is the number of scanners. Attiya and Rachman present a deterministic snapshot algorithm based on swmr registers, which uses 
+
+<math display="inline" id="Shared_snapshot_objects:8">
+<semantics>
+<mrow>
+<mi>O</mi>
+<mrow>
+<mo stretchy="false">(</mo>
+<mrow>
+<mi>n</mi>
+<mrow>
+<mi>log</mi>
+<mi>n</mi>
+</mrow>
+</mrow>
+<mo stretchy="false">)</mo>
+</mrow>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<times></times>
+<ci>O</ci>
+<apply>
+<times></times>
+<ci>n</ci>
+<apply>
+<log></log>
+<ci>n</ci>
+</apply>
+</apply>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   O(n\log n)
+  </annotation>
+</semantics>
+</math>
+
+ operations per update and scan. <a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a> Applying a general method by Israeli, Shaham, and Shirazi <a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a> this can be improved to an unbounded snapshot algorithm, which only needs 
+
+<math display="inline" id="Shared_snapshot_objects:9">
+<semantics>
+<mrow>
+<mi>O</mi>
+<mrow>
+<mo stretchy="false">(</mo>
+<mrow>
+<mi>n</mi>
+<mrow>
+<mi>log</mi>
+<mi>n</mi>
+</mrow>
+</mrow>
+<mo stretchy="false">)</mo>
+</mrow>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<times></times>
+<ci>O</ci>
+<apply>
+<times></times>
+<ci>n</ci>
+<apply>
+<log></log>
+<ci>n</ci>
+</apply>
+</apply>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   O(n\log n)
+  </annotation>
+</semantics>
+</math>
+
+ operations per scan and 
+
+<math display="inline" id="Shared_snapshot_objects:10">
+<semantics>
+<mrow>
+<mi>O</mi>
+<mrow>
+<mo stretchy="false">(</mo>
+<mi>n</mi>
+<mo stretchy="false">)</mo>
+</mrow>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<times></times>
+<ci>O</ci>
+<ci>n</ci>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   O(n)
+  </annotation>
+</semantics>
+</math>
+
+ operations per update. There are further improvements introduced by Inoue et al.,<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a> using only a linear number of read and write operations. In contrast to the other presented methods, this approach uses mwmr registers and not swmr registers.</p>
+<h2 id="applications">Applications</h2>
+
+<p>There are several <a href="algorithm" title="wikilink">algorithms</a> in <a href="distributed_computing" title="wikilink">distributed computing</a> which can be simplified in design and/or verification using shared snapshot objects.<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a> Examples of this are exclusion problems,<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a><a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a><a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a> concurrent time-stamp systems,<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a> approximate agreement,<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a> <a href="randomized_consensus" title="wikilink">randomized consensus</a><a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a><a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a> and wait-free implementations of other data structures.<a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a> With mwmr snapshot objects it is also possible to create atomic multi-writer multi-reader <a href="Shared_Register" title="wikilink">registers</a>.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Shared_register" title="wikilink">Shared register</a></li>
+<li><a href="Shared_memory" title="wikilink">Shared memory</a></li>
+<li><a href="Distributed_shared_memory" title="wikilink">Distributed shared memory</a></li>
+<li><a class="uri" href="Linearizability" title="wikilink">Linearizability</a></li>
+</ul>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Distributed_computing_problems" title="wikilink">Category:Distributed computing problems</a> <a href="Category:Distributed_computing" title="wikilink">Category:Distributed computing</a> <a href="Category:Distributed_algorithms" title="wikilink"> </a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"></li>
+<li id="fn4"></li>
+<li id="fn5"></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"></li>
+<li id="fn9"></li>
+<li id="fn10"></li>
+<li id="fn11"></li>
+<li id="fn12"></li>
+<li id="fn13"></li>
+<li id="fn14"></li>
+<li id="fn15"><a href="#fnref15">↩</a></li>
+<li id="fn16"><a href="#fnref16">↩</a></li>
+<li id="fn17"><a href="#fnref17">↩</a></li>
+<li id="fn18"></li>
+<li id="fn19"><a href="#fnref19">↩</a></li>
+<li id="fn20"><a href="#fnref20">↩</a></li>
+<li id="fn21"><a href="#fnref21">↩</a></li>
+<li id="fn22"></li>
+<li id="fn23"><a href="#fnref23">↩</a></li>
+<li id="fn24"><a href="#fnref24">↩</a></li>
+<li id="fn25"><a href="#fnref25">↩</a></li>
+<li id="fn26"><a href="#fnref26">↩</a></li>
+<li id="fn27"><a href="#fnref27">↩</a></li>
+<li id="fn28"><a href="#fnref28">↩</a></li>
+<li id="fn29"><a href="#fnref29">↩</a></li>
+<li id="fn30"><a href="#fnref30">↩</a></li>
+</ol>
+</section>
+</hr></body>
+</html>

@@ -1,0 +1,985 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="450">Kahan summation algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Kahan summation algorithm</h1>
+<hr/>
+
+<p>In <a href="numerical_analysis" title="wikilink">numerical analysis</a>, the <strong>Kahan summation algorithm</strong> (also known as <strong>compensated summation</strong> <a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a>) significantly reduces the <a href="numerical_error" title="wikilink">numerical error</a> in the total obtained by adding a <a class="uri" href="sequence" title="wikilink">sequence</a> of finite <a href="decimal_precision" title="wikilink">precision</a> <a href="floating_point_number" title="wikilink">floating point numbers</a>, compared to the obvious approach. This is done by keeping a separate <em>running compensation</em> (a variable to accumulate small errors).</p>
+
+<p>In particular, simply summing <em>n</em> numbers in sequence has a worst-case error that grows proportional to <em>n</em>, and a <a href="root_mean_square" title="wikilink">root mean square</a> error that grows as 
+
+<math display="inline" id="Kahan_summation_algorithm:0">
+ <semantics>
+  <msqrt>
+   <mi>n</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{n}
+  </annotation>
+ </semantics>
+</math>
+
+ for random inputs (the roundoff errors form a <a href="random_walk" title="wikilink">random walk</a>).<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> With compensated summation, the worst-case <a href="error_bound" title="wikilink">error bound</a> is independent of <em>n</em>, so a large number of values can be summed with an error that only depends on the floating-point <a href="precision_(arithmetic)" title="wikilink">precision</a>.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>The <a class="uri" href="algorithm" title="wikilink">algorithm</a> is attributed to <a href="William_Kahan" title="wikilink">William Kahan</a>.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> Similar, earlier techniques are, for example, <a href="Bresenham's_line_algorithm" title="wikilink">Bresenham's line algorithm</a>, keeping track of the accumulated error in integer operations (although first documented around the same time<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a>) and the <a href="Delta-sigma_modulation" title="wikilink">Delta-sigma modulation</a><a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> (integrating, not just summing the error).</p>
+<h2 id="the-algorithm">The algorithm</h2>
+
+<p>In <a class="uri" href="pseudocode" title="wikilink">pseudocode</a>, the algorithm is:</p>
+
+<p><strong><code>function</code></strong><code> KahanSum(input)</code><br/>
+<code>    </code><strong><code>var</code></strong><code> sum = 0.0</code><br/>
+<code>    </code><strong><code>var</code></strong><code> c = 0.0                  // A running compensation for lost low-order bits.</code><br/>
+<code>    </code><strong><code>for</code></strong><code> i = 1 </code><strong><code>to</code></strong><code> input.length </code><strong><code>do</code></strong><br/>
+<code>        </code><strong><code>var</code></strong><code> y = input[i] - c     // So far, so good: </code><em><code>c</code></em><code> is zero.</code><br/>
+<code>        </code><strong><code>var</code></strong><code> t = sum + y          // Alas, </code><em><code>sum</code></em><code> is big, </code><em><code>y</code></em><code> small, so low-order digits of </code><em><code>y</code></em><code> are lost.</code><br/>
+<code>        c = (t - sum) - y        // </code><em><code>(t</code> <code>-</code> <code>sum)</code></em><code> recovers the high-order part of </code><em><code>y</code></em><code>; subtracting </code><em><code>y</code></em><code> recovers -(low part of </code><em><code>y</code></em><code>)</code><br/>
+<code>        sum = t                  // Algebraically, </code><em><code>c</code></em><code> should always be zero. Beware overly-aggressive optimizing compilers!</code><br/>
+<code>                                 // Next time around, the lost low part will be added to </code><em><code>y</code></em><code> in a fresh attempt.</code><br/>
+<code>    </code><strong><code>return</code></strong><code> sum</code></p>
+<h3 id="worked-example">Worked example</h3>
+
+<p>This example will be given in decimal. Computers typically use binary arithmetic, but the principle being illustrated is the same. Suppose we are using six-digit decimal floating point arithmetic, <em>sum</em> has attained the value 10000.0, and the next two values of <em>input(i)</em> are 3.14159 and 2.71828. The exact result is 10005.85987, which rounds to 10005.9. With a plain summation, each incoming value would be aligned with <em>sum</em> and many low order digits lost (by truncation or rounding.) The first result, after rounding, would be 10003.1. The second result would be 10005.81828 before rounding, and 10005.8 after rounding. This is not correct.</p>
+
+<p>However, with compensated summation, we get the correct rounded result of 10005.9.</p>
+
+<p>Assume that <em>c</em> has the initial value zero.</p>
+
+<p><code>  y = 3.14159 - 0                   </code><em><code>y</code> <code>=</code> <code>input[i]</code> <code>-</code> <code>c</code></em><br/>
+<code>  t = 10000.0 + 3.14159</code><br/>
+<code>    = 10003.1                       Many digits have been lost!</code><br/>
+<code>  c = (10003.1 - 10000.0) - 3.14159 This </code><strong><code>must</code></strong><code> be evaluated as written! </code><br/>
+<code>    = 3.10000 - 3.14159             The assimilated part of </code><em><code>y</code></em><code> recovered, vs. the original full </code><em><code>y</code></em><code>.</code><br/>
+<code>    = -.0415900                     Trailing zeros shown because this is six-digit arithmetic.</code><br/>
+<code>sum = 10003.1                       Thus, few digits from </code><em><code>input(i</code></em><code>) met those of </code><em><code>sum</code></em><code>.</code></p>
+
+<p>The sum is so large that only the high-order digits of the input numbers are being accumulated. But on the next step, <em>c</em> gives the error.</p>
+
+<p><code>  y = 2.71828 - -.0415900           The shortfall from the previous stage gets included.</code><br/>
+<code>    = 2.75987                       It is of a size similar to </code><em><code>y</code></em><code>: most digits meet.</code><br/>
+<code>  t = 10003.1 + 2.75987             But few meet the digits of </code><em><code>sum</code></em><code>.</code><br/>
+<code>    = 10005.85987, rounds to 10005.9</code><br/>
+<code>  c = (10005.9 - 10003.1) - 2.75987 This extracts whatever went in.</code><br/>
+<code>    = 2.80000 - 2.75987             In this case, too much.</code><br/>
+<code>    = .040130                       But no matter, the excess would be subtracted off next time.</code><br/>
+<code>sum = 10005.9                       Exact result is 10005.85987, this is correctly rounded to 6 digits.</code></p>
+
+<p>So the summation is performed with two accumulators: <em>sum</em> holds the sum, and <em>c</em> accumulates the parts not assimilated into <em>sum</em>, to nudge the low-order part of <em>sum</em> the next time around. Thus the summation proceeds with "guard digits" in <em>c</em> which is better than not having any but is not as good as performing the calculations with double the precision of the input. However, simply increasing the precision of the calculations is not practical in general; if <em>input</em> is already double precision, few systems supply <a href="quadruple_precision" title="wikilink">quadruple precision</a> and if they did, <em>input</em> could then be quadruple precision.</p>
+<h2 id="accuracy">Accuracy</h2>
+
+<p>A careful analysis of the errors in compensated summation is needed to appreciate its accuracy characteristics. While it is more accurate than naive summation, it can still give large relative errors for ill-conditioned sums.</p>
+
+<p>Suppose that one is summing <em>n</em> values <em>x</em><sub><em>i</em></sub>, for <em>i</em>=1,...,<em>n</em>. The exact sum is:</p>
+
+<p>
+
+<math display="block" id="Kahan_summation_algorithm:1">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>S</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>n</mi>
+    </munderover>
+    <msub>
+     <mi>x</mi>
+     <mi>i</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>S</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S_{n}=\sum_{i=1}^{n}x_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ (computed with infinite precision) With compensated summation, one instead obtains 
+
+<math display="inline" id="Kahan_summation_algorithm:2">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>S</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>+</mo>
+   <msub>
+    <mi>E</mi>
+    <mi>n</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>S</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S_{n}+E_{n}
+  </annotation>
+ </semantics>
+</math>
+
+, where the error 
+
+<math display="inline" id="Kahan_summation_algorithm:3">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{n}
+  </annotation>
+ </semantics>
+</math>
+
+
+ is bounded above by:<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+
+<p>
+
+<math display="block" id="Kahan_summation_algorithm:4">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>E</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+   </mrow>
+   <mo>≤</mo>
+   <mrow>
+    <mrow>
+     <mo>[</mo>
+     <mrow>
+      <mrow>
+       <mn>2</mn>
+       <mi>ε</mi>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <mi>O</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mi>n</mi>
+         <msup>
+          <mi>ε</mi>
+          <mn>2</mn>
+         </msup>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo>]</mo>
+    </mrow>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </munderover>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>x</mi>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <abs></abs>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <ci>ε</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>O</ci>
+        <apply>
+         <times></times>
+         <ci>n</ci>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>ε</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <abs></abs>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |E_{n}|\leq\left[2\varepsilon+O(n\varepsilon^{2})\right]\sum_{i=1}^{n}|x_{i}|
+  </annotation>
+ </semantics>
+</math>
+
+ where ε is the <a href="machine_precision" title="wikilink">machine precision</a> of the arithmetic being employed (e.g. ε≈10<sup>−16</sup> for IEEE standard <a href="double_precision" title="wikilink">double precision</a> floating point). Usually, the quantity of interest is the <a href="relative_error" title="wikilink">relative error</a> 
+
+<math display="inline" id="Kahan_summation_algorithm:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>E</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+   </mrow>
+   <mo>/</mo>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>S</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <abs></abs>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <abs></abs>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>S</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |E_{n}|/|S_{n}|
+  </annotation>
+ </semantics>
+</math>
+
+, which is therefore bounded above by:</p>
+
+<p>
+
+<math display="block" id="Kahan_summation_algorithm:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>E</mi>
+       <mi>n</mi>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>S</mi>
+       <mi>n</mi>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mfrac>
+    <mo>≤</mo>
+    <mrow>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <mrow>
+        <mn>2</mn>
+        <mi>ε</mi>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mi>O</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>n</mi>
+          <msup>
+           <mi>ε</mi>
+           <mn>2</mn>
+          </msup>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+     <mfrac>
+      <mrow>
+       <msubsup>
+        <mo largeop="true" symmetric="true">∑</mo>
+        <mrow>
+         <mi>i</mi>
+         <mo>=</mo>
+         <mn>1</mn>
+        </mrow>
+        <mi>n</mi>
+       </msubsup>
+       <mrow>
+        <mo stretchy="false">|</mo>
+        <msub>
+         <mi>x</mi>
+         <mi>i</mi>
+        </msub>
+        <mo stretchy="false">|</mo>
+       </mrow>
+      </mrow>
+      <mrow>
+       <mo>|</mo>
+       <mrow>
+        <msubsup>
+         <mo largeop="true" symmetric="true">∑</mo>
+         <mrow>
+          <mi>i</mi>
+          <mo>=</mo>
+          <mn>1</mn>
+         </mrow>
+         <mi>n</mi>
+        </msubsup>
+        <msub>
+         <mi>x</mi>
+         <mi>i</mi>
+        </msub>
+       </mrow>
+       <mo>|</mo>
+      </mrow>
+     </mfrac>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <divide></divide>
+     <apply>
+      <abs></abs>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+     <apply>
+      <abs></abs>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>S</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <ci>ε</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>O</ci>
+        <apply>
+         <times></times>
+         <ci>n</ci>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>ε</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <abs></abs>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <abs></abs>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <sum></sum>
+          <apply>
+           <eq></eq>
+           <ci>i</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>n</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{|E_{n}|}{|S_{n}|}\leq\left[2\varepsilon+O(n\varepsilon^{2})\right]\frac{%
+\sum_{i=1}^{n}|x_{i}|}{\left|\sum_{i=1}^{n}x_{i}\right|}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>In the expression for the relative error bound, the fraction Σ|<em>x<sub>i</sub></em>|/|Σ<em>x<sub>i</sub></em>| is the <a href="condition_number" title="wikilink">condition number</a> of the summation problem. Essentially, the condition number represents the <em>intrinsic</em> sensitivity of the summation problem to errors, regardless of how it is computed.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> The relative error bound of <em>every</em> (<a href="backwards_stable" title="wikilink">backwards stable</a>) summation method by a fixed algorithm in fixed precision (i.e. not those that use <a href="arbitrary_precision" title="wikilink">arbitrary precision</a> arithmetic, nor algorithms whose memory and time requirements change based on the data), is proportional to this condition number.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> An <em>ill-conditioned</em> summation problem is one in which this ratio is large, and in this case even compensated summation can have a large relative error. For example, if the summands <em>x<sub>i</sub></em> are uncorrelated random numbers with zero mean, the sum is a <a href="random_walk" title="wikilink">random walk</a> and the condition number will grow proportional to 
+
+<math display="inline" id="Kahan_summation_algorithm:7">
+ <semantics>
+  <msqrt>
+   <mi>n</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{n}
+  </annotation>
+ </semantics>
+</math>
+
+. On the other hand, for random inputs with nonzero mean the condition number asymptotes to a finite constant as 
+
+<math display="inline" id="Kahan_summation_algorithm:8">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>→</mo>
+   <mi mathvariant="normal">∞</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <ci>n</ci>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n\to\infty
+  </annotation>
+ </semantics>
+</math>
+
+
+. If the inputs are all <a class="uri" href="non-negative" title="wikilink">non-negative</a>, then the condition number is 1.</p>
+
+<p>Given a condition number, the relative error of compensated summation is effectively independent of <em>n</em>. In principle, there is the O(<em>n</em>ε<sup>2</sup>) that grows linearly with <em>n</em>, but in practice this term is effectively zero: since the final result is rounded to a precision ε, the <em>n</em>ε<sup>2</sup> term rounds to zero unless <em>n</em> is roughly 1/ε or larger.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> In double precision, this corresponds to an <em>n</em> of roughly 10<sup>16</sup>, much larger than most sums. So, for a fixed condition number, the errors of compensated summation are effectively <em>O</em>(ε), independent of <em>n</em>.</p>
+
+<p>In comparison, the relative error bound for naive summation (simply adding the numbers in sequence, rounding at each step) grows as 
+
+<math display="inline" id="Kahan_summation_algorithm:9">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>ε</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>ε</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\varepsilon n)
+  </annotation>
+ </semantics>
+</math>
+
+ multiplied by the condition number.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> This worst-case error is rarely observed in practice, however, because it only occurs if the rounding errors are all in the same direction. In practice, it is much more likely that the rounding errors have a random sign, with zero mean, so that they form a random walk; in this case, naive summation has a <a href="root_mean_square" title="wikilink">root mean square</a> relative error that grows as 
+
+<math display="inline" id="Kahan_summation_algorithm:10">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>ε</mi>
+     <msqrt>
+      <mi>n</mi>
+     </msqrt>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>ε</ci>
+     <apply>
+      <root></root>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\varepsilon\sqrt{n})
+  </annotation>
+ </semantics>
+</math>
+
+ multiplied by the condition number.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> This is still much worse than compensated summation, however. Note, however, that if the sum can be performed in twice the precision, then ε is replaced by ε<sup>2</sup> and naive summation has a worst-case error comparable to the O(<em>n</em>ε<sup>2</sup>) term in compensated summation at the original precision.</p>
+
+<p>By the same token, the Σ|<em>x<sub>i</sub></em>| that appears in 
+
+<math display="inline" id="Kahan_summation_algorithm:11">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{n}
+  </annotation>
+ </semantics>
+</math>
+
+ above is a worst-case bound that occurs only if all the rounding errors have the same sign (and are of maximum possible magnitude).<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> In practice, it is more likely that the errors have random sign, in which case terms in Σ|<em>x<sub>i</sub></em>| are replaced by a random walk—in this case, even for random inputs with zero mean, the error 
+
+<math display="inline" id="Kahan_summation_algorithm:12">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{n}
+  </annotation>
+ </semantics>
+</math>
+
+ grows only as 
+
+<math display="inline" id="Kahan_summation_algorithm:13">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>ε</mi>
+     <msqrt>
+      <mi>n</mi>
+     </msqrt>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>ε</ci>
+     <apply>
+      <root></root>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\varepsilon\sqrt{n})
+  </annotation>
+ </semantics>
+</math>
+
+
+ (ignoring the <em>n</em>ε<sup>2</sup> term), the same rate the sum 
+
+<math display="inline" id="Kahan_summation_algorithm:14">
+ <semantics>
+  <msub>
+   <mi>S</mi>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>S</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S_{n}
+  </annotation>
+ </semantics>
+</math>
+
+ grows, canceling the 
+
+<math display="inline" id="Kahan_summation_algorithm:15">
+ <semantics>
+  <msqrt>
+   <mi>n</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{n}
+  </annotation>
+ </semantics>
+</math>
+
+ factors when the relative error is computed. So, even for asymptotically ill-conditioned sums, the relative error for compensated summation can often be much smaller than a worst-case analysis might suggest.</p>
+<h2 id="alternatives">Alternatives</h2>
+
+<p>Although Kahan's algorithm achieves 
+
+<math display="inline" id="Kahan_summation_algorithm:16">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+ error growth for summing <em>n</em> numbers, only slightly worse 
+
+<math display="inline" id="Kahan_summation_algorithm:17">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>log</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log n)
+  </annotation>
+ </semantics>
+</math>
+
+ growth can be achieved by <a href="pairwise_summation" title="wikilink">pairwise summation</a>: one <a class="uri" href="recursively" title="wikilink">recursively</a> divides the set of numbers into two halves, sums each half, and then adds the two sums.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> This has the advantage of requiring the same number of arithmetic operations as the naive summation (unlike Kahan's algorithm, which requires four times the arithmetic and has a latency of four times a simple summation) and can be calculated in parallel. The base case of the recursion could in principle be the sum of only one (or zero) numbers, but to <a class="uri" href="amortize" title="wikilink">amortize</a> the overhead of recursion one would normally use a larger base case. The equivalent of pairwise summation is used in many <a href="fast_Fourier_transform" title="wikilink">fast Fourier transform</a> (FFT) algorithms, and is responsible for the logarithmic growth of roundoff errors in those FFTs.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> In practice, with roundoff errors of random signs, the root mean square errors of pairwise summation actually grow as 
+
+<math display="inline" id="Kahan_summation_algorithm:18">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msqrt>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </msqrt>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <root></root>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\sqrt{\log n})
+  </annotation>
+ </semantics>
+</math>
+
+
+.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a></p>
+
+<p>Another alternative is to use <a href="arbitrary_precision_arithmetic" title="wikilink">arbitrary precision arithmetic</a>, which in principle need no rounding at all with a cost of much greater computational effort. A way of performing exactly rounded sums using arbitrary precision is to extended adaptively using multiple floating-point components. This will minimize computational cost in common cases where high precision is not needed.<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a><a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> Another method that uses only integer arithmetic, but a large accumulator was described by Kirchner and Kulisch;<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a> a hardware implementation was described by Müller, Rüb and Rülling.<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a></p>
+<h2 id="computer-languages">Computer languages</h2>
+
+<p>In principle, a sufficiently aggressive <a href="Compiler_optimization" title="wikilink">optimizing compiler</a> could destroy the effectiveness of Kahan summation: for example, if the compiler simplified expressions according to the <a class="uri" href="associativity" title="wikilink">associativity</a> rules of real arithmetic, it might "simplify" the second step in the sequence <code>t = sum + y; c = (t - sum) - y;</code> to <code>((sum + y) - sum) - y;</code> then to <code>c = 0;</code>, eliminating the error compensation.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a> In practice, many compilers do not use associativity rules (which are only approximate in floating-point arithmetic) in simplifications unless explicitly directed to do so by compiler options enabling "unsafe" optimizations,<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a><a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a><a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a><a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a> although the <a href="Intel_C++_Compiler" title="wikilink">Intel C++ Compiler</a> is one example that allows associativity-based transformations by default.<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a> The original <a href="K&amp;R;_C" title="wikilink">K&amp;R; C</a> version of the <a href="C_programming_language" title="wikilink">C programming language</a> allowed the compiler to re-order floating-point expressions according to real-arithmetic associativity rules, but the subsequent <a href="ANSI_C" title="wikilink">ANSI C</a> standard prohibited re-ordering in order to make C better suited for numerical applications (and more similar to <a class="uri" href="Fortran" title="wikilink">Fortran</a>, which also prohibits re-ordering),<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a> although in practice compiler options can re-enable re-ordering as mentioned above.</p>
+
+<p>In general, built-in "sum" functions in computer languages typically provide no guarantees that a particular summation algorithm will be employed, much less Kahan summation. The <a class="uri" href="BLAS" title="wikilink">BLAS</a> standard for <a href="linear_algebra" title="wikilink">linear algebra</a> subroutines explicitly avoids mandating any particular computational order of operations for performance reasons,<a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a> and BLAS implementations typically do not use Kahan summation.</p>
+
+<p>The standard library of the <a href="Python_(programming_language)" title="wikilink">Python</a> computer language specifies an <a href="https://docs.python.org/library/math.html#math.fsum">fsum</a> function for exactly rounded summation, using the <a href="Shewchuk_algorithm" title="wikilink">Shewchuk algorithm</a> <a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a> to track multiple partial sums.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Algorithms_for_calculating_variance" title="wikilink">Algorithms for calculating variance</a>, which includes stable summation</li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.ddj.com/cpp/184403224">Floating-point Summation, Dr. Dobb's Journal September, 1996</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Computer_arithmetic" title="wikilink">Category:Computer arithmetic</a> <a href="Category:Numerical_analysis" title="wikilink">Category:Numerical analysis</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Strictly, there exist other variants of compensated summation as well: see <a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5">Jack E. Bresenham, <a href="http://www.research.ibm.com/journal/sj/041/ibmsjIVRIC.pdf">"Algorithm for computer control of a digital plotter"</a>, <em>IBM Systems Journal</em>, Vol. 4, No.1, January 1965, pp. 25–30<a href="#fnref5">↩</a></li>
+<li id="fn6">H. Inose, Y. Yasuda, J. Murakami, "A Telemetering System by Code Manipulation – ΔΣ Modulation," IRE Trans on Space Electronics and Telemetry, Sep. 1962, pp. 204–209.<a href="#fnref6">↩</a></li>
+<li id="fn7"></li>
+<li id="fn8">L. N. Trefethen and D. Bau, <em>Numerical Linear Algebra</em> (SIAM: Philadelphia, 1997).<a href="#fnref8">↩</a></li>
+<li id="fn9"></li>
+<li id="fn10"></li>
+<li id="fn11"></li>
+<li id="fn12">Manfred Tasche and Hansmartin Zeuner <em>Handbook of Analytic-Computational Methods in Applied Mathematics</em> Boca Raton, FL: CRC Press, 2000).<a href="#fnref12">↩</a></li>
+<li id="fn13"></li>
+<li id="fn14"></li>
+<li id="fn15">S. G. Johnson and M. Frigo, "<a href="http://cnx.org/content/m16336/latest/">Implementing FFTs in practice</a>, in <em><a href="http://cnx.org/content/col10550/">Fast Fourier Transforms</a></em>, edited by <a href="C._Sidney_Burrus" title="wikilink">C. Sidney Burrus</a>(2008).<a href="#fnref15">↩</a></li>
+<li id="fn16"></li>
+<li id="fn17">Jonathan R. Shewchuk, <a href="http://www.cs.berkeley.edu/~jrs/papers/robustr.pdf">Adaptive Precision Floating-Point Arithmetic and Fast Robust Geometric Predicates</a>, <em>Discrete and Computational Geometry</em>, vol. 18, pp. 305–363 (October 1997).<a href="#fnref17">↩</a></li>
+<li id="fn18">Raymond Hettinger, <a href="http://code.activestate.com/recipes/393090/">Recipe 393090: Binary floating point summation accurate to full precision</a>, Python implementation of algorithm from Shewchuk (1997) paper (28 March 2005).<a href="#fnref18">↩</a></li>
+<li id="fn19">R. Kirchner, U. W. Kulisch, <em>Accurate arithmetic for vector processors</em>, Journal of Parallel and Distributed Computing 5 (1988) 250-270<a href="#fnref19">↩</a></li>
+<li id="fn20">M. Muller, C. Rub, W. Rulling [<a class="uri" href="http://ieeexplore.ieee.org/stamp/stamp.jsp?tp">http://ieeexplore.ieee.org/stamp/stamp.jsp?tp</a>=&amp;arnumber;=145535&amp;isnumber;=3902], <em>Exact accumulation of floating-point numbers</em>, Proceedings 10th IEEE Symposium on Computer Arithmetic (Jun 1991), doi 10.1109/ARITH.1991.145535<a href="#fnref20">↩</a></li>
+<li id="fn21"><a href="#fnref21">↩</a></li>
+<li id="fn22"><a href="GNU_Compiler_Collection" title="wikilink">GNU Compiler Collection</a> manual, version 4.4.3: <a href="http://gcc.gnu.org/onlinedocs/gcc-4.4.3/gcc/Optimize-Options.html">3.10 Options That Control Optimization</a>, <em>-fassociative-math</em> (Jan. 21, 2010).<a href="#fnref22">↩</a></li>
+<li id="fn23"><em><a href="http://h21007.www2.hp.com/portal/download/files/unprot/Fortran/docs/unix-um/dfumperf.htm">Compaq Fortran User Manual for Tru64 UNIX and Linux Alpha Systems</a></em>, section 5.9.7 Arithmetic Reordering Optimizations (retrieved March 2010).<a href="#fnref23">↩</a></li>
+<li id="fn24">Börje Lindh, <a href="http://www.sun.com/blueprints/0302/optimize.pdf">Application Performance Optimization</a>, <em>Sun BluePrints OnLine</em> (March 2002).<a href="#fnref24">↩</a></li>
+<li id="fn25">Eric Fleegal, "<a href="http://msdn.microsoft.com/en-us/library/aa289157%28VS.71%29.aspx">Microsoft Visual C++ Floating-Point Optimization</a>", <em>Microsoft Visual Studio Technical Articles</em> (June 2004).<a href="#fnref25">↩</a></li>
+<li id="fn26">Martyn J. Corden, "<a href="http://software.intel.com/en-us/articles/consistency-of-floating-point-results-using-the-intel-compiler/">Consistency of floating-point results using the Intel compiler</a>," <em>Intel technical report</em> (Sep. 18, 2009).<a href="#fnref26">↩</a></li>
+<li id="fn27">Tom Macdonald, "C for Numerical Computing", <em>Journal of Supercomputing</em> vol. 5, pp. 31–48 (1991).<a href="#fnref27">↩</a></li>
+<li id="fn28"><a href="http://www.netlib.org/blas/blast-forum/">BLAS Technical Forum</a>, section 2.7 (August 21, 2001), <a href="https://web.archive.org/web/20040410160918/http://www.netlib.org/blas/blast-forum/chapter2.pdf#page=17">Archived on Wayback Machine</a>.<a href="#fnref28">↩</a></li>
+<li id="fn29"></li>
+</ol>
+</section>
+</body>
+</html>

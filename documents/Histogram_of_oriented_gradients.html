@@ -1,0 +1,488 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1175">Histogram of oriented gradients</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Histogram of oriented gradients</h1>
+<hr/>
+
+<p>The <strong>histogram of oriented gradients (HOG)</strong> is a feature descriptor used in <a href="computer_vision" title="wikilink">computer vision</a> and <a href="image_processing" title="wikilink">image processing</a> for the purpose of <a href="object_detection" title="wikilink">object detection</a>. The technique counts occurrences of gradient orientation in localized portions of an image. This method is similar to that of <a href="edge_orientation_histogram" title="wikilink">edge orientation histograms</a>, <a href="scale-invariant_feature_transform" title="wikilink">scale-invariant feature transform</a> descriptors, and <a href="shape_context" title="wikilink">shape contexts</a>, but differs in that it is computed on a dense grid of uniformly spaced cells and uses overlapping local contrast normalization for improved accuracy.</p>
+
+<p><a href="Navneet_Dalal" title="wikilink">Navneet Dalal</a> and <a href="Bill_Triggs" title="wikilink">Bill Triggs</a>, researchers for the <a href="French_National_Institute_for_Research_in_Computer_Science_and_Automation" title="wikilink">French National Institute for Research in Computer Science and Automation</a> (<a class="uri" href="INRIA" title="wikilink">INRIA</a>), first described HOG descriptors at the 2005 <a href="Conference_on_Computer_Vision_and_Pattern_Recognition" title="wikilink">Conference on Computer Vision and Pattern Recognition</a> (CVPR). In this work they focused on pedestrian detection in static images, although since then they expanded their tests to include human detection in videos, as well as to a variety of common animals and vehicles in static imagery.</p>
+<h2 id="theory">Theory</h2>
+
+<p>The essential thought behind the histogram of oriented gradients descriptor is that local object appearance and shape within an image can be described by the distribution of intensity gradients or edge directions. The image is divided into small connected regions called cells, and for the pixels within each cell, a histogram of gradient directions is compiled. The descriptor is then the concatenation of these histograms. For improved accuracy, the local histograms can be contrast-normalized by calculating a measure of the intensity across a larger region of the image, called a block, and then using this value to normalize all cells within the block. This normalization results in better invariance to changes in illumination and shadowing.</p>
+
+<p>The HOG descriptor has a few key advantages over other descriptors. Since it operates on local cells, it is invariant to geometric and photometric transformations, except for object orientation. Such changes would only appear in larger spatial regions. Moreover, as Dalal and Triggs discovered, coarse spatial sampling, fine orientation sampling, and strong local photometric normalization permits the individual body movement of pedestrians to be ignored so long as they maintain a roughly upright position. The HOG descriptor is thus particularly suited for human detection in images.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h2 id="algorithm-implementation">Algorithm implementation</h2>
+<h3 id="gradient-computation">Gradient computation</h3>
+
+<p>The first step of calculation in many feature detectors in image pre-processing is to ensure normalized color and gamma values. As Dalal and Triggs point out, however, this step can be omitted in HOG descriptor computation, as the ensuing descriptor normalization essentially achieves the same result. Image pre-processing thus provides little impact on performance. Instead, the first step of calculation is the computation of the gradient values. The most common method is to apply the 1-D centered, point discrete <a href="derivative_mask" title="wikilink">derivative mask</a> in one or both of the horizontal and vertical directions. Specifically, this method requires filtering the color or intensity data of the image with the following filter kernels:</p>
+
+<p>
+
+<math display="block" id="Histogram_of_oriented_gradients:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo>,</mo>
+     <mn>0</mn>
+     <mo>,</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mtext>and</mtext>
+    <msup>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo>,</mo>
+      <mn>0</mn>
+      <mo>,</mo>
+      <mn>1</mn>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <mi>T</mi>
+    </msup>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <list>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+     <cn type="integer">0</cn>
+     <cn type="integer">1</cn>
+    </list>
+    <mtext>and</mtext>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <list>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+      <cn type="integer">0</cn>
+      <cn type="integer">1</cn>
+     </list>
+     <ci>T</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [-1,0,1]\text{ and }[-1,0,1]^{T}.\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Dalal and Triggs tested other, more complex masks, such as the 3x3 <a href="Sobel_operator" title="wikilink">Sobel mask</a> or diagonal masks, but these masks generally performed poorer in detecting humans in images. They also experimented with <a href="Gaussian_smoothing" title="wikilink">Gaussian smoothing</a> before applying the derivative mask, but similarly found that omission of any smoothing performed better in practice.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+<h3 id="orientation-binning">Orientation binning</h3>
+
+<p>The second step of calculation is creating the cell histograms. Each pixel within the cell casts a weighted vote for an orientation-based histogram channel based on the values found in the gradient computation. The cells themselves can either be rectangular or radial in shape, and the histogram channels are evenly spread over 0 to 180 degrees or 0 to 360 degrees, depending on whether the gradient is “unsigned” or “signed”. Dalal and Triggs found that unsigned gradients used in conjunction with 9 histogram channels performed best in their human detection experiments. As for the vote weight, pixel contribution can either be the gradient magnitude itself, or some function of the magnitude. In tests, the gradient magnitude itself generally produces the best results. Other options for the vote weight could include the square root or square of the gradient magnitude, or some clipped version of the magnitude.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+<h3 id="descriptor-blocks">Descriptor blocks</h3>
+
+<p>To account for changes in illumination and contrast, the gradient strengths must be locally normalized, which requires grouping the cells together into larger, spatially connected blocks. The HOG descriptor is then the concatenated vector of the components of the normalized cell histograms from all of the block regions. These blocks typically overlap, meaning that each cell contributes more than once to the final descriptor. Two main block geometries exist: rectangular R-HOG blocks and circular C-HOG blocks. R-HOG blocks are generally square grids, represented by three parameters: the number of cells per block, the number of pixels per cell, and the number of channels per cell histogram. In the Dalal and Triggs human detection experiment, the optimal parameters were found to be 8x8 cell blocks of 16x16 pixel cells with 9 histogram channels. Moreover, they found that some minor improvement in performance could be gained by applying a Gaussian spatial window within each block before tabulating histogram votes in order to weight pixels around the edge of the blocks less. The R-HOG blocks appear quite similar to the <a href="scale-invariant_feature_transform" title="wikilink">scale-invariant feature transform</a> (SIFT) descriptors; however, despite their similar formation, R-HOG blocks are computed in dense grids at some single scale without orientation alignment, whereas SIFT descriptors are usually computed at sparse, scale-invariant key image points and are rotated to align orientation. In addition, the R-HOG blocks are used in conjunction to encode spatial form information, while SIFT descriptors are used singly.</p>
+
+<p>Circular HOG blocks (C-HOG) can be found in two variants: those with a single, central cell and those with an angularly divided central cell. In addition, these C-HOG blocks can be described with four parameters: the number of angular and radial bins, the radius of the center bin, and the expansion factor for the radius of additional radial bins. Dalal and Triggs found that the two main variants provided equal performance, and that two radial bins with four angular bins, a center radius of 4 pixels, and an expansion factor of 2 provided the best performance in their experimentation. Also, Gaussian weighting provided no benefit when used in conjunction with the C-HOG blocks. C-HOG blocks appear similar to <a href="shape_context" title="wikilink">shape context</a> descriptors, but differ strongly in that C-HOG blocks contain cells with several orientation channels, while shape contexts only make use of a single edge presence count in their formulation.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<h3 id="block-normalization">Block normalization</h3>
+
+<p>Dalal and Triggs explored four different methods for block normalization. Let 
+
+<math display="inline" id="Histogram_of_oriented_gradients:1">
+ <semantics>
+  <mi>v</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>v</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v
+  </annotation>
+ </semantics>
+</math>
+
+ be the non-normalized vector containing all histograms in a given block, 
+
+<math display="inline" id="Histogram_of_oriented_gradients:2">
+ <semantics>
+  <msub>
+   <mrow>
+    <mo>∥</mo>
+    <mi>v</mi>
+    <mo>∥</mo>
+   </mrow>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <csymbol cd="latexml">norm</csymbol>
+     <ci>v</ci>
+    </apply>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \|v\|_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ be its <em>k</em>-norm for 
+
+<math display="inline" id="Histogram_of_oriented_gradients:3">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mn>2</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>k</ci>
+    <list>
+     <cn type="integer">1</cn>
+     <cn type="integer">2</cn>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k={1,2}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Histogram_of_oriented_gradients:4">
+ <semantics>
+  <mi>e</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>e</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   e
+  </annotation>
+ </semantics>
+</math>
+
+ be some small constant (the exact value, hopefully, is unimportant). Then the normalization factor can be one of the following:</p>
+<dl>
+<dd>L2-norm
+
+<math display="block" id="Histogram_of_oriented_gradients:5">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mi>v</mi>
+    <msqrt>
+     <mrow>
+      <msubsup>
+       <mrow>
+        <mo>∥</mo>
+        <mi>v</mi>
+        <mo>∥</mo>
+       </mrow>
+       <mn>2</mn>
+       <mn>2</mn>
+      </msubsup>
+      <mo>+</mo>
+      <msup>
+       <mi>e</mi>
+       <mn>2</mn>
+      </msup>
+     </mrow>
+    </msqrt>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>f</ci>
+    <apply>
+     <divide></divide>
+     <ci>v</ci>
+     <apply>
+      <root></root>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="latexml">norm</csymbol>
+          <ci>v</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>e</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f={v\over\sqrt{\|v\|^{2}_{2}+e^{2}}}
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+<dl>
+<dd>L2-hys: L2-norm followed by clipping (limiting the maximum values of v to 0.2) and renormalizing, as in <a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a>
+</dd>
+</dl>
+<dl>
+<dd>L1-norm
+
+<math display="block" id="Histogram_of_oriented_gradients:6">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mi>v</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msub>
+       <mrow>
+        <mo>∥</mo>
+        <mi>v</mi>
+        <mo>∥</mo>
+       </mrow>
+       <mn>1</mn>
+      </msub>
+      <mo>+</mo>
+      <mi>e</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>f</ci>
+    <apply>
+     <divide></divide>
+     <ci>v</ci>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <csymbol cd="latexml">norm</csymbol>
+        <ci>v</ci>
+       </apply>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>e</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f={v\over(\|v\|_{1}+e)}
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+<dl>
+<dd>L1-sqrt
+
+<math display="block" id="Histogram_of_oriented_gradients:7">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mo>=</mo>
+   <msqrt>
+    <mfrac>
+     <mi>v</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <msub>
+        <mrow>
+         <mo>∥</mo>
+         <mi>v</mi>
+         <mo>∥</mo>
+        </mrow>
+        <mn>1</mn>
+       </msub>
+       <mo>+</mo>
+       <mi>e</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mfrac>
+   </msqrt>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>f</ci>
+    <apply>
+     <root></root>
+     <apply>
+      <divide></divide>
+      <ci>v</ci>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <csymbol cd="latexml">norm</csymbol>
+         <ci>v</ci>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>e</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f=\sqrt{v\over(\|v\|_{1}+e)}
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+
+<p>In addition, the scheme L2-hys can be computed by first taking the L2-norm, clipping the result, and then renormalizing. In their experiments, Dalal and Triggs found the L2-hys, L2-norm, and L1-sqrt schemes provide similar performance, while the L1-norm provides slightly less reliable performance; however, all four methods showed very significant improvement over the non-normalized data.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+<h3 id="svm-classifier">SVM classifier</h3>
+
+<p>The final step in object recognition using histogram of oriented Gradient descriptors is to feed the descriptors into some recognition system based on supervised learning. The <a href="support_vector_machine" title="wikilink">support vector machine</a> (SVM) classifier is a binary classifier which looks for an optimal hyperplane as a decision function. Once trained on images containing some particular object, the SVM classifier can make decisions regarding the presence of an object, such as a human, in additional test images.</p>
+<h2 id="performance">Performance</h2>
+
+<p>In their original human detection experiment, Dalal and Triggs compared their R-HOG and C-HOG descriptor blocks against <a href="generalized_Haar_wavelet" title="wikilink">generalized Haar wavelets</a>, <a class="uri" href="PCA-SIFT" title="wikilink">PCA-SIFT</a> descriptors, and <a href="shape_context" title="wikilink">shape context</a> descriptors. Generalized Haar wavelets are oriented Haar wavelets, and were used in 2001 by Mohan, Papageorgiou, and Poggio in their own object detection experiments. PCA-SIFT descriptors are similar to SIFT descriptors, but differ in that <a href="principal_component_analysis" title="wikilink">principal component analysis</a> is applied to the normalized gradient patches. PCA-SIFT descriptors were first used in 2004 by Ke and Sukthankar and were claimed to outperform regular SIFT descriptors. Finally, shape contexts use circular bins, similar to those used in C-HOG blocks, but only tabulate votes on the basis of edge presence, making no distinction with regards to orientation. Shape contexts were originally used in 2001 by Belongie, Malik, and Puzicha.</p>
+
+<p>The testing commenced on two different data sets. The <a href="Massachusetts_Institute_of_Technology" title="wikilink">Massachusetts Institute of Technology</a> (MIT) pedestrian database contains 509 training images and 200 test images of pedestrians on city streets. The set only contains images featuring the front or back of human figures and contains little variety in human pose. The set is well-known and has been used in a variety of human detection experiments, such as those conducted by Papageorgiou and Poggio in 2000. The MIT database is currently available for research at <a class="uri" href="http://cbcl.mit.edu/cbcl/software-datasets/PedestrianData.html">http://cbcl.mit.edu/cbcl/software-datasets/PedestrianData.html</a>. The second set was developed by Dalal and Triggs exclusively for their human detection experiment due to the fact that the HOG descriptors performed near-perfectly on the MIT set. Their set, known as INRIA, contains 1805 images of humans taken from personal photographs. The set contains images of humans in a wide variety of poses and includes difficult backgrounds, such as crowd scenes, thus rendering it more complex than the MIT set. The INRIA database is currently available for research at <a class="uri" href="http://lear.inrialpes.fr/data">http://lear.inrialpes.fr/data</a>.</p>
+
+<p>The above site has an image showing examples from the INRIA human detection database.</p>
+
+<p>As for the results, the C-HOG and R-HOG block descriptors perform comparatively, with the C-HOG descriptors maintaining a slight advantage in the detection miss rate at fixed <a href="false_positive_rate" title="wikilink">false positive rates</a> across both data sets. On the MIT set, the C-HOG and R-HOG descriptors produced a detection miss rate of essentially zero at a 10<sup>−4</sup> false positive rate. On the INRIA set, the C-HOG and R-HOG descriptors produced a detection miss rate of roughly 0.1 at a 10<sup>−4</sup> false positive rate. The generalized Haar wavelets represent the next highest performing approach: they produced roughly a 0.01 miss rate at a 10<sup>−4</sup> false positive rate on the MIT set, and roughly a 0.3 miss rate on the INRIA set. The PCA-SIFT descriptors and shape context descriptors both performed fairly poorly on both data sets. Both methods produced a miss rate of 0.1 at a 10<sup>−4</sup> false positive rate on the MIT set and nearly a miss rate of 0.5 at a 10<sup>−4</sup> false positive rate on the INRIA set.</p>
+<h2 id="further-development">Further development</h2>
+
+<p>As part of the Pascal Visual Object Classes 2006 Workshop, Dalal and Triggs presented results on applying histogram of oriented gradients descriptors to image objects other than humans, such as cars, buses, and bicycles, as well as common animals such as dogs, cats, and cows. They included with their results the optimal parameters for block formulation and normalization in each case. The image in the below reference shows some of their detection examples for motorbikes.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+
+<p>As part of the 2006 <a href="European_Conference_on_Computer_Vision" title="wikilink">European Conference on Computer Vision</a> (ECCV), Dalal and Triggs teamed up with <a href="Cordelia_Schmid" title="wikilink">Cordelia Schmid</a> to apply HOG detectors to the problem of human detection in films and videos. They combined HOG descriptors on individual video frames with their newly introduced internal motion histograms (IMH) on pairs of subsequent video frames. These internal motion histograms use the gradient magnitudes from <a href="optical_flow" title="wikilink">optical flow</a> fields obtained from two consecutive frames. These gradient magnitudes are then used in the same manner as those produced from static image data within the HOG descriptor approach. When testing on two large datasets taken from several movies, the combined HOG-IMH method yielded a miss rate of approximately 0.1 at a 
+
+<math display="inline" id="Histogram_of_oriented_gradients:8">
+ <semantics>
+  <msup>
+   <mn>10</mn>
+   <mrow>
+    <mo>-</mo>
+    <mn>4</mn>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <cn type="integer">10</cn>
+    <apply>
+     <minus></minus>
+     <cn type="integer">4</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   10^{-4}
+  </annotation>
+ </semantics>
+</math>
+
+ false positive rate.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+
+<p>At the <a href="Intelligent_Vehicles_Symposium" title="wikilink">Intelligent Vehicles Symposium</a> in 2006, <a href="F._Suard" title="wikilink">F. Suard</a>, <a href="A._Rakotomamonjy" title="wikilink">A. Rakotomamonjy</a>, and <a href="A._Bensrhair" title="wikilink">A. Bensrhair</a> introduced a complete system for pedestrian detection based on HOG descriptors. Their system operates using two infrared cameras. Since human beings appear brighter than their surroundings on infrared images, the system first locates positions of interest within the larger view field where humans could possibly be located. Then support vector machine classifiers operate on the HOG descriptors taken from these smaller positions of interest to formulate a decision regarding the presence of a pedestrian. Once pedestrians are located within the view field, the actual position of the pedestrian is estimated using stereo vision.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+
+<p>At the <a class="uri" href="IEEE" title="wikilink">IEEE</a> <a href="Conference_on_Computer_Vision_and_Pattern_Recognition" title="wikilink">Conference on Computer Vision and Pattern Recognition</a> in 2006, <a href="Qiang_Zhu" title="wikilink">Qiang Zhu</a>, <a href="Shai_Avidan" title="wikilink">Shai Avidan</a>, <a href="Mei-Chen_Yeh" title="wikilink">Mei-Chen Yeh</a>, and <a href="Kwang-Ting_Cheng" title="wikilink">Kwang-Ting Cheng</a> presented an algorithm to significantly speed up human detection using HOG descriptor methods. Their method uses HOG descriptors in combination with the <a href="cascading_classifiers" title="wikilink">cascading classifiers</a> algorithm normally applied with great success to face detection. Also, rather than relying on blocks of uniform size, they introduce blocks that vary in size, location, and aspect ratio. In order to isolate the blocks best suited for human detection, they applied the <a class="uri" href="AdaBoost" title="wikilink">AdaBoost</a> algorithm to select those blocks to be included in the cascade. In their experimentation, their algorithm achieved comparable performance to the original Dalal and Triggs algorithm, but operated at speeds up to 70 times faster. In 2006, the <a href="Mitsubishi_Electric_Research_Laboratories" title="wikilink">Mitsubishi Electric Research Laboratories</a> applied for the U.S. Patent of this algorithm under application number 20070237387.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>At the <a class="uri" href="IEEE" title="wikilink">IEEE</a> <a href="International_Conference_on_Image_Processing" title="wikilink">International Conference on Image Processing</a> in 2010, <a href="Rui_Hu" title="wikilink">Rui Hu</a>, <a href="Mark_Banard" title="wikilink">Mark Banard</a>, and <a href="John_Collomosse" title="wikilink">John Collomosse</a> extended the HOG descriptor for use in sketch based image retrieval (SBIR). A dense orientation field was extrapolated from dominant responses in the <a href="Canny_edge_detector" title="wikilink">Canny edge detector</a> under a <a class="uri" href="Laplacian" title="wikilink">Laplacian</a> smoothness constraint, and HOG computed over this field. The resulting gradient field HOG (GF-HOG) descriptor captured local spatial structure in sketches or image edge maps. This enabled the descriptor to be used within a <a href="content-based_image_retrieval" title="wikilink">content-based image retrieval</a> system searchable by free-hand sketched shapes.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> The GF-HOG adaptation was shown to outperform existing gradient histogram descriptors such as <a href="Scale-invariant_feature_transform" title="wikilink">SIFT</a>, <a class="uri" href="SURF" title="wikilink">SURF</a>, and HOG by around 15 percent at the task of SBIR.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Corner_detection" title="wikilink">Corner detection</a></li>
+<li><a href="Pedestrian_detection" title="wikilink">Pedestrian detection</a></li>
+<li><a href="Feature_(computer_vision)" title="wikilink">Feature (computer vision)</a></li>
+<li><a href="Feature_detection_(computer_vision)" title="wikilink">Feature detection (computer vision)</a></li>
+<li><a href="Feature_extraction" title="wikilink">Feature extraction</a></li>
+<li><a href="Interest_point_detection" title="wikilink">Interest point detection</a></li>
+<li><a href="Object_recognition" title="wikilink">Object recognition</a></li>
+<li><a href="Scale-invariant_feature_transform" title="wikilink">Scale-invariant feature transform</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a class="uri" href="http://www.mathworks.com/matlabcentral/fileexchange/33863">http://www.mathworks.com/matlabcentral/fileexchange/33863</a> An implementation for Matlab (mex file)</li>
+<li><a class="uri" href="http://www.cs.cmu.edu/~yke/pcasift/">http://www.cs.cmu.edu/~yke/pcasift/</a> - Code for PCA-SIFT Object Detection</li>
+<li><a class="uri" href="http://lear.inrialpes.fr/software/">http://lear.inrialpes.fr/software/</a> - Software Toolkit for HOG Object Detection (Research Team homepage)</li>
+<li><a class="uri" href="http://www.navneetdalal.com/software/">http://www.navneetdalal.com/software/</a> - Software Toolkit for HOG Object Detection (Navneet Dalal homepage)</li>
+<li><a class="uri" href="http://dlib.net/imaging.html#scan_fhog_pyramid">http://dlib.net/imaging.html#scan_fhog_pyramid</a> - C++ and Python Software Toolkit for HOG Object Detection</li>
+<li><a class="uri" href="http://pascal.inrialpes.fr/data/human/">http://pascal.inrialpes.fr/data/human/</a> - INRIA Human Image Dataset</li>
+<li><a class="uri" href="http://cbcl.mit.edu/software-datasets/PedestrianData.html">http://cbcl.mit.edu/software-datasets/PedestrianData.html</a> - MIT Pedestrian Image Dataset</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Feature_detection_(computer_vision)" title="wikilink">Category:Feature detection (computer vision)</a> <a href="Category:Object_recognition_and_categorization" title="wikilink">Category:Object recognition and categorization</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5">D. G. Lowe. <a href="http://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf">Distinctive image features from scale-invariant keypoints.</a> IJCV, 60(2):91–110, 2004.<a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"> (original document no longer available; <a href="http://lear.inrialpes.fr/pubs/2006/DTS06/eccv2006.pdf">similar paper</a>)<a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

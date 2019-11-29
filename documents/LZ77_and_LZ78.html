@@ -1,0 +1,428 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="53">LZ77 and LZ78</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>LZ77 and LZ78</h1>
+<hr/>
+<figure><b>(Figure)</b>
+<figcaption>A sign in an Israeli science museum describing the importance of the algorithm</figcaption>
+</figure>
+
+<p><strong>LZ77</strong> and <strong>LZ78</strong> are the two <a href="lossless_data_compression" title="wikilink">lossless data compression</a> <a href="algorithm" title="wikilink">algorithms</a> published in papers by <a href="Abraham_Lempel" title="wikilink">Abraham Lempel</a> and <a href="Jacob_Ziv" title="wikilink">Jacob Ziv</a> in 1977<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> and 1978.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> They are also known as <strong>LZ1</strong> and <strong>LZ2</strong> respectively.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> These two algorithms form the basis for many variations including <a href="Lempel–Ziv–Welch" title="wikilink">LZW</a>, <a href="Lempel-Ziv-Storer-Szymanski" title="wikilink">LZSS</a>, <a href="Lempel-Ziv-Markov_chain_algorithm" title="wikilink">LZMA</a> and others. Besides their academic influence, these algorithms formed the basis of several ubiquitous compression schemes, including <a class="uri" href="GIF" title="wikilink">GIF</a> and the <a class="uri" href="DEFLATE" title="wikilink">DEFLATE</a> algorithm used in <a href="Portable_Network_Graphics" title="wikilink">PNG</a>.</p>
+
+<p>They are both theoretically <a href="dictionary_coder" title="wikilink">dictionary coders</a>. LZ77 maintains a <em><a href="sliding_window" title="wikilink">sliding window</a></em> during compression. This was later shown to be equivalent to the <em><a href="explicit_dictionary" title="wikilink">explicit dictionary</a></em> constructed by LZ78—however, they are only equivalent when the entire data is intended to be decompressed. LZ78 decompression allows random access to the input as long as the entire dictionary is available, while LZ77 decompression must always start at the beginning of the input.</p>
+
+<p>The algorithms were named an <a href="List_of_IEEE_milestones" title="wikilink">IEEE Milestone</a> in 2004.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<h2 id="theoretical-efficiency">Theoretical efficiency</h2>
+
+<p>In the second of the two papers that introduced these algorithms they are analyzed as encoders defined by finite-state machines. A measure analogous to information entropy is developed for individual sequences (as opposed to probabilistic ensembles). This measure gives a bound on the compression ratio that can be achieved. It is then shown that there exist finite lossless encoders for every sequence that achieve this bound as the length of the sequence grows to infinity. In this sense an algorithm based on this scheme produces asymptotically optimal encodings. This result can be proved more directly, as for example in notes by Peter Shor.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+<h2 id="lz77">LZ77</h2>
+
+<p>LZ77 algorithms achieve compression by replacing repeated occurrences of data with references to a single copy of that data existing earlier in the uncompressed data stream. A match is encoded by a pair of numbers called a <em>length-distance pair</em>, which is equivalent to the statement "each of the next <em>length</em> characters is equal to the characters exactly <em>distance</em> characters behind it in the uncompressed stream". (The "distance" is sometimes called the "offset" instead.)</p>
+
+<p>To spot matches, the encoder must keep track of some amount of the most recent data, such as the last 2 kB, 4 kB, or 32 kB. The structure in which this data is held is called a <em>sliding window</em>, which is why LZ77 is sometimes called <em><a href="sliding_window_compression" title="wikilink">sliding window compression</a></em>. The encoder needs to keep this data to look for matches, and the decoder needs to keep this data to interpret the matches the encoder refers to. The larger the sliding window is, the longer back the encoder may search for creating references.</p>
+
+<p>It is not only acceptable but frequently useful to allow length-distance pairs to specify a length that actually exceeds the distance. As a copy command, this is puzzling: "Go back <em>four</em> characters and copy <em>ten</em> characters from that position into the current position". How can ten characters be copied over when only four of them are actually in the buffer? Tackling one byte at a time, there is no problem serving this request, because as a byte is copied over, it may be fed again as input to the copy command. When the copy-from position makes it to the initial destination position, it is consequently fed data that was pasted from the <em>beginning</em> of the copy-from position. The operation is thus equivalent to the statement "copy the data you were given and repetitively paste it until it fits". As this type of pair repeats a single copy of data multiple times, it can be used to incorporate a flexible and easy form of <a href="run-length_encoding" title="wikilink">run-length encoding</a>.</p>
+
+<p>Another way to see things is as follows: While encoding, for the search pointer to continue finding matched pairs past the end of the search window, all characters from the first match at offset D and forward to the end of the search window must have matched input, and these are the (previously seen) characters that comprise a single run unit of length L<sub>R</sub>, which must equal D. Then as the search pointer proceeds past the search window and forward, as far as the run pattern repeats in the input, the search and input pointers will be in sync and match characters until the run pattern is interrupted. Then L characters have been matched in total, L&gt;D, and the code is [D,L,c].</p>
+
+<p>Upon decoding [D,L,c], again, D=L<sub>R</sub>. When the first L<sub>R</sub> characters are read to the output, this corresponds to a single run unit appended to the output buffer. At this point, the read pointer could be thought of as only needing to return int(L/L<sub>R</sub>) + (1 if L mod L<sub>R</sub> does not equal 0) times to the start of that single buffered run unit, read L<sub>R</sub> characters (or maybe fewer on the last return), and repeat until a total of L characters are read. But mirroring the encoding process, since the pattern is repetitive, the read pointer need only trail in sync with the write pointer by a fixed distance equal to the run length L<sub>R</sub> until L characters have been copied to output in total.</p>
+
+<p>Considering the above, especially if the compression of data runs is expected to predominate, the window search should begin at the end of the window and proceed backwards, since run patterns, if they exist, will be found first and allow the search to terminate, absolutely if the current maximum matching sequence length is met, or judiciously, if a sufficient length is met, and finally for the simple possibility that the data is more recent and may correlate better with the next input.</p>
+<h3 id="pseudocode">Pseudocode</h3>
+
+<p>The pseudocode is a reproduction of the LZ77 compression algorithm sliding window.</p>
+
+<p><code>begin</code><br/>
+<code>     fill view from input</code><br/>
+<code>     while (view is not empty) do </code><br/>
+<code>     begin</code><br/>
+<code>          find longest prefix p of view starting in coded part</code><br/>
+<code>          i := position of p in window</code><br/>
+<code>          j := length of p</code><br/>
+<code>          X := first char after p in view</code><br/>
+<code>          output(i,j,X)</code><br/>
+<code>          add j+1 chars</code><br/>
+<code>     end</code><br/>
+<code>end</code></p>
+<h3 id="example">Example</h3>
+
+<p>The calculation of the LZ77-based factorization of the string <code>aacaacabcabaaac</code> illustrated.</p>
+
+<p>The table shows the calculation of the LZ77 factorization using a dictionary buffer of size 12 and a preview buffer of size 9. In the far right column is from top to bottom read the output of the algorithm (0, 0, "a") (1, 1, "c") (3, 4, "b") (3, 3, "a") (12, 3, "$"). The position is relative to the right edge of the dictionary buffer, this must be considered when decoding.</p>
+
+<p>The buffers operate on the principle of a sliding window, i.e. to be compressed data stream is pushed right into the buffer. As noted in the algorithm, the shift is to the length of the match found in the dictionary, and a further position. This means that redundant triples be avoided as new characters are usually always taken individually in the dictionary. In the example, so the third triple (0, 0, "c") should be incorporated, what the compression ratio, however, deteriorated significantly. The matches are green and marked to be moved string in red. It is important to note that more and more a character is shifted, was found to be in accordance to new characters do not have to double encode.</p>
+
+<p>Example of a LZ77 compression sliding window</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Example of a LZ77 compression sliding window</p></td>
+<td style="text-align: left;">
+<p>Line</p></td>
+<td style="text-align: left;">
+<p>12</p></td>
+<td style="text-align: left;">
+<p>11</p></td>
+<td style="text-align: left;">
+<p>10</p></td>
+<td style="text-align: left;">
+<p> 9</p></td>
+<td style="text-align: left;">
+<p> 8</p></td>
+<td style="text-align: left;">
+<p> 7</p></td>
+<td style="text-align: left;">
+<p> 6</p></td>
+<td style="text-align: left;">
+<p> 5</p></td>
+<td style="text-align: left;">
+<p> 4</p></td>
+<td style="text-align: left;">
+<p> 3</p></td>
+<td style="text-align: left;">
+<p> 2</p></td>
+<td style="text-align: left;">
+<p> 1</p></td>
+<td style="text-align: left;">
+<p> 0</p></td>
+<td style="text-align: left;">
+<p> 1</p></td>
+<td style="text-align: left;">
+<p> 2</p></td>
+<td style="text-align: left;">
+<p> 3</p></td>
+<td style="text-align: left;">
+<p> 4</p></td>
+<td style="text-align: left;">
+<p> 5</p></td>
+<td style="text-align: left;">
+<p> 6</p></td>
+<td style="text-align: left;">
+<p> 7</p></td>
+<td style="text-align: left;">
+<p> 8</p></td>
+<td style="text-align: left;">
+<p> 9</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>Output</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>(Empty)</p></td>
+<td style="text-align: left;">
+<p>bgcolor:=#ffdddd"|a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>b</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="LZ77_and_LZ78:0">
+ <semantics>
+  <mo>⟹</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-⟹</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Longrightarrow
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>(0,0,"<strong>a</strong>")</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>(Empty)</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>b</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>b</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="LZ77_and_LZ78:1">
+ <semantics>
+  <mo>⟹</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-⟹</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Longrightarrow
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>(1,1,"<strong>c</strong>")</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>3</p></td>
+<td style="text-align: left;">
+<p>(Empty)</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p><span style="background-color:#ccffcc">a</span></p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>b</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>b</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="LZ77_and_LZ78:2">
+ <semantics>
+  <mo>⟹</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-⟹</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Longrightarrow
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>(3,4,"<strong>b</strong>")</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>(Empty)</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>b</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>b</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>(Empty)</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="LZ77_and_LZ78:3">
+ <semantics>
+  <mo>⟹</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-⟹</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Longrightarrow
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>(3,3,"<strong>a</strong>")</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>5</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>b</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>b</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>a</p></td>
+<td style="text-align: left;">
+<p>c</p></td>
+<td style="text-align: left;">
+<p>(Empty)</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="LZ77_and_LZ78:4">
+ <semantics>
+  <mo>⟹</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-⟹</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Longrightarrow
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>(12,3,"<strong>$</strong>")</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><strong>finished</strong></p></td>
+</tr>
+<tr class="even">
+</tr>
+</tbody>
+</table>
+
+<p>The first popular characters is unknown, so that the first "a" is added to (0, 0, "a"). In the 2nd line "a" can already be read from the dictionary buffer (marked in green) so that "c" is accepted as the new character. In the 3rd line is a special case of the LZ77 algorithm can be seen as the matching string extends into the preview window, shown in the example by green text on a red background. Line 4 and 5 are equivalent to deal with the first two. Except that last a triple $ is next inserted character, since the text is fully compressed and there is no next character</p>
+<h3 id="implementations">Implementations</h3>
+
+<p>Even though all LZ77 algorithms work by definition on the same basic principle, they can vary widely in how they encode their compressed data to vary the numerical ranges of a length-distance pair, alter the number of bits consumed for a length-distance pair, and distinguish their length-distance pairs from <em>literals</em> (raw data encoded as itself, rather than as part of a length-distance pair). A few examples:</p>
+<ul>
+<li>The algorithm illustrated in Lempel and Ziv's original 1977 paper outputs all its data three values at a time: the length and distance of the longest match found in the buffer, and the literal which followed that match. If two successive characters in the input stream could only be encoded as literals, the length of the length-distance pair would be 0.</li>
+<li><a class="uri" href="LZSS" title="wikilink">LZSS</a> improves on LZ77 by using a 1 bit flag to indicate whether the next chunk of data is a literal or a length-distance pair, and using literals if a length-distance pair would be longer.</li>
+<li>In the <a class="uri" href="PalmDoc" title="wikilink">PalmDoc</a> format, a length-distance pair is always encoded by a two-byte sequence. Of the 16 bits that make up these two bytes, 11 bits go to encoding the distance, 3 go to encoding the length, and the remaining two are used to make sure the decoder can identify the first byte as the beginning of such a two-byte sequence.</li>
+<li>In the implementation used for many games by <a href="Electronic_Arts" title="wikilink">Electronic Arts</a>,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> the size in bytes of a length-distance pair can be specified inside the first byte of the length-distance pair itself; depending on if the first byte begins with a 0, 10, 110, or 111 (when read in <a href="Endianness" title="wikilink">big-endian</a> bit orientation), the length of the entire length-distance pair can be 1 to 4 bytes large.</li>
+<li>
+
+<p>, the most popular LZ77 based compression method is <a class="uri" href="DEFLATE" title="wikilink">DEFLATE</a>; it combines LZ77 with <a href="Huffman_coding" title="wikilink">Huffman coding</a>.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> Literals, lengths, and a symbol to indicate the end of the current block of data are all placed together into one alphabet. Distances can be safely placed into a separate alphabet; since a distance only occurs just after a length, it cannot be mistaken for another kind of symbol or vice versa.</p></li>
+</ul>
+<h2 id="lz78">LZ78</h2>
+
+<p>LZ78 algorithms achieve compression by replacing repeated occurrences of data with references to a dictionary that is built based on the input data stream. Each dictionary entry is of the form dictionary[...] = {index, character}, where <em>index</em> is the index to a previous dictionary entry, and character is appended to the string represented by dictionary[index]. For example, "abc" would be stored (in reverse order) as follows: dictionary[k] = {j, 'c'}, dictionary[j] = {i, 'b'}, dictionary[i] = {0, 'a'}, where an index of 0 specifies the first character of a string. The algorithm initializes <em>last matching index</em> = 0 and <em>next available index</em> = 1. For each character of the input stream, the dictionary is searched for a match: {last matching index, character}. If a match is found, then <em>last matching index</em> is set to the index of the matching entry, and nothing is output. If a match is not found, then a new dictionary entry is created: dictionary[next available index] = {last matching index, character}, and the algorithm outputs <em>last matching index</em>, followed by <em>character</em>, then resets <em>last matching index</em> = 0 and increments <em>next available index</em>. Once the dictionary is full, no more entries are added. When the end of the input stream is reached, the algorithm outputs <em>last matching index</em>. Note that strings are stored in the dictionary in reverse order, which an LZ78 decoder will have to deal with.</p>
+
+<p><a href="Lempel–Ziv–Welch" title="wikilink">LZW</a> is an LZ78-based algorithm that uses a dictionary pre-initialized with all possible characters (symbols), (or emulation of a pre-initialized dictionary). The main improvement of <a href="Lempel–Ziv–Welch" title="wikilink">LZW</a> is that when a match is not found, the current input stream character is assumed to be the first character of an existing string in the dictionary (since the dictionary is initialized with all possible characters), so only the <em>last matching index</em> is output (which may be the pre-initialized dictionary index corresponding to the previous (or the initial) input character). Refer to the <a href="Lempel–Ziv–Welch" title="wikilink">LZW</a> article for implementation details.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a class="uri" href="Lempel-Ziv-Stac" title="wikilink">Lempel-Ziv-Stac</a> (LZS)</li>
+<li><a href="Statistical_Lempel–Ziv" title="wikilink">Statistical Lempel–Ziv</a></li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li></li>
+</ul>
+<ul>
+<li></li>
+</ul>
+<ul>
+<li></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Lossless_compression_algorithms" title="wikilink">Category:Lossless compression algorithms</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

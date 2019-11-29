@@ -1,0 +1,746 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1502">Kademlia</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Kademlia</h1>
+<hr/>
+
+<p><strong>Kademlia</strong> is a <a href="distributed_hash_table" title="wikilink">distributed hash table</a> for decentralized <a class="uri" href="peer-to-peer" title="wikilink">peer-to-peer</a> <a href="computer_network" title="wikilink">computer networks</a> designed by Petar Maymounkov and David Mazières in 2002.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> It specifies the structure of the network and the exchange of information through <a href="node_(networking)" title="wikilink">node</a> lookups. Kademlia nodes communicate among themselves using <a href="User_Datagram_Protocol" title="wikilink">UDP</a>. A virtual or <a href="overlay_network" title="wikilink">overlay network</a> is formed by the participant nodes. Each node is identified by a number or <em>node ID</em>. The <em>node ID</em> serves not only as identification, but the Kademlia algorithm uses the <em>node ID</em> to locate values (usually file <a href="Hash_function" title="wikilink">hashes</a> or keywords). In fact, the <em>node ID</em> provides a direct map to file hashes and that node stores information on where to obtain the file or resource.</p>
+
+<p>When searching for some value, the algorithm needs to know the associated key and explores the network in several steps. Each step will find nodes that are closer to the key until the contacted node returns the value or no more closer nodes are found. This is very efficient: Like many other <a href="Distributed_hash_table" title="wikilink">DHTs</a>, Kademlia contacts only <a href="Big_O_notation" title="wikilink">
+
+<math display="inline" id="Kademlia:0">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>log</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log(n))
+  </annotation>
+ </semantics>
+</math>
+
+</a> nodes during the search out of a total of 
+
+<math display="inline" id="Kademlia:1">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ nodes in the system.</p>
+
+<p>Further advantages are found particularly in the decentralized structure, which increases the resistance against a <a href="denial_of_service_attack" title="wikilink">denial of service attack</a>. Even if a whole set of nodes is flooded, this will have limited effect on network availability, since the network will recover itself by knitting the network around these "holes".</p>
+<h2 id="system-details">System details</h2>
+
+<p>The first generation peer-to-peer file sharing networks, such as <a class="uri" href="Napster" title="wikilink">Napster</a>, relied on a central database to co-ordinate look ups on the network. Second generation peer-to-peer networks, such as <a class="uri" href="Gnutella" title="wikilink">Gnutella</a>, used flooding to locate files, searching every node on the network. Third generation peer-to-peer networks use <a href="Distributed_hash_table" title="wikilink">Distributed hash tables</a> to look up files in the network. <em>Distributed hash tables</em> store resource <strong>locations</strong> throughout the network. A major criterion for these protocols is locating the desired nodes quickly.</p>
+
+<p>Kademlia uses a "distance" calculation between two nodes. This distance is computed as the <em><a href="exclusive_or" title="wikilink">exclusive or (XOR)</a></em> of the two node IDs, taking the result as an <a href="integer" title="wikilink">integer number</a>. Keys and Node IDs have the same format and length, so distance can be calculated among them in exactly the same way. The node ID is typically a large random number that is chosen with the goal of being unique for a particular node (see <a href="Universally_unique_identifier" title="wikilink">UUID</a>). It can and does happen that geographically widely separated nodes—from Germany and Australia, for instance—can be "neighbors" if they have chosen similar random node IDs.</p>
+
+<p><em>Exclusive or</em> was chosen because it acts as a <a href="Metric_(mathematics)" title="wikilink">distance function</a> between all the node IDs. Specifically:</p>
+<ul>
+<li>the distance between a node and itself is zero</li>
+<li>it is symmetric: the "distances" calculated from A to B and from B to A are the same</li>
+<li>it follows the <a href="triangle_inequality" title="wikilink">triangle inequality</a>: given A, B and C are <a href="Vertex_(geometry)" title="wikilink">vertices</a> (points) of a triangle, then the distance from A to B is shorter than (or equal to) the sum of the distance from A to C and the distance from C to B.</li>
+</ul>
+
+<p>These three conditions are enough to ensure that <em>exclusive or</em> captures all of the essential, important features of a "real" distance function, while being cheap and simple to calculate.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>Each Kademlia search iteration comes one bit closer to the target. A <strong>basic</strong> Kademlia network with 2<sup>n</sup> nodes will only take <em>n</em> steps (in the worst case) to find that node.</p>
+<h3 id="routing-tables">Routing tables</h3>
+
+<p><em>This section is simplified to use a single <a class="uri" href="bit" title="wikilink">bit</a>, see the section <a href="Kademlia#Accelerated_lookups" title="wikilink">accelerated lookups</a> for more information on real routing tables.</em></p>
+
+<p>Kademlia routing tables consist of a <em>list</em> for each bit of the node ID. (e.g. if a node ID consists of 128 bits, a node will keep 128 such <em>lists</em>.) A list has many entries. Every entry in a <em>list</em> holds the necessary data to locate another node. The data in each <em>list</em> entry is typically the <em>IP address</em>, <em>port</em>, and <em>node ID</em> of another node. Every <em>list</em> corresponds to a specific distance from the node. Nodes that can go in the n<sup>th</sup> <em>list</em> must have a differing n<sup>th</sup> bit from the node's ID; the first n-1 bits of the candidate ID must match those of the node's ID. This means that it is very easy to fill the first <em>list</em> as 1/2 of the nodes in the network are far away candidates. The next <em>list</em> can use only 1/4 of the nodes in the network (one bit closer than the first), etc.</p>
+
+<p>With an ID of 128 bits, every node in the network will classify other nodes in one of 128 different distances, one specific distance per bit.</p>
+
+<p>As nodes are encountered on the network, they are added to the <em>lists</em>. This includes store and retrieval operations and even helping other nodes to find a key. Every node encountered will be considered for inclusion in the <em>lists</em>. Therefore, the knowledge that a node has of the network is very dynamic. This keeps the network constantly updated and adds resilience to failures or attacks.</p>
+
+<p>In the Kademlia literature, the <em>lists</em> are referred to as <em>k-buckets</em>. <em>k</em> is a system wide number, like 20. Every k-bucket is a <em>list</em> having up to <em>k</em> entries inside; i.e. for a network with k=20, each node will have <em>lists</em> containing up to 20 nodes for a particular bit (a particular distance from itself).</p>
+
+<p>Since the possible nodes for each <em>k-bucket</em> decreases quickly (because there will be very few nodes that are that close), the lower bit <em>k-buckets</em> will fully map all nodes in that section of the network. Since the quantity of possible IDs is much larger than any node population can ever be, some of the k-buckets corresponding to very short distances will remain empty.</p>
+<figure><b>(Figure)</b>
+<figcaption>Network partition for node <strong>110</strong></figcaption>
+</figure>
+
+<p>Consider the simple network to the right. The network size is 2^3 or eight maximum keys and nodes. There are seven nodes participating; the small circles at the bottom. The node under consideration is node six (binary 110) in black. There are three <em>k-buckets</em> for each node in this network. Nodes zero, one and two (binary 000, 001, and 010) are candidates for the farthest <em>k-bucket</em> . Node three (binary 011, not shown) is not participating in the network. In the middle <em>k-bucket</em>, nodes four and five (binary 100 and 101) are placed. Finally, the third <em>k-bucket</em> can only contain node seven (binary 111). Each of the three <em>k-buckets</em> are enclosed in a gray circle. If the size of the <em>k-bucket</em> was two, then the farthest <em>2-bucket</em> can only contain two of the three nodes. For example if node six has node one and two in the farthest 2-bucket, it would have to request a node ID lookup to these nodes to find the location (ip address) of node zero. Each node <em>knows</em> its neighbourhood well and has contact with a few nodes far away which can help locate other nodes far away.</p>
+
+<p>It is known that nodes that have been connected for a long time in a network will probably remain connected for a long time in the future.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> Because of this statistical distribution, Kademlia selects long connected nodes to remain stored in the k-buckets. This increases the number of known valid nodes at some time in the future and provides for a more stable network.</p>
+
+<p>When a <em>k-bucket</em> is full and a new node is discovered for that <em>k-bucket</em>, the least recently seen node in the <em>k-bucket</em> is PINGed. If the node is found to be still alive, the new node is placed in a secondary list, a replacement cache. The replacement cache is used only if a node in the <em>k-bucket</em> stops responding. In other words: new nodes are used only when older nodes disappear.</p>
+<h3 id="protocol-messages">Protocol messages</h3>
+
+<p>Kademlia has four messages.</p>
+<ul>
+<li>PING — used to verify that a node is still alive.</li>
+<li>STORE — Stores a (key, value) pair in one node.</li>
+<li>FIND_NODE — The recipient of the request will return the k nodes in his own buckets that are the closest ones to the requested key.</li>
+<li>FIND_VALUE — Same as FIND_NODE, but if the recipient of the request has the requested key in its store, it will return the corresponding value.</li>
+</ul>
+
+<p>Each <a href="Remote_procedure_call" title="wikilink">RPC</a> message includes a random value from the initiator. This ensures that when the response is received it corresponds to the request previously sent. (see <a href="Magic_cookie" title="wikilink">Magic cookie</a>)</p>
+<h3 id="locating-nodes">Locating nodes</h3>
+
+<p>Node lookups can proceed asynchronously. The quantity of simultaneous lookups is denoted by α and is typically three. A node initiates a FIND_NODE request by querying to the α nodes in its own <em>k-buckets</em> that are the closest ones to the desired key. When these recipient nodes receive the request, they will look in their <em>k-buckets</em> and return the <em>k</em> closest nodes to the desired key that they know. The requester will update a results list with the results (node ID's) he receives, keeping the <em>k</em> best ones (the k nodes that are closer to the searched key) that respond to queries. Then the requester will select these <em>k</em> best results and issue the request to them, and iterate this process again and again. Because every node has a better knowledge of his own surroundings than any other node has, the received results will be other nodes that are every time closer and closer to the searched key. The iterations continue until no nodes are returned that are closer than the best previous results. When the iterations stop, the best k nodes in the results list are the ones in the whole network that are the closest to the desired key.</p>
+
+<p>The node information can be augmented with <a href="Round-trip_delay_time" title="wikilink">round trip times</a>, or <a href="Round-trip_delay_time" title="wikilink">RTT</a>. This information will be used to choose a time-out specific for every consulted node. When a query times out, another query can be initiated, never surpassing α queries at the same time.</p>
+<h3 id="locating-resources">Locating resources</h3>
+
+<p>Information is located by mapping it to a key. A <a href="Hash_function" title="wikilink">hash</a> is typically used for the map. The storer nodes will have information due to a previous STORE message. Locating a value follows the same procedure as locating the closest nodes to a key, except the search terminates when a node has the requested value in his store and returns this value.</p>
+
+<p>The values are stored at several nodes (k of them) to allow for nodes to come and go and still have the value available in some node. Periodically, a node that stores a value will explore the network to find the k nodes that are close to the key value and replicate the value onto them. This compensates for disappeared nodes.</p>
+
+<p>Also, for popular values that might have many requests, the load in the storer nodes is diminished by having a retriever store this value in some node near, but outside of, the k closest ones. This new storing is called a cache. In this way the value is stored farther and farther away from the key, depending on the quantity of requests. This allows popular searches to find a storer more quickly. Because the value is returned from nodes farther away from the key, this alleviates possible "hot spots". Caching nodes will drop the value after a certain time depending on their distance from the key.</p>
+
+<p>Some implementations (e.g. <a href="Kad_network" title="wikilink">Kad</a>) do not have replication nor caching. The purpose of this is to remove old information quickly from the system. The node that is providing the file will periodically refresh the information onto the network (perform FIND_NODE and STORE messages). When all of the nodes having the file go offline, nobody will be refreshing its values (sources and keywords) and the information will eventually disappear from the network.</p>
+<h3 id="joining-the-network">Joining the network</h3>
+
+<p>A node that would like to join the net must first go through a <a href="Bootstrapping_node" title="wikilink">bootstrap</a> process. In this phase, the joining node needs to know the <a href="IP_address" title="wikilink">IP address</a> and port of another node—a bootstrap node (obtained from the user, or from a stored list)—that is already participating in the Kademlia network. If the joining node has not yet participated in the network, it computes a <a href="randomness" title="wikilink">random</a> ID number that is supposed not to be already assigned to any other node. It uses this ID until leaving the network.</p>
+
+<p>The joining node inserts the bootstrap node into one of its <em>k-buckets</em>. The joining node then does a FIND_NODE of its own ID against the bootstrap node (the only other node it knows). The "self-lookup" will populate other nodes' <em>k-buckets</em> with the new node ID, and will populate the joining node's k-buckets with the nodes in the path between it and the bootstrap node. After this, the joining node refreshes all <em>k-buckets</em> further away than the k-bucket the bootstrap node falls in. This refresh is just a lookup of a random key that is within that <em>k-bucket</em> range.</p>
+
+<p>Initially, nodes have one <em>k-bucket</em>. When the <em>k-bucket</em> becomes full, it can be split. The split occurs if the range of nodes in the <em>k-bucket</em> spans the node's own id (values to the left and right in a binary tree). Kademlia relaxes even this rule for the one "closest nodes" <em>k-bucket</em>, because typically one single bucket will correspond to the distance where all the nodes that are the closest to this node are, they may be more than k, and we want it to know them all. It may turn out that a highly unbalanced binary sub-tree exists near the node. If <em>k</em> is 20, and there are 21+ nodes with a prefix "xxx0011....." and the new node is "xxx0000<em>11001</em>", the new node can contain multiple <em>k-buckets</em> for the other 21+ nodes. This is to guarantee that the network knows about all nodes in the closest region.</p>
+<h3 id="accelerated-lookups">Accelerated lookups</h3>
+
+<p>Kademlia uses an <em><a href="exclusive_or" title="wikilink">XOR</a> <a href="metric_(mathematics)" title="wikilink">metric</a></em> to define distance. Two node ID's or a node ID and a key are XORed and the result is the distance between them. For each bit, the XOR function returns zero if the two bits are equal and one if the two bits are different. XOR metric distances hold the <a href="triangle_inequality" title="wikilink">triangle inequality</a>: given A, B and C are <a href="Vertex_(geometry)" title="wikilink">vertices</a>(points) of a triangle, then the distance from A to B is shorter than (or equal to) the sum of the distance from A to C to B.</p>
+
+<p>The <em>XOR metric</em> allows Kademlia to extend routing tables beyond single bits. Groups of bits can be placed in <em>k-buckets</em>. The group of bits are termed a prefix. For an <em>m-bit</em> prefix, there will be 2<sup>m</sup>-1 <em>k-buckets</em>. The missing <em>k-bucket</em> is a further extension of the routing tree that contains the node ID. An <em>m-bit</em> prefix reduces the maximum number of lookups from <em>log<sub>2</sub> n</em> to <em>log<sub>2<sup>m</sup></sub> n</em>. These are <strong>maximum</strong> values and the average value will be far less, increasing the chance of finding a node in a <em>k-bucket</em> that shares more bits than just the prefix with the target key.</p>
+
+<p>Nodes can use mixtures of prefixes in their routing table, such as the <a href="Kad_Network" title="wikilink">Kad Network</a> used by <a class="uri" href="eMule" title="wikilink">eMule</a>.  The Kademlia network could even be heterogeneous in routing table implementations, at the expense of complicating the analysis of lookups.</p>
+<h2 id="academic-significance">Academic significance</h2>
+
+<p>While the XOR metric is not needed to understand Kademlia, it is critical in the analysis of the protocol. The XOR arithmetic forms an <a href="abelian_group" title="wikilink">abelian group</a> allowing closed analysis. Other DHT protocols and algorithms required <a href="Computer_simulation" title="wikilink">simulation</a> or complicated formal analysis in order to predict network behavior and correctness. Using groups of bits as routing information also simplifies the algorithms.</p>
+<h2 id="analysis-of-the-algorithm">Analysis of the algorithm</h2>
+
+<p>To analyze the algorithm, consider a Kademlia network of 
+
+<math display="inline" id="Kademlia:2">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ nodes with IDs 
+
+<math display="inline" id="Kademlia:3">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>x</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <mi mathvariant="normal">…</mi>
+   <mo>,</mo>
+   <msub>
+    <mi>x</mi>
+    <mi>n</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>normal-…</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>n</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{1},\ldots,x_{n}
+  </annotation>
+ </semantics>
+</math>
+
+, each of which is a string of length 
+
+<math display="inline" id="Kademlia:4">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+ that consists of only ones and zeros. It can be modeled as a <a class="uri" href="trie" title="wikilink">trie</a>, in which each leaf represents a node, and the labeled path from the root to a leaf represents its ID. For a node 
+
+<math display="inline" id="Kademlia:5">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <msub>
+     <mi>x</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>x</ci>
+    <set>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>n</ci>
+     </apply>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x\in\{x_{1},\ldots,x_{n}\}
+  </annotation>
+ </semantics>
+</math>
+
+, let 
+
+<math display="inline" id="Kademlia:6">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi class="ltx_font_mathcaligraphic">𝒟</mi>
+    <mi>i</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝒟</ci>
+     <ci>i</ci>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{D}_{i}(x)
+  </annotation>
+ </semantics>
+</math>
+
+ be the set of nodes (IDs) that share a prefix with 
+
+<math display="inline" id="Kademlia:7">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ of length 
+
+<math display="inline" id="Kademlia:8">
+ <semantics>
+  <mrow>
+   <mi>d</mi>
+   <mo>-</mo>
+   <mi>i</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <ci>d</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d-i
+  </annotation>
+ </semantics>
+</math>
+
+. Then filling the 
+
+<math display="inline" id="Kademlia:9">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+-th bucket of 
+
+<math display="inline" id="Kademlia:10">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ can be modeled as adding pointers from the leaf 
+
+<math display="inline" id="Kademlia:11">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Kademlia:12">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ leaves (IDs) chosen uniformly at random from 
+
+<math display="inline" id="Kademlia:13">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi class="ltx_font_mathcaligraphic">𝒟</mi>
+    <mi>i</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝒟</ci>
+     <ci>i</ci>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{D}_{i}(x)
+  </annotation>
+ </semantics>
+</math>
+
+. Thus routing can be seen as jumping among the leaves along these pointers such that each step goes towards the target ID as much as possible, i.e., in a greedy way. Let 
+
+<math display="inline" id="Kademlia:14">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mrow>
+    <mi>x</mi>
+    <mi>y</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <apply>
+     <times></times>
+     <ci>x</ci>
+     <ci>y</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{xy}
+  </annotation>
+ </semantics>
+</math>
+
+ be number of jumps needed to go from the leaf 
+
+<math display="inline" id="Kademlia:15">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ to a target ID 
+
+<math display="inline" id="Kademlia:16">
+ <semantics>
+  <mi>y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y
+  </annotation>
+ </semantics>
+</math>
+
+, then it has been proved that 
+
+<math display="inline" id="Kademlia:17">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mo>sup</mo>
+     <mrow>
+      <msub>
+       <mi>x</mi>
+       <mn>1</mn>
+      </msub>
+      <mo>,</mo>
+      <mi mathvariant="normal">…</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>x</mi>
+       <mi>n</mi>
+      </msub>
+     </mrow>
+    </msub>
+    <mrow>
+     <msub>
+      <mo>sup</mo>
+      <mi>x</mi>
+     </msub>
+     <mrow>
+      <msub>
+       <mo>sup</mo>
+       <mi>y</mi>
+      </msub>
+      <mrow>
+       <mi>𝔼</mi>
+       <msub>
+        <mi>T</mi>
+        <mrow>
+         <mi>x</mi>
+         <mi>y</mi>
+        </mrow>
+       </msub>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>≤</mo>
+   <mrow>
+    <msub>
+     <mi>c</mi>
+     <mi>k</mi>
+    </msub>
+    <mrow>
+     <mi>log</mi>
+     <mi>n</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">supremum</csymbol>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-…</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <ci>n</ci>
+       </apply>
+      </list>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">supremum</csymbol>
+       <ci>x</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <csymbol cd="latexml">supremum</csymbol>
+        <ci>y</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>𝔼</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>T</ci>
+         <apply>
+          <times></times>
+          <ci>x</ci>
+          <ci>y</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>c</ci>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sup_{x_{1},\ldots,x_{n}}\sup_{x}\sup_{y}\mathbb{E}T_{xy}\leq c_{k}\log n
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Kademlia:18">
+ <semantics>
+  <msub>
+   <mi>c</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>c</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ is about 
+
+<math display="inline" id="Kademlia:19">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>/</mo>
+   <mrow>
+    <mi>log</mi>
+    <mi>k</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <cn type="integer">1</cn>
+    <apply>
+     <log></log>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1/\log k
+  </annotation>
+ </semantics>
+</math>
+
+. In other words, however the IDs are distributed, however the starting node and target ID are chosen, the expected searching time is always less than 
+
+<math display="inline" id="Kademlia:20">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>log</mi>
+    <mi>k</mi>
+   </msub>
+   <mi>n</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <log></log>
+     <ci>k</ci>
+    </apply>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log_{k}n
+  </annotation>
+ </semantics>
+</math>
+
+.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+<h2 id="use-in-file-sharing-networks">Use in file sharing networks</h2>
+
+<p>Kademlia is used in <a href="file_sharing" title="wikilink">file sharing</a> networks. By making Kademlia keyword searches, one can find information in the file-sharing network so it can be downloaded. Since there is no central instance to store an index of existing files, this task is divided evenly among all clients: If a node wants to share a file, it processes the contents of the file, calculating from it a number (<a href="hash_function" title="wikilink">hash</a>) that will identify this file within the file-sharing network. The hashes and the node IDs must be of the same length. It then searches for several nodes whose ID is close to the hash, and has its own IP address stored at those nodes. i.e. it publishes itself as a source for this file. A searching client will use Kademlia to search the network for the node whose ID has the smallest distance to the file hash, then will retrieve the sources list that is stored in that node.</p>
+
+<p>Since a key can correspond to many values, e.g. many sources of the same file, every storing node may have different information. Then, the sources are requested from all k nodes close to the key.</p>
+
+<p>The file hash is usually obtained from a specially formed Internet <a href="Magnet_URI_scheme" title="wikilink">magnet link</a> found elsewhere, or included within an indexing file obtained from other sources.</p>
+
+<p>Filename searches are implemented using <a href="Index_term" title="wikilink">keywords</a>. The filename is divided into its constituent words. Each of these keywords is hashed and stored in the network, together with the corresponding filename and file hash. A search involves choosing one of the keywords, contacting the node with an ID closest to that keyword hash, and retrieving the list of filenames that contain the keyword. Since every filename in the list has its hash attached, the chosen file can then be obtained in the normal way.</p>
+<h2 id="implementations">Implementations</h2>
+<h3 id="networks">Networks</h3>
+
+<p>Public networks using the Kademlia algorithm (these networks are incompatible with one another):</p>
+<ul>
+<li><a href="Kad_Network" title="wikilink">Kad Network</a> — developed originally by the <a class="uri" href="eMule" title="wikilink">eMule</a> community to replace the server-based architecture of the <a href="eDonkey2000_network" title="wikilink">eDonkey2000 network</a>.</li>
+<li><a href="Overnet" title="wikilink">Overnet network</a>: With <a href="http://kadc.sourceforge.net/">KadC</a> a C library for handling its Kademlia is available. (development of Overnet is discontinued)</li>
+</ul>
+<ul>
+<li><a href="BitTorrent_(protocol)" title="wikilink">BitTorrent</a> Uses a DHT based on an implementation of the Kademlia algorithm, for trackerless torrents.</li>
+<li><a href="Osiris_(Serverless_Portal_System)" title="wikilink">Osiris sps</a> (all version): used to manage distributed and anonymous web portal.</li>
+<li><a class="uri" href="Retroshare" title="wikilink">Retroshare</a> — F2F decentralised communication platform with secure VOIP, instant messaging, file transfer etc.</li>
+<li><a class="uri" href="Gnutella" title="wikilink">Gnutella</a> DHT — Originally by <a class="uri" href="LimeWire" title="wikilink">LimeWire</a><a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a><a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> to augment the <a class="uri" href="Gnutella" title="wikilink">Gnutella</a> protocol for finding alternate file locations, now in use by other gnutella clients.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></li>
+<li><a class="uri" href="Ethereum" title="wikilink">Ethereum</a> — a <a class="uri" href="blockchain" title="wikilink">blockchain</a>-based virtual machine featuring stateful user-created digital contracts and a Turing-complete contract programming language.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></li>
+</ul>
+<h2 id="next-generation">Next generation</h2>
+
+<p>Over the years, the academic and practitioner communities have realized that all current DHT designs suffer from a security weakness, known as the <a href="Sybil_attack" title="wikilink">Sybil attack</a>. Petar Maymounkov, one of the original authors of Kademlia, has proposed a way to circumvent this weakness by incorporating social trust relationships into the system design.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+
+<p>The new system, codenamed Tonika or also known by its domain name as 5ttt, is based on an algorithm design known as Electric routing and co-authored with the mathematician Jonathan Kelner.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> Maymounkov has now undertaken a comprehensive implementation effort of this new system, which is entirely based on the <a href="Go_(programming_language)" title="wikilink">Go programming language</a>. However, research into effective defences against Sybil attacks is generally considered an open question, and wide variety of potential defences are proposed every year in top security research conferences.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Content_addressable_network" title="wikilink">Content addressable network</a></li>
+<li><a href="Chord_(DHT)" title="wikilink">Chord (DHT)</a></li>
+<li><a href="Tapestry_(DHT)" title="wikilink">Tapestry (DHT)</a></li>
+<li><a href="Pastry_(DHT)" title="wikilink">Pastry (DHT)</a></li>
+<li><a class="uri" href="Koorde" title="wikilink">Koorde</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://pdos.csail.mit.edu/~petar/">Academic Home Page</a> of Petar Maymounkov, co-designer of Kademlia.</li>
+<li><a href="http://xlattice.sourceforge.net/components/protocol/kademlia/specs.html">Xlattice projects</a> Kademlia Specification and definitions.</li>
+<li><a href="http://www.cs.northwestern.edu/~yqiao">Yi Qiao</a> and <a href="http://www.cs.northwestern.edu/~fabianb">Fabian E. Bustamante</a> <a href="http://www.aqualab.cs.northwestern.edu/publications/YQiao06SUO.pdf">USENIX 2006 paper that characterizes Overnet and Gnutella</a></li>
+<li></li>
+<li><a href="http://www.cs.technion.ac.il/~gilga/P2P2013_49.pdf">Kaleidoscope: Adding Colors to Kademlia</a> IEEE P2P 2013 (cache friendly lookup for kademlia)</li>
+<li><a href="http://www.cs.helsinki.fi/u/jakangas/MLDHT/">Mainline DHT Measurement</a> at Department of Computer Science, University of Helsinki, Finland.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:2002_introductions" title="wikilink">Category:2002 introductions</a> <a href="Category:Distributed_data_storage" title="wikilink">Category:Distributed data storage</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">*<a href="http://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf">Kademlia: A Peer-to-peer information system based on the XOR Metric</a><a href="#fnref1">↩</a></li>
+<li id="fn2"><a class="uri" href="http://www.scs.stanford.edu/~dm/home/papers/">http://www.scs.stanford.edu/~dm/home/papers/</a><a href="#fnref2">↩</a></li>
+<li id="fn3"></li>
+<li id="fn4">Stefan Saroiu, P. Krishna Gummadi and Steven D. Gribble. A Measurement Study of Peer-to-Peer File Sharing Systems. Technical Report UW-CSE-01-06-02, University of Washington, Department of Computer Science and Engineering, July 2001.<a href="#fnref4">↩</a></li>
+<li id="fn5">Daniel Stutzbach and Reza Rejaie. <a href="http://www.barsoom.org/papers/imc-2006-churn.pdf">Understanding Churn in Peer-to-Peer Networks</a> Section 5.5 Uptime Predictability, Internet Measurement Conference, Rio de Janeiro, October, 2006.<a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="http://www.slyck.com/story1235.html">Mojito and LimeWire</a><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="http://web.archive.org/web/20090217070609/http://wiki.limewire.org/index.php?title=Mojito">Mojito Wiki (archive.org)</a><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="https://gtk-gnutella.svn.sourceforge.net/svnroot/gtk-gnutella/trunk/gtk-gnutella/ChangeLog">Gtk-gnutella changelog</a> Retrieved January, 2010.<a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="https://blog.ethereum.org/2014/12/05/d%CE%BEvcon-0-recap/">ÐΞVcon-0 Recap</a><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

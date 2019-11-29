@@ -1,0 +1,2334 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1342">Histogram equalization</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Histogram equalization</h1>
+<hr/>
+
+<p><strong>Histogram equalization</strong> is a method in <a href="image_processing" title="wikilink">image processing</a> of <a href="contrast_(vision)" title="wikilink">contrast</a> adjustment using the <a class="uri" href="image" title="wikilink">image</a>'s <a href="Image_histogram" title="wikilink">histogram</a>.</p>
+<figure><b>(Figure)</b>
+<figcaption>Histograms of an image before and after equalization.</figcaption>
+</figure>
+<h2 id="overview">Overview</h2>
+
+<p>This method usually increases the global <a href="contrast_(vision)" title="wikilink">contrast</a> of many images, especially when the usable <a class="uri" href="data" title="wikilink">data</a> of the image is represented by close contrast values. Through this adjustment, the <a href="luminous_intensity" title="wikilink">intensities</a> can be better distributed on the histogram. This allows for areas of lower local contrast to gain a higher contrast. Histogram equalization accomplishes this by effectively spreading out the most frequent intensity values.</p>
+
+<p>The method is useful in images with backgrounds and foregrounds that are both bright or both dark. In particular, the method can lead to better views of <a class="uri" href="bone" title="wikilink">bone</a> structure in <a class="uri" href="x-ray" title="wikilink">x-ray</a> images, and to better detail in <a class="uri" href="photographs" title="wikilink">photographs</a> that are over or under-exposed. A key advantage of the method is that it is a fairly straightforward technique and an <a class="uri" href="invertible" title="wikilink">invertible</a> <a href="Operator_(mathematics)" title="wikilink">operator</a>. So in theory, if the histogram equalization <a href="function_(mathematics)" title="wikilink">function</a> is known, then the original histogram can be recovered. The calculation is not <a href="computation" title="wikilink">computationally</a> intensive. A disadvantage of the method is that it is indiscriminate. It may increase the contrast of background <a href="signal_noise" title="wikilink">noise</a>, while decreasing the usable <a href="signal_(information_theory)" title="wikilink">signal</a>.</p>
+
+<p>In scientific imaging where spatial correlation is more important than intensity of signal (such as separating <a class="uri" href="DNA" title="wikilink">DNA</a> fragments of quantized length), the small <a href="signal_to_noise_ratio" title="wikilink">signal to noise ratio</a> usually hampers visual detection.</p>
+
+<p>Histogram equalization often produces unrealistic effects in photographs; however it is very useful for scientific images like <a href="Thermography" title="wikilink">thermal</a>, <a class="uri" href="satellite" title="wikilink">satellite</a> or <a class="uri" href="x-ray" title="wikilink">x-ray</a> images, often the same class of images to which one would apply <a class="uri" href="false-color" title="wikilink">false-color</a>. Also histogram equalization can produce undesirable effects (like visible <a href="image_gradient" title="wikilink">image gradient</a>) when applied to images with low <a href="color_depth" title="wikilink">color depth</a>. For example, if applied to 8-bit image displayed with <a href="List_of_8-bit_computer_hardware_palettes" title="wikilink">8-bit gray-scale palette</a> it will further reduce <a href="color_depth" title="wikilink">color depth</a> (number of unique shades of gray) of the image. Histogram equalization will work the best when applied to images with much higher <a href="color_depth" title="wikilink">color depth</a> than <a href="Palette_(computing)" title="wikilink">palette</a> size, like <a href="Continuous_function" title="wikilink">continuous</a> data or 16-bit gray-scale images.</p>
+
+<p>There are two ways to think about and implement histogram equalization, either as image change or as <a href="Palette_(computing)" title="wikilink">palette</a> change. The operation can be expressed as <em>P(M(I))</em> where <em>I</em> is the original image, <em>M</em> is histogram equalization mapping operation and <em>P</em> is a palette. If we define a new palette as <em>P'=P(M)</em> and leave image <em>I</em> unchanged then histogram equalization is implemented as <a href="Palette_(computing)" title="wikilink">palette</a> change. On the other hand if palette P remains unchanged and image is modified to <em>I'=M(I)</em> then the implementation is by image change. In most cases palette change is better as it preserves the original data.</p>
+
+<p>Modifications of this method use multiple histograms, called subhistograms, to emphasize local contrast, rather than overall contrast. Examples of such methods include <a href="adaptive_histogram_equalization" title="wikilink">adaptive histogram equalization</a>, <em>contrast limiting adaptive histogram equalization</em> or <a class="uri" href="CLAHE" title="wikilink">CLAHE</a>, multipeak histogram equalization (MPHE), and multipurpose beta optimized bihistogram equalization (MBOBHE). The goal of these methods, especially MBOBHE, is to improve the contrast without producing brightness mean-shift and detail loss artifacts by modifying the HE algorithm.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p>A signal transform equivalent to histogram equalization also seems to happen in <a href="biological_neural_networks" title="wikilink">biological neural networks</a> so as to maximize the output firing rate of the neuron as a function of the input statistics. This has been proved in particular in the <a class="uri" href="fly" title="wikilink">fly</a> <a class="uri" href="retina" title="wikilink">retina</a>.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+
+<p>Histogram equalization is a specific case of the more general class of histogram remapping methods. These methods seek to adjust the image to make it easier to analyze or improve visual quality (e.g., <a class="uri" href="retinex" title="wikilink">retinex</a>)</p>
+<h3 id="back-projection">Back projection</h3>
+
+<p>The <strong>back projection</strong> (or "project") of a histogrammed image is the re-application of the modified histogram to the original image, functioning as a look-up table for pixel brightness values.</p>
+
+<p>For each group of pixels taken from the same position from all input single-channel images, the function puts the histogram bin value to the destination image, where the coordinates of the bin are determined by the values of pixels in this input group. In terms of statistics, the value of each output image pixel characterizes the probability that the corresponding input pixel group belongs to the object whose histogram is used.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+<h2 id="implementation">Implementation</h2>
+
+<p>Consider a discrete <a href="Grayscale" title="wikilink">grayscale image</a> {<em>x</em>} and let <em>n<sub>i</sub></em> be the number of occurrences of gray level <em>i</em>. The probability of an occurrence of a pixel of level <em>i</em> in the image is</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:0">
+ <semantics>
+  <mrow>
+   <msub>
+    <mpadded lspace="5pt" width="+5pt">
+     <mi>p</mi>
+    </mpadded>
+    <mi>x</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>i</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>=</mo>
+    <mi>i</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <msub>
+     <mi>n</mi>
+     <mi>i</mi>
+    </msub>
+    <mi>n</mi>
+   </mfrac>
+   <mo rspace="12.5pt">,</mo>
+   <mn>0</mn>
+   <mo>≤</mo>
+   <mi>i</mi>
+   <mo><</mo>
+   <mi>L</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>p</ci>
+     <ci>x</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">i</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <eq></eq>
+     <csymbol cd="unknown">i</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <divide></divide>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>n</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>n</ci>
+    </apply>
+    <ci>normal-,</ci>
+    <cn type="integer">0</cn>
+    <leq></leq>
+    <csymbol cd="unknown">i</csymbol>
+    <lt></lt>
+    <csymbol cd="unknown">L</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ p_{x}(i)=p(x=i)=\frac{n_{i}}{n},\quad 0\leq i<L
+  </annotation>
+ </semantics>
+</math>
+
+ <em>L</em> being the total number of gray levels in the image (typically 256), <em>n</em> being the total number of pixels in the image, and 
+
+<math display="inline" id="Histogram_equalization:1">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>p</mi>
+    <mi>x</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>i</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>p</ci>
+     <ci>x</ci>
+    </apply>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p_{x}(i)
+  </annotation>
+ </semantics>
+</math>
+
+ being in fact the image's histogram for pixel value i, normalized to [0,1].</p>
+
+<p>Let us also define the <em><a href="cumulative_distribution_function" title="wikilink">cumulative distribution function</a></em> corresponding to <em>p<sub>x</sub></em> as</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mpadded lspace="5pt" width="+5pt">
+     <mi>c</mi>
+    </mpadded>
+    <mi>d</mi>
+    <msub>
+     <mi>f</mi>
+     <mi>x</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>i</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>j</mi>
+      <mo>=</mo>
+      <mn>0</mn>
+     </mrow>
+     <mi>i</mi>
+    </munderover>
+    <mrow>
+     <msub>
+      <mi>p</mi>
+      <mi>x</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>j</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>c</ci>
+     <ci>d</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>x</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>j</ci>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <ci>x</ci>
+      </apply>
+      <ci>j</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ cdf_{x}(i)=\sum_{j=0}^{i}p_{x}(j)
+  </annotation>
+ </semantics>
+</math>
+
+, which is also the image's accumulated normalized histogram.</p>
+
+<p>We would like to create a transformation of the form <em>y</em> = <em>T</em>(<em>x</em>) to produce a new image {<em>y</em>}, with a flat histogram. Such an image would have a linearized cumulative distribution function (CDF) across the value range, i.e.</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mpadded lspace="5pt" width="+5pt">
+     <mi>c</mi>
+    </mpadded>
+    <mi>d</mi>
+    <msub>
+     <mi>f</mi>
+     <mi>y</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>i</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>i</mi>
+    <mi>K</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>c</ci>
+     <ci>d</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>y</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <ci>K</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ cdf_{y}(i)=iK
+  </annotation>
+ </semantics>
+</math>
+
+ for some constant <em>K</em>. The properties of the CDF allow us to perform such a transform (see <a href="Cumulative_distribution_function#Inverse_distribution_function_(quantile_function)" title="wikilink">Inverse distribution function</a>); it is defined as</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:4">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mpadded lspace="5pt" width="+5pt">
+     <mi>c</mi>
+    </mpadded>
+    <mi>d</mi>
+    <msub>
+     <mi>f</mi>
+     <mi>y</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msup>
+      <mi>y</mi>
+      <mo>′</mo>
+     </msup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>c</mi>
+    <mi>d</mi>
+    <msub>
+     <mi>f</mi>
+     <mi>y</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>T</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>k</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>c</mi>
+    <mi>d</mi>
+    <msub>
+     <mi>f</mi>
+     <mi>x</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <ci>d</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>f</ci>
+       <ci>y</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>y</ci>
+       <ci>normal-′</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <ci>d</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>f</ci>
+       <ci>y</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>T</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <ci>d</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>f</ci>
+       <ci>x</ci>
+      </apply>
+      <ci>k</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ cdf_{y}(y^{\prime})=cdf_{y}(T(k))=cdf_{x}(k)
+  </annotation>
+ </semantics>
+</math>
+
+ where <em>k</em> is in the range [0,L). Notice that T maps the levels into the range [0,1], since we used a normalized histogram of {x}. In order to map the values back into their original range, the following simple transformation needs to be applied on the result:</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:5">
+ <semantics>
+  <mrow>
+   <msup>
+    <mpadded lspace="5pt" width="+5pt">
+     <mi>y</mi>
+    </mpadded>
+    <mo>′</mo>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>y</mi>
+     <mo>⋅</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mrow>
+        <mi>max</mi>
+        <mrow>
+         <mo stretchy="false">{</mo>
+         <mi>x</mi>
+         <mo stretchy="false">}</mo>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>min</mi>
+        <mrow>
+         <mo stretchy="false">{</mo>
+         <mi>x</mi>
+         <mo stretchy="false">}</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>min</mi>
+     <mrow>
+      <mo stretchy="false">{</mo>
+      <mi>x</mi>
+      <mo stretchy="false">}</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <ci>normal-⋅</ci>
+      <ci>y</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <max></max>
+        <ci>x</ci>
+       </apply>
+       <apply>
+        <min></min>
+        <ci>x</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <min></min>
+      <ci>x</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ y^{\prime}=y\cdot(\max\{x\}-\min\{x\})+\min\{x\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>A more detailed derivation is <a href="http://www.math.uci.edu/icamp/courses/math77c/demos/hist_eq.pdf">provided here</a>.</p>
+<h2 id="histogram-equalization-of-color-images">Histogram equalization of color images</h2>
+
+<p>The above describes histogram equalization on a grayscale image. However it can also be used on color images by applying the same method separately to the Red, Green and Blue components of the <a class="uri" href="RGB" title="wikilink">RGB</a> color values of the image. However, applying the same method on the Red, Green, and Blue components of an RGB image may yield dramatic changes in the image's <a href="color_balance" title="wikilink">color balance</a> since the relative distributions of the color channels change as a result of applying the algorithm. However, if the image is first converted to another color space, <a href="Lab_color_space" title="wikilink">Lab color space</a>, or <a href="HSL_and_HSV" title="wikilink">HSL/HSV color space</a> in particular, then the algorithm can be applied to the <a class="uri" href="luminance" title="wikilink">luminance</a> or value channel without resulting in changes to the hue and saturation of the image.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> There are several histogram equalization methods in 3D space. Trahanias and Venetsanopoulos applied histogram equalization in 3D color space<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> However, it results in "whitening" where the probability of bright pixels are higher than that of dark ones.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Han et al. proposed to use a new cdf defined by the iso-luminance plane, which results in uniform gray distribution.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+<h2 id="examples">Examples</h2>
+<h3 id="small-image">Small image</h3>
+
+<p>The following is the same 8x8 subimage as used in <a class="uri" href="JPEG" title="wikilink">JPEG</a>. The 8-bit greyscale image shown has the following values:</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:6">
+ <semantics>
+  <mrow>
+   <mo>[</mo>
+   <mtable displaystyle="true">
+    <mtr>
+     <mtd columnalign="center">
+      <mn>52</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>55</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>61</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>66</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>70</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>61</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>64</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>73</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>63</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>59</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>55</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>90</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>109</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>85</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>69</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>72</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>62</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>59</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>68</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>113</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>144</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>104</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>66</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>73</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>63</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>58</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>71</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>122</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>154</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>106</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>70</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>69</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>67</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>61</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>68</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>104</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>126</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>88</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>68</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>70</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>79</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>65</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>60</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>70</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>77</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>68</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>58</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>75</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>85</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>71</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>64</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>59</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>55</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>61</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>65</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>83</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>87</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>79</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>69</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>68</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>65</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>76</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>78</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>94</mn>
+     </mtd>
+    </mtr>
+   </mtable>
+   <mo>]</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <cn type="integer">52</cn>
+     <cn type="integer">55</cn>
+     <cn type="integer">61</cn>
+     <cn type="integer">66</cn>
+     <cn type="integer">70</cn>
+     <cn type="integer">61</cn>
+     <cn type="integer">64</cn>
+     <cn type="integer">73</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">63</cn>
+     <cn type="integer">59</cn>
+     <cn type="integer">55</cn>
+     <cn type="integer">90</cn>
+     <cn type="integer">109</cn>
+     <cn type="integer">85</cn>
+     <cn type="integer">69</cn>
+     <cn type="integer">72</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">62</cn>
+     <cn type="integer">59</cn>
+     <cn type="integer">68</cn>
+     <cn type="integer">113</cn>
+     <cn type="integer">144</cn>
+     <cn type="integer">104</cn>
+     <cn type="integer">66</cn>
+     <cn type="integer">73</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">63</cn>
+     <cn type="integer">58</cn>
+     <cn type="integer">71</cn>
+     <cn type="integer">122</cn>
+     <cn type="integer">154</cn>
+     <cn type="integer">106</cn>
+     <cn type="integer">70</cn>
+     <cn type="integer">69</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">67</cn>
+     <cn type="integer">61</cn>
+     <cn type="integer">68</cn>
+     <cn type="integer">104</cn>
+     <cn type="integer">126</cn>
+     <cn type="integer">88</cn>
+     <cn type="integer">68</cn>
+     <cn type="integer">70</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">79</cn>
+     <cn type="integer">65</cn>
+     <cn type="integer">60</cn>
+     <cn type="integer">70</cn>
+     <cn type="integer">77</cn>
+     <cn type="integer">68</cn>
+     <cn type="integer">58</cn>
+     <cn type="integer">75</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">85</cn>
+     <cn type="integer">71</cn>
+     <cn type="integer">64</cn>
+     <cn type="integer">59</cn>
+     <cn type="integer">55</cn>
+     <cn type="integer">61</cn>
+     <cn type="integer">65</cn>
+     <cn type="integer">83</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">87</cn>
+     <cn type="integer">79</cn>
+     <cn type="integer">69</cn>
+     <cn type="integer">68</cn>
+     <cn type="integer">65</cn>
+     <cn type="integer">76</cn>
+     <cn type="integer">78</cn>
+     <cn type="integer">94</cn>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{bmatrix}52&55&61&66&70&61&64&73\\
+63&59&55&90&109&85&69&72\\
+62&59&68&113&144&104&66&73\\
+63&58&71&122&154&106&70&69\\
+67&61&68&104&126&88&68&70\\
+79&65&60&70&77&68&58&75\\
+85&71&64&59&55&61&65&83\\
+87&79&69&68&65&76&78&94\end{bmatrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The histogram for this image is shown in the following table. Pixel values that have a zero count are excluded for the sake of brevity.</p>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Value</p></th>
+<th style="text-align: left;">
+<p>Count</p></th>
+<th style="text-align: left;">
+<p>Value</p></th>
+<th style="text-align: left;">
+<p>Count</p></th>
+<th style="text-align: left;">
+<p>Value</p></th>
+<th style="text-align: left;">
+<p>Count</p></th>
+<th style="text-align: left;">
+<p>Value</p></th>
+<th style="text-align: left;">
+<p>Count</p></th>
+<th style="text-align: left;">
+<p>Value</p></th>
+<th style="text-align: left;">
+<p>Count</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>52</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>64</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>72</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>85</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>113</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>55</p></td>
+<td style="text-align: left;">
+<p>3</p></td>
+<td style="text-align: left;">
+<p>65</p></td>
+<td style="text-align: left;">
+<p>3</p></td>
+<td style="text-align: left;">
+<p>73</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>87</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>122</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>58</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>66</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>75</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>88</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>126</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>59</p></td>
+<td style="text-align: left;">
+<p>3</p></td>
+<td style="text-align: left;">
+<p>67</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>76</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>90</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>144</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>60</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>68</p></td>
+<td style="text-align: left;">
+<p>5</p></td>
+<td style="text-align: left;">
+<p>77</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>94</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>154</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>61</p></td>
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>69</p></td>
+<td style="text-align: left;">
+<p>3</p></td>
+<td style="text-align: left;">
+<p>78</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>104</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>rowspan="3"</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>62</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>70</p></td>
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>79</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>106</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>63</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>71</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>83</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>109</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>The <a href="cumulative_distribution_function" title="wikilink">cumulative distribution function</a> (cdf) is shown below. Again, pixel values that do not contribute to an increase in the cdf are excluded for brevity.</p>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Value</p></th>
+<th style="text-align: left;">
+<p>cdf</p></th>
+<th style="text-align: left;">
+<p>cdf, scaled</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>52</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>55</p></td>
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>12</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>58</p></td>
+<td style="text-align: left;">
+<p>6</p></td>
+<td style="text-align: left;">
+<p>20</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>59</p></td>
+<td style="text-align: left;">
+<p>9</p></td>
+<td style="text-align: left;">
+<p>32</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>60</p></td>
+<td style="text-align: left;">
+<p>10</p></td>
+<td style="text-align: left;">
+<p>36</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>61</p></td>
+<td style="text-align: left;">
+<p>14</p></td>
+<td style="text-align: left;">
+<p>53</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>62</p></td>
+<td style="text-align: left;">
+<p>15</p></td>
+<td style="text-align: left;">
+<p>57</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>63</p></td>
+<td style="text-align: left;">
+<p>17</p></td>
+<td style="text-align: left;">
+<p>65</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>64</p></td>
+<td style="text-align: left;">
+<p>19</p></td>
+<td style="text-align: left;">
+<p>73</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>65</p></td>
+<td style="text-align: left;">
+<p>22</p></td>
+<td style="text-align: left;">
+<p>85</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>66</p></td>
+<td style="text-align: left;">
+<p>24</p></td>
+<td style="text-align: left;">
+<p>93</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>67</p></td>
+<td style="text-align: left;">
+<p>25</p></td>
+<td style="text-align: left;">
+<p>97</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>68</p></td>
+<td style="text-align: left;">
+<p>30</p></td>
+<td style="text-align: left;">
+<p>117</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>69</p></td>
+<td style="text-align: left;">
+<p>33</p></td>
+<td style="text-align: left;">
+<p>130</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>70</p></td>
+<td style="text-align: left;">
+<p>37</p></td>
+<td style="text-align: left;">
+<p>146</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>71</p></td>
+<td style="text-align: left;">
+<p>39</p></td>
+<td style="text-align: left;">
+<p>154</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>72</p></td>
+<td style="text-align: left;">
+<p>40</p></td>
+<td style="text-align: left;">
+<p>158</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>73</p></td>
+<td style="text-align: left;">
+<p>42</p></td>
+<td style="text-align: left;">
+<p>166</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>75</p></td>
+<td style="text-align: left;">
+<p>43</p></td>
+<td style="text-align: left;">
+<p>170</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>76</p></td>
+<td style="text-align: left;">
+<p>44</p></td>
+<td style="text-align: left;">
+<p>174</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>77</p></td>
+<td style="text-align: left;">
+<p>45</p></td>
+<td style="text-align: left;">
+<p>178</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>78</p></td>
+<td style="text-align: left;">
+<p>46</p></td>
+<td style="text-align: left;">
+<p>182</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>79</p></td>
+<td style="text-align: left;">
+<p>48</p></td>
+<td style="text-align: left;">
+<p>190</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>83</p></td>
+<td style="text-align: left;">
+<p>49</p></td>
+<td style="text-align: left;">
+<p>194</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>85</p></td>
+<td style="text-align: left;">
+<p>51</p></td>
+<td style="text-align: left;">
+<p>202</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>87</p></td>
+<td style="text-align: left;">
+<p>52</p></td>
+<td style="text-align: left;">
+<p>206</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>88</p></td>
+<td style="text-align: left;">
+<p>53</p></td>
+<td style="text-align: left;">
+<p>210</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>90</p></td>
+<td style="text-align: left;">
+<p>54</p></td>
+<td style="text-align: left;">
+<p>215</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>94</p></td>
+<td style="text-align: left;">
+<p>55</p></td>
+<td style="text-align: left;">
+<p>219</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>104</p></td>
+<td style="text-align: left;">
+<p>57</p></td>
+<td style="text-align: left;">
+<p>227</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>106</p></td>
+<td style="text-align: left;">
+<p>58</p></td>
+<td style="text-align: left;">
+<p>231</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>109</p></td>
+<td style="text-align: left;">
+<p>59</p></td>
+<td style="text-align: left;">
+<p>235</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>113</p></td>
+<td style="text-align: left;">
+<p>60</p></td>
+<td style="text-align: left;">
+<p>239</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>122</p></td>
+<td style="text-align: left;">
+<p>61</p></td>
+<td style="text-align: left;">
+<p>243</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>126</p></td>
+<td style="text-align: left;">
+<p>62</p></td>
+<td style="text-align: left;">
+<p>247</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>144</p></td>
+<td style="text-align: left;">
+<p>63</p></td>
+<td style="text-align: left;">
+<p>251</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>154</p></td>
+<td style="text-align: left;">
+<p>64</p></td>
+<td style="text-align: left;">
+<p>255</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>This cdf shows that the minimum value in the subimage is 52 and the maximum value is 154. The cdf of 64 for value 154 coincides with the number of pixels in the image. The cdf must be normalized to 
+
+<math display="inline" id="Histogram_equalization:7">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">[</mo>
+   <mn>0</mn>
+   <mo>,</mo>
+   <mn>255</mn>
+   <mo stretchy="false">]</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="closed">
+    <cn type="integer">0</cn>
+    <cn type="integer">255</cn>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [0,255]
+  </annotation>
+ </semantics>
+</math>
+
+. The general histogram equalization formula is:</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>h</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>v</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>round</mi>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mfrac>
+       <mrow>
+        <mrow>
+         <mi>c</mi>
+         <mi>d</mi>
+         <mi>f</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>v</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>-</mo>
+        <mrow>
+         <mi>c</mi>
+         <mi>d</mi>
+         <msub>
+          <mi>f</mi>
+          <mrow>
+           <mi>m</mi>
+           <mi>i</mi>
+           <mi>n</mi>
+          </mrow>
+         </msub>
+        </mrow>
+       </mrow>
+       <mrow>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>M</mi>
+          <mo>×</mo>
+          <mi>N</mi>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mo>-</mo>
+        <mrow>
+         <mi>c</mi>
+         <mi>d</mi>
+         <msub>
+          <mi>f</mi>
+          <mrow>
+           <mi>m</mi>
+           <mi>i</mi>
+           <mi>n</mi>
+          </mrow>
+         </msub>
+        </mrow>
+       </mrow>
+      </mfrac>
+      <mo>×</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>L</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>h</ci>
+     <ci>v</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>round</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>c</ci>
+         <ci>d</ci>
+         <ci>f</ci>
+         <ci>v</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>c</ci>
+         <ci>d</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>f</ci>
+          <apply>
+           <times></times>
+           <ci>m</ci>
+           <ci>i</ci>
+           <ci>n</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>M</ci>
+         <ci>N</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>c</ci>
+         <ci>d</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>f</ci>
+          <apply>
+           <times></times>
+           <ci>m</ci>
+           <ci>i</ci>
+           <ci>n</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <ci>L</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(v)=\mathrm{round}\left(\frac{cdf(v)-cdf_{min}}{(M\times N)-cdf_{min}}\times(%
+L-1)\right)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where cdf<sub>min</sub> is the minimum non-zero value of the cumulative distribution function (in this case 1), M × N gives the image's number of pixels (for the example above 64, where M is width and N the height) and L is the number of grey levels used (in most cases, like this one, 256).</p>
+
+<p><small> ''Note that to scale values in the original data that are above 0 to the range 1 to L-1, inclusive, the above equation would instead be:</small></p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:9">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>h</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>v</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>round</mi>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <mfrac>
+        <mrow>
+         <mrow>
+          <mi>c</mi>
+          <mi>d</mi>
+          <mi>f</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>v</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>-</mo>
+         <mrow>
+          <mi>c</mi>
+          <mi>d</mi>
+          <msub>
+           <mi>f</mi>
+           <mrow>
+            <mi>m</mi>
+            <mi>i</mi>
+            <mi>n</mi>
+           </mrow>
+          </msub>
+         </mrow>
+        </mrow>
+        <mrow>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mi>M</mi>
+           <mo>×</mo>
+           <mi>N</mi>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mo>-</mo>
+         <mrow>
+          <mi>c</mi>
+          <mi>d</mi>
+          <msub>
+           <mi>f</mi>
+           <mrow>
+            <mi>m</mi>
+            <mi>i</mi>
+            <mi>n</mi>
+           </mrow>
+          </msub>
+         </mrow>
+        </mrow>
+       </mfrac>
+       <mo>×</mo>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mi>L</mi>
+         <mo>-</mo>
+         <mn>2</mn>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>h</ci>
+     <ci>v</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>round</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <ci>c</ci>
+          <ci>d</ci>
+          <ci>f</ci>
+          <ci>v</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <ci>c</ci>
+          <ci>d</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>f</ci>
+           <apply>
+            <times></times>
+            <ci>m</ci>
+            <ci>i</ci>
+            <ci>n</ci>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <ci>M</ci>
+          <ci>N</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <ci>c</ci>
+          <ci>d</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>f</ci>
+           <apply>
+            <times></times>
+            <ci>m</ci>
+            <ci>i</ci>
+            <ci>n</ci>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <ci>L</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(v)=\mathrm{round}\left(\frac{cdf(v)-cdf_{min}}{(M\times N)-cdf_{min}}\times(%
+L-2)\right)+1
+  </annotation>
+ </semantics>
+</math>
+
+ where cdf(v) &gt; 0. Scaling from 1 to 255 preserves the non-zero-ness of the minimum value.'' </p>
+
+<p>The equalization formula for the example scaling data from 0 to 255, inclusive, is:</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:10">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>h</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>v</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>round</mi>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mfrac>
+       <mrow>
+        <mrow>
+         <mi>c</mi>
+         <mi>d</mi>
+         <mi>f</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>v</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+       <mn>63</mn>
+      </mfrac>
+      <mo>×</mo>
+      <mn>255</mn>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>h</ci>
+     <ci>v</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>round</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>c</ci>
+         <ci>d</ci>
+         <ci>f</ci>
+         <ci>v</ci>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+       <cn type="integer">63</cn>
+      </apply>
+      <cn type="integer">255</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(v)=\mathrm{round}\left(\frac{cdf(v)-1}{63}\times 255\right)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>For example, the cdf of 78 is 46. (The value of 78 is used in the bottom row of the 7th column.) The normalized value becomes</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:11">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>h</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>78</mn>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>round</mi>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mfrac>
+       <mrow>
+        <mn>46</mn>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+       <mn>63</mn>
+      </mfrac>
+      <mo>×</mo>
+      <mn>255</mn>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>round</mi>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mn>0.714286</mn>
+      <mo>×</mo>
+      <mn>255</mn>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>182</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>h</ci>
+      <cn type="integer">78</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>round</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <minus></minus>
+         <cn type="integer">46</cn>
+         <cn type="integer">1</cn>
+        </apply>
+        <cn type="integer">63</cn>
+       </apply>
+       <cn type="integer">255</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <ci>round</ci>
+      <apply>
+       <times></times>
+       <cn type="float">0.714286</cn>
+       <cn type="integer">255</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <cn type="integer">182</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(78)=\mathrm{round}\left(\frac{46-1}{63}\times 255\right)=\mathrm{round}\left%
+(0.714286\times 255\right)=182
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Once this is done then the values of the equalized image are directly taken from the normalized cdf to yield the equalized values:</p>
+
+<p>
+
+<math display="block" id="Histogram_equalization:12">
+ <semantics>
+  <mrow>
+   <mo>[</mo>
+   <mtable displaystyle="true">
+    <mtr>
+     <mtd columnalign="center">
+      <mn>0</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>12</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>53</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>93</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>146</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>53</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>73</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>166</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>65</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>32</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>12</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>215</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>235</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>202</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>130</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>158</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>57</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>32</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>117</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>239</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>251</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>227</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>93</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>166</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>65</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>20</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>154</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>243</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>255</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>231</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>146</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>130</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>97</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>53</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>117</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>227</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>247</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>210</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>117</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>146</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>190</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>85</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>36</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>146</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>178</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>117</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>20</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>170</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>202</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>154</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>73</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>32</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>12</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>53</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>85</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>194</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>206</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>190</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>130</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>117</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>85</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>174</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>182</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>219</mn>
+     </mtd>
+    </mtr>
+   </mtable>
+   <mo>]</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <cn type="integer">0</cn>
+     <cn type="integer">12</cn>
+     <cn type="integer">53</cn>
+     <cn type="integer">93</cn>
+     <cn type="integer">146</cn>
+     <cn type="integer">53</cn>
+     <cn type="integer">73</cn>
+     <cn type="integer">166</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">65</cn>
+     <cn type="integer">32</cn>
+     <cn type="integer">12</cn>
+     <cn type="integer">215</cn>
+     <cn type="integer">235</cn>
+     <cn type="integer">202</cn>
+     <cn type="integer">130</cn>
+     <cn type="integer">158</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">57</cn>
+     <cn type="integer">32</cn>
+     <cn type="integer">117</cn>
+     <cn type="integer">239</cn>
+     <cn type="integer">251</cn>
+     <cn type="integer">227</cn>
+     <cn type="integer">93</cn>
+     <cn type="integer">166</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">65</cn>
+     <cn type="integer">20</cn>
+     <cn type="integer">154</cn>
+     <cn type="integer">243</cn>
+     <cn type="integer">255</cn>
+     <cn type="integer">231</cn>
+     <cn type="integer">146</cn>
+     <cn type="integer">130</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">97</cn>
+     <cn type="integer">53</cn>
+     <cn type="integer">117</cn>
+     <cn type="integer">227</cn>
+     <cn type="integer">247</cn>
+     <cn type="integer">210</cn>
+     <cn type="integer">117</cn>
+     <cn type="integer">146</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">190</cn>
+     <cn type="integer">85</cn>
+     <cn type="integer">36</cn>
+     <cn type="integer">146</cn>
+     <cn type="integer">178</cn>
+     <cn type="integer">117</cn>
+     <cn type="integer">20</cn>
+     <cn type="integer">170</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">202</cn>
+     <cn type="integer">154</cn>
+     <cn type="integer">73</cn>
+     <cn type="integer">32</cn>
+     <cn type="integer">12</cn>
+     <cn type="integer">53</cn>
+     <cn type="integer">85</cn>
+     <cn type="integer">194</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">206</cn>
+     <cn type="integer">190</cn>
+     <cn type="integer">130</cn>
+     <cn type="integer">117</cn>
+     <cn type="integer">85</cn>
+     <cn type="integer">174</cn>
+     <cn type="integer">182</cn>
+     <cn type="integer">219</cn>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{bmatrix}0&12&53&93&146&53&73&166\\
+65&32&12&215&235&202&130&158\\
+57&32&117&239&251&227&93&166\\
+65&20&154&243&255&231&146&130\\
+97&53&117&227&247&210&117&146\\
+190&85&36&146&178&117&20&170\\
+202&154&73&32&12&53&85&194\\
+206&190&130&117&85&174&182&219\end{bmatrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Notice that the minimum value (52) is now 0 and the maximum value (154) is now 255.</p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><figure><b>(Figure)</b>
+<figcaption>JPEG example subimage.svg</figcaption>
+</figure></td>
+<td style="text-align: left;"><figure><b>(Figure)</b>
+<figcaption>JPEG example subimage - equalized.svg</figcaption>
+</figure></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Original</p></td>
+<td style="text-align: left;">
+<p>Equalized</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+<h3 id="full-sized-image">Full-sized image</h3>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><figure><b>(Figure)</b>
+<figcaption>An unequalized image</figcaption>
+</figure></td>
+<td style="text-align: left;"><figure><b>(Figure)</b>
+<figcaption>Corresponding histogram (red) and cumulative histogram (black)</figcaption>
+</figure></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><figure><b>(Figure)</b>
+<figcaption>The same image after histogram equalization</figcaption>
+</figure></td>
+<td style="text-align: left;"><figure><b>(Figure)</b>
+<figcaption>Corresponding histogram (red) and cumulative histogram (black)</figcaption>
+</figure></td>
+</tr>
+</tbody>
+</table>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Histogram_matching" title="wikilink">Histogram matching</a></li>
+<li><a href="Adaptive_histogram_equalization" title="wikilink">Adaptive histogram equalization</a></li>
+<li><a href="Normalization_(image_processing)" title="wikilink">Normalization (image processing)</a></li>
+</ul>
+<h2 id="notes">Notes</h2>
+<h2 id="references">References</h2>
+<ul>
+<li>Acharya and Ray, <em>Image Processing: Principles and Applications</em>, Wiley-Interscience 2005 ISBN 0-471-71998-6</li>
+<li>Russ, <em>The Image Processing Handbook: Fourth Edition</em>, CRC 2002 ISBN 0-8493-2532-3</li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.generation5.org/content/2004/histogramEqualization.asp">"Histogram Equalization" at Generation5</a></li>
+<li>[<a class="uri" href="http://www.kamlex.com/index.php?option=com_content&amp;view">http://www.kamlex.com/index.php?option=com_content&amp;view;</a>;=article&amp;id;=54 Free histogram equalization plugin for Adobe Photoshop and PSP (broken link)]</li>
+<li><a href="http://fourier.eng.hmc.edu/e161/lectures/contrast_transform/node2.html">Page by Ruye Wang with good explanation and pseudo-code</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Image_processing" title="wikilink">Category:Image processing</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4">S. Naik and C. Murthy, "<a href="http://ieeexplore.ieee.org/xpl/articleDetails.jsp?arnumber=1257395">Hue-preserving color image enhancement without gamut problem</a>," IEEE Trans. Image Processing, vol. 12, no. 12, pp. 1591–1598, Dec. 2003<a href="#fnref4">↩</a></li>
+<li id="fn5">P. E. Trahanias and A. N. Venetsanopoulos, "<a href="http://ieeexplore.ieee.org/xpl/articleDetails.jsp?arnumber=202045">Color image enhancement through 3-D histogram equalization</a>," in Proc. 15th IAPR Int. Conf. Pattern Recognition, vol. 1, pp. 545–548, Aug.-Sep. 1992.<a href="#fnref5">↩</a></li>
+<li id="fn6">N. Bassiou and C. Kotropoulos, "<a href="http://www.sciencedirect.com/science/article/pii/S1077314206002141">Color image histogram equalization by absolute discounting back-off</a>," Computer Vision and Image Understanding, vol. 107, no. 1-2, pp.108-122, Jul.-Aug. 2007<a href="#fnref6">↩</a></li>
+<li id="fn7">Ji-Hee Han, Sejung Yang, Byung-Uk Lee, "<a href="http://dx.doi.org/10.1109/TIP.2010.2068555">A Novel 3-D Color Histogram Equalization Method with Uniform 1-D Gray Scale Histogram</a>", IEEE Trans. on Image Processing, Vol. 20, No. 2, pp. 506-512, Feb. 2011<a href="#fnref7">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

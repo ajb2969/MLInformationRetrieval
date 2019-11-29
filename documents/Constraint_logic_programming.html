@@ -1,0 +1,1253 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1243">Constraint logic programming</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Constraint logic programming</h1>
+<hr/>
+
+<p><strong>Constraint logic programming</strong> is a form of <a href="constraint_programming" title="wikilink">constraint programming</a>, in which <a href="logic_programming" title="wikilink">logic programming</a> is extended to include concepts from <a href="constraint_satisfaction" title="wikilink">constraint satisfaction</a>. A constraint logic program is a logic program that contains constraints in the body of clauses. An example of a clause including a constraint is <code>A(X,Y) :- X+Y&gt;0, B(X), C(Y)</code>. In this clause, <code>X+Y&gt;0</code> is a constraint; <code>A(X,Y)</code>, <code>B(X)</code>, and <code>C(Y)</code> are <a href="Literal_(mathematical_logic)" title="wikilink">literals</a> as in regular logic programming. This clause states one condition under which the statement <code>A(X,Y)</code> holds: <code>X+Y</code> is greater than zero and both <code>B(X)</code> and <code>C(Y)</code> are true.</p>
+
+<p>As in regular logic programming, programs are queried about the provability of a goal, which may contain constraints in addition to literals. A proof for a goal is composed of clauses whose bodies are satisfiable constraints and literals that can in turn be proved using other clauses. Execution is performed by an interpreter, which starts from the goal and <a href="Recursion" title="wikilink">recursively</a> scans the clauses trying to prove the goal. Constraints encountered during this scan are placed in a set called <strong>constraint store</strong>. If this set is found out to be unsatisfiable, the interpreter <a href="Backtracking" title="wikilink">backtracks</a>, trying to use other clauses for proving the goal. In practice, satisfiability of the constraint store may be checked using an incomplete algorithm, which does not always detect inconsistency.</p>
+<h2 id="overview">Overview</h2>
+
+<p>Formally, constraint logic programs are like regular logic programs, but the body of clauses can contain constraints, in addition to the regular logic programming literals. As an example, <code>X&gt;0</code> is a constraint, and is included in the last clause of the following constraint logic program.</p>
+
+<p><code> B(X,1):- X</code><code>0.</code><br/>
+<code> A(X,Y):- X&gt;0, B(X,Y).</code></p>
+
+<p>Like in regular logic programming, evaluating a goal such as <code>A(X,1)</code> requires evaluating the body of the last clause with <code>Y=1</code>. Like in regular logic programming, this in turn requires proving the goal <code>B(X,1)</code>. Contrary to regular logic programming, this also requires a constraint to be satisfied: <code>X&gt;0</code>, the constraint in the body of the last clause (in regular logic programming, X&gt;0 cannot be proved unless X is bound to a fully-ground term and execution of the program will fail if that is not the case).</p>
+
+<p>Whether a constraint is satisfied cannot always be determined when the constraint is encountered. In this case, for example, the value of <code>X</code> is not determined when the last clause is evaluated. As a result, the constraint <code>X&gt;0</code> is not satisfied nor violated at this point. Rather than proceeding in the evaluation of <code>B(X,1)</code> and then checking whether the resulting value of <code>X</code> is positive afterwards, the interpreter stores the constraint <code>X&gt;0</code> and then proceeds in the evaluation of <code>B(X,1)</code>; this way, the interpreter can detect violation of the constraint <code>X&gt;0</code> during the evaluation of <code>B(X,1)</code>, and backtrack immediately if this is the case, rather than waiting for the evaluation of <code>B(X,1)</code> to conclude.</p>
+
+<p>In general, the evaluation of a constraint logic program proceeds like for a regular logic program, but constraints encountered during evaluation are placed in a set called constraint store. As an example, the evaluation of the goal <code>A(X,1)</code> proceeds by evaluating the body of the first clause with <code>Y=1</code>; this evaluation adds <code>X&gt;0</code> to the constraint store and requires the goal <code>B(X,1)</code> to be proved. While trying to prove this goal, the first clause is applicable, but its evaluation adds <code>X&lt;0</code> to the constraint store. This addition makes the constraint store unsatisfiable, and the interpreter backtracks, removing the last addition from the constraint store. The evaluation of the second clause adds <code>X=1</code> and <code>Y&gt;0</code> to the constraint store. Since the constraint store is satisfiable and no other literal is left to prove, the interpreter stops with the solution <code>X=1, Y=1</code>.</p>
+<h2 id="semantics">Semantics</h2>
+
+<p>The semantics of constraint logic programs can be defined in terms of a virtual interpreter that maintains a pair 
+
+<math display="inline" id="Constraint_logic_programming:0">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mi>G</mi>
+   <mo>,</mo>
+   <mi>S</mi>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>G</ci>
+    <ci>S</ci>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle G,S\rangle
+  </annotation>
+ </semantics>
+</math>
+
+
+ during execution. The first element of this pair is called current goal; the second element is called constraint store. The <em>current goal</em> contains the literals the interpreter is trying to prove and may also contain some constraints it is trying to satisfy; the <em>constraint store</em> contains all constraints the interpreter has assumed satisfiable so far.</p>
+
+<p>Initially, the current goal is the goal and the constraint store is empty. The interpreter proceeds by removing the first element from the current goal and analyzing it. The details of this analysis are explained below, but in the end this analysis may produce a successful termination or a failure. This analysis may involve <a href="Recursion" title="wikilink">recursive calls</a> and addition of new literals to the current goal and new constraint to the constraint store. The interpreter backtracks if a failure is generated. A successful termination is generated when the current goal is empty and the constraint store is satisfiable.</p>
+
+<p>The details of the analysis of a literal removed from the goal is as follows. After having removed this literal from the front of the goal, it is checked whether it is a constraint or a literal. If it is a constraint, it is added to the constraint store. If it is a literal, a clause whose head has the same predicate of the literal is chosen; the clause is rewritten by replacing its variables with new variables (variables not occurring in the goal): the result is called a <em>fresh variant</em> of the clause; the body of the fresh variant of the clause is then placed in front of the goal; the equality of each argument of the literal with the corresponding one of the fresh variant head is placed in front of the goal as well.</p>
+
+<p>Some checks are done during these operations. In particular, the constraint store is checked for consistency every time a new constraint is added to it. In principle, whenever the constraint store is unsatisfiable the algorithm could backtrack. However, checking unsatisfiability at each step would be inefficient. For this reason, an incomplete satisfiability checker may be used instead. In practice, satisfiability is checked using methods that simplify the constraint store, that is, rewrite it into an equivalent but simpler-to-solve form. These methods can sometimes but not always prove unsatisfiability of an unsatisfiable constraint store.</p>
+
+<p>The interpreter has proved the goal when the current goal is empty and the constraint store is not detected unsatisfiable. The result of execution is the current set of (simplified) constraints. This set may include constraints such as 
+
+<math display="inline" id="Constraint_logic_programming:1">
+ <semantics>
+  <mrow>
+   <mi>X</mi>
+   <mo>=</mo>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>X</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X=2
+  </annotation>
+ </semantics>
+</math>
+
+ that force variables to a specific value, but may also include constraints like 
+
+<math display="inline" id="Constraint_logic_programming:2">
+ <semantics>
+  <mrow>
+   <mi>X</mi>
+   <mo>></mo>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <ci>X</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X>2
+  </annotation>
+ </semantics>
+</math>
+
+ that only bound variables without giving them a specific value.</p>
+
+<p>Formally, the semantics of constraint logic programming is defined in terms of <em>derivations</em>. A transition is a pair of pairs goal/store, noted 
+
+<math display="inline" id="Constraint_logic_programming:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">⟨</mo>
+    <mi>G</mi>
+    <mo>,</mo>
+    <mi>S</mi>
+    <mo stretchy="false">⟩</mo>
+   </mrow>
+   <mo>→</mo>
+   <mrow>
+    <mo stretchy="false">⟨</mo>
+    <msup>
+     <mi>G</mi>
+     <mo>′</mo>
+    </msup>
+    <mo>,</mo>
+    <msup>
+     <mi>S</mi>
+     <mo>′</mo>
+    </msup>
+    <mo stretchy="false">⟩</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <list>
+     <ci>G</ci>
+     <ci>S</ci>
+    </list>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>G</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>S</ci>
+      <ci>normal-′</ci>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle G,S\rangle\rightarrow\langle G^{\prime},S^{\prime}\rangle
+  </annotation>
+ </semantics>
+</math>
+
+. Such a pair states the possibility of going from state 
+
+<math display="inline" id="Constraint_logic_programming:4">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mi>G</mi>
+   <mo>,</mo>
+   <mi>S</mi>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>G</ci>
+    <ci>S</ci>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle G,S\rangle
+  </annotation>
+ </semantics>
+</math>
+
+ to state 
+
+<math display="inline" id="Constraint_logic_programming:5">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <msup>
+    <mi>G</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>,</mo>
+   <msup>
+    <mi>S</mi>
+    <mo>′</mo>
+   </msup>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>G</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>S</ci>
+     <ci>normal-′</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle G^{\prime},S^{\prime}\rangle
+  </annotation>
+ </semantics>
+</math>
+
+
+. Such a transition is possible in three possible cases:</p>
+<ul>
+<li>an element of 
+
+<math display="inline" id="Constraint_logic_programming:6">
+ <semantics>
+  <mi>G</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>G</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G
+  </annotation>
+ </semantics>
+</math>
+
+ is a constraint 
+
+<math display="inline" id="Constraint_logic_programming:7">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Constraint_logic_programming:8">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>G</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mi>G</mi>
+    <mo>\</mo>
+    <mrow>
+     <mo stretchy="false">{</mo>
+     <mi>C</mi>
+     <mo stretchy="false">}</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>G</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <ci>normal-\</ci>
+     <ci>G</ci>
+     <set>
+      <ci>C</ci>
+     </set>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G^{\prime}=G\backslash\{C\}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Constraint_logic_programming:9">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>S</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mi>S</mi>
+    <mo>∪</mo>
+    <mrow>
+     <mo stretchy="false">{</mo>
+     <mi>C</mi>
+     <mo stretchy="false">}</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>S</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <union></union>
+     <ci>S</ci>
+     <set>
+      <ci>C</ci>
+     </set>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S^{\prime}=S\cup\{C\}
+  </annotation>
+ </semantics>
+</math>
+
+; in other words, a constraint can be moved from the goal to the constraint store</li>
+<li>an element of 
+
+<math display="inline" id="Constraint_logic_programming:10">
+ <semantics>
+  <mi>G</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>G</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G
+  </annotation>
+ </semantics>
+</math>
+
+
+ is a literal 
+
+<math display="inline" id="Constraint_logic_programming:11">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>t</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>t</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>L</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <ci>n</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(t_{1},\ldots,t_{n})
+  </annotation>
+ </semantics>
+</math>
+
+, there exists a clause that, rewritten using new variables, is 
+
+<math display="inline" id="Constraint_logic_programming:12">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msubsup>
+      <mi>t</mi>
+      <mn>1</mn>
+      <mo>′</mo>
+     </msubsup>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msubsup>
+      <mi>t</mi>
+      <mi>n</mi>
+      <mo>′</mo>
+     </msubsup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>:</mo>
+   <mrow>
+    <mo>-</mo>
+    <mi>B</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <vector>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <ci>n</ci>
+       </apply>
+       <ci>normal-′</ci>
+      </apply>
+     </vector>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(t_{1}^{\prime},\ldots,t_{n}^{\prime}):-B
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Constraint_logic_programming:13">
+ <semantics>
+  <msup>
+   <mi>G</mi>
+   <mo>′</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>G</ci>
+    <ci>normal-′</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+ is 
+
+<math display="inline" id="Constraint_logic_programming:14">
+ <semantics>
+  <mi>G</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>G</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G
+  </annotation>
+ </semantics>
+</math>
+
+ with 
+
+<math display="inline" id="Constraint_logic_programming:15">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>t</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>t</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>L</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <ci>n</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(t_{1},\ldots,t_{n})
+  </annotation>
+ </semantics>
+</math>
+
+
+ replaced by 
+
+<math display="inline" id="Constraint_logic_programming:16">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>t</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <msubsup>
+      <mi>t</mi>
+      <mn>1</mn>
+      <mo>′</mo>
+     </msubsup>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <msub>
+     <mi>t</mi>
+     <mi>n</mi>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <msubsup>
+      <mi>t</mi>
+      <mi>n</mi>
+      <mo>′</mo>
+     </msubsup>
+     <mo>,</mo>
+     <mi>B</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>normal-…</ci>
+     </list>
+    </apply>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <ci>n</ci>
+     </apply>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <ci>n</ci>
+       </apply>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>B</ci>
+     </list>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{1}=t_{1}^{\prime},\ldots,t_{n}=t_{n}^{\prime},B
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Constraint_logic_programming:17">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>S</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>=</mo>
+   <mi>S</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>S</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S^{\prime}=S
+  </annotation>
+ </semantics>
+</math>
+
+; in other words, a literal can be replaced by the body of a fresh variant of a clause having the same predicate in the head, adding the body of the fresh variant and the above equalities of terms to the goal</li>
+<li>
+
+<math display="inline" id="Constraint_logic_programming:18">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Constraint_logic_programming:19">
+ <semantics>
+  <msup>
+   <mi>S</mi>
+   <mo>′</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>S</ci>
+    <ci>normal-′</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+ are equivalent according to the specific constraint semantics</li>
+</ul>
+
+<p>A sequence of transitions is a derivation. A goal 
+
+<math display="inline" id="Constraint_logic_programming:20">
+ <semantics>
+  <mi>G</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>G</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G
+  </annotation>
+ </semantics>
+</math>
+
+
+ can be proved if there exists a derivation from 
+
+<math display="inline" id="Constraint_logic_programming:21">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mi>G</mi>
+   <mo>,</mo>
+   <mi mathvariant="normal">∅</mi>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>G</ci>
+    <emptyset></emptyset>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle G,\emptyset\rangle
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Constraint_logic_programming:22">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mi mathvariant="normal">∅</mi>
+   <mo>,</mo>
+   <mi>S</mi>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <emptyset></emptyset>
+    <ci>S</ci>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle\emptyset,S\rangle
+  </annotation>
+ </semantics>
+</math>
+
+ for some satisfiable constraint store 
+
+<math display="inline" id="Constraint_logic_programming:23">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+. This semantics formalizes the possible evolutions of an interpreter that arbitrarily chooses the literal of the goal to process and the clause to replace literals. In other words, a goal is proved under this semantics if there exists a sequence of choices of literals and clauses, among the possibly many ones, that lead to an empty goal and satisfiable store.</p>
+
+<p>Actual interpreters process the goal elements in a <a href="LIFO_(computing)" title="wikilink">LIFO</a> order: elements are added in the front and processed from the front. They also choose the clause of the second rule according to the order in which they are written, and rewrite the constraint store when it is modified.</p>
+
+<p>The third possible kind of transition is a replacement of the constraint store with an equivalent one. This replacement is limited to those done by specific methods, such as <a href="constraint_propagation" title="wikilink">constraint propagation</a>. The semantics of constraint logic programming is parametric not only to the kind of constraints used but also to the method for rewriting the constraint store. The specific methods used in practice replace the constraint store with one that is simpler to solve. If the constraint store is unsatisfiable, this simplification may detect this unsatisfiability sometimes, but not always.</p>
+
+<p>The result of evaluating a goal against a constraint logic program is defined if the goal is proved. In this case, there exists a derivation from the initial pair to a pair where the goal is empty. The constraint store of this second pair is considered the result of the evaluation. This is because the constraint store contains all constraints assumed satisfiable to prove the goal. In other words, the goal is proved for all variable evaluations that satisfy these constraints.</p>
+
+<p>The pairwise equality of terms of two literals is often compactly denoted by 
+
+<math display="inline" id="Constraint_logic_programming:24">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>t</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>t</mi>
+      <mi>n</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msubsup>
+      <mi>t</mi>
+      <mn>1</mn>
+      <mo>′</mo>
+     </msubsup>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msubsup>
+      <mi>t</mi>
+      <mi>n</mi>
+      <mo>′</mo>
+     </msubsup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <vector>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>t</ci>
+       <ci>n</ci>
+      </apply>
+     </vector>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <vector>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <ci>n</ci>
+       </apply>
+       <ci>normal-′</ci>
+      </apply>
+     </vector>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(t_{1},\ldots,t_{n})=L(t_{1}^{\prime},\ldots,t_{n}^{\prime})
+  </annotation>
+ </semantics>
+</math>
+
+: this is a shorthand for the constraints 
+
+<math display="inline" id="Constraint_logic_programming:25">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>t</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <msubsup>
+      <mi>t</mi>
+      <mn>1</mn>
+      <mo>′</mo>
+     </msubsup>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <msub>
+     <mi>t</mi>
+     <mi>n</mi>
+    </msub>
+    <mo>=</mo>
+    <msubsup>
+     <mi>t</mi>
+     <mi>n</mi>
+     <mo>′</mo>
+    </msubsup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>normal-…</ci>
+     </list>
+    </apply>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>t</ci>
+       <ci>n</ci>
+      </apply>
+      <ci>normal-′</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{1}=t_{1}^{\prime},\ldots,t_{n}=t_{n}^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+
+. A common variant of the semantics for constraint logic programming adds 
+
+<math display="inline" id="Constraint_logic_programming:26">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>t</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>t</mi>
+      <mi>n</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msubsup>
+      <mi>t</mi>
+      <mn>1</mn>
+      <mo>′</mo>
+     </msubsup>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msubsup>
+      <mi>t</mi>
+      <mi>n</mi>
+      <mo>′</mo>
+     </msubsup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <vector>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>t</ci>
+       <ci>n</ci>
+      </apply>
+     </vector>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <vector>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>t</ci>
+        <ci>n</ci>
+       </apply>
+       <ci>normal-′</ci>
+      </apply>
+     </vector>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(t_{1},\ldots,t_{n})=L(t_{1}^{\prime},\ldots,t_{n}^{\prime})
+  </annotation>
+ </semantics>
+</math>
+
+ directly to the constraint store rather than to the goal.</p>
+<h2 id="terms-and-constraints">Terms and constraints</h2>
+
+<p>Different definitions of terms are used, generating different kinds of constraint logic programming: over trees, reals, or finite domains. A kind of constraint that is always present is the equality of terms. Such constraints are necessary because the interpreter adds <code>t1=t2</code> to the goal whenever a literal <code>P(...t1...)</code> is replaced with the body of a clause fresh variant whose head is <code>P(...t2...)</code>.</p>
+<h3 id="tree-terms">Tree terms</h3>
+
+<p>Constraint logic programming with tree terms emulates regular logic programming by storing substitutions as constraints in the constraint store. Terms are variables, constants, and function symbols applied to other terms. The only constraints considered are equalities and disequalities between terms. Equality is particularly important, as constraints like <code>t1=t2</code> are often generated by the interpreter. Equality constraints on terms can be simplified, that is solved, via <a href="unification_(computing)" title="wikilink">unification</a>:</p>
+
+<p>A constraint <code>t1=t2</code> can be simplified if both terms are function symbols applied to other terms. If the two function symbols are the same and the number of subterms is also the same, this constraint can be replaced with the pairwise equality of subterms. If the terms are composed of different function symbols or the same functor but on different number of terms, the constraint is unsatisfiable.</p>
+
+<p>If one of the two terms is a variable, the only allowed value the variable can take is the other term. As a result, the other term can replace the variable in the current goal and constraint store, thus practically removing the variable from consideration. In the particular case of equality of a variable with itself, the constraint can be removed as always satisfied.</p>
+
+<p>In this form of constraint satisfaction, variable values are terms.</p>
+<h3 id="reals">Reals</h3>
+
+<p>Constraint logic programming with <a href="real_number" title="wikilink">real numbers</a> uses real expressions as terms. When no function symbols are used, terms are expressions over reals, possibly including variables. In this case, each variable can only take a real number as a value.</p>
+
+<p>To be precise, terms are expressions over variables and real constants. Equality between terms is a kind of constraint that is always present, as the interpreter generates equality of terms during execution. As an example, if the first literal of the current goal is <code>A(X+1)</code> and the interpreter has chosen a clause that is <code>A(Y-1):-Y=1</code> after rewriting is variables, the constraints added to the current goal are <code>X+1=Y-1</code> and 
+
+<math display="inline" id="Constraint_logic_programming:27">
+ <semantics>
+  <mrow>
+   <mi>Y</mi>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>Y</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y=1
+  </annotation>
+ </semantics>
+</math>
+
+. The rules of simplification used for function symbols are obviously not used: <code>X+1=Y-1</code> is not unsatisfiable just because the first expression is built using <code>+</code> and the second using <code>-</code>.</p>
+
+<p>Reals and function symbols can be combined, leading to terms that are expressions over reals and function symbols applied to other terms. Formally, variables and real constants are expressions, as any arithmetic operator over other expressions. Variables, constants (zero-arity-function symbols), and expressions are terms, as any function symbol applied to terms. In other words, terms are built over expressions, while expressions are built over numbers and variables. In this case, variables ranges over real numbers <em>and terms</em>. In other words, a variable can take a real number as a value, while another takes a term.</p>
+
+<p>Equality of two terms can be simplified using the rules for tree terms if none of the two terms is a real expression. For example, if the two terms have the same function symbol and number of subterms, their equality constraint can be replaced with the equality of subterms.</p>
+<h3 id="finite-domains">Finite domains</h3>
+
+<p>The third class of constraints used in constraint logic programming is that of finite domains. Values of variables are in this case taken from a finite domain, often that of <a href="integer_number" title="wikilink">integer numbers</a>. For each variable, a different domain can be specified: <code>X::[1..5]</code> for example means that the value of <code>X</code> is between <code>1</code> and <code>5</code>. The domain of a variable can also be given by enumerating all values a variable can take; therefore, the above domain declaration can be also written <code>X::[1,2,3,4,5]</code>. This second way of specifying a domain allows for domains that are not composed of integers, such as <code>X::[george,mary,john]</code>. If the domain of a variable is not specified, it is assumed to be the set of integers representable in the language. A group of variables can be given the same domain using a declaration like <code>[X,Y,Z]::[1..5]</code>.</p>
+
+<p>The domain of a variable may be reduced during execution. Indeed, as the interpreter adds constraints to the constraint store, it performs <a href="constraint_propagation" title="wikilink">constraint propagation</a> to enforce a form of <a href="local_consistency" title="wikilink">local consistency</a>, and these operations may reduce the domain of variables. If the domain of a variable becomes empty, the constraint store is inconsistent, and the algorithm backtracks. If the domain of a variable becomes a <a href="Singleton_(mathematics)" title="wikilink">singleton</a>, the variable can be assigned the unique value in its domain. The forms of consistency typically enforced are <a href="arc_consistency" title="wikilink">arc consistency</a>, <a href="hyper-arc_consistency" title="wikilink">hyper-arc consistency</a>, and <a href="bound_consistency" title="wikilink">bound consistency</a>. The current domain of a variable can be inspected using specific literals; for example, <code>dom(X,D)</code> finds out the current domain <code>D</code> of a variable <code>X</code>.</p>
+
+<p>As for domains of reals, functors can be used with domains of integers. In this case, a term can be an expression over integers, a constant, or the application of a functor over other terms. A variable can take an arbitrary term as a value, if its domain has not been specified to be a set of integers or constants.</p>
+<h2 id="the-constraint-store">The constraint store</h2>
+
+<p>The constraint store contains the constraints that are currently assumed satisfiable. It can be considered what the current substitution is for regular logic programming. When only tree terms are allowed, the constraint store contains constraints in the form <code>t1=t2</code>; these constraints are simplified by unification, resulting in constraints of the form <code>variable=term</code>; such constraints are equivalent to a substitution.</p>
+
+<p>However, the constraint store may also contain constraints in the form <code>t1!=t2</code>, if the difference <code>!=</code> between terms is allowed. When constraints over reals or finite domains are allowed, the constraint store may also contain domain-specific constraints like <code>X+2=Y/2</code>, etc.</p>
+
+<p>The constraint store extends the concept of current substitution in two ways. First, it does not only contain the constraints derived from equating a literal with the head of a fresh variant of a clause, but also the constraints of the body of clauses. Second, it does not only contain constraints of the form <code>variable=value</code> but also constraints on the considered constraint language. While the result of a successful evaluation of a regular logic program is the final substitution, the result for a constraint logic program is the final constraint store, which may contain constraint of the form variable=value but in general may contain arbitrary constraints.</p>
+
+<p>Domain-specific constraints may come to the constraint store both from the body of a clauses and from equating a literal with a clause head: for example, if the interpreter rewrites the literal <code>A(X+2)</code> with a clause whose fresh variant head is <code>A(Y/2)</code>, the constraint <code>X+2=Y/2</code> is added to the constraint store. If a variable appears in a real or finite domain expression, it can only take a value in the reals or the finite domain. Such a variable cannot take a term made of a functor applied to other terms as a value. The constraint store is unsatisfiable if a variable is bound to take both a value of the specific domain and a functor applied to terms.</p>
+
+<p>After a constraint is added to the constraint store, some operations are performed on the constraint store. Which operations are performed depends on the considered domain and constraints. For example <a href="unification_(computing)" title="wikilink">unification</a> is used for finite tree equalities, <a href="variable_elimination" title="wikilink">variable elimination</a> for polynomial equations over reals, <a href="constraint_propagation" title="wikilink">constraint propagation</a> to enforce a form of <a href="local_consistency" title="wikilink">local consistency</a> for finite domains. These operations are aimed at making the constraint store simpler to be checked for satisfiability and solved.</p>
+
+<p>As a result of these operations, the addition of new constraints may change the old ones. It is essential that the interpreter is able to undo these changes when it backtracks. The simplest case method is for the interpreter to save the complete state of the store every time it makes a choice (it chooses a clause to rewrite a goal). More efficient methods for allowing the constraint store to return to a previous state exist. In particular, one may just save the changes to the constraint store made between two points of choice, including the changes made to the old constraints. This can be done by simply saving the old value of the constraints that have been modified; this method is called <em>trailing</em>. A more advanced method is to save the changes that have been done on the modified constraints. For example, a linear constraint is changed by modifying its coefficient: saving the difference between the old and new coefficient allows reverting a change. This second method is called <em>semantic backtracking</em>, because the semantics of the change is saved rather than the old version of the constraints only.</p>
+<h2 id="labeling">Labeling</h2>
+
+<p>The labeling literals are used on variables over finite domains to check satisfiability or partial satisfiability of the constraint store and to find a satisfying assignment. A labeling literal is of the form <code>labeling([variables])</code>, where the argument is a list of variables over finite domains. Whenever the interpreter evaluates such a literal, it performs a search over the domains of the variables of the list to find an assignment that satisfies all relevant constraints. Typically, this is done by a form of <a class="uri" href="backtracking" title="wikilink">backtracking</a>: variables are evaluated in order, trying all possible values for each of them, and backtracking when inconsistency is detected.</p>
+
+<p>The first use of the labeling literal is to actual check satisfiability or partial satisfiability of the constraint store. When the interpreter adds a constraint to the constraint store, it only enforces a form of local consistency on it. This operation may not detect inconsistency even if the constraint store is unsatisfiable. A labeling literal over a set of variables enforces a satisfiability check of the constraints over these variables. As a result, using all variables mentioned in the constraint store results in checking satisfiability of the store.</p>
+
+<p>The second use of the labeling literal is to actually determine an evaluation of the variables that satisfies the constraint store. Without the labeling literal, variables are assigned values only when the constraint store contains a constraint of the form <code>X=value</code> and when local consistency reduces the domain of a variable to a single value. A labeling literal over some variables forces these variables to be evaluated. In other words, after the labeling literal has been considered, all variables are assigned a value.</p>
+
+<p>Typically, constraint logic programs are written in such a way labeling literals are evaluated only after as many constraints as possible have been accumulated in the constraint store. This is because labeling literals enforce search, and search is more efficient if there are more constraints to be satisfied. A <a href="constraint_satisfaction_problem" title="wikilink">constraint satisfaction problem</a> is typical solved by a constraint logic program having the following structure:</p>
+
+<p><code>solve(X):-constraints(X), labeling(X)</code><br/>
+<code>constraints(X):- (all constraints of the CSP)</code></p>
+
+<p>When the interpreter evaluates the goal <code>solve(args)</code>, it places the body of a fresh variant of the first clause in the current goal. Since the first goal is <code>constraints(X')</code>, the second clause is evaluated, and this operation moves all constraints in the current goal and eventually in the constraint store. The literal <code>labeling(X')</code> is then evaluated, forcing a search for a solution of the constraint store. Since the constraint store contains exactly the constraints of the original constraint satisfaction problem, this operation searches for a solution of the original problem.</p>
+<h2 id="program-reformulations">Program reformulations</h2>
+
+<p>A given constraint logic program may be reformulated to improve its efficiency. A first rule is that labeling literals should be placed after as much constraints on the labeled literals are accumulated in the constraint store. While in theory <code>A(X):-labeling(X),X&gt;0</code> is equivalent to <code>A(X):-X&gt;0,labeling(X)</code>, the search that is performed when the interpreter encounters the labeling literal is on a constraint store that does not contain the constraint <code>X&gt;0</code>. As a result, it may generate solutions, such as <code>X=-1</code>, that are later found out not to satisfy this constraint. On the other hand, in the second formulation the search is performed only when the constraint is already in the constraint store. As a result, search only returns solutions that are consistent with it, taking advantage of the fact that additional constraints reduce the search space.</p>
+
+<p>A second reformulation that can increase efficiency is to place constraints before literals in the body of clauses. Again, <code>A(X):-B(X),X&gt;0</code> and <code>A(X):-X&gt;0,B(X)</code> are in principle equivalent. However, the first may require more computation. For example, if the constraint store contains the constraint <code>X&lt;-2</code>, the interpreter recursively evaluates <code>B(X)</code> in the first case; if it succeeds, it then finds out that the constraint store is inconsistent when adding <code>X&gt;0</code>. In the second case, when evaluating that clause, the interpreter first adds <code>X&gt;0</code> to the constraint store and then possibly evaluates <code>B(X)</code>. Since the constraint store after the addition of <code>X&gt;0</code> turns out to be inconsistent, the recursive evaluation of <code>B(X)</code> is not performed at all.</p>
+
+<p>A third reformulation that can increase efficiency is the addition of redundant constrains. If the programmer knows (by whatever means) that the solution of a problem satisfies a specific constraint, they can include that constraint to cause inconsistency of the constraint store as soon as possible. For example, if it is known beforehand that the evaluation of <code>B(X)</code> will result in a positive value for <code>X</code>, the programmer may add <code>X&gt;0</code> before any occurrence of <code>B(X)</code>. As an example, <code>A(X,Y):-B(X),C(X)</code> will fail on the goal <code>A(-2,Z)</code>, but this is only found out during the evaluation of the subgoal <code>B(X)</code>. On the other hand, if the above clause is replaced by <code>A(X,Y):-X&gt;0,A(X),B(X)</code>, the interpreter backtracks as soon as the constraint <code>X&gt;0</code> is added to the constraint store, which happens before the evaluation of <code>B(X)</code> even starts.</p>
+<h2 id="constraint-handling-rules">Constraint handling rules</h2>
+
+<p><a href="Constraint_handling_rules" title="wikilink">Constraint handling rules</a> were initially defined as a stand-alone formalism for specifying constraint solvers, and were later embedded in logic programming. There are two kinds of constraint handling rules. The rules of the first kind specify that, under a given condition, a set of constraints is equivalent to another one. The rules of the second kind specify that, under a given condition, a set of constraints implies another one. In a constraint logic programming language supporting constraint handling rules, a programmer can use these rules to specify possible rewritings of the constraint store and possible additions of constraints to it. The following are example rules:</p>
+
+<p><code>A(X) </code><code> B(X) | C(X)</code><br/>
+<code>A(X) ==&gt; B(X) | C(X)</code></p>
+
+<p>The first rule tells that, if <code>B(X)</code> is entailed by the store, the constraint <code>A(X)</code> can be rewritten as <code>C(X)</code>. As an example, <code>N*X&gt;0</code> can be rewritten as <code>X&gt;0</code> if the store implies that <code>N&gt;0</code>. The symbol <code> resembles equivalence in logic, and tells that the first constraint is equivalent to the latter. In practice, this implies that the first constraint can be <em>replaced</em> with the latter.</code></p>
+
+<p>The second rule instead specifies that the latter constraint is a consequence of the first, if the constraint in the middle is entailed by the constraint store. As a result, if <code>A(X)</code> is in the constraint store and <code>B(X)</code> is entailed by the constraint store, then <code>C(X)</code> can be added to the store. Differently from the case of equivalence, this is an addition and not a replacement: the new constraint is added but the old one remains.</p>
+
+<p>Equivalence allows for simplifying the constraint store by replacing some constraints with simpler ones; in particular, if the third constraint in an equivalence rule is <code>true</code>, and the second constraint is entailed, the first constraint is removed from the constraint store. Inference allows for the addition of new constraints, which may lead to proving inconsistency of the constraint store, and may generally reduce the amount of search needed to establish its satisfiability.</p>
+
+<p>Logic programming clauses in conjunction with constraint handling rules can be used to specify a method for establishing the satisfiability of the constraint store. Different clauses are used to implement the different choices of the method; the constraint handling rules are used for rewriting the constraint store during execution. As an example, one can implement backtracking with <a href="unit_propagation" title="wikilink">unit propagation</a> this way. Let <code>holds(L)</code> represents a propositional clause, in which the literals in the list <code>L</code> are in the same order as they are evaluated. The algorithm can be implemented using clauses for the choice of assigning a literal to true or false, and constraint handling rules to specify propagation. These rules specify that <code>holds([l|L])</code> can be removed if <code>l=true</code> follows from the store, and it can be rewritten as <code>holds(L)</code> if <code>l=false</code> follows from the store. Similarly, <code>holds([l])</code> can be replaced by <code>l=true</code>. In this example, the choice of value for a variable is implemented using clauses of logic programming; however, it can be encoded in constraint handling rules using an extension called disjunctive constraint handling rules or CHR<sup>∨</sup>.</p>
+<h2 id="bottom-up-evaluation">Bottom-up evaluation</h2>
+
+<p>The standard strategy of evaluation of logic programs is <a href="Top-down_and_bottom-up_design#Computer_science" title="wikilink">top-down</a> and <a class="uri" href="depth-first" title="wikilink">depth-first</a>: from the goal, a number of clauses are identified as being possibly able to prove the goal, and recursion over the literals of their bodies is performed. An alternative strategy is to start from the facts and use clauses to derive new facts; this strategy is called <a href="Top-down_and_bottom-up_design#Computer_science" title="wikilink">bottom-up</a>. It is considered better than the top-down one when the aim is that of producing all consequences of a given program, rather than proving a single goal. In particular, finding all consequences of a program in the standard top-down and depth-first manner may not terminate while the bottom-up <a href="evaluation_strategy" title="wikilink">evaluation strategy</a> terminates.</p>
+
+<p>The bottom-up evaluation strategy maintains the set of facts proved so far during evaluation. This set is initially empty. With each step, new facts are derived by applying a program clause to the existing facts, and are added to the set. For example, the bottom up evaluation of the following program requires two steps:</p>
+
+<p><code>A(q).</code><br/>
+<code>B(X):-A(X).</code></p>
+
+<p>The set of consequences is initially empty. At the first step, <code>A(q)</code> is the only clause whose body can be proved (because it is empty), and <code>A(q)</code> is therefore added to the current set of consequences. At the second step, since <code>A(q)</code> is proved, the second clause can be used and <code>B(q)</code> is added to the consequences. Since no other consequence can be proved from <code>{A(q),B(q)}</code>, execution terminates.</p>
+
+<p>The advantage of the bottom-up evaluation over the top-down one is that cycles of derivations do not produce an <a href="infinite_loop" title="wikilink">infinite loop</a>. This is because adding a consequence to the current set of consequences that already contains it has no effect. As an example, adding a third clause to the above program generates a cycle of derivations in the top-down evaluation:</p>
+
+<p><code>A(q).</code><br/>
+<code>B(X):-A(X).</code><br/>
+<code>A(X):-B(X).</code></p>
+
+<p>For example, while evaluating all answers to the goal <code>A(X)</code>, the top-down strategy would produce the following derivations:</p>
+
+<p><code>A(q)</code><br/>
+<code>A(q):-B(q), B(q):-A(q), A(q)</code><br/>
+<code>A(q):-B(q), B(q):-A(q), A(q):-B(q), B(q):-A(q), A(q)</code></p>
+
+<p>In other words, the only consequence <code>A(q)</code> is produced first, but then the algorithm cycles over derivations that do not produce any other answer. More generally, the top-down evaluation strategy may cycle over possible derivations, possibly when other ones exist.</p>
+
+<p>The bottom-up strategy does not have the same drawback, as consequences that were already derived has no effect. On the above program, the bottom-up strategy starts adding <code>A(q)</code> to the set of consequences; in the second step, <code>B(X):-A(X)</code> is used to derive <code>B(q)</code>; in the third step, the only facts that can be derived from the current consequences are <code>A(q)</code> and <code>B(q)</code>, which are however already in the set of consequences. As a result, the algorithm stops.</p>
+
+<p>In the above example, the only used facts were ground literals. In general, every clause that only contains constraints in the body is considered a fact. For example, a clause <code>A(X):-X&gt;0,X&lt;10</code> is considered a fact as well. For this extended definition of facts, some facts may be equivalent while not syntactically equal. For example, <code>A(q)</code> is equivalent to <code>A(X):-X=q</code> and both are equivalent to <code>A(X):-X=Y, Y=q</code>. To solve this problem, facts are translated into a normal form in which the head contains a tuple of all-different variables; two facts are then equivalent if their bodies are equivalent on the variables of the head, that is, their sets of solutions are the same when restricted to these variables.</p>
+
+<p>As described, the bottom-up approach has the advantage of not considering consequences that have already been derived. However, it still may derive consequences that are entailed by those already derived while not being equal to any of them. As an example, the bottom up evaluation of the following program is infinite:</p>
+
+<p><code>A(0).</code><br/>
+<code>A(X):-X&gt;0.</code><br/>
+<code>A(X):-X=Y+1, A(Y).</code></p>
+
+<p>The bottom-up evaluation algorithm first derives that <code>A(X)</code> is true for <code>X=0</code> and <code>X&gt;0</code>. In the second step, the first fact with the third clause allows for the derivation of <code>A(1)</code>. In the third step, <code>A(2)</code> is derived, etc. However, these facts are already entailed by the fact that <code>A(X)</code> is true for any nonnegative <code>X</code>. This drawback can be overcome by checking for <a class="uri" href="entailment" title="wikilink">entailment</a> facts that are to be added to the current set of consequences. If the new consequence is already entailed by the set, it is not added to it. Since facts are stored as clauses, possibly with "local variables", entailment is restricted over the variables of their heads.</p>
+<h2 id="concurrent-constraint-logic-programming">Concurrent constraint logic programming</h2>
+
+<p>The concurrent versions of constraint logic programming are aimed at programming <a href="concurrent_process" title="wikilink">concurrent processes</a> rather than solving <a href="constraint_satisfaction_problem" title="wikilink">constraint satisfaction problems</a>. Goals in constraint logic programming are evaluated concurrently; a concurrent process is therefore programmed as the evaluation of a goal by the <a href="Interpreter_(computing)" title="wikilink">interpreter</a>.</p>
+
+<p>Syntactically, concurrent constraints logic programs are similar to non-concurrent programs, the only exception being that clauses includes <em>guards</em>, which are constraints that may block the applicability of the clause under some conditions. Semantically, concurrent constraint logic programming differs from its non-concurrent versions because a goal evaluation is intended to realize a concurrent process rather than finding a solution to a problem. Most notably, this difference affects how the interpreter behaves when more than one clause is applicable: non-concurrent constraint logic programming <a href="Recursion" title="wikilink">recursively</a> tries all clauses; concurrent constraint logic programming chooses only one. This is the most evident effect of an intended <em>directionality</em> of the interpreter, which never revises a choice it has previously taken. Other effects of this are the semantical possibility of having a goal that cannot be proved while the whole evaluation does not fail, and a particular way for equating a goal and a clause head.</p>
+<h2 id="applications">Applications</h2>
+
+<p>Constraint logic programming has been applied to a number of fields, such as <a href="civil_engineering" title="wikilink">civil engineering</a>, <a href="mechanical_engineering" title="wikilink">mechanical engineering</a>, <a href="digital_circuit" title="wikilink">digital circuit</a> verification, <a href="automated_timetabling" title="wikilink">automated timetabling</a>, <a href="air_traffic_control" title="wikilink">air traffic control</a>, finance, and others.</p>
+<h2 id="history">History</h2>
+
+<p>Constraint logic programming was introduced by Jaffar and Lassez in 1987. They generalized the observation that the term equations and disequations of <a href="Prolog_II" title="wikilink">Prolog II</a> were a specific form of constraints, and generalized this idea to arbitrary constraint languages. The first implementations of this concept were <a href="Prolog_III" title="wikilink">Prolog III</a>, <a class="uri" href="CLP(R)" title="wikilink">CLP(R)</a>, and <a href="CHIP_(programming_language)" title="wikilink">CHIP</a>.</p>
+<h2 id="references">References</h2>
+<ul>
+<li>
+
+<p>ISBN 1-55860-890-7</p></li>
+<li>
+
+<p>ISBN 0-521-82583-0</p></li>
+<li>
+
+<p>ISBN 0-262-13341-5</p></li>
+<li>
+
+<p>ISBN 3-540-67623-6</p></li>
+<li></li>
+<li></li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a class="uri" href="BProlog" title="wikilink">BProlog</a></li>
+<li><a class="uri" href="ECLiPSe" title="wikilink">ECLiPSe</a></li>
+<li><a href="GNU_Prolog" title="wikilink">GNU Prolog</a></li>
+<li><a class="uri" href="SWI-Prolog" title="wikilink">SWI-Prolog</a></li>
+<li><a href="Oz_(programming_language)" title="wikilink">Distributed Oz Mozart</a></li>
+<li><a href="Ciao_(programming_language)" title="wikilink">Ciao</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Logic_programming" title="wikilink">Category:Logic programming</a> <a href="Category:Constraint_programming" title="wikilink">Category:Constraint programming</a></p>
+</body>
+</html>

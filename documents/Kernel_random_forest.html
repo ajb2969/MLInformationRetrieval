@@ -1,0 +1,4677 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1799">Kernel random forest</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Kernel random forest</h1>
+<hr/>
+
+<p>In machine learning, <strong>kernel random forests</strong> establish the connection between <a href="random_forest" title="wikilink">random forests</a> and <a href="kernel_method" title="wikilink">kernel methods</a>. By slightly modifying their definition, <a href="random_forests" title="wikilink">random forests</a> can be rewritten as <a href="kernel_methods" title="wikilink">kernel methods</a>, which are more interpretable and easier to analyze.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h2 id="history">History</h2>
+
+<p><a href="Leo_Breiman" title="wikilink">Leo Breiman</a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> was the first person to notice the link between <a href="random_forest" title="wikilink">random forest</a> and <a href="kernel_methods" title="wikilink">kernel methods</a>. He pointed out that <a href="random_forests" title="wikilink">random forests</a> which are grown using i.i.d random vectors in the tree construction are equivalent to a kernel acting on the true margin. Lin and Jeon <a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> established the connection between <a href="random_forests" title="wikilink">random forests</a> and adaptive nearest neighbor, implying that <a href="random_forests" title="wikilink">random forests</a> can be seen as adaptive kernel estimates. Davies and Ghahramani<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> proposed Random Forest Kernel and show that it can empirically outperform state-of-art kernel methods. Scornet<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> first defined <strong>KeRF estimates</strong> and gave the explicit link between <strong>KeRF estimates</strong> and <a href="random_forest" title="wikilink">random forest</a>. He also gave explicit expressions for kernels based on centred random forest<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> and uniform random forest,<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> two simplified models of <a href="random_forest" title="wikilink">random forest</a>. He named these two <strong>KeRFs</strong> by <strong>Centred KeRF</strong> and <strong>Uniform KeRF</strong>,and proved upper bounds on their rates of consistency.</p>
+<h2 id="notations-and-definitions">Notations and definitions</h2>
+<h3 id="preliminaries-centred-forests">Preliminaries: Centred forests</h3>
+
+<p>Centred forest<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> is a simplified model for Breiman's original <a href="random_forest" title="wikilink">random forest</a>, which uniformly selects an attribute among all attributes and performs splits at the center of the cell along the pre-chosen attribute. The algorithm stops when a fully binary tree of level 
+
+<math display="inline" id="Kernel_random_forest:0">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+
+ is built, where 
+
+<math display="inline" id="Kernel_random_forest:1">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>∈</mo>
+   <mi>ℕ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>k</ci>
+    <ci>ℕ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k\in\mathbb{N}
+  </annotation>
+ </semantics>
+</math>
+
+ is a parameter of the algorithm.</p>
+<h3 id="uniform-forest">Uniform forest</h3>
+
+<p>Uniform forest<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> is another simplified model for Breiman's original <a href="random_forest" title="wikilink">random forest</a>, which uniformly selects an attribute among all attributes and performs splits at a point uniformly drawn on the side of the cell, along the preselected attribute.</p>
+<h3 id="from-random-forest-to-kerf">From random forest to KeRF</h3>
+
+<p>Given a training sample 
+
+<math display="inline" id="Kernel_random_forest:2">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi class="ltx_font_mathcaligraphic">𝒟</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>=</mo>
+   <msubsup>
+    <mrow>
+     <mo stretchy="false">{</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>𝐗</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>Y</mi>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo stretchy="false">}</mo>
+    </mrow>
+    <mrow>
+     <mi>i</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>n</mi>
+   </msubsup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝒟</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <set>
+       <interval closure="open">
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐗</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>Y</ci>
+         <ci>i</ci>
+        </apply>
+       </interval>
+      </set>
+      <apply>
+       <eq></eq>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{D}_{n}=\{(\mathbf{X}_{i},Y_{i})\}_{i=1}^{n}
+  </annotation>
+ </semantics>
+</math>
+
+ of 
+
+<math display="inline" id="Kernel_random_forest:3">
+ <semantics>
+  <mrow>
+   <msup>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>0</mn>
+     <mo>,</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi>p</mi>
+   </msup>
+   <mo>×</mo>
+   <mi>ℝ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <interval closure="closed">
+      <cn type="integer">0</cn>
+      <cn type="integer">1</cn>
+     </interval>
+     <ci>p</ci>
+    </apply>
+    <ci>ℝ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [0,1]^{p}\times\mathbb{R}
+  </annotation>
+ </semantics>
+</math>
+
+-valued independent random variables distributed as the independent prototype pair 
+
+<math display="inline" id="Kernel_random_forest:4">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mi>𝐗</mi>
+   <mo>,</mo>
+   <mi>Y</mi>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open">
+    <ci>𝐗</ci>
+    <ci>Y</ci>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (\mathbf{X},Y)
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Kernel_random_forest:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝔼</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <msup>
+      <mi>Y</mi>
+      <mn>2</mn>
+     </msup>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo><</mo>
+   <mi mathvariant="normal">∞</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <lt></lt>
+    <apply>
+     <times></times>
+     <ci>𝔼</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>Y</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{E}[Y^{2}]<\infty
+  </annotation>
+ </semantics>
+</math>
+
+
+. We aim at predicting the response 
+
+<math display="inline" id="Kernel_random_forest:6">
+ <semantics>
+  <mi>Y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y
+  </annotation>
+ </semantics>
+</math>
+
+,associated with the random variable 
+
+<math display="inline" id="Kernel_random_forest:7">
+ <semantics>
+  <mi>𝐗</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐗</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}
+  </annotation>
+ </semantics>
+</math>
+
+, by estimating the regression function 
+
+<math display="inline" id="Kernel_random_forest:8">
+ <semantics>
+  <mrow>
+   <mi>m</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>𝔼</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>Y</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝐗</mi>
+    <mo>=</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">m</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">E</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <csymbol cd="unknown">Y</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <eq></eq>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-]</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m(\mathbf{x})=\mathbb{E}[Y|\mathbf{X}=\mathbf{x}]
+  </annotation>
+ </semantics>
+</math>
+
+. A random regression forest is an ensemble of 
+
+<math display="inline" id="Kernel_random_forest:9">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ randomized regression trees. Denote 
+
+<math display="inline" id="Kernel_random_forest:10">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>m</mi>
+    <mi>n</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>𝚯</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>m</ci>
+     <ci>n</ci>
+    </apply>
+    <interval closure="open">
+     <ci>𝐱</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝚯</ci>
+      <ci>j</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m_{n}(\mathbf{x},\mathbf{\Theta}_{j})
+  </annotation>
+ </semantics>
+</math>
+
+
+ the predicted value at point 
+
+<math display="inline" id="Kernel_random_forest:11">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ by the 
+
+<math display="inline" id="Kernel_random_forest:12">
+ <semantics>
+  <mi>j</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>j</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j
+  </annotation>
+ </semantics>
+</math>
+
+-th tree, where 
+
+<math display="inline" id="Kernel_random_forest:13">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>𝚯</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <mi mathvariant="normal">⋯</mi>
+   <mo>,</mo>
+   <msub>
+    <mi>𝚯</mi>
+    <mi>M</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝚯</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>normal-⋯</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝚯</ci>
+     <ci>M</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\Theta}_{1},\cdots,\mathbf{\Theta}_{M}
+  </annotation>
+ </semantics>
+</math>
+
+ are independent random variables, distributed as a generic random variable 
+
+<math display="inline" id="Kernel_random_forest:14">
+ <semantics>
+  <mi>𝚯</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝚯</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\Theta}
+  </annotation>
+ </semantics>
+</math>
+
+, independent of the sample 
+
+<math display="inline" id="Kernel_random_forest:15">
+ <semantics>
+  <msub>
+   <mi class="ltx_font_mathcaligraphic">𝒟</mi>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝒟</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{D}_{n}
+  </annotation>
+ </semantics>
+</math>
+
+
+. This random variable can be used to describe the randomness induced by node splitting and the sampling procedure for tree construction. The trees are combined to form the finite forest estimate 
+
+<math display="inline" id="Kernel_random_forest:16">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>m</mi>
+     <mrow>
+      <mi>M</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">⋯</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mi>M</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>M</mi>
+    </mfrac>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>j</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>M</mi>
+     </msubsup>
+     <mrow>
+      <msub>
+       <mi>m</mi>
+       <mi>n</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo>,</mo>
+       <msub>
+        <mi mathvariant="normal">Θ</mi>
+        <mi>j</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>m</ci>
+      <list>
+       <ci>M</ci>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <vector>
+      <ci>𝐱</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Θ</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-⋯</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Θ</ci>
+       <ci>M</ci>
+      </apply>
+     </vector>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>M</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>M</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>m</ci>
+        <ci>n</ci>
+       </apply>
+       <interval closure="open">
+        <ci>𝐱</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Θ</ci>
+         <ci>j</ci>
+        </apply>
+       </interval>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m_{M,n}(\mathbf{x},\Theta_{1},\cdots,\Theta_{M})=\frac{1}{M}\sum_{j=1}^{M}m_{n%
+}(\mathbf{x},\Theta_{j})
+  </annotation>
+ </semantics>
+</math>
+
+. For regression trees, we have 
+
+<math display="inline" id="Kernel_random_forest:17">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>m</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>n</mi>
+    </msubsup>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mi>Y</mi>
+       <mi>i</mi>
+      </msub>
+      <msub>
+       <mn>𝟏</mn>
+       <mrow>
+        <msub>
+         <mi>𝐗</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>∈</mo>
+        <mrow>
+         <msub>
+          <mi>A</mi>
+          <mi>n</mi>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>𝐱</mi>
+          <mo>,</mo>
+          <msub>
+           <mi mathvariant="normal">Θ</mi>
+           <mi>j</mi>
+          </msub>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mrow>
+      </msub>
+     </mrow>
+     <mrow>
+      <msub>
+       <mi>N</mi>
+       <mi>n</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo>,</mo>
+       <msub>
+        <mi mathvariant="normal">Θ</mi>
+        <mi>j</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>m</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>Y</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <cn type="integer">1</cn>
+        <apply>
+         <in></in>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐗</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>A</ci>
+           <ci>n</ci>
+          </apply>
+          <interval closure="open">
+           <ci>𝐱</ci>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>normal-Θ</ci>
+            <ci>j</ci>
+           </apply>
+          </interval>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <ci>n</ci>
+       </apply>
+       <interval closure="open">
+        <ci>𝐱</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Θ</ci>
+         <ci>j</ci>
+        </apply>
+       </interval>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m_{n}=\sum_{i=1}^{n}\frac{Y_{i}\mathbf{1}_{\mathbf{X}_{i}\in A_{n}(\mathbf{x},%
+\Theta_{j})}}{N_{n}(\mathbf{x},\Theta_{j})}
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Kernel_random_forest:18">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>A</mi>
+    <mi>n</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>A</ci>
+     <ci>n</ci>
+    </apply>
+    <interval closure="open">
+     <ci>𝐱</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Θ</ci>
+      <ci>j</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{n}(\mathbf{x},\Theta_{j})
+  </annotation>
+ </semantics>
+</math>
+
+ is the cell containing 
+
+<math display="inline" id="Kernel_random_forest:19">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+, designed with randomness 
+
+<math display="inline" id="Kernel_random_forest:20">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Θ</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Θ</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta_{j}
+  </annotation>
+ </semantics>
+</math>
+
+
+ and dataset 
+
+<math display="inline" id="Kernel_random_forest:21">
+ <semantics>
+  <msub>
+   <mi class="ltx_font_mathcaligraphic">𝒟</mi>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝒟</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{D}_{n}
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Kernel_random_forest:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>N</mi>
+     <mi>n</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mi>j</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>n</mi>
+    </msubsup>
+    <msub>
+     <mn>𝟏</mn>
+     <mrow>
+      <msub>
+       <mi>𝐗</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>∈</mo>
+      <mrow>
+       <msub>
+        <mi>A</mi>
+        <mi>n</mi>
+       </msub>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>𝐱</mi>
+        <mo>,</mo>
+        <msub>
+         <mi mathvariant="normal">Θ</mi>
+         <mi>j</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>N</ci>
+      <ci>n</ci>
+     </apply>
+     <interval closure="open">
+      <ci>𝐱</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Θ</ci>
+       <ci>j</ci>
+      </apply>
+     </interval>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <cn type="integer">1</cn>
+      <apply>
+       <in></in>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐗</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>A</ci>
+         <ci>n</ci>
+        </apply>
+        <interval closure="open">
+         <ci>𝐱</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>normal-Θ</ci>
+          <ci>j</ci>
+         </apply>
+        </interval>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N_{n}(\mathbf{x},\Theta_{j})=\sum_{i=1}^{n}\mathbf{1}_{\mathbf{X}_{i}\in A_{n}%
+(\mathbf{x},\Theta_{j})}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Thus random forest estimates satisfy, for all 
+
+<math display="inline" id="Kernel_random_forest:23">
+ <semantics>
+  <mrow>
+   <mi>𝐱</mi>
+   <mo>∈</mo>
+   <msup>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>0</mn>
+     <mo>,</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi>d</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>𝐱</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <interval closure="closed">
+      <cn type="integer">0</cn>
+      <cn type="integer">1</cn>
+     </interval>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}\in[0,1]^{d}
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Kernel_random_forest:24">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>m</mi>
+     <mrow>
+      <mi>M</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mi>M</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>M</mi>
+    </mfrac>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>j</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>M</mi>
+     </msubsup>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <msubsup>
+        <mo largeop="true" symmetric="true">∑</mo>
+        <mrow>
+         <mi>i</mi>
+         <mo>=</mo>
+         <mn>1</mn>
+        </mrow>
+        <mi>n</mi>
+       </msubsup>
+       <mfrac>
+        <mrow>
+         <msub>
+          <mi>Y</mi>
+          <mi>i</mi>
+         </msub>
+         <msub>
+          <mn>𝟏</mn>
+          <mrow>
+           <msub>
+            <mi>𝐗</mi>
+            <mi>i</mi>
+           </msub>
+           <mo>∈</mo>
+           <mrow>
+            <msub>
+             <mi>A</mi>
+             <mi>n</mi>
+            </msub>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mi>𝐱</mi>
+             <mo>,</mo>
+             <msub>
+              <mi mathvariant="normal">Θ</mi>
+              <mi>j</mi>
+             </msub>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+          </mrow>
+         </msub>
+        </mrow>
+        <mrow>
+         <msub>
+          <mi>N</mi>
+          <mi>n</mi>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>𝐱</mi>
+          <mo>,</mo>
+          <msub>
+           <mi mathvariant="normal">Θ</mi>
+           <mi>j</mi>
+          </msub>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mfrac>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>m</ci>
+      <list>
+       <ci>M</ci>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <vector>
+      <ci>𝐱</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Θ</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Θ</ci>
+       <ci>M</ci>
+      </apply>
+     </vector>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>M</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>M</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <divide></divide>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>Y</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <cn type="integer">1</cn>
+          <apply>
+           <in></in>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>𝐗</ci>
+            <ci>i</ci>
+           </apply>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>A</ci>
+             <ci>n</ci>
+            </apply>
+            <interval closure="open">
+             <ci>𝐱</ci>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>normal-Θ</ci>
+              <ci>j</ci>
+             </apply>
+            </interval>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>N</ci>
+          <ci>n</ci>
+         </apply>
+         <interval closure="open">
+          <ci>𝐱</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>normal-Θ</ci>
+           <ci>j</ci>
+          </apply>
+         </interval>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m_{M,n}(\mathbf{x},\Theta_{1},\ldots,\Theta_{M})=\frac{1}{M}\sum_{j=1}^{M}%
+\left(\sum_{i=1}^{n}\frac{Y_{i}\mathbf{1}_{\mathbf{X}_{i}\in A_{n}(\mathbf{x},%
+\Theta_{j})}}{N_{n}(\mathbf{x},\Theta_{j})}\right)
+  </annotation>
+ </semantics>
+</math>
+
+. Random regression forest has two level of averaging, first over the samples in the target cell of a tree, then over all trees. Thus the contributions of observations that are in cells with a high density of data points are smaller than that of observations which belong to less populated cells. In order to improve the random forest methods and compensate the misestimation, Scornet<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> defined <strong>KeRF</strong> by</p>
+
+<p>
+
+<math display="block" id="Kernel_random_forest:25">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mover accent="true">
+      <mi>m</mi>
+      <mo stretchy="false">~</mo>
+     </mover>
+     <mrow>
+      <mi>M</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mi>M</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mrow>
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>j</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>M</mi>
+      </msubsup>
+      <mrow>
+       <msub>
+        <mi>N</mi>
+        <mi>n</mi>
+       </msub>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>𝐱</mi>
+        <mo>,</mo>
+        <msub>
+         <mi mathvariant="normal">Θ</mi>
+         <mi>j</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mfrac>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>j</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>M</mi>
+     </munderover>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>n</mi>
+      </munderover>
+      <mrow>
+       <msub>
+        <mi>Y</mi>
+        <mi>i</mi>
+       </msub>
+       <msub>
+        <mn>𝟏</mn>
+        <mrow>
+         <msub>
+          <mi>𝐗</mi>
+          <mi>i</mi>
+         </msub>
+         <mo>∈</mo>
+         <mrow>
+          <msub>
+           <mi>A</mi>
+           <mi>n</mi>
+          </msub>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>𝐱</mi>
+           <mo>,</mo>
+           <msub>
+            <mi mathvariant="normal">Θ</mi>
+            <mi>j</mi>
+           </msub>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+       </msub>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-~</ci>
+       <ci>m</ci>
+      </apply>
+      <list>
+       <ci>M</ci>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <vector>
+      <ci>𝐱</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Θ</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Θ</ci>
+       <ci>M</ci>
+      </apply>
+     </vector>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>j</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>M</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>N</ci>
+         <ci>n</ci>
+        </apply>
+        <interval closure="open">
+         <ci>𝐱</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>normal-Θ</ci>
+          <ci>j</ci>
+         </apply>
+        </interval>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>M</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>Y</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <cn type="integer">1</cn>
+         <apply>
+          <in></in>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝐗</ci>
+           <ci>i</ci>
+          </apply>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>A</ci>
+            <ci>n</ci>
+           </apply>
+           <interval closure="open">
+            <ci>𝐱</ci>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>normal-Θ</ci>
+             <ci>j</ci>
+            </apply>
+           </interval>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tilde{m}_{M,n}(\mathbf{x},\Theta_{1},\ldots,\Theta_{M})=\frac{1}{\sum_{j=1}^{%
+M}N_{n}(\mathbf{x},\Theta_{j})}\sum_{j=1}^{M}\sum_{i=1}^{n}Y_{i}\mathbf{1}_{%
+\mathbf{X}_{i}\in A_{n}(\mathbf{x},\Theta_{j})}
+  </annotation>
+ </semantics>
+</math>
+
+,which is equal to the mean of the 
+
+<math display="inline" id="Kernel_random_forest:26">
+ <semantics>
+  <msub>
+   <mi>Y</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>Y</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y_{i}
+  </annotation>
+ </semantics>
+</math>
+
+'s falling in the cells containing 
+
+<math display="inline" id="Kernel_random_forest:27">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ in the forest. If we define 
+
+<math display="inline" id="Kernel_random_forest:28">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>K</mi>
+     <mrow>
+      <mi>M</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <mi>𝐳</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>M</mi>
+    </mfrac>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>j</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>M</mi>
+     </msubsup>
+     <msub>
+      <mn>𝟏</mn>
+      <mrow>
+       <msub>
+        <mi>𝐗</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>∈</mo>
+       <mrow>
+        <msub>
+         <mi>A</mi>
+         <mi>n</mi>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>𝐱</mi>
+         <mo>,</mo>
+         <msub>
+          <mi mathvariant="normal">Θ</mi>
+          <mi>j</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>K</ci>
+      <list>
+       <ci>M</ci>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <interval closure="open">
+      <ci>𝐱</ci>
+      <ci>𝐳</ci>
+     </interval>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>M</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>M</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <cn type="integer">1</cn>
+       <apply>
+        <in></in>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐗</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>A</ci>
+          <ci>n</ci>
+         </apply>
+         <interval closure="open">
+          <ci>𝐱</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>normal-Θ</ci>
+           <ci>j</ci>
+          </apply>
+         </interval>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K_{M,n}(\mathbf{x},\mathbf{z})=\frac{1}{M}\sum_{j=1}^{M}\mathbf{1}_{\mathbf{X}%
+_{i}\in A_{n}(\mathbf{x},\Theta_{j})}
+  </annotation>
+ </semantics>
+</math>
+
+ the connection function of the 
+
+<math display="inline" id="Kernel_random_forest:29">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ finite forest,then almost surely, we have 
+
+<math display="inline" id="Kernel_random_forest:30">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mover accent="true">
+      <mi>m</mi>
+      <mo stretchy="false">~</mo>
+     </mover>
+     <mrow>
+      <mi>M</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mi>M</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mstyle displaystyle="false">
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>n</mi>
+      </msubsup>
+     </mstyle>
+     <mrow>
+      <msub>
+       <mi>Y</mi>
+       <mi>i</mi>
+      </msub>
+      <msub>
+       <mi>K</mi>
+       <mrow>
+        <mi>M</mi>
+        <mo>,</mo>
+        <mi>n</mi>
+       </mrow>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo>,</mo>
+       <msub>
+        <mi>𝐗</mi>
+        <mi>i</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mstyle displaystyle="false">
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi mathvariant="normal">ℓ</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>n</mi>
+      </msubsup>
+     </mstyle>
+     <mrow>
+      <msub>
+       <mi>K</mi>
+       <mrow>
+        <mi>M</mi>
+        <mo>,</mo>
+        <mi>n</mi>
+       </mrow>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo>,</mo>
+       <msub>
+        <mi>𝐗</mi>
+        <mi mathvariant="normal">ℓ</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-~</ci>
+       <ci>m</ci>
+      </apply>
+      <list>
+       <ci>M</ci>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <vector>
+      <ci>𝐱</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Θ</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Θ</ci>
+       <ci>M</ci>
+      </apply>
+     </vector>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>Y</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>K</ci>
+        <list>
+         <ci>M</ci>
+         <ci>n</ci>
+        </list>
+       </apply>
+       <interval closure="open">
+        <ci>𝐱</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐗</ci>
+         <ci>i</ci>
+        </apply>
+       </interval>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>normal-ℓ</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>K</ci>
+        <list>
+         <ci>M</ci>
+         <ci>n</ci>
+        </list>
+       </apply>
+       <interval closure="open">
+        <ci>𝐱</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐗</ci>
+         <ci>normal-ℓ</ci>
+        </apply>
+       </interval>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tilde{m}_{M,n}(\mathbf{x},\Theta_{1},\ldots,\Theta_{M})=\frac{\sum_{i=1}^{n}Y%
+_{i}K_{M,n}(\mathbf{x},\mathbf{X}_{i})}{\sum_{\ell=1}^{n}K_{M,n}(\mathbf{x},%
+\mathbf{X}_{\ell})}
+  </annotation>
+ </semantics>
+</math>
+
+, which defines the <strong>KeRF</strong>.</p>
+<h3 id="centred-kerf">Centred KeRF</h3>
+
+<p>The construction of <strong>Centred KeRF</strong> of level 
+
+<math display="inline" id="Kernel_random_forest:31">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ is the same as for <strong>centred forest</strong>, except that predictions are made by 
+
+<math display="inline" id="Kernel_random_forest:32">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>m</mi>
+     <mo stretchy="false">~</mo>
+    </mover>
+    <mrow>
+     <mi>M</mi>
+     <mo>,</mo>
+     <mi>n</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Θ</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Θ</mi>
+     <mi>M</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-~</ci>
+      <ci>m</ci>
+     </apply>
+     <list>
+      <ci>M</ci>
+      <ci>n</ci>
+     </list>
+    </apply>
+    <vector>
+     <ci>𝐱</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Θ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Θ</ci>
+      <ci>M</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tilde{m}_{M,n}(\mathbf{x},\Theta_{1},\ldots,\Theta_{M})
+  </annotation>
+ </semantics>
+</math>
+
+, the corresponding kernel function, or connection function is</p>
+
+<p>
+
+<math display="block" id="Kernel_random_forest:33">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msubsup>
+     <mi>K</mi>
+     <mi>k</mi>
+     <mrow>
+      <mi>c</mi>
+      <mi>c</mi>
+     </mrow>
+    </msubsup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <mi>𝐳</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munder>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mrow>
+       <msub>
+        <mi>k</mi>
+        <mn>1</mn>
+       </msub>
+       <mo>,</mo>
+       <mi mathvariant="normal">…</mi>
+       <mo>,</mo>
+       <msub>
+        <mi>k</mi>
+        <mi>d</mi>
+       </msub>
+       <mo>,</mo>
+       <mrow>
+        <mstyle displaystyle="false">
+         <msubsup>
+          <mo largeop="true" symmetric="true">∑</mo>
+          <mrow>
+           <mi>j</mi>
+           <mo>=</mo>
+           <mn>1</mn>
+          </mrow>
+          <mi>d</mi>
+         </msubsup>
+        </mstyle>
+        <msub>
+         <mi>k</mi>
+         <mi>j</mi>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo>=</mo>
+      <mi>k</mi>
+     </mrow>
+    </munder>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <mi>k</mi>
+       <mo lspace="0pt" rspace="3.5pt">!</mo>
+      </mrow>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>k</mi>
+         <mn>1</mn>
+        </msub>
+        <mo lspace="0pt" rspace="3.5pt">!</mo>
+       </mrow>
+       <mi mathvariant="normal">…</mi>
+       <mrow>
+        <msub>
+         <mi>k</mi>
+         <mi>d</mi>
+        </msub>
+        <mo lspace="0pt" rspace="3.5pt">!</mo>
+       </mrow>
+      </mrow>
+     </mfrac>
+     <msup>
+      <mrow>
+       <mo>(</mo>
+       <mfrac>
+        <mn>1</mn>
+        <mi>d</mi>
+       </mfrac>
+       <mo>)</mo>
+      </mrow>
+      <mi>k</mi>
+     </msup>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+       <mrow>
+        <mi>j</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>d</mi>
+      </munderover>
+      <msub>
+       <mn>𝟏</mn>
+       <mrow>
+        <mrow>
+         <mo stretchy="false">⌈</mo>
+         <mrow>
+          <msup>
+           <mn>2</mn>
+           <msub>
+            <mi>k</mi>
+            <mi>j</mi>
+           </msub>
+          </msup>
+          <msub>
+           <mi>x</mi>
+           <mi>j</mi>
+          </msub>
+         </mrow>
+         <mo stretchy="false">⌉</mo>
+        </mrow>
+        <mo>=</mo>
+        <mrow>
+         <mo stretchy="false">⌈</mo>
+         <mrow>
+          <msup>
+           <mn>2</mn>
+           <msub>
+            <mi>k</mi>
+            <mi>j</mi>
+           </msub>
+          </msup>
+          <msub>
+           <mi>z</mi>
+           <mi>j</mi>
+          </msub>
+         </mrow>
+         <mo stretchy="false">⌉</mo>
+        </mrow>
+       </mrow>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>K</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>c</ci>
+       <ci>c</ci>
+      </apply>
+     </apply>
+     <interval closure="open">
+      <ci>𝐱</ci>
+      <ci>𝐳</ci>
+     </interval>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <eq></eq>
+       <list>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <ci>normal-…</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>k</ci>
+         <ci>d</ci>
+        </apply>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <sum></sum>
+           <apply>
+            <eq></eq>
+            <ci>j</ci>
+            <cn type="integer">1</cn>
+           </apply>
+          </apply>
+          <ci>d</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>k</ci>
+          <ci>j</ci>
+         </apply>
+        </apply>
+       </list>
+       <ci>k</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <factorial></factorial>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <factorial></factorial>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>k</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>normal-…</ci>
+        <apply>
+         <factorial></factorial>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>k</ci>
+          <ci>d</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <ci>d</ci>
+       </apply>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <csymbol cd="latexml">product</csymbol>
+         <apply>
+          <eq></eq>
+          <ci>j</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>d</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <cn type="integer">1</cn>
+        <apply>
+         <eq></eq>
+         <apply>
+          <ceiling></ceiling>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <cn type="integer">2</cn>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>k</ci>
+             <ci>j</ci>
+            </apply>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>x</ci>
+            <ci>j</ci>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <ceiling></ceiling>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <cn type="integer">2</cn>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>k</ci>
+             <ci>j</ci>
+            </apply>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>z</ci>
+            <ci>j</ci>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K_{k}^{cc}(\mathbf{x},\mathbf{z})=\sum_{k_{1},\ldots,k_{d},\sum_{j=1}^{d}k_{j}%
+=k}\frac{k!}{k_{1}!\ldots k_{d}!}\left(\frac{1}{d}\right)^{k}\prod_{j=1}^{d}%
+\mathbf{1}_{\lceil 2^{k_{j}}x_{j}\rceil=\lceil 2^{k_{j}}z_{j}\rceil}
+  </annotation>
+ </semantics>
+</math>
+
+, for all 
+
+<math display="inline" id="Kernel_random_forest:34">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <mi>𝐳</mi>
+   </mrow>
+   <mo>∈</mo>
+   <msup>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>0</mn>
+     <mo>,</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi>d</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <list>
+     <ci>𝐱</ci>
+     <ci>𝐳</ci>
+    </list>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <interval closure="closed">
+      <cn type="integer">0</cn>
+      <cn type="integer">1</cn>
+     </interval>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x},\mathbf{z}\in[0,1]^{d}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h3 id="uniform-kerf">Uniform KeRF</h3>
+
+<p><strong>Uniform KeRF</strong> is built in the same way as <strong>uniform forest</strong>, except that predictions are made by 
+
+<math display="inline" id="Kernel_random_forest:35">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>m</mi>
+     <mo stretchy="false">~</mo>
+    </mover>
+    <mrow>
+     <mi>M</mi>
+     <mo>,</mo>
+     <mi>n</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Θ</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Θ</mi>
+     <mi>M</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-~</ci>
+      <ci>m</ci>
+     </apply>
+     <list>
+      <ci>M</ci>
+      <ci>n</ci>
+     </list>
+    </apply>
+    <vector>
+     <ci>𝐱</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Θ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Θ</ci>
+      <ci>M</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tilde{m}_{M,n}(\mathbf{x},\Theta_{1},\ldots,\Theta_{M})
+  </annotation>
+ </semantics>
+</math>
+
+, the corresponding kernel function, or connection function is</p>
+
+<p>
+
+<math display="block" id="Kernel_random_forest:36">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msubsup>
+     <mi>K</mi>
+     <mi>k</mi>
+     <mrow>
+      <mi>u</mi>
+      <mi>f</mi>
+     </mrow>
+    </msubsup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>𝟎</mn>
+     <mo>,</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munder>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mrow>
+       <msub>
+        <mi>k</mi>
+        <mn>1</mn>
+       </msub>
+       <mo>,</mo>
+       <mi mathvariant="normal">…</mi>
+       <mo>,</mo>
+       <msub>
+        <mi>k</mi>
+        <mi>d</mi>
+       </msub>
+       <mo>,</mo>
+       <mrow>
+        <mstyle displaystyle="false">
+         <msubsup>
+          <mo largeop="true" symmetric="true">∑</mo>
+          <mrow>
+           <mi>j</mi>
+           <mo>=</mo>
+           <mn>1</mn>
+          </mrow>
+          <mi>d</mi>
+         </msubsup>
+        </mstyle>
+        <msub>
+         <mi>k</mi>
+         <mi>j</mi>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo>=</mo>
+      <mi>k</mi>
+     </mrow>
+    </munder>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <mi>k</mi>
+       <mo lspace="0pt" rspace="3.5pt">!</mo>
+      </mrow>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>k</mi>
+         <mn>1</mn>
+        </msub>
+        <mo lspace="0pt" rspace="3.5pt">!</mo>
+       </mrow>
+       <mi mathvariant="normal">…</mi>
+       <mrow>
+        <msub>
+         <mi>k</mi>
+         <mi>d</mi>
+        </msub>
+        <mo lspace="0pt" rspace="3.5pt">!</mo>
+       </mrow>
+      </mrow>
+     </mfrac>
+     <msup>
+      <mrow>
+       <mo>(</mo>
+       <mfrac>
+        <mn>1</mn>
+        <mi>d</mi>
+       </mfrac>
+       <mo>)</mo>
+      </mrow>
+      <mi>k</mi>
+     </msup>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+       <mrow>
+        <mi>m</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>d</mi>
+      </munderover>
+      <mrow>
+       <mo>(</mo>
+       <mrow>
+        <mn>1</mn>
+        <mo>-</mo>
+        <mrow>
+         <mrow>
+          <mo stretchy="false">|</mo>
+          <msub>
+           <mi>x</mi>
+           <mi>m</mi>
+          </msub>
+          <mo stretchy="false">|</mo>
+         </mrow>
+         <mrow>
+          <munderover>
+           <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+           <mrow>
+            <mi>j</mi>
+            <mo>=</mo>
+            <mn>0</mn>
+           </mrow>
+           <mrow>
+            <msub>
+             <mi>k</mi>
+             <mi>m</mi>
+            </msub>
+            <mo>-</mo>
+            <mn>1</mn>
+           </mrow>
+          </munderover>
+          <mfrac>
+           <msup>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mrow>
+              <mo>-</mo>
+              <mrow>
+               <mi>ln</mi>
+               <mrow>
+                <mo stretchy="false">|</mo>
+                <msub>
+                 <mi>x</mi>
+                 <mi>m</mi>
+                </msub>
+                <mo stretchy="false">|</mo>
+               </mrow>
+              </mrow>
+             </mrow>
+             <mo stretchy="false">)</mo>
+            </mrow>
+            <mi>j</mi>
+           </msup>
+           <mrow>
+            <mi>j</mi>
+            <mo lspace="0pt" rspace="3.5pt">!</mo>
+           </mrow>
+          </mfrac>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>K</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>u</ci>
+       <ci>f</ci>
+      </apply>
+     </apply>
+     <interval closure="open">
+      <cn type="integer">0</cn>
+      <ci>𝐱</ci>
+     </interval>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <eq></eq>
+       <list>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <ci>normal-…</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>k</ci>
+         <ci>d</ci>
+        </apply>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <sum></sum>
+           <apply>
+            <eq></eq>
+            <ci>j</ci>
+            <cn type="integer">1</cn>
+           </apply>
+          </apply>
+          <ci>d</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>k</ci>
+          <ci>j</ci>
+         </apply>
+        </apply>
+       </list>
+       <ci>k</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <factorial></factorial>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <factorial></factorial>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>k</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>normal-…</ci>
+        <apply>
+         <factorial></factorial>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>k</ci>
+          <ci>d</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <ci>d</ci>
+       </apply>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <csymbol cd="latexml">product</csymbol>
+         <apply>
+          <eq></eq>
+          <ci>m</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>d</ci>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+        <apply>
+         <times></times>
+         <apply>
+          <abs></abs>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>x</ci>
+           <ci>m</ci>
+          </apply>
+         </apply>
+         <apply>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <sum></sum>
+            <apply>
+             <eq></eq>
+             <ci>j</ci>
+             <cn type="integer">0</cn>
+            </apply>
+           </apply>
+           <apply>
+            <minus></minus>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>k</ci>
+             <ci>m</ci>
+            </apply>
+            <cn type="integer">1</cn>
+           </apply>
+          </apply>
+          <apply>
+           <divide></divide>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <apply>
+             <minus></minus>
+             <apply>
+              <ln></ln>
+              <apply>
+               <abs></abs>
+               <apply>
+                <csymbol cd="ambiguous">subscript</csymbol>
+                <ci>x</ci>
+                <ci>m</ci>
+               </apply>
+              </apply>
+             </apply>
+            </apply>
+            <ci>j</ci>
+           </apply>
+           <apply>
+            <factorial></factorial>
+            <ci>j</ci>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K_{k}^{uf}(\mathbf{0},\mathbf{x})=\sum_{k_{1},\ldots,k_{d},\sum_{j=1}^{d}k_{j}%
+=k}\frac{k!}{k_{1}!\ldots k_{d}!}\left(\frac{1}{d}\right)^{k}\prod_{m=1}^{d}%
+\left(1-|x_{m}|\sum_{j=0}^{k_{m}-1}\frac{(-\ln|x_{m}|)^{j}}{j!}\right)
+  </annotation>
+ </semantics>
+</math>
+
+, for all 
+
+<math display="inline" id="Kernel_random_forest:37">
+ <semantics>
+  <mrow>
+   <mi>𝐱</mi>
+   <mo>∈</mo>
+   <msup>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>0</mn>
+     <mo>,</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi>d</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>𝐱</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <interval closure="closed">
+      <cn type="integer">0</cn>
+      <cn type="integer">1</cn>
+     </interval>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}\in[0,1]^{d}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h2 id="properties">Properties</h2>
+<h3 id="relation-between-kerf-and-random-forest">Relation between KeRF and <a href="random_forest" title="wikilink">random forest</a></h3>
+
+<p>Predictions given by <strong>KeRF</strong> and <a href="random_forests" title="wikilink">random forests</a> are close if the number of points in each cell is controlled:</p>
+
+<p>
+
+<math display="block" id="Kernel_random_forest:38">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mtext>Assume that there exist sequences</mtext>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>a</mi>
+         <mi>n</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>,</mo>
+      <mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>b</mi>
+         <mi>n</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mtext>such that, a.s.</mtext>
+      </mrow>
+      <mo>,</mo>
+      <msub>
+       <mi>a</mi>
+       <mi>n</mi>
+      </msub>
+     </mrow>
+     <mo>≤</mo>
+     <mrow>
+      <msub>
+       <mi>N</mi>
+       <mi>n</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo>,</mo>
+       <mi mathvariant="normal">Θ</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>≤</mo>
+     <mrow>
+      <msub>
+       <mi>b</mi>
+       <mi>n</mi>
+      </msub>
+      <mtext>and</mtext>
+      <msub>
+       <mi>a</mi>
+       <mi>n</mi>
+      </msub>
+     </mrow>
+     <mo>≤</mo>
+     <mrow>
+      <mfrac>
+       <mn>1</mn>
+       <mi>M</mi>
+      </mfrac>
+      <mrow>
+       <munderover>
+        <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+        <mrow>
+         <mi>m</mi>
+         <mo>=</mo>
+         <mn>1</mn>
+        </mrow>
+        <mi>M</mi>
+       </munderover>
+       <mrow>
+        <msub>
+         <mi>N</mi>
+         <mi>n</mi>
+        </msub>
+        <mi>𝐱</mi>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <msub>
+      <mi mathvariant="normal">Θ</mi>
+      <mi>m</mi>
+     </msub>
+     <mo>≤</mo>
+     <mrow>
+      <msub>
+       <mi>b</mi>
+       <mi>n</mi>
+      </msub>
+      <mo>,</mo>
+      <mtext>then almost surely</mtext>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <and></and>
+     <apply>
+      <leq></leq>
+      <list>
+       <apply>
+        <times></times>
+        <mtext>Assume that there exist sequences</mtext>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>a</ci>
+         <ci>n</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>b</ci>
+         <ci>n</ci>
+        </apply>
+        <mtext>such that, a.s.</mtext>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>a</ci>
+        <ci>n</ci>
+       </apply>
+      </list>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <ci>n</ci>
+       </apply>
+       <interval closure="open">
+        <ci>𝐱</ci>
+        <ci>normal-Θ</ci>
+       </interval>
+      </apply>
+     </apply>
+     <apply>
+      <leq></leq>
+      <share href="#.cmml">
+      </share>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>b</ci>
+        <ci>n</ci>
+       </apply>
+       <mtext>and</mtext>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>a</ci>
+        <ci>n</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <leq></leq>
+      <share href="#.cmml">
+      </share>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <ci>M</ci>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <sum></sum>
+          <apply>
+           <eq></eq>
+           <ci>m</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>M</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>N</ci>
+          <ci>n</ci>
+         </apply>
+         <ci>𝐱</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <leq></leq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Θ</ci>
+      <ci>m</ci>
+     </apply>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>b</ci>
+       <ci>n</ci>
+      </apply>
+      <mtext>then almost surely</mtext>
+     </list>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \text{Assume that there exist sequences }(a_{n}),(b_{n})\text{ such that, a.s.%
+},a_{n}\leq N_{n}(\mathbf{x},\Theta)\leq b_{n}\text{ and }a_{n}\leq\frac{1}{M}%
+\sum_{m=1}^{M}N_{n}{\mathbf{x},\Theta_{m}}\leq b_{n},\text{ then almost surely},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Kernel_random_forest:39">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <mrow>
+     <mrow>
+      <msub>
+       <mi>m</mi>
+       <mrow>
+        <mi>M</mi>
+        <mo>,</mo>
+        <mi>n</mi>
+       </mrow>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>-</mo>
+     <mrow>
+      <msub>
+       <mover accent="true">
+        <mi>m</mi>
+        <mo stretchy="false">~</mo>
+       </mover>
+       <mrow>
+        <mi>M</mi>
+        <mo>,</mo>
+        <mi>n</mi>
+       </mrow>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">|</mo>
+   </mrow>
+   <mo>≤</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mi>b</mi>
+       <mi>n</mi>
+      </msub>
+      <mo>-</mo>
+      <msub>
+       <mi>a</mi>
+       <mi>n</mi>
+      </msub>
+     </mrow>
+     <msub>
+      <mi>a</mi>
+      <mi>n</mi>
+     </msub>
+    </mfrac>
+    <msub>
+     <mover accent="true">
+      <mi>m</mi>
+      <mo stretchy="false">~</mo>
+     </mover>
+     <mrow>
+      <mi>M</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <abs></abs>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>m</ci>
+        <list>
+         <ci>M</ci>
+         <ci>n</ci>
+        </list>
+       </apply>
+       <ci>𝐱</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-~</ci>
+         <ci>m</ci>
+        </apply>
+        <list>
+         <ci>M</ci>
+         <ci>n</ci>
+        </list>
+       </apply>
+       <ci>𝐱</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>b</ci>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>a</ci>
+        <ci>n</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>a</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-~</ci>
+       <ci>m</ci>
+      </apply>
+      <list>
+       <ci>M</ci>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <ci>𝐱</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |m_{M,n}(\mathbf{x})-\tilde{m}_{M,n}(\mathbf{x})|\leq\frac{b_{n}-a_{n}}{a_{n}}%
+\tilde{m}_{M,n}(\mathbf{x})
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h3 id="relation-between-infinite-kerf-and-infinite-random-forest">Relation between infinite KeRF and infinite <a href="random_forest" title="wikilink">random forest</a></h3>
+
+<p>When the number of trees 
+
+<math display="inline" id="Kernel_random_forest:40">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ goes to infinity, then we have infinite <a href="random_forest" title="wikilink">random forest</a> and infinite KeRF. Their estimates are close if the number of observations in each cell is bounded:</p>
+
+<p>
+
+<math display="block" id="Kernel_random_forest:41">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mtext>Assume that there exist sequences</mtext>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>ε</mi>
+      <mi>n</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>a</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>b</mi>
+      <mi>n</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mtext>such that, a.s.</mtext>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <times></times>
+     <mtext>Assume that there exist sequences</mtext>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ε</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>a</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>b</ci>
+      <ci>n</ci>
+     </apply>
+     <mtext>such that, a.s.</mtext>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \text{Assume that there exist sequences }(\varepsilon_{n}),(a_{n}),(b_{n})%
+\text{ such that, a.s.}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<ul>
+<li>
+
+<math display="inline" id="Kernel_random_forest:42">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝔼</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mrow>
+      <msub>
+       <mi>N</mi>
+       <mi>n</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo>,</mo>
+       <mi mathvariant="normal">Θ</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>≥</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <geq></geq>
+    <apply>
+     <times></times>
+     <ci>𝔼</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <ci>n</ci>
+       </apply>
+       <interval closure="open">
+        <ci>𝐱</ci>
+        <ci>normal-Θ</ci>
+       </interval>
+      </apply>
+     </apply>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{E}[N_{n}(\mathbf{x},\Theta)]\geq 1
+  </annotation>
+ </semantics>
+</math>
+
+,</li>
+<li>
+
+<math display="inline" id="Kernel_random_forest:43">
+ <semantics>
+  <mrow>
+   <mi>ℙ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <msub>
+     <mi>a</mi>
+     <mi>n</mi>
+    </msub>
+    <mo>≤</mo>
+    <msub>
+     <mi>N</mi>
+     <mi>n</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <mi mathvariant="normal">Θ</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>≤</mo>
+    <msub>
+     <mi>b</mi>
+     <mi>n</mi>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi class="ltx_font_mathcaligraphic">𝒟</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mo>≥</mo>
+   <mn>1</mn>
+   <mo>-</mo>
+   <msub>
+    <mi>ε</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>/</mo>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>a</ci>
+      <ci>n</ci>
+     </apply>
+     <leq></leq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>N</ci>
+      <ci>n</ci>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">Θ</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <leq></leq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>b</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝒟</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>normal-]</ci>
+    </cerror>
+    <geq></geq>
+    <cn type="integer">1</cn>
+    <minus></minus>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>ε</ci>
+     <ci>n</ci>
+    </apply>
+    <divide></divide>
+    <cn type="integer">2</cn>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{P}[a_{n}\leq N_{n}(\mathbf{x},\Theta)\leq b_{n}\mid\mathcal{D}_{n}]%
+\geq 1-\varepsilon_{n}/2
+  </annotation>
+ </semantics>
+</math>
+
+,</li>
+<li>
+
+<math display="inline" id="Kernel_random_forest:44">
+ <semantics>
+  <mrow>
+   <mi>ℙ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <msub>
+     <mi>a</mi>
+     <mi>n</mi>
+    </msub>
+    <mo>≤</mo>
+    <msub>
+     <mi>𝔼</mi>
+     <mi mathvariant="normal">Θ</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <msub>
+      <mi>N</mi>
+      <mi>n</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>𝐱</mi>
+      <mo>,</mo>
+      <mi mathvariant="normal">Θ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mo>≤</mo>
+    <msub>
+     <mi>b</mi>
+     <mi>n</mi>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi class="ltx_font_mathcaligraphic">𝒟</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mo>≥</mo>
+   <mn>1</mn>
+   <mo>-</mo>
+   <msub>
+    <mi>ε</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>/</mo>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>a</ci>
+      <ci>n</ci>
+     </apply>
+     <leq></leq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝔼</ci>
+      <ci>normal-Θ</ci>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-[</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>N</ci>
+       <ci>n</ci>
+      </apply>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">x</csymbol>
+       <ci>normal-,</ci>
+       <csymbol cd="unknown">Θ</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-]</ci>
+     </cerror>
+     <leq></leq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>b</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝒟</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>normal-]</ci>
+    </cerror>
+    <geq></geq>
+    <cn type="integer">1</cn>
+    <minus></minus>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>ε</ci>
+     <ci>n</ci>
+    </apply>
+    <divide></divide>
+    <cn type="integer">2</cn>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{P}[a_{n}\leq\mathbb{E}_{\Theta}[N_{n}(\mathbf{x},\Theta)]\leq b_{n}%
+\mid\mathcal{D}_{n}]\geq 1-\varepsilon_{n}/2
+  </annotation>
+ </semantics>
+</math>
+
+,</li>
+</ul>
+
+<p>
+
+<math display="inline" id="Kernel_random_forest:45">
+ <semantics>
+  <mrow>
+   <mtext>Then almost surely,</mtext>
+   <mo stretchy="false">|</mo>
+   <msub>
+    <mi>m</mi>
+    <mrow>
+     <mi mathvariant="normal">∞</mi>
+     <mo>,</mo>
+     <mi>n</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo>-</mo>
+    <msub>
+     <mover accent="true">
+      <mi>m</mi>
+      <mo stretchy="false">~</mo>
+     </mover>
+     <mrow>
+      <mi mathvariant="normal">∞</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">|</mo>
+    <mo>≤</mo>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mi>b</mi>
+       <mi>n</mi>
+      </msub>
+      <mo>-</mo>
+      <msub>
+       <mi>a</mi>
+       <mi>n</mi>
+      </msub>
+     </mrow>
+     <msub>
+      <mi>a</mi>
+      <mi>n</mi>
+     </msub>
+    </mfrac>
+    <msub>
+     <mover accent="true">
+      <mi>m</mi>
+      <mo stretchy="false">~</mo>
+     </mover>
+     <mrow>
+      <mi mathvariant="normal">∞</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>+</mo>
+    <mi>n</mi>
+    <msub>
+     <mi>ε</mi>
+     <mi>n</mi>
+    </msub>
+    <mrow>
+     <mo>(</mo>
+     <msub>
+      <mi>max</mi>
+      <mrow>
+       <mn>1</mn>
+       <mo>≤</mo>
+       <mi>i</mi>
+       <mo>≤</mo>
+       <mi>n</mi>
+      </mrow>
+     </msub>
+     <msub>
+      <mi>Y</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <mtext>Then almost surely,</mtext>
+    <ci>normal-|</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>m</ci>
+     <list>
+      <infinity></infinity>
+      <ci>n</ci>
+     </list>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <minus></minus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-~</ci>
+       <ci>m</ci>
+      </apply>
+      <list>
+       <infinity></infinity>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-|</ci>
+     <leq></leq>
+     <apply>
+      <divide></divide>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>b</ci>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>a</ci>
+        <ci>n</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>a</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-~</ci>
+       <ci>m</ci>
+      </apply>
+      <list>
+       <infinity></infinity>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <plus></plus>
+     <csymbol cd="unknown">n</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ε</ci>
+      <ci>n</ci>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <max></max>
+       <apply>
+        <and></and>
+        <apply>
+         <leq></leq>
+         <cn type="integer">1</cn>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <leq></leq>
+         <share href="#.cmml">
+         </share>
+         <ci>n</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>Y</ci>
+       <ci>i</ci>
+      </apply>
+      <ci>normal-)</ci>
+     </cerror>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \text{Then almost surely,}|m_{\infty,n}(\mathbf{x}-\tilde{m}_{\infty,n}(%
+\mathbf{x})|\leq\frac{b_{n}-a_{n}}{a_{n}}\tilde{m}_{\infty,n}(\mathbf{x})+n%
+\varepsilon_{n}\left(\max_{1\leq i\leq n}Y_{i}\right)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h2 id="consistency-results">Consistency results</h2>
+
+<p>Assume that 
+
+<math display="inline" id="Kernel_random_forest:46">
+ <semantics>
+  <mrow>
+   <mi>Y</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>m</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>𝐗</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mi>ε</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>Y</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>m</ci>
+      <ci>𝐗</ci>
+     </apply>
+     <ci>ε</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y=m(\mathbf{X})+\varepsilon
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Kernel_random_forest:47">
+ <semantics>
+  <mi>ε</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ε</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varepsilon
+  </annotation>
+ </semantics>
+</math>
+
+ is a centred Gaussian noise, independent of 
+
+<math display="inline" id="Kernel_random_forest:48">
+ <semantics>
+  <mi>𝐗</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐗</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}
+  </annotation>
+ </semantics>
+</math>
+
+, with finite variance 
+
+<math display="inline" id="Kernel_random_forest:49">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>σ</mi>
+    <mn>2</mn>
+   </msup>
+   <mo><</mo>
+   <mi mathvariant="normal">∞</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <lt></lt>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>σ</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma^{2}<\infty
+  </annotation>
+ </semantics>
+</math>
+
+. Moreover, 
+
+<math display="inline" id="Kernel_random_forest:50">
+ <semantics>
+  <mi>𝐗</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐗</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}
+  </annotation>
+ </semantics>
+</math>
+
+ is uniformly distributed on 
+
+<math display="inline" id="Kernel_random_forest:51">
+ <semantics>
+  <msup>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>0</mn>
+    <mo>,</mo>
+    <mn>1</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mi>d</mi>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <interval closure="closed">
+     <cn type="integer">0</cn>
+     <cn type="integer">1</cn>
+    </interval>
+    <ci>d</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [0,1]^{d}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kernel_random_forest:52">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+ is <a class="uri" href="Lipschitz" title="wikilink">Lipschitz</a>. Scornet<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> proved upper bounds on the rates of consistency for <strong>centred KeRF</strong> and <strong>uniform KeRF</strong>.</p>
+<h3 id="consistency-of-centred-kerf">Consistency of centred KeRF</h3>
+
+<p>Providing 
+
+<math display="inline" id="Kernel_random_forest:53">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>→</mo>
+   <mi mathvariant="normal">∞</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <ci>k</ci>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k\rightarrow\infty
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kernel_random_forest:54">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>n</mi>
+    <mo>/</mo>
+    <msup>
+     <mn>2</mn>
+     <mi>k</mi>
+    </msup>
+   </mrow>
+   <mo>→</mo>
+   <mi mathvariant="normal">∞</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <divide></divide>
+     <ci>n</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <cn type="integer">2</cn>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n/2^{k}\rightarrow\infty
+  </annotation>
+ </semantics>
+</math>
+
+, there exists a constant 
+
+<math display="inline" id="Kernel_random_forest:55">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>C</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>></mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>C</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C_{1}>0
+  </annotation>
+ </semantics>
+</math>
+
+ such that, for all 
+
+<math display="inline" id="Kernel_random_forest:56">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Kernel_random_forest:57">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝔼</mi>
+    <msup>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mrow>
+       <mrow>
+        <msubsup>
+         <mover accent="true">
+          <mi>m</mi>
+          <mo stretchy="false">~</mo>
+         </mover>
+         <mi>n</mi>
+         <mrow>
+          <mi>c</mi>
+          <mi>c</mi>
+         </mrow>
+        </msubsup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>𝐗</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>m</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>𝐗</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+   <mo>≤</mo>
+   <mrow>
+    <msub>
+     <mi>C</mi>
+     <mn>1</mn>
+    </msub>
+    <msup>
+     <mi>n</mi>
+     <mrow>
+      <mo>-</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>/</mo>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>3</mn>
+         <mo>+</mo>
+         <mrow>
+          <mi>d</mi>
+          <mrow>
+           <mi>log</mi>
+           <mn>2</mn>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </msup>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>log</mi>
+       <mi>n</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <ci>𝔼</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <apply>
+            <ci>normal-~</ci>
+            <ci>m</ci>
+           </apply>
+           <ci>n</ci>
+          </apply>
+          <apply>
+           <times></times>
+           <ci>c</ci>
+           <ci>c</ci>
+          </apply>
+         </apply>
+         <ci>𝐗</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>m</ci>
+         <ci>𝐗</ci>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>C</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>n</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <apply>
+         <plus></plus>
+         <cn type="integer">3</cn>
+         <apply>
+          <times></times>
+          <ci>d</ci>
+          <apply>
+           <log></log>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <log></log>
+       <ci>n</ci>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{E}[\tilde{m}_{n}^{cc}(\mathbf{X})-m(\mathbf{X})]^{2}\leq C_{1}n^{-1/(3%
++d\log 2)}(\log n)^{2}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h3 id="consistency-of-uniform-kerf">Consistency of uniform KeRF</h3>
+
+<p>Providing 
+
+<math display="inline" id="Kernel_random_forest:58">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>→</mo>
+   <mi mathvariant="normal">∞</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <ci>k</ci>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k\rightarrow\infty
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kernel_random_forest:59">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>n</mi>
+    <mo>/</mo>
+    <msup>
+     <mn>2</mn>
+     <mi>k</mi>
+    </msup>
+   </mrow>
+   <mo>→</mo>
+   <mi mathvariant="normal">∞</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <divide></divide>
+     <ci>n</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <cn type="integer">2</cn>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n/2^{k}\rightarrow\infty
+  </annotation>
+ </semantics>
+</math>
+
+, there exists a constant 
+
+<math display="inline" id="Kernel_random_forest:60">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mo>></mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <ci>C</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C>0
+  </annotation>
+ </semantics>
+</math>
+
+ such that, 
+
+<math display="inline" id="Kernel_random_forest:61">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝔼</mi>
+    <msup>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mrow>
+       <mrow>
+        <msubsup>
+         <mover accent="true">
+          <mi>m</mi>
+          <mo stretchy="false">~</mo>
+         </mover>
+         <mi>n</mi>
+         <mrow>
+          <mi>u</mi>
+          <mi>f</mi>
+         </mrow>
+        </msubsup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>𝐗</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>m</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>𝐗</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+   <mo>≤</mo>
+   <mrow>
+    <mi>C</mi>
+    <msup>
+     <mi>n</mi>
+     <mrow>
+      <mo>-</mo>
+      <mrow>
+       <mn>2</mn>
+       <mo>/</mo>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>6</mn>
+         <mo>+</mo>
+         <mrow>
+          <mn>3</mn>
+          <mi>d</mi>
+          <mrow>
+           <mi>log</mi>
+           <mn>2</mn>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </msup>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>log</mi>
+       <mi>n</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <ci>𝔼</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <apply>
+            <ci>normal-~</ci>
+            <ci>m</ci>
+           </apply>
+           <ci>n</ci>
+          </apply>
+          <apply>
+           <times></times>
+           <ci>u</ci>
+           <ci>f</ci>
+          </apply>
+         </apply>
+         <ci>𝐗</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>m</ci>
+         <ci>𝐗</ci>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>C</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>n</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <divide></divide>
+        <cn type="integer">2</cn>
+        <apply>
+         <plus></plus>
+         <cn type="integer">6</cn>
+         <apply>
+          <times></times>
+          <cn type="integer">3</cn>
+          <ci>d</ci>
+          <apply>
+           <log></log>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <log></log>
+       <ci>n</ci>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{E}[\tilde{m}_{n}^{uf}(\mathbf{X})-m(\mathbf{X})]^{2}\leq Cn^{-2/(6+3d%
+\log 2)}(\log n)^{2}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+
+<p>"</p>
+
+<p><a class="uri" href="Category:Statistics" title="wikilink">Category:Statistics</a> <a href="Category:Machine_learning" title="wikilink">Category:Machine learning</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"></li>
+<li id="fn9"></li>
+<li id="fn10"></li>
+<li id="fn11"></li>
+</ol>
+</section>
+</body>
+</html>

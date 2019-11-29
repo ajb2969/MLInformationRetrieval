@@ -1,0 +1,613 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="310">Director string</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Director string</h1>
+<hr/>
+
+<p>In <a class="uri" href="mathematics" title="wikilink">mathematics</a>, in the area of <a href="lambda_calculus" title="wikilink">lambda calculus</a> and <a class="uri" href="computation" title="wikilink">computation</a>, <strong>directors</strong> or <strong>director strings</strong> are a mechanism for keeping track of the <a href="free_variable" title="wikilink">free variables</a> in a <a href="Expression_(mathematics)" title="wikilink">term</a>. Loosely speaking, they can be understood as a kind of <a class="uri" href="memoization" title="wikilink">memoization</a> for free variables; that is, as an <a href="program_optimization" title="wikilink">optimization</a> technique for rapidly locating the free variables in a <a href="term_algebra" title="wikilink">term algebra</a> or in a lambda expression. Director strings were introduced by Kennaway and Sleep in 1982 and further developed by Sinot, Fernández and Mackie <a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> as a mechanism for understanding and controlling the <a href="Analysis_of_algorithms" title="wikilink">computational complexity</a> cost of <a href="beta_reduction" title="wikilink">beta reduction</a>.</p>
+<h2 id="motivation">Motivation</h2>
+
+<p>In beta reduction, one defines the value of the expression on the left to be that on the right:</p>
+
+<p>
+
+<math display="block" id="Director_string:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>λ</mi>
+    <mi>x</mi>
+    <mo>.</mo>
+    <mi>E</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mi>y</mi>
+   <mo>≡</mo>
+   <mi>E</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>x</mi>
+    <mo>:=</mo>
+    <mi>y</mi>
+    <mo rspace="4.2pt" stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">λ</csymbol>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-.</ci>
+     <csymbol cd="unknown">E</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">y</csymbol>
+    <equivalent></equivalent>
+    <csymbol cd="unknown">E</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <csymbol cd="latexml">assign</csymbol>
+     <csymbol cd="unknown">y</csymbol>
+     <ci>normal-]</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (\lambda x.E)y\equiv E[x:=y]\,
+  </annotation>
+ </semantics>
+</math>
+
+ or 
+
+<math display="inline" id="Director_string:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>λ</mi>
+    <mi>x</mi>
+    <mo>.</mo>
+    <mi>E</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mi>y</mi>
+   <mo>≡</mo>
+   <mi>E</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>x</mi>
+    <mo>/</mo>
+    <mi>y</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">λ</csymbol>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-.</ci>
+     <csymbol cd="unknown">E</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">y</csymbol>
+    <equivalent></equivalent>
+    <csymbol cd="unknown">E</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <divide></divide>
+     <csymbol cd="unknown">y</csymbol>
+     <ci>normal-]</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (\lambda x.E)y\equiv E[x/y]
+  </annotation>
+ </semantics>
+</math>
+
+ (Replace all <em>x</em> in <em>E</em>(body) by <em>y</em>)</p>
+
+<p>While this is a conceptually simple operation, the <a href="Analysis_of_algorithms" title="wikilink">computational complexity</a> of the step can be non-trivial: a naive algorithm would scan the expression <em>E</em> for all occurrences of the free variable <em>x</em>. Such an algorithm is clearly <em>O</em>(<em>n</em>) in the length of the expression <em>E</em>. Thus, one is motivated to somehow track the occurrences of the free variables in the expression. One may attempt to track the position of <em>every</em> free variable, wherever it may occur in the expression, but this can clearly become very costly in terms of storage; furthermore, it provides a level of detail that is not really needed. Director strings suggest that the correct model is to track free variables in a hierarchical fashion, by tracking their use in component terms.</p>
+<h2 id="definition">Definition</h2>
+
+<p>Consider, for simplicity, a <a href="term_algebra" title="wikilink">term algebra</a>, that is, a collection of free variables, constants, and operators which may be freely combined. Assume that a term <em>t</em> takes the form</p>
+
+<p>
+
+<math display="block" id="Director_string:2">
+ <semantics>
+  <mrow>
+   <mi>t</mi>
+   <mo>:</mo>
+   <mo>:=</mo>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>t</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>t</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>t</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <ci>normal-:</ci>
+    <csymbol cd="latexml">assign</csymbol>
+    <csymbol cd="unknown">f</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t::=f(t_{1},t_{2},\dots,t_{n})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where <em>f</em> is a <a href="function_(mathematics)" title="wikilink">function</a>, of <a class="uri" href="arity" title="wikilink">arity</a> <em>n</em>, with no <a href="free_variable" title="wikilink">free variables</a>, and the 
+
+<math display="inline" id="Director_string:3">
+ <semantics>
+  <msub>
+   <mi>t</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>t</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ are terms that may or may not contain free variables. Let <em>V</em> denote the set of all free variables that may occur in the set of all terms. The director is then the map</p>
+
+<p>
+
+<math display="block" id="Director_string:4">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>σ</mi>
+    <mi>t</mi>
+   </msub>
+   <mo>:</mo>
+   <mrow>
+    <mi>V</mi>
+    <mo>→</mo>
+    <mrow>
+     <mi>P</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mo stretchy="false">{</mo>
+       <mn>1</mn>
+       <mo>,</mo>
+       <mn>2</mn>
+       <mo>,</mo>
+       <mi mathvariant="normal">…</mi>
+       <mo>,</mo>
+       <mi>n</mi>
+       <mo stretchy="false">}</mo>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <ci>normal-→</ci>
+     <ci>V</ci>
+     <apply>
+      <times></times>
+      <ci>P</ci>
+      <set>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+       <ci>normal-…</ci>
+       <ci>n</ci>
+      </set>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{t}:V\to P(\{1,2,\dots,n\})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>from the free variables to the <a href="power_set" title="wikilink">power set</a> 
+
+<math display="inline" id="Director_string:5">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>P</ci>
+    <ci>X</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(X)
+  </annotation>
+ </semantics>
+</math>
+
+ of the set 
+
+<math display="inline" id="Director_string:6">
+ <semantics>
+  <mrow>
+   <mi>X</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mn>2</mn>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mi>n</mi>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>X</ci>
+    <set>
+     <cn type="integer">1</cn>
+     <cn type="integer">2</cn>
+     <ci>normal-…</ci>
+     <ci>n</ci>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X=\{1,2,\dots,n\}
+  </annotation>
+ </semantics>
+</math>
+
+. The values taken by 
+
+<math display="inline" id="Director_string:7">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{t}
+  </annotation>
+ </semantics>
+</math>
+
+ are simply a list of the indices of the 
+
+<math display="inline" id="Director_string:8">
+ <semantics>
+  <msub>
+   <mi>t</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>t</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ in which a given free variable occurs. Thus, for example, if a free variable 
+
+<math display="inline" id="Director_string:9">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mo>∈</mo>
+   <mi>V</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>x</ci>
+    <ci>V</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x\in V
+  </annotation>
+ </semantics>
+</math>
+
+ occurs in 
+
+<math display="inline" id="Director_string:10">
+ <semantics>
+  <msub>
+   <mi>t</mi>
+   <mn>3</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>t</ci>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{3}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Director_string:11">
+ <semantics>
+  <msub>
+   <mi>t</mi>
+   <mn>5</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>t</ci>
+    <cn type="integer">5</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{5}
+  </annotation>
+ </semantics>
+</math>
+
+ but in no other terms, then one has 
+
+<math display="inline" id="Director_string:12">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>σ</mi>
+     <mi>t</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mn>3</mn>
+    <mo>,</mo>
+    <mn>5</mn>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>x</ci>
+    </apply>
+    <set>
+     <cn type="integer">3</cn>
+     <cn type="integer">5</cn>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{t}(x)=\{3,5\}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Thus, for every term 
+
+<math display="inline" id="Director_string:13">
+ <semantics>
+  <mrow>
+   <mi>t</mi>
+   <mo>∈</mo>
+   <mi>T</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>t</ci>
+    <ci>T</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t\in T
+  </annotation>
+ </semantics>
+</math>
+
+ in the set of all terms <em>T</em>, one maintains a function 
+
+<math display="inline" id="Director_string:14">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{t}
+  </annotation>
+ </semantics>
+</math>
+
+, and instead of working only with terms <em>t</em>, one works with pairs 
+
+<math display="inline" id="Director_string:15">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mi>t</mi>
+   <mo>,</mo>
+   <msub>
+    <mi>σ</mi>
+    <mi>t</mi>
+   </msub>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open">
+    <ci>t</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>t</ci>
+    </apply>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (t,\sigma_{t})
+  </annotation>
+ </semantics>
+</math>
+
+. Thus, the time complexity of finding the free variables in <em>t</em> is traded for the space complexity of maintaining a list of the terms in which a variable occurs.</p>
+<h2 id="general-case">General case</h2>
+
+<p>Although the above definition is formulated in terms of a <a href="term_algebra" title="wikilink">term algebra</a>, the general concept applies more generally, and can be defined both for <a href="combinatory_algebra" title="wikilink">combinatory algebras</a> and for <a href="lambda_calculus" title="wikilink">lambda calculus</a> proper, specifically, within the framework of <a href="explicit_substitution" title="wikilink">explicit substitution</a>.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Term_rewrite_system" title="wikilink">Term rewrite system</a></li>
+<li><a href="Explicit_substitution" title="wikilink">Explicit substitution</a></li>
+<li><a href="Combinatory_reduction_system" title="wikilink">Combinatory reduction system</a></li>
+<li><a class="uri" href="Memoization" title="wikilink">Memoization</a></li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<ul>
+<li>F.-R. Sinot. "<a href="http://www.lsv.ens-cachan.fr/Publis/PAPERS/PDF/sinot-jlc05.pdf">Director Strings Revisited: A Generic Approach to the Efficient Representation of Free Variables in Higher-order Rewriting.</a>" <em>Journal of Logic and Computation</em> <strong>15</strong>(2), pages 201-218, 2005.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Lambda_calculus" title="wikilink">Category:Lambda calculus</a> <a href="Category:Rewriting_systems" title="wikilink">Category:Rewriting systems</a> <a href="Category:Software_optimization" title="wikilink">Category:Software optimization</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">F.-R. Sinot, M. Fernández and I. Mackie. Efficient Reductions with Director Strings. In <em>Proc. Rewriting Techniques and Applications</em>. Springer LNCS vol 2706, 2003<a href="#fnref1">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

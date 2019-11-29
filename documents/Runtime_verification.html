@@ -1,0 +1,580 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1816">Runtime verification</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Runtime verification</h1>
+<hr>'''Runtime verification''' is a computing system analysis and execution approach based on extracting information from a running system and using it to detect and possibly react to observed behaviors satisfying or violating certain properties.  Some very particular properties, such as datarace and deadlock freedom, are typically desired to be satisfied by all systems and may be best implemented algorithmically.  Other properties can be more conveniently captured as formal specifications.  Runtime verification specifications are typically expressed in trace predicate formalisms, such as finite state machines, regular expressions, context-free patterns, linear temporal logics, etc., or extensions of these.  This allows for a less adhoc approach than normal testing.  However, any mechanism for monitoring an executing system is considered runtime verification, including verifying against test oracles and reference implementations
+<p><code>.  When formal requirements specifications are provided, monitors are synthesized from them and infused within the system by means of instrumentation.  Runtime verification can be used for many purposes, such as security or safety policy monitoring, debugging, testing, verification, validation, profiling, fault protection, behavior modification (e.g., recovery), etc.  Runtime verification avoids the complexity of traditional formal verification techniques, such as model checking and theorem proving, by analyzing only one or a few execution traces and by working directly with the actual system, thus scaling up relatively well and giving more confidence in the results of the analysis (because it avoids the tedious and error-prone step of  formally modelling the system), at the expense of less coverage.  Moreover, through its reflective capabilities runtime verification can be made an integral part of the target system, monitoring and guiding its execution during deployment.</code></p>
+<h2 id="history-and-context">History and Context</h2>
+
+<p>The terminology <em>runtime verification</em> was formally introduced as the name of a 2001 workshop aimed at addressing problems at the boundary between formal verification and testing. Nevertheless, checking formally or informally specified properties against executing systems or programs is an old topic (notable examples are dynamic typing in software, or fail-safe devices or watchdog timers in hardware), whose precise roots are hard to identify. Currently, runtime verification techniques are often presented with various alternative names, such as runtime monitoring, runtime checking, runtime reflection, runtime analysis, dynamic analysis, runtime/dynamic symbolic analysis, trace analysis, log file analysis, etc., all referring to instances of the same high-level concept applied either to different areas or by scholars from different communities. Runtime verification is intimately related to other well-established areas, such as testing (particularly model-based testing) when used before deployment and fault-tolerant systems when used during deployment.</p>
+
+<p>Within the broad area of runtime verification, one can distinguish several categories, such as:</p>
+<ul>
+<li>"specification-less" monitoring that targets a fixed set of mostly concurrency-related properties such as atomicity. The pioneering work in this area is by Savage <em>et al.</em> with the Eraser algorithm<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></li>
+<li>monitoring with respect to temporal logic specifications; early contributions in this direction has been made by Lee, Kannan, and their collaborators,<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> and Havelund and Rosu,.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></li>
+</ul>
+<h2 id="examples">Examples</h2>
+
+<p>The examples below discuss some simple properties which have been considered, possibly with small variations, by several runtime verification groups by the time of this writing (April 2011). To make them more interesting, each property below uses a different specification formalism and all of them are parametric. Parametric properties are properties about traces formed with parametric events, which are events that bind data to parameters. Here a parametric property has the form 
+
+<math display="inline" id="Runtime_verification:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>∀</mo>
+    <mrow>
+     <mi>p</mi>
+     <mi>a</mi>
+     <mi>r</mi>
+     <mi>a</mi>
+     <mi>m</mi>
+     <mi>e</mi>
+     <mi>t</mi>
+     <mi>e</mi>
+     <mi>r</mi>
+     <mi>s</mi>
+    </mrow>
+   </mrow>
+   <mo>:</mo>
+   <mi>φ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <apply>
+     <csymbol cd="latexml">for-all</csymbol>
+     <apply>
+      <times></times>
+      <ci>p</ci>
+      <ci>a</ci>
+      <ci>r</ci>
+      <ci>a</ci>
+      <ci>m</ci>
+      <ci>e</ci>
+      <ci>t</ci>
+      <ci>e</ci>
+      <ci>r</ci>
+      <ci>s</ci>
+     </apply>
+    </apply>
+    <ci>φ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \forall parameters:\varphi
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Runtime_verification:1">
+ <semantics>
+  <mi>φ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>φ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varphi
+  </annotation>
+ </semantics>
+</math>
+
+ is a specification in some appropriate formalism referring to generic (uninstantiated) parametric events. The intuition for such parametric properties is that the property expressed by 
+
+<math display="inline" id="Runtime_verification:2">
+ <semantics>
+  <mi>φ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>φ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varphi
+  </annotation>
+ </semantics>
+</math>
+
+ must hold for all parameter instances encountered (through parametric events) in the observed trace. None of the following examples are specific to any particular runtime verification system, though support for parameters is obviously needed. In the following examples Java syntax is assumed, thus "==" is logical equality, while "=" is assignment. Some methods (e.g., <code>update()</code> in the UnsafeEnumExample) are dummy methods, which are not part of the Java API, that are used for clarity.</p>
+<h3 id="hasnext">HasNext</h3>
+
+<p> The Java <a href="http://download.oracle.com/javase/6/docs/api/java/util/Iterator.html">Iterator</a> interface requires that the <code>hasNext()</code> method be called and return true before the <code>next()</code> method is called. If this does not occur, it is very possible that a user will iterate "off the end of" a <a href="http://download.oracle.com/javase/6/docs/api/java/util/Collection.html">Collection</a>. The figure to the right shows a finite state machine that defines a possible monitor for checking and enforcing this property with runtime verification. From the <em>unknown</em> state, it is always an error to call the <code>next()</code> method because such an operation could be unsafe. If <code>hasNext()</code> is called and returns <code>true</code>, it is safe to call <code>next()</code>, so the monitor enters the <em>more</em> state. If, however, the <code>hasNext()</code> method returns <code>false</code>, there are no more elements, and the monitor enters the <em>none</em> state. In the <em>more</em> and <em>none</em> states, calling the <code>hasNext()</code> method provides no new information. It is safe to call the <code>next()</code> method from the <em>more</em> state, but it becomes unknown if more elements exist, so the monitor reenters the initial <em>unknown</em> state. Finally, calling the <code>next()</code> method from the <em>none</em> state results in entering the <em>error</em> state. What follows is a representation of this property using parametric past time <a href="linear_temporal_logic" title="wikilink">linear temporal logic</a>.</p>
+
+<p>
+
+<math display="inline" id="Runtime_verification:3">
+ <semantics>
+  <mrow>
+   <mo rspace="5.8pt">∀</mo>
+   <mpadded width="+3.3pt">
+    <mtext>Iterator</mtext>
+   </mpadded>
+   <mi>i</mi>
+   <mi>i</mi>
+   <mo>.</mo>
+   <mtext>next</mtext>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo rspace="5.8pt" stretchy="false">)</mo>
+   </mrow>
+   <mo rspace="5.8pt">→</mo>
+   <mo>⊙</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>i</mi>
+    <mo>.</mo>
+    <mtext>hasNext</mtext>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>=</mo>
+    <mo>=</mo>
+    <mi>t</mi>
+    <mi>r</mi>
+    <mi>u</mi>
+    <mi>e</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="latexml">for-all</csymbol>
+    <mtext>Iterator</mtext>
+    <csymbol cd="unknown">i</csymbol>
+    <ci></ci>
+    <csymbol cd="unknown">i</csymbol>
+    <ci>normal-.</ci>
+    <mtext>next</mtext>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <ci>normal-)</ci>
+    </cerror>
+    <ci>normal-→</ci>
+    <csymbol cd="latexml">direct-product</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">i</csymbol>
+     <ci>normal-.</ci>
+     <mtext>hasNext</mtext>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <ci>normal-)</ci>
+     </cerror>
+     <eq></eq>
+     <eq></eq>
+     <csymbol cd="unknown">t</csymbol>
+     <csymbol cd="unknown">r</csymbol>
+     <csymbol cd="unknown">u</csymbol>
+     <csymbol cd="unknown">e</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \forall~{}\text{Iterator}~{}i\quad i.\text{next}()~{}\rightarrow~{}\odot(i.%
+\text{hasNext}()==true)
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>This formula says that any call to the <code>next()</code> method must be immediately preceded by a call to <code>hasNext()</code> method that returns true. The property here is parametric in the Iterator <code>i</code>. Conceptually, this means that there will be one copy of the monitor for each possible Iterator in a test program, although runtime verification systems need not implement their parametric monitors this way. The monitor for this property would be set to trigger a handler when the formula is violated (equivalently when the finite state machine enters the <em>error</em> state), which will occur when either <code>next()</code> is called without first calling <code>hasNext()</code>, or when <code>hasNext()</code> is called before <code>next()</code>, but returned <code>false</code>.</p>
+<h3 id="unsafeenum">UnsafeEnum</h3>
+
+<p> The <a href="http://download.oracle.com/javase/6/docs/api/java/util/Vector.html">Vector</a> class in Java has two means for iterating over its elements. One may use the Iterator interface, as seen in the previous example, or one may use the <a href="http://download.oracle.com/javase/6/docs/api/java/util/Enumeration.html">Enumeration</a> interface. Besides the addition of a remove method for the Iterator interface, the main difference is that Iterator is "fail fast" while Enumeration is not. What this means is that if one modifies the Vector (other than by using the Iterator remove method) when one is iterating over the Vector using an Iterator, a <a href="http://download.oracle.com/javase/6/docs/api/java/util/ConcurrentModificationException.html">ConcurrentModificationException</a> is thrown. However, when using an Enumeration this is not a case, as mentioned. This can result in non-deterministic results from a program because the Vector is left in an inconsistent state from the perspective of the Enumeration. For legacy programs that still use the Enumeration interface, one may wish to enforce that Enumerations are not used when their underlying Vector is modified. The following parametric regular pattern can be used to enforce this behavior:</p>
+<figure><b>(Figure)</b>
+<figcaption>Unsafeenumform.jpg</figcaption>
+</figure>
+
+<p>This pattern is parametric in both the Enumeration and the Vector. Intuitively, and as above runtime verification systems need not implement their parametric monitors this way, one may think of the parametric monitor for this property as creating and keeping track of a non-parametric monitor instance for each possible pair of Vector and Enumeration. Some events may concern several monitors at the same time, such as <code>v.update()</code>, so the runtime verification system must (again conceptually) dispatch them to all interested monitors. Here the property is specified so that it states the bad behaviors of the program. This property, then, must be monitored for the match of the pattern. The figure to the right shows Java code that matches this pattern, thus violating the property. The Vector, v, is updated after the Enumeration, e, is created, and e is then used.</p>
+<h3 id="safelock">SafeLock</h3>
+
+<p>The previous two examples show finite state properties, but properties used in runtime verification may be much more complex. The SafeLock property enforces the policy that the number of acquires and releases of a (reentrant) Lock class are matched within a given method call. This, of course, disallows release of Locks in methods other than the ones that acquire them, but this is very possibly a desirable goal for the tested system to achieve. Below is a specification of this property using a parametric context-free pattern:</p>
+<figure><b>(Figure)</b>
+<figcaption>Safelockform.jpg</figcaption>
+</figure>
+
+<p> The pattern specifies balanced sequences of nested begin/end and acquire/release pairs for each Thread and Lock (
+
+<math display="inline" id="Runtime_verification:4">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ is the empty sequence). Here begin and end refer to the begin and end of every method in the program (except the calls to acquire and release themselves). They are parametric in the Thread because it is necessary to associate the beginning and end of methods if and only if they belong to the same Thread. The acquire and release events are also parametric in the Thread for the same reason. They are, additionally, parametric in Lock because we do not wish to associate the releases of one Lock with the acquires of another. In the extreme, it is possible that there will be an instance of the property, i.e., a copy of the context-free parsing mechanism, for each possible combination of Thread with Lock; this happens, again, intuitively, because runtime verification systems may implement the same functionality differently. For example, if a system has Threads 
+
+<math display="inline" id="Runtime_verification:5">
+ <semantics>
+  <msub>
+   <mi>t</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>t</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{1}
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Runtime_verification:6">
+ <semantics>
+  <msub>
+   <mi>t</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>t</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Runtime_verification:7">
+ <semantics>
+  <msub>
+   <mi>t</mi>
+   <mn>3</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>t</ci>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{3}
+  </annotation>
+ </semantics>
+</math>
+
+ with Locks 
+
+<math display="inline" id="Runtime_verification:8">
+ <semantics>
+  <msub>
+   <mi>l</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>l</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l_{1}
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="Runtime_verification:9">
+ <semantics>
+  <msub>
+   <mi>l</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>l</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, then it is possible to have to maintain property instances for the pairs t_1,
+
+<math display="inline" id="Runtime_verification:10">
+ <semantics>
+  <msub>
+   <mi>l</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>l</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l_{1}
+  </annotation>
+ </semantics>
+</math>
+
+&gt;, t_1,
+
+<math display="inline" id="Runtime_verification:11">
+ <semantics>
+  <msub>
+   <mi>l</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>l</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l_{2}
+  </annotation>
+ </semantics>
+</math>
+
+&gt;, t_2,
+
+<math display="inline" id="Runtime_verification:12">
+ <semantics>
+  <msub>
+   <mi>l</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>l</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l_{1}
+  </annotation>
+ </semantics>
+</math>
+
+&gt;, t_2,
+
+<math display="inline" id="Runtime_verification:13">
+ <semantics>
+  <msub>
+   <mi>l</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>l</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l_{2}
+  </annotation>
+ </semantics>
+</math>
+
+
+&gt;, t_3,
+
+<math display="inline" id="Runtime_verification:14">
+ <semantics>
+  <msub>
+   <mi>l</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>l</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l_{1}
+  </annotation>
+ </semantics>
+</math>
+
+&gt;, and t_3,
+
+<math display="inline" id="Runtime_verification:15">
+ <semantics>
+  <msub>
+   <mi>l</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>l</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l_{2}
+  </annotation>
+ </semantics>
+</math>
+
+&gt;. This property should be monitored for failures to match the pattern because the pattern specified correct behavior. The figure to the right shows a trace which produces two violations of this property. The steps down in the figure represent the beginning of a method, while the steps up are the end. The grey arrows in the figure show the matching between given acquires and releases of the same Lock. For simplicity, the trace shows only one Thread and one Lock.</p>
+<h2 id="research-challenges-and-applications">Research Challenges and Applications</h2>
+
+<p>Most of the runtime verification research addresses one or more of the topics listed below.</p>
+<h3 id="reducing-runtime-overhead">Reducing Runtime Overhead</h3>
+
+<p>Observing an executing system typically incurs some runtime overhead (hardware monitors may make an exception). It is important to reduce the overhead of runtime verification tools as much as possible, particularly when the generated monitors are deployed with the system. Runtime overhead reducing techniques include:</p>
+<ul>
+<li><strong><em>Improved instrumentation</em></strong>. Extracting events from the executing system and sending them to monitors can generate a large runtime overhead if done naively. Good system instrumentation is critical for any runtime verification tool, unless the tool explicitly targets existing execution logs. There are many instrumentation approaches in current use, each with its advantages and disadvantages, ranging from custom or manual instrumentation, to specialized libraries, to compilation into aspect-oriented languages, to augmenting the virtual machine, to building upon hardware support.</li>
+</ul>
+<ul>
+<li><strong><em>Combination with static analysis</em></strong>. A common combination of static and dynamic analyses, particularly encountered in compilers, is to monitor all the requirements which cannot be discharged statically. A dual and ultimately equivalent approach tends to become the norm in runtime verification, namely to use static analysis to reduce the amount of otherwise exhaustive monitoring. Static analysis can be performed both on the property to monitor and on the system to be monitored. Static analysis of the property to monitor can reveal that certain events are unnecessary to monitor, that the creation of certain monitors can be delayed, and that certain existing monitors will never trigger and thus can be garbage collected. Static analysis of the system to monitor can detect code that can never influence the monitors. For example, when monitoring the <strong>HasNext</strong> property above, one needs not instrument portions of code where each call <code>i.next()</code> is immediately preceded on any path by a call <code>i.hasnext()</code> which returns <code>true</code> (visible on the control-flow graph).</li>
+</ul>
+<ul>
+<li><strong><em>Efficient monitor generation and management</em></strong>. When monitoring parametric properties like the ones in the examples above, the monitoring system needs to keep track of the status of the monitored property with respect to each parameter instance. The number of such instances is theoretically unbounded and tends to be enormous in practice. An important research challenge is how to efficiently dispatch observed events to precisely those instances which need them. A related challenge is how to keep the number of such instances small (so that dispatching is faster), or in other words, how to avoid creating unnecessary instances for as long as possible and, dually, how to remove already created instances as soon as they become unnecessary. Finally, parametric monitoring algorithms typically generalize similar algorithms for generating non-parametric monitors. Thus, the quality of the generated non-parametric monitors dictates the quality of the resulting parametric monitors. However, unlike in other verification approaches (e.g., model checking), the number of states or the size of the generated monitor is less important in runtime verification; in fact, some monitors can have infinitely many states, such as the one for the <strong>SafeLock</strong> property above, although at any point in time only a finite number of states may have occurred. What is important is how efficiently the monitor transits from a state to its next state when it receives an event from the executing system.</li>
+</ul>
+<h3 id="specifying-properties">Specifying Properties</h3>
+
+<p>One of the major practical impediments of all formal approaches is that their users are reluctant to, or don't know and don't want to learn how to read or write specifications. In some cases the specifications are implicit, such as those for deadlocks and data-races, but in most cases they need to be produced. An additional inconvenience, particularly in the context of runtime verification, is that many existing specification languages are not expressive enough to capture the intended properties.</p>
+<ul>
+<li><strong><em>Better formalisms.</em></strong> A significant amount of work in the runtime verification community has been put into designing specification formalisms that fit the desired application domains for runtime verification better than the conventional specification formalisms. Some of these consist of slight or no syntactic changes to the conventional formalisms, but only of changes to their semantics (e.g., finite trace versus infinite trace semantics, etc.) and to their implementation (optimized finite state machines instead of Buchi automata, etc.). Others extend existing formalisms with features that are amenable for runtime verification but may not easily be for other verification approaches, such as adding parameters, as seen in the examples above. Finally, there are specification formalisms that have been designed specifically for runtime verification, attempting to achieve their best for this domain and caring little about other application domains. Designing universally better or domain-specifically better specification formalisms for runtime verification is and will continue to be one of its major research challenges.</li>
+</ul>
+<ul>
+<li><strong><em>Quantitative properties.</em></strong> Compared to other verification approaches, runtime verification is able to operate on concrete values of system state variables, which makes it possible to collect statistical information about the program execution and use this information to assess complex quantitative properties. More expressive property languages that will allow us to fully utilize this capability are needed.</li>
+</ul>
+<ul>
+<li><strong><em>Better interfaces.</em></strong> Reading and writing property specifications is not easy for non-experts. Even experts often stare for minutes at relatively small temporal logic formulae (particularly when they have nested "until" operators). An important research area is to develop powerful user interfaces for various specification formalisms that would allow users to more easily understand, write and maybe even visualize properties.</li>
+</ul>
+<ul>
+<li><strong><em>Mining specifications.</em></strong> No matter what tool support is available to help users produce specifications, they will almost always be more pleased to have to write no specifications at all, particularly when they are trivial. Fortunately, there are plenty of programs out there making supposedly correct use of the actions/events that one wants to have properties about. If that is the case, then it is conceivable that one would like to make use of those correct programs by automatically learning from them the desired properties. Even if the overall quality of the automatically mined specifications is expected to be lower than that of manually produced specifications, they can serve as a start point for the latter or as the basis for automatic runtime verification tools aimed specifically at finding bugs (where a poor specification turns into false positives or negatives, often acceptable during testing).</li>
+</ul>
+<h3 id="execution-models-and-predictive-analysis">Execution Models and Predictive Analysis</h3>
+
+<p>The capability of a runtime verifier to detect errors strictly depends on its capability to analyze execution traces. When the monitors are deployed with the system, instrumentation is typically minimal and the execution traces are as simple as possible to keep the runtime overhead low. When runtime verification is used for testing, one can afford more comprehensive instrumentations that augment events with important system information that can be used by the monitors to construct and therefore analyze more refined models of the executing system. For example, augmenting events with vector-clock information and with data and control flow information allows the monitors to construct a <em>causal model</em> of the running system in which the observed execution was only one possible instance. Any other permutation of events which is consistent with the model is a feasible execution of the system, which could happen under a different thread interleaving. Detecting property violations in such inferred executions (by monitoring them) makes the monitor <em>predict</em> errors which did not happen in the observed execution, but which can happen in another execution of the same system. An important research challenge is to extract models from execution traces which comprise as many other execution traces as possible.</p>
+<h3 id="behavior-modification">Behavior Modification</h3>
+
+<p>Unlike testing or exhaustive verification, runtime verification holds the promise to allow the system to recover from detected violations, through reconfiguration, micro-resets, or through finer intervention mechanisms sometimes referred to as tuning or steering. Implementation of these techniques within the rigorous framework of runtime verification gives rise to additional challenges.</p>
+<ul>
+<li><strong><em>Specification of actions.</em></strong> One needs to specify the modification to be performed in an abstract enough fashion that does not require the user to know irrelevant implementation details. In addition, when such a modification can take place needs to be specified in order to maintain the integrity of the system.</li>
+</ul>
+<ul>
+<li><strong><em>Reasoning about intervention effects.</em></strong> It is important to know that an intervention improves the situation, or at least does not make the situation worse.</li>
+</ul>
+<ul>
+<li><strong><em>Action interfaces.</em></strong> Similar to the instrumentation for monitoring, we need to enable the system to receive action invocations. Invocation mechanisms are by necessity going to be dependent on the implementation details of the system. However, at the specification level, we need to provide the user with a declarative way of providing feedback to the system by specifying what actions should be applied when under what conditions.</li>
+</ul>
+<h2 id="related-work">Related Work</h2>
+<h3 id="aspect-oriented-programming">Aspect-oriented Programming</h3>
+
+<p>In recent years, researchers in Runtime Verification have recognized the potential of using <a href="Aspect-oriented_Programming" title="wikilink">Aspect-oriented Programming</a> as a technique for defining program instrumentation in a modular way. Aspect-oriented programming (AOP) generally promotes the modularization of crosscutting concerns. Runtime Verification naturally is one such concern and can hence benefit from certain properties of AOP. Aspect-oriented monitor definitions are largely declarative, and hence tend to be simpler to reason about than instrumentation expressed through a program transformation written in an imperative programming language. Further, static analyses can reason about monitoring aspects more easily than about other forms of program instrumentation, as all instrumentation is contained within a single aspect. Many current runtime verification tools are hence built in the form of specification compilers, that take an expressive high-level specification as input and produce as output code written in some Aspect-oriented programming language (most often <a class="uri" href="AspectJ" title="wikilink">AspectJ</a>).</p>
+<h3 id="combination-with-formal-verification">Combination with Formal Verification</h3>
+
+<p>Runtime verification, if used in combination with provably correct recovery code, can provide an invaluable infrastructure for program verification, which can significantly lower the latter's complexity. For example, formally verifying heap-sort algorithm is very challenging. One less challenging technique to verify it is to monitor its output to be sorted (a linear complexity monitor) and, if not sorted, then sort it using some easily verifiable procedure, say insertion sort. The resulting sorting program is now more easily verifiable, the only thing being required from heap-sort is that it does not destroy the original elements regarded as a multiset, which is much easier to prove. Looking at from the other direction, one can use formal verification to reduce the overhead of runtime verification, as already mentioned above for static analysis instead of formal verification. Indeed, one can start with a fully runtime verified, but probably slow program. Then one can use formal verification (or static analysis) to discharge monitors, same way a compiler uses static analysis to discharge rutime checks of type correctness or <a href="memory_safety" title="wikilink">memory safety</a>.</p>
+<h3 id="increasing-coverage">Increasing Coverage</h3>
+
+<p>Compared to the more traditional verification approaches, an immediate disadvantage of runtime verification is its reduced coverage. This is not problematic when the runtime monitors are deployed with the system (together with appropriate recovery code to be executed when the property is violated), but it may limit the effectiveness of runtime verification when used to find errors in systems. Techniques to increase the coverage of runtime verification for error detection purposes include:</p>
+<ul>
+<li><strong><em>Input generation.</em></strong> It is well known that generating a good set of inputs (program input variable values, system call values, thread schedules, etc.) can enormously increase the effectiveness of testing. That holds true for runtime verification used for error detection, too, but in addition to using the program code to drive the input generation process, in runtime verification one can also use the property specifications, when available, and can also use monitoring techniques to induce desired behaviors. This use of runtime verification makes it closely related to model-based testing, although the runtime verification specifications are typically general purpose, not necessarily crafted for testing reasons. Consider, for example, that one wants to test the general-purpose <em>UnsafeEnum</em> property above. Instead of just generating the above mentioned monitor to passively observe the system execution, one can generate a smarter monitor which freezes the thread attempting to generate the second <em>e.nextElement()</em> event (right before it generates it), letting the other threads execute in a hope that one of them may generate a <em>v.update()</em> event, in which case an error has been found.</li>
+</ul>
+<ul>
+<li><strong><em>Dynamic symbolic execution.</em></strong> In symbolic execution programs are executed and monitored symbolically, that is, without concrete inputs. One symbolic execution of the system may cover a large set of concrete inputs. Off-the-shelf constraint solving or satisfiability checking techniques are often used to drive symbolic executions or to systematically explore their space. When the underlying satisfiability checkers cannot handle a choice point, then a concrete input can be generated to pass that point; this combination of <em>conc</em>rete and symb<em>olic</em> execution is also referred to as concolic execution.</li>
+</ul>
+<h2 id="workshops-conferences-and-meetings">Workshops, Conferences and Meetings</h2>
+<h3 id="runtime-verification-rv">Runtime Verification (RV)</h3>
+<ul>
+<li><strong><em><a href="http://rv2011.eecs.berkeley.edu/Home.html"><strong>2nd International Conference on Runtime Verification, September 2011, San Francisco, USA</strong></a></em></strong></li>
+<li><strong><em><a href="http://www.rv2010.org/"><strong>1st International Conference on Runtime Verification, November 2010, Malta</strong></a></em></strong></li>
+<li><strong><em><a href="http://www.runtime-verification.org/"><strong>Earlier Workshops on Runtime Verification</strong></a></em></strong></li>
+</ul>
+<h3 id="workshop-on-dynamic-analysis-woda">Workshop on Dynamic Analysis (WODA)</h3>
+<ul>
+<li><strong><em><a href="http://www.cs.purdue.edu/woda11/index.html"><strong>Workshop on Dynamic Analysis 2011</strong></a></em></strong></li>
+<li><strong><em><a href="http://www.isr.uci.edu/woda10/Welcome.html"><strong>Workshop on Dynamic Analysis 2010</strong></a></em></strong></li>
+<li><strong><em><a href="http://www.cs.purdue.edu/woda11/earlier.html"><strong>Earlier Workshops on Dynamic Analysis</strong></a></em></strong></li>
+</ul>
+<h3 id="dagstuhl-events">Dagstuhl Events</h3>
+<ul>
+<li><strong><em><a href="http://www.dagstuhl.de/en/program/calendar/semhp/?semnr=10451"><strong>2010 Dagstuhl Seminar on Runtime Verification, Diagnosis, Planning and Control for Autonomous Systems</strong></a></em></strong></li>
+<li><strong><em><a href="http://www.dagstuhl.de/en/program/calendar/semhp/?semid=32256"><strong>2007 Dagstuhl Seminar on Runtime Verification</strong></a></em></strong></li>
+</ul>
+<h2 id="research-groupslaboratories">Research Groups/Laboratories</h2>
+
+<p>(alphabetically)</p>
+<h3 id="aspectbench-compiler-group-1">AspectBench Compiler group <a href="http://www.aspectbench.org/">1</a></h3>
+<dl>
+<dd>The AspectBench Compiler supports <a href="http://abc.comlab.ox.ac.uk/papers#oopsla2005">tracematches</a>, a way to match on the execution history of <a href="Java_(programming_language)" title="wikilink">Java</a> and <a class="uri" href="AspectJ" title="wikilink">AspectJ</a> programs.
+</dd>
+</dl>
+<h3 id="formal-methods-group-at-the-university-of-manchester-2">Formal Methods Group at the University of Manchester <a href="http://www.cs.man.ac.uk/~david/sm.html">2</a></h3>
+<h3 id="formal-systems-laboratory-at-the-university-of-illinois-at-urbana-champaign-3">Formal Systems Laboratory at the University of Illinois at Urbana Champaign <a href="http://fsl.cs.uiuc.edu">3</a></h3>
+<dl>
+<dd>Work within the Formal Systems Laboratory focuses on <a href="http://fsl.cs.uiuc.edu/index.php/MOP">Monitoring</a>, <a href="http://fsl.cs.uiuc.edu/index.php/jPredictor">Prediction</a>, and <a href="http://fsl.cs.uiuc.edu/index.php/jMiner">Mining</a>.
+</dd>
+</dl>
+<h3 id="laboratory-for-reliable-software-at-jpl-4">Laboratory for Reliable Software at JPL <a href="http://lars-lab.jpl.nasa.gov/">4</a></h3>
+<h3 id="semantics-verification-research-group-at-the-university-of-malta-5">Semantics &amp; Verification Research Group at the University of Malta <a href="http://www.cs.um.edu.mt/svrg/">5</a></h3>
+<h3 id="software-technology-group-at-technische-universität-darmstadt-6">Software Technology Group at Technische Universität Darmstadt <a href="http://www.stg.tu-darmstadt.de/">6</a></h3>
+<h2 id="commercial-systems">Commercial Systems</h2>
+
+<p>(alphabetically)</p>
+<ul>
+<li><a href="http://contrastsecurity.com/"><strong>Contrast Security</strong></a></li>
+<li><a href="http://runtimeverification.com/"><strong>Runtime Verification, Inc.</strong></a></li>
+<li><a href="http://www.time-rover.com/"><strong>Time Rover, Inc.</strong></a></li>
+</ul>
+<h2 id="freeware-systems">Freeware Systems</h2>
+<ul>
+<li><a href="http://www.tismtool.com/"><strong>TismTool</strong></a></li>
+</ul>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Formal_methods" title="wikilink">Category:Formal methods</a> <a href="Category:Logic_in_computer_science" title="wikilink">Category:Logic in computer science</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Stefan Savage, Michael Burrows, Greg Nelson, Patrick Sobalvarro, and Thomas Anderson. 1997. Eraser: a Dynamic Data Race Detector for Multithreaded Programs. ACM Trans. Comput. Syst. 15(4), November 1997, pp. 391-411.<a href="#fnref1">↩</a></li>
+<li id="fn2">Moonjoo Kim, Mahesh Viswanathan, Insup Lee, Hanêne Ben-Abdellah, Sampath Kannan, and Oleg Sokolsky, Formally Specified Monitoring of Temporal Properties, Proceedings of the European Conference on Real-Time Systems, June 1999.<a href="#fnref2">↩</a></li>
+<li id="fn3">Insup Lee, Sampath Kannan, Moonjoo Kim, Oleg Sokolsky, Mahesh Viswanathan, Runtime Assurance Based On Formal Specifications, Proceedings of International Conference on Parallel and Distributed Processing Techniques and Applications, June 1999.<a href="#fnref3">↩</a></li>
+<li id="fn4">Klaus Havelund, Using Runtime Analysis to Guide Model Checking of Java Programs, 7th International SPIN Workshop, August 2000.<a href="#fnref4">↩</a></li>
+<li id="fn5">Klaus Havelund and Grigore Rosu, Monitoring Programs using Rewriting, Automated Software Engineering (ASE'01), November 2001.<a href="#fnref5">↩</a></li>
+</ol>
+</section>
+</hr></body>
+</html>

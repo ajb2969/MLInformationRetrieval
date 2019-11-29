@@ -1,0 +1,2301 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="639">Collision detection</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Collision detection</h1>
+<hr/>
+
+<p><strong>Collision detection</strong> typically refers to the computational problem of detecting the intersection of two or more objects. While the topic is most often associated with its use in <a href="video_game" title="wikilink">video games</a> and other <a href="computer_simulations" title="wikilink">physical simulations</a>, it also has applications in <a class="uri" href="robotics" title="wikilink">robotics</a>. In addition to determining whether two objects have collided, collision detection systems may also calculate <em>time of impact</em> (TOI), and report a <em>contact manifold</em> (the set of intersecting points).<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> <a href="Collision_response" title="wikilink">Collision response</a> deals with simulating what happens when a collision is detected (see <a href="physics_engine" title="wikilink">physics engine</a>, <a href="ragdoll_physics" title="wikilink">ragdoll physics</a>). Solving collision detection problems requires extensive use of concepts from <a href="linear_algebra" title="wikilink">linear algebra</a> and <a href="computational_geometry" title="wikilink">computational geometry</a>.</p>
+<h2 id="overview">Overview</h2>
+
+<p> In physical simulation, we wish to conduct experiments, such as playing <a class="uri" href="billiards" title="wikilink">billiards</a>. The <a class="uri" href="physics" title="wikilink">physics</a> of bouncing billiard balls are well understood, under the umbrella of <a href="rigid_body_motion" title="wikilink">rigid body motion</a> and <a href="elastic_collision" title="wikilink">elastic collisions</a>. An initial description of the situation would be given, with a very precise physical description of the billiard table and balls, as well as initial positions of all the balls. Given a force applied to the cue ball (probably resulting from a player hitting the ball with his or her cue stick), we want to calculate the trajectories, precise motion, and eventual resting places of all the balls with a <a href="computer_program" title="wikilink">computer program</a>. A program to simulate this game would consist of several portions, one of which would be responsible for calculating the precise impacts between the billiard balls. This particular example also turns out to be <a href="condition_number" title="wikilink">ill conditioned</a>: a small error in any calculation will cause drastic changes in the final position of the billiard balls.</p>
+
+<p>Video games have similar requirements, with some crucial differences. While physical simulation needs to simulate real-world physics as precisely as possible, video games need to simulate real-world physics in an <em>acceptable</em> way, in <a href="Real-time_computing" title="wikilink">real time</a> and robustly. Compromises are allowed, so long as the resulting simulation is satisfying to the game players.</p>
+<h2 id="collision-detection-in-physical-simulation">Collision detection in physical simulation</h2>
+
+<p>Physical simulators differ in the way they react on a collision. Some use the softness of the material to calculate a force, which will resolve the collision in the following time steps like it is in reality. Due to the low softness of some materials this is very CPU intensive. Some simulators estimate the time of collision by <a href="linear_interpolation" title="wikilink">linear interpolation</a>, <a href="Rollback_(data_management)" title="wikilink">roll back</a> the simulation, and calculate the collision by the more abstract methods of <a href="conservation_laws" title="wikilink">conservation laws</a>.</p>
+
+<p>Some iterate the linear interpolation (<a href="Newton's_method" title="wikilink">Newton's method</a>) to calculate the time of collision with a much higher precision than the rest of the simulation. Collision detection utilizes time coherence to allow even finer time steps without much increasing CPU demand, such as in <a href="air_traffic_control" title="wikilink">air traffic control</a>.</p>
+
+<p>After an inelastic collision, special states of sliding and resting can occur and, for example, the <a href="Open_Dynamics_Engine" title="wikilink">Open Dynamics Engine</a> uses constraints to simulate them. Constraints avoid inertia and thus instability. Implementation of rest by means of a <a href="scene_graph" title="wikilink">scene graph</a> avoids drift.</p>
+
+<p>In other words, physical simulators usually function one of two ways, where the collision is detected <em><a href="Empirical_evidence" title="wikilink">a posteriori</a></em> (after the collision occurs) or <em><a href="A_priori_and_a_posteriori" title="wikilink">a priori</a></em> (before the collision occurs). In addition to the <em>a posteriori</em> and <em>a priori</em> distinction, almost all modern collision detection algorithms are broken into a hierarchy of algorithms. Often the terms "discrete" and "continuous" are used rather than <em>a posteriori</em> and <em>a priori</em>.</p>
+<h3 id="a-posteriori-discrete-versus-a-priori-continuous">A posteriori (discrete) versus a priori (continuous)</h3>
+
+<p>In the <em>a posteriori</em> case, we advance the physical simulation by a small time step, then check if any objects are intersecting, or are somehow so close to each other that we deem them to be intersecting. At each simulation step, a list of all intersecting bodies is created, and the positions and trajectories of these objects are somehow "fixed" to account for the collision. We say that this method is <em>a posteriori</em> because we typically miss the actual instant of collision, and only catch the collision after it has actually happened.</p>
+
+<p>In the <em>a priori</em> methods, we write a collision detection algorithm which will be able to predict very precisely the trajectories of the physical bodies. The instants of collision are calculated with high precision, and the physical bodies never actually interpenetrate. We call this <em>a priori</em> because we calculate the instants of collision before we update the configuration of the physical bodies.</p>
+
+<p>The main benefits of the <em>a posteriori</em> methods are as follows. In this case, the collision detection algorithm need not be aware of the myriad of physical variables; a simple list of physical bodies is fed to the algorithm, and the program returns a list of intersecting bodies. The collision detection algorithm doesn't need to understand friction, elastic collisions, or worse, nonelastic collisions and deformable bodies. In addition, the <em>a posteriori</em> algorithms are in effect one dimension simpler than the <em>a priori</em> algorithms. Indeed, an <em>a priori</em> algorithm must deal with the time variable, which is absent from the <em>a posteriori</em> problem.</p>
+
+<p>On the other hand, <em>a posteriori</em> algorithms cause problems in the "fixing" step, where intersections (which aren't physically correct) need to be corrected. Moreover, if the discrete step is too large, the collision could go undetected, resulting in an object which passes through another if it is sufficiently fast or small.</p>
+
+<p>The benefits of the <em>a priori</em> algorithms are increased fidelity and stability. It is difficult (but not completely impossible) to separate the physical simulation from the collision detection algorithm. However, in all but the simplest cases, the problem of determining ahead of time when two bodies will collide (given some initial data) has no closed form solution—a numerical <a href="Root-finding_algorithm" title="wikilink">root finder</a> is usually involved.</p>
+
+<p>Some objects are in <em>resting contact</em>, that is, in collision, but neither bouncing off, nor interpenetrating, such as a vase resting on a table. In all cases, resting contact requires special treatment: If two objects collide (<em>a posteriori</em>) or slide (<em>a priori</em>) and their relative motion is below a threshold, friction becomes <a class="uri" href="stiction" title="wikilink">stiction</a> and both objects are arranged in the same branch of the <a href="scene_graph" title="wikilink">scene graph</a>.</p>
+<h2 id="optimization">Optimization</h2>
+
+<p>The obvious approaches to collision detection for multiple objects are very slow. <a href="Triangular_number" title="wikilink">Checking every object against every other object</a> will, of course, work, but is too inefficient to be used when the number of objects is at all large. Checking objects with complex geometry against each other in the obvious way, by checking each face against each other face, is itself quite slow. Thus, considerable research has been applied to speeding up the problem.</p>
+<h3 id="exploiting-temporal-coherence">Exploiting temporal coherence</h3>
+
+<p>In many applications, the configuration of physical bodies from one time step to the next changes very little. Many of the objects may not move at all. Algorithms have been designed so that the calculations done in a preceding time step can be reused in the current time step, resulting in faster completion of the calculation.</p>
+
+<p>At the coarse level of collision detection, the objective is to find pairs of objects which might potentially intersect. Those pairs will require further analysis. An early high performance algorithm for this was developed by <a href="Ming_C._Lin" title="wikilink">Ming C. Lin</a> at the <a href="University_of_California,_Berkeley" title="wikilink">University of California, Berkeley</a> <a href="http://www.cs.berkeley.edu/~jfc/mirtich/collDet.html">1</a>, who suggested using <a href="axis-aligned_bounding_box" title="wikilink">axis-aligned bounding boxes</a> for all <em>n</em> bodies in the scene.</p>
+
+<p>Each box is represented by the product of three intervals (i.e., a box would be 
+
+<math display="inline" id="Collision_detection:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>I</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>×</mo>
+    <msub>
+     <mi>I</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>×</mo>
+    <msub>
+     <mi>I</mi>
+     <mn>3</mn>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <msub>
+      <mi>a</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>b</mi>
+      <mn>1</mn>
+     </msub>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mo>×</mo>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <msub>
+      <mi>a</mi>
+      <mn>2</mn>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>b</mi>
+      <mn>2</mn>
+     </msub>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mo>×</mo>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <msub>
+      <mi>a</mi>
+      <mn>3</mn>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>b</mi>
+      <mn>3</mn>
+     </msub>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>I</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>I</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>I</ci>
+      <cn type="integer">3</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <interval closure="closed">
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>a</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>b</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </interval>
+     <interval closure="closed">
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>a</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>b</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </interval>
+     <interval closure="closed">
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>a</ci>
+       <cn type="integer">3</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>b</ci>
+       <cn type="integer">3</cn>
+      </apply>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{1}\times I_{2}\times I_{3}=[a_{1},b_{1}]\times[a_{2},b_{2}]\times[a_{3},b_{%
+3}]
+  </annotation>
+ </semantics>
+</math>
+
+
+.) A common algorithm for collision detection of bounding boxes is <a href="sweep_and_prune" title="wikilink">sweep and prune</a>. We observe that two such boxes, 
+
+<math display="inline" id="Collision_detection:1">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>I</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>×</mo>
+   <msub>
+    <mi>I</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>×</mo>
+   <msub>
+    <mi>I</mi>
+    <mn>3</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>I</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>I</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>I</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{1}\times I_{2}\times I_{3}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:2">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>J</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>×</mo>
+   <msub>
+    <mi>J</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>×</mo>
+   <msub>
+    <mi>J</mi>
+    <mn>3</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>J</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>J</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>J</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J_{1}\times J_{2}\times J_{3}
+  </annotation>
+ </semantics>
+</math>
+
+ intersect if, and only if, 
+
+<math display="inline" id="Collision_detection:3">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ intersects 
+
+<math display="inline" id="Collision_detection:4">
+ <semantics>
+  <msub>
+   <mi>J</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>J</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J_{1}
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Collision_detection:5">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{2}
+  </annotation>
+ </semantics>
+</math>
+
+
+ intersects 
+
+<math display="inline" id="Collision_detection:6">
+ <semantics>
+  <msub>
+   <mi>J</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>J</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:7">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mn>3</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{3}
+  </annotation>
+ </semantics>
+</math>
+
+ intersects 
+
+<math display="inline" id="Collision_detection:8">
+ <semantics>
+  <msub>
+   <mi>J</mi>
+   <mn>3</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>J</ci>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J_{3}
+  </annotation>
+ </semantics>
+</math>
+
+. We suppose that, from one time step to the next, 
+
+<math display="inline" id="Collision_detection:9">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:10">
+ <semantics>
+  <msub>
+   <mi>J</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>J</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J_{k}
+  </annotation>
+ </semantics>
+</math>
+
+
+ intersect, then it is very likely that at the next time step, they will still intersect. Likewise, if they did not intersect in the previous time step, then they are very likely to continue not to.</p>
+
+<p>So we reduce the problem to that of tracking, from frame to frame, which intervals do intersect. We have three lists of intervals (one for each axis) and all lists are the same length (since each list has length 
+
+<math display="inline" id="Collision_detection:11">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+, the number of bounding boxes.) In each list, each interval is allowed to intersect all other intervals in the list. So for each list, we will have an 
+
+<math display="inline" id="Collision_detection:12">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>×</mo>
+   <mi>n</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>n</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n\times n
+  </annotation>
+ </semantics>
+</math>
+
+ <a href="matrix_(math)" title="wikilink">matrix</a> 
+
+<math display="inline" id="Collision_detection:13">
+ <semantics>
+  <mrow>
+   <mi>M</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>m</mi>
+     <mrow>
+      <mi>i</mi>
+      <mi>j</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>M</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>m</ci>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M=(m_{ij})
+  </annotation>
+ </semantics>
+</math>
+
+ of zeroes and ones
+
+<math display="block" id="Collision_detection:14">
+ <semantics>
+  <msub>
+   <mi>m</mi>
+   <mrow>
+    <mi>i</mi>
+    <mi>j</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>m</ci>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <ci>j</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m_{ij}
+  </annotation>
+ </semantics>
+</math>
+
+ is 1 if intervals 
+
+<math display="inline" id="Collision_detection:15">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="Collision_detection:16">
+ <semantics>
+  <mi>j</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>j</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j
+  </annotation>
+ </semantics>
+</math>
+
+ intersect, and 0 if they do not intersect.</p>
+
+<p>By our assumption, the matrix 
+
+<math display="inline" id="Collision_detection:17">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ associated to a list of intervals will remain essentially unchanged from one time step to the next. To exploit this, the list of intervals is actually maintained as a list of labeled endpoints. Each element of the list has the coordinate of an endpoint of an interval, as well as a unique integer identifying that interval. Then, we <a href="sorting_algorithm" title="wikilink">sort</a> the list by coordinates, and update the matrix 
+
+<math display="inline" id="Collision_detection:18">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ as we go. It's not so hard to believe that this algorithm will work relatively quickly if indeed the configuration of bounding boxes does not change significantly from one time step to the next.</p>
+
+<p>In the case of deformable bodies such as cloth simulation, it may not be possible to use a more specific pairwise pruning algorithm as discussed below, and an <em>n</em>-body pruning algorithm is the best that can be done.</p>
+
+<p>If an upper bound can be placed on the velocity of the physical bodies in a scene, then pairs of objects can be pruned based on their initial distance and the size of the time step.</p>
+<h3 id="pairwise-pruning">Pairwise pruning</h3>
+
+<p>Once we've selected a pair of physical bodies for further investigation, we need to check for collisions more carefully. However, in many applications, individual objects (if they are not too deformable) are described by a set of smaller primitives, mainly triangles. So now, we have two sets of triangles, 
+
+<math display="inline" id="Collision_detection:19">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>S</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>S</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>S</mi>
+     <mi>n</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>S</ci>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>S</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>S</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>S</ci>
+      <ci>n</ci>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S={S_{1},S_{2},\dots,S_{n}}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:20">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>T</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>T</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>T</mi>
+     <mi>n</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>T</ci>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>T</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>T</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>T</ci>
+      <ci>n</ci>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T={T_{1},T_{2},\dots,T_{n}}
+  </annotation>
+ </semantics>
+</math>
+
+
+ (for simplicity, we will assume that each set has the same number of triangles.)</p>
+
+<p>The obvious thing to do is to check all triangles 
+
+<math display="inline" id="Collision_detection:21">
+ <semantics>
+  <msub>
+   <mi>S</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>S</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ against all triangles 
+
+<math display="inline" id="Collision_detection:22">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ for collisions, but this involves 
+
+<math display="inline" id="Collision_detection:23">
+ <semantics>
+  <msup>
+   <mi>n</mi>
+   <mn>2</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>n</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n^{2}
+  </annotation>
+ </semantics>
+</math>
+
+ comparisons, which is highly inefficient. If possible, it is desirable to use a pruning algorithm to reduce the number of pairs of triangles we need to check.</p>
+
+<p>The most widely used family of algorithms is known as the <em>hierarchical bounding volumes</em> method. As a preprocessing step, for each object (in our example, 
+
+<math display="inline" id="Collision_detection:24">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:25">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T
+  </annotation>
+ </semantics>
+</math>
+
+
+) we will calculate a hierarchy of bounding volumes. Then, at each time step, when we need to check for collisions between 
+
+<math display="inline" id="Collision_detection:26">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:27">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T
+  </annotation>
+ </semantics>
+</math>
+
+, the hierarchical bounding volumes are used to reduce the number of pairs of triangles under consideration. For simplicity, we will give an example using bounding spheres, although it has been noted that spheres are undesirable in many cases.</p>
+
+<p>If 
+
+<math display="inline" id="Collision_detection:28">
+ <semantics>
+  <mi>E</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>E</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E
+  </annotation>
+ </semantics>
+</math>
+
+ is a set of triangles, we can precalculate a bounding sphere 
+
+<math display="inline" id="Collision_detection:29">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>E</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>E</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(E)
+  </annotation>
+ </semantics>
+</math>
+
+. There are many ways of choosing 
+
+<math display="inline" id="Collision_detection:30">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>E</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>E</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(E)
+  </annotation>
+ </semantics>
+</math>
+
+
+, we only assume that 
+
+<math display="inline" id="Collision_detection:31">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>E</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>E</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(E)
+  </annotation>
+ </semantics>
+</math>
+
+ is a sphere that completely contains 
+
+<math display="inline" id="Collision_detection:32">
+ <semantics>
+  <mi>E</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>E</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E
+  </annotation>
+ </semantics>
+</math>
+
+ and is as small as possible.</p>
+
+<p>Ahead of time, we can compute 
+
+<math display="inline" id="Collision_detection:33">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(S)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:34">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>T</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>T</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(T)
+  </annotation>
+ </semantics>
+</math>
+
+. Clearly, if these two spheres do not intersect (and that is very easy to test), then neither do 
+
+<math display="inline" id="Collision_detection:35">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="Collision_detection:36">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T
+  </annotation>
+ </semantics>
+</math>
+
+. This is not much better than an <em>n</em>-body pruning algorithm, however.</p>
+
+<p>If 
+
+<math display="inline" id="Collision_detection:37">
+ <semantics>
+  <mrow>
+   <mi>E</mi>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>E</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>E</mi>
+     <mi>m</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>E</ci>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>m</ci>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E={E_{1},E_{2},\dots,E_{m}}
+  </annotation>
+ </semantics>
+</math>
+
+ is a set of triangles, then we can split it into two halves 
+
+<math display="inline" id="Collision_detection:38">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>E</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>:=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>E</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>E</mi>
+     <mrow>
+      <mi>m</mi>
+      <mo>/</mo>
+      <mn>2</mn>
+     </mrow>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">assign</csymbol>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <ci>E</ci>
+    </apply>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <divide></divide>
+       <ci>m</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(E):={E_{1},E_{2},\dots,E_{m/2}}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:39">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>R</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>E</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>:=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mrow>
+      <mrow>
+       <mi>m</mi>
+       <mo>/</mo>
+       <mn>2</mn>
+      </mrow>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>E</mi>
+     <mrow>
+      <mi>m</mi>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>E</mi>
+     <mi>m</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">assign</csymbol>
+    <apply>
+     <times></times>
+     <ci>R</ci>
+     <ci>E</ci>
+    </apply>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <plus></plus>
+       <apply>
+        <divide></divide>
+        <ci>m</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <minus></minus>
+       <ci>m</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>m</ci>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R(E):={E_{m/2+1},\dots,E_{m-1},E_{m}}
+  </annotation>
+ </semantics>
+</math>
+
+. We can do this to 
+
+<math display="inline" id="Collision_detection:40">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="Collision_detection:41">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T
+  </annotation>
+ </semantics>
+</math>
+
+, and we can calculate (ahead of time) the bounding spheres 
+
+<math display="inline" id="Collision_detection:42">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>B</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>L</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>S</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <mi>B</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>R</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>S</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <apply>
+      <times></times>
+      <ci>L</ci>
+      <ci>S</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <apply>
+      <times></times>
+      <ci>R</ci>
+      <ci>S</ci>
+     </apply>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(L(S)),B(R(S))
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:43">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>B</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>L</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>T</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <mi>B</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>R</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>T</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <apply>
+      <times></times>
+      <ci>L</ci>
+      <ci>T</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <apply>
+      <times></times>
+      <ci>R</ci>
+      <ci>T</ci>
+     </apply>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(L(T)),B(R(T))
+  </annotation>
+ </semantics>
+</math>
+
+. The hope here is that these bounding spheres are much smaller than 
+
+<math display="inline" id="Collision_detection:44">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(S)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:45">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>T</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>T</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(T)
+  </annotation>
+ </semantics>
+</math>
+
+
+. And, if, for instance, 
+
+<math display="inline" id="Collision_detection:46">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(S)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:47">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>L</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>T</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <ci>T</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(L(T))
+  </annotation>
+ </semantics>
+</math>
+
+ do not intersect, then there is no sense in checking any triangle in 
+
+<math display="inline" id="Collision_detection:48">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ against any triangle in 
+
+<math display="inline" id="Collision_detection:49">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>T</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>L</ci>
+    <ci>T</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(T)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>As a <a class="uri" href="precomputation" title="wikilink">precomputation</a>, we can take each physical body (represented by a set of triangles) and recursively decompose it into a <a href="binary_tree" title="wikilink">binary tree</a>, where each node 
+
+<math display="inline" id="Collision_detection:50">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+
+ represents a set of triangles, and its two children represent 
+
+<math display="inline" id="Collision_detection:51">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>N</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>L</ci>
+    <ci>N</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(N)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Collision_detection:52">
+ <semantics>
+  <mrow>
+   <mi>R</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>N</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>R</ci>
+    <ci>N</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R(N)
+  </annotation>
+ </semantics>
+</math>
+
+. At each node in the tree, we can precompute the bounding sphere 
+
+<math display="inline" id="Collision_detection:53">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>N</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>N</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(N)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>When the time comes for testing a pair of objects for collision, their bounding sphere tree can be used to eliminate many pairs of triangles.</p>
+
+<p>Many variants of the algorithms are obtained by choosing something other than a sphere for 
+
+<math display="inline" id="Collision_detection:54">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>T</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>T</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(T)
+  </annotation>
+ </semantics>
+</math>
+
+. If one chooses <a href="axis-aligned_bounding_box" title="wikilink">axis-aligned bounding boxes</a>, one gets AABBTrees. <a href="Oriented_bounding_box" title="wikilink">Oriented bounding box</a> trees are called OBBTrees. Some trees are easier to update if the underlying object changes. Some trees can accommodate higher order primitives such as <a href="Spline_(mathematics)" title="wikilink">splines</a> instead of simple triangles.</p>
+<h3 id="exact-pairwise-collision-detection">Exact pairwise collision detection</h3>
+
+<p>Once we're done pruning, we are left with a number of candidate pairs to check for exact collision detection.</p>
+
+<p>A basic observation is that for any two <a href="convex_set" title="wikilink">convex</a> objects which are disjoint, one can find a plane in space so that one object lies completely on one side of that plane, and the other object lies on the opposite side of that plane. This allows the development of very fast collision detection algorithms for convex objects.</p>
+
+<p>Early work in this area involved "<a href="Separating_axis_theorem" title="wikilink">separating plane</a>" methods. Two triangles collide essentially only when they can not be separated by a plane going through three vertices. That is, if the triangles are 
+
+<math display="inline" id="Collision_detection:55">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>v</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>v</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>v</mi>
+    <mn>3</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {v_{1},v_{2},v_{3}}
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="Collision_detection:56">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>v</mi>
+    <mn>4</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>v</mi>
+    <mn>5</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>v</mi>
+    <mn>6</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <cn type="integer">4</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <cn type="integer">5</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <cn type="integer">6</cn>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {v_{4},v_{5},v_{6}}
+  </annotation>
+ </semantics>
+</math>
+
+ where each 
+
+<math display="inline" id="Collision_detection:57">
+ <semantics>
+  <msub>
+   <mi>v</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>v</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ is a vector in 
+
+<math display="inline" id="Collision_detection:58">
+ <semantics>
+  <msup>
+   <mi>ℝ</mi>
+   <mn>3</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>ℝ</ci>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{R}^{3}
+  </annotation>
+ </semantics>
+</math>
+
+, then we can take three vertices, 
+
+<math display="inline" id="Collision_detection:59">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>v</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>v</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>v</mi>
+    <mi>k</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <ci>k</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v_{i},v_{j},v_{k}
+  </annotation>
+ </semantics>
+</math>
+
+, find a plane going through all three vertices, and check to see if this is a separating plane. If any such plane is a separating plane, then the triangles are deemed to be disjoint. On the other hand, if none of these planes are separating planes, then the triangles are deemed to intersect. There are twenty such planes.</p>
+
+<p>If the triangles are coplanar, this test is not entirely successful. One can add some extra planes, for instance, planes that are normal to triangle edges, to fix the problem entirely. In other cases, objects that meet at a flat face must necessarily also meet at an angle elsewhere, hence the overall collision detection will be able to find the collision.</p>
+
+<p>Better methods have since been developed. Very fast algorithms are available for finding the closest points on the surface of two convex polyhedral objects. Early work by <a href="Ming_C._Lin" title="wikilink">Ming C. Lin</a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> used a variation on the <a href="simplex_algorithm" title="wikilink">simplex algorithm</a> from <a href="linear_programming" title="wikilink">linear programming</a>. The <a href="Gilbert-Johnson-Keerthi_distance_algorithm" title="wikilink">Gilbert-Johnson-Keerthi distance algorithm</a> has superseded that approach. These algorithms approach constant time when applied repeatedly to pairs of stationary or slow-moving objects, when used with starting points from the previous collision check.</p>
+
+<p>The end result of all this algorithmic work is that collision detection can be done efficiently for thousands of moving objects in real time on typical personal computers and game consoles.</p>
+<h3 id="a-priori-pruning">A priori pruning</h3>
+
+<p>Where most of the objects involved are fixed, as is typical of video games, a priori methods using precomputation can be used to speed up execution.</p>
+
+<p>Pruning is also desirable here, both <em>n</em>-body pruning and pairwise pruning, but the algorithms must take time and the types of motions used in the underlying physical system into consideration.</p>
+
+<p>When it comes to the exact pairwise collision detection, this is highly trajectory dependent, and one almost has to use a numerical <a href="root-finding_algorithm" title="wikilink">root-finding algorithm</a> to compute the instant of impact.</p>
+
+<p>As an example, consider two triangles moving in time 
+
+<math display="inline" id="Collision_detection:60">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>v</mi>
+     <mn>1</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <msub>
+     <mi>v</mi>
+     <mn>2</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <msub>
+     <mi>v</mi>
+     <mn>3</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>v</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>v</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>v</ci>
+      <cn type="integer">3</cn>
+     </apply>
+     <ci>t</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {v_{1}(t),v_{2}(t),v_{3}(t)}
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="Collision_detection:61">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>v</mi>
+     <mn>4</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <msub>
+     <mi>v</mi>
+     <mn>5</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <msub>
+     <mi>v</mi>
+     <mn>6</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>v</ci>
+      <cn type="integer">4</cn>
+     </apply>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>v</ci>
+      <cn type="integer">5</cn>
+     </apply>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>v</ci>
+      <cn type="integer">6</cn>
+     </apply>
+     <ci>t</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {v_{4}(t),v_{5}(t),v_{6}(t)}
+  </annotation>
+ </semantics>
+</math>
+
+. At any point in time, the two triangles can be checked for intersection using the twenty planes previously mentioned. However, we can do better, since these twenty planes can all be tracked in time. If 
+
+<math display="inline" id="Collision_detection:62">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>u</mi>
+    <mo>,</mo>
+    <mi>v</mi>
+    <mo>,</mo>
+    <mi>w</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>P</ci>
+    <vector>
+     <ci>u</ci>
+     <ci>v</ci>
+     <ci>w</ci>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(u,v,w)
+  </annotation>
+ </semantics>
+</math>
+
+ is the plane going through points 
+
+<math display="inline" id="Collision_detection:63">
+ <semantics>
+  <mrow>
+   <mi>u</mi>
+   <mo>,</mo>
+   <mi>v</mi>
+   <mo>,</mo>
+   <mi>w</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>u</ci>
+    <ci>v</ci>
+    <ci>w</ci>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   u,v,w
+  </annotation>
+ </semantics>
+</math>
+
+ in 
+
+<math display="inline" id="Collision_detection:64">
+ <semantics>
+  <msup>
+   <mi>ℝ</mi>
+   <mn>3</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>ℝ</ci>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{R}^{3}
+  </annotation>
+ </semantics>
+</math>
+
+ then there are twenty planes 
+
+<math display="inline" id="Collision_detection:65">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msub>
+      <mi>v</mi>
+      <mi>i</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <msub>
+      <mi>v</mi>
+      <mi>j</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <msub>
+      <mi>v</mi>
+      <mi>k</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>P</ci>
+    <vector>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>v</ci>
+       <ci>i</ci>
+      </apply>
+      <ci>t</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>v</ci>
+       <ci>j</ci>
+      </apply>
+      <ci>t</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>v</ci>
+       <ci>k</ci>
+      </apply>
+      <ci>t</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(v_{i}(t),v_{j}(t),v_{k}(t))
+  </annotation>
+ </semantics>
+</math>
+
+
+ to track. Each plane needs to be tracked against three vertices, this gives sixty values to track. Using a root finder on these sixty functions produces the exact collision times for the two given triangles and the two given trajectory. We note here that if the trajectories of the vertices are assumed to be linear polynomials in 
+
+<math display="inline" id="Collision_detection:66">
+ <semantics>
+  <mi>t</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>t</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t
+  </annotation>
+ </semantics>
+</math>
+
+ then the final sixty functions are in fact cubic polynomials, and in this exceptional case, it is possible to locate the exact collision time using the formula for the roots of the cubic. Some numerical analysts suggest that using the formula for the roots of the cubic is not as numerically stable as using a root finder for polynomials.</p>
+<h3 id="spatial-partitioning">Spatial partitioning</h3>
+
+<p>Alternative algorithms are grouped under the <a href="spatial_partitioning" title="wikilink">spatial partitioning</a> umbrella, which includes <a href="octree" title="wikilink">octrees</a>, <a href="binary_space_partitioning" title="wikilink">binary space partitioning</a> (or BSP trees) and other, similar approaches. If one splits space into a number of simple cells, and if two objects can be shown not to be in the same cell, then they need not be checked for intersection. Since BSP trees can be precomputed, that approach is well suited to handling walls and fixed obstacles in games. These algorithms are generally older than the algorithms described above.</p>
+<h3 id="bounding-boxes">Bounding boxes</h3>
+
+<p><a href="Bounding_box" title="wikilink">Bounding boxes</a> (or <a href="Bounding_volume" title="wikilink">Bounding volumes</a>) are most often a 2D rectangle or 3D <a class="uri" href="cuboid" title="wikilink">cuboid</a>, but other shapes are possible. The bounding diamond, the minimum bounding parallelogram, the convex hull, the bounding circle or bounding ball, and the bounding ellipse have all been tried, but bounding boxes remain the most popular due to their simplicity.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> Bounding boxes are typically used in the early (pruning) stage of collision detection, so that only objects with overlapping bounding boxes need be compared in detail.</p>
+<h2 id="video-games">Video games</h2>
+
+<p>Video games have to split their very limited computing time between several tasks. Despite this resource limit, and the use of relatively primitive collision detection algorithms, programmers have been able to create believable, if inexact, systems for use in games .</p>
+
+<p>For a long time, video games had a very limited number of objects to treat, and so checking all pairs was not a problem. In two-dimensional games, in some cases, the hardware was able to efficiently detect and report overlapping pixels between <a href="sprite_(computer_graphics)" title="wikilink">sprites</a> on the screen. In other cases, simply tiling the screen and binding each <em>sprite</em> into the tiles it overlaps provides sufficient pruning, and for pairwise checks, bounding rectangles or circles called <a href="hitbox" title="wikilink">hitboxes</a> are used and deemed sufficiently accurate.</p>
+
+<p>Three-dimensional games have used spatial partitioning methods for 
+
+<math display="inline" id="Collision_detection:67">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+-body pruning, and for a long time used one or a few spheres per actual 3D object for pairwise checks. Exact checks are very rare, except in games attempting to <a href="Simulation_game" title="wikilink">simulate</a> reality closely. Even then, exact checks are not necessarily used in all cases.</p>
+
+<p>Because games do not need to mimic actual physics, stability is not as much of an issue. Almost all games use <em>a posteriori</em> collision detection, and collisions are often resolved using very simple rules. For instance, if a character becomes embedded in a wall, he might be simply moved back to his last known good location. Some games will calculate the distance the character can move before getting embedded into a wall, and only allow him to move that far.</p>
+
+<p>In many cases for video games, approximating the characters by a point is sufficient for the purpose of collision detection with the environment. In this case, <a href="Binary_space_partition" title="wikilink">Binary space partitioning</a> trees provide a viable, efficient and simple algorithm for checking if a point is embedded in the scenery or not. Such a data structure can also be used to handle "resting position" situation gracefully when a character is running along the ground. Collisions between characters, and collisions with projectiles and hazards, are treated separately.</p>
+
+<p>A robust simulator is one that will react to any input in a reasonable way. For instance, if we imagine a high speed <a href="Racing_game" title="wikilink">racecar video game</a>, from one simulation step to the next, it is conceivable that the cars would advance a substantial distance along the race track. If there is a shallow obstacle on the track (such as a brick wall), it is not entirely unlikely that the car will completely leap over it, and this is very undesirable. In other instances, the "fixing" that posteriori algorithms require isn't implemented correctly, and characters find themselves embedded in walls, or falling off into a deep void, sometimes referred to as "black hell," "blue hell," or "green hell," depending on the predominant color . These are the hallmarks of a failing collision detection and physical simulation system. <a href="Big_Rigs:_Over_the_Road_Racing" title="wikilink">Big Rigs: Over the Road Racing</a> is an infamous example of a game which either has a failing collision detection system or does not even have one.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a class="uri" href="Hit-testing" title="wikilink">Hit-testing</a></li>
+<li><a href="Bounding_volume" title="wikilink">Bounding volume</a></li>
+<li><a href="Game_physics" title="wikilink">Game physics</a></li>
+<li><a href="Gilbert–Johnson–Keerthi_distance_algorithm" title="wikilink">Gilbert–Johnson–Keerthi distance algorithm</a></li>
+<li><a href="Physics_engine" title="wikilink">Physics engine</a></li>
+<li><a href="Lubachevsky-Stillinger_algorithm" title="wikilink">Lubachevsky-Stillinger algorithm</a></li>
+<li><a href="Ragdoll_physics" title="wikilink">Ragdoll physics</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.tsarevitch.org/ozcollide/">OZCollide</a> Free, Fast and 3D Cross-platform detection library.</li>
+<li><a href="http://gamma.cs.unc.edu/research/collision/">University of North Carolina at Chapel Hill collision detection research web site</a></li>
+<li><a href="http://web.comlab.ox.ac.uk/oucl/work/stephen.cameron/distances/">Prof. Steven Cameron (Oxford University) web site on collision detection</a></li>
+<li><a href="http://demonstrations.wolfram.com/HowToAvoidACollision/">How to Avoid a Collision</a> by George Beck, <a href="Wolfram_Demonstrations_Project" title="wikilink">Wolfram Demonstrations Project</a>.</li>
+<li><a href="http://geomalgorithms.com/a08-_containers.html">Bounding boxes and their usage</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Computational_physics" title="wikilink">Category:Computational physics</a> <a href="Category:Computer_physics_engines" title="wikilink">Category:Computer physics engines</a> <a href="Category:Video_game_development" title="wikilink">Category:Video game development</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Ericson, Christer. Real-time Collision Detection. Elsevier, 2005, p. 13.<a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

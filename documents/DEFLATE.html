@@ -1,0 +1,219 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="54">DEFLATE</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>DEFLATE</h1>
+<hr/>
+
+<p>In <a class="uri" href="computing" title="wikilink">computing</a>, <strong>deflate</strong> is a <a href="data_compression" title="wikilink">data compression</a> <a class="uri" href="algorithm" title="wikilink">algorithm</a> that uses a combination of the <a href="LZ77_and_LZ78" title="wikilink">LZ77</a> algorithm and <a href="Huffman_coding" title="wikilink">Huffman coding</a>. It was originally defined by <a href="Phil_Katz" title="wikilink">Phil Katz</a> for version 2 of his <a class="uri" href="PKZIP" title="wikilink">PKZIP</a> archiving tool and was later specified in RFC 1951.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p>The original algorithm as designed by Katz was patented as  and assigned to <a href="PKWARE,_Inc." title="wikilink">PKWARE, Inc.</a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> As stated in the RFC document, Deflate is widely thought to be implementable in a manner not covered by patents.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> This has led to its widespread use, for example in <a class="uri" href="gzip" title="wikilink">gzip</a> compressed files, <a href="Portable_Network_Graphics" title="wikilink">PNG</a> image files and the <a href="ZIP_(file_format)" title="wikilink">.ZIP</a> file format for which Katz originally designed it.</p>
+<h2 id="stream-format">Stream format</h2>
+
+<p>A Deflate stream consists of a series of blocks. Each block is preceded by a 3-<a class="uri" href="bit" title="wikilink">bit</a> header:</p>
+<ul>
+<li>First bit: Last-block-in-stream marker:
+<ul>
+<li><code>1</code>: this is the last block in the stream.</li>
+<li><code>0</code>: there are more blocks to process after this one.</li>
+</ul></li>
+<li>Second and third bits: Encoding method used for this block type:
+<ul>
+<li><code>00</code>: a stored/raw/literal section, between 0 and 65,535 bytes in length.</li>
+<li><code>01</code>: a <em>static Huffman</em> compressed block, using a pre-agreed Huffman tree.</li>
+<li><code>10</code>: a compressed block complete with the Huffman table supplied.</li>
+<li><code>11</code>: reserved, don't use.</li>
+</ul></li>
+</ul>
+
+<p>Most blocks will end up being encoded using method <code>10</code>, the <em>dynamic Huffman</em> encoding, which produces an optimised Huffman tree customised for each block of data individually. Instructions to generate the necessary Huffman tree immediately follow the block header.</p>
+
+<p>Compression is achieved through two steps</p>
+<ul>
+<li>The matching and replacement of duplicate strings with pointers.</li>
+<li>Replacing symbols with new, weighted symbols based on frequency of use.</li>
+</ul>
+<h3 id="duplicate-string-elimination">Duplicate string elimination</h3>
+
+<p>Within compressed blocks, if a duplicate series of bytes is spotted (a repeated string), then a back-<a href="Reference_(computer_science)" title="wikilink">reference</a> is inserted, linking to the previous location of that identical string instead. An encoded match to an earlier string consists of a length (3–258 bytes) and a distance (1–32,768 bytes). Relative back-references can be made across any number of blocks, as long as the distance appears within the last 32 kB of uncompressed data decoded (termed the <em>sliding window</em>).</p>
+<h3 id="bit-reduction">Bit reduction</h3>
+
+<p>The second compression stage consists of replacing commonly used symbols with shorter representations and less commonly used symbols with longer representations. The method used is <a href="Huffman_coding" title="wikilink">Huffman coding</a> which creates an unprefixed tree of non-overlapping intervals, where the length of each sequence is inversely proportional to the probability of that symbol needing to be encoded. The more likely a symbol has to be encoded, the shorter its bit-sequence will be.</p>
+
+<p>A tree is created, containing space for 288 symbols:</p>
+<ul>
+<li>0–255: represent the literal bytes/symbols 0–255.</li>
+<li>256: end of block – stop processing if last block, otherwise start processing next block.</li>
+<li>257–285: combined with extra-bits, a match length of 3–258 bytes.</li>
+<li>286, 287: not used, reserved and illegal but still part of the tree.</li>
+</ul>
+
+<p>A match length code will always be followed by a distance code. Based on the distance code read, further "extra" bits may be read in order to produce the final distance. The distance tree contains space for 32 symbols:</p>
+<ul>
+<li>0–3: distances 1–4</li>
+<li>4–5: distances 5–8, 1 extra bit</li>
+<li>6–7: distances 9–16, 2 extra bits</li>
+<li>8–9: distances 17–32, 3 extra bits</li>
+<li>...</li>
+<li>26–27: distances 8,193–16,384, 12 extra bits</li>
+<li>28–29: distances 16,385–32,768, 13 extra bits</li>
+<li>30–31: not used, reserved and illegal but still part of the tree.</li>
+</ul>
+
+<p>Note that for the match distance symbols 2–29, the number of extra bits can be calculated as 
+
+<math display="inline" id="DEFLATE:0">
+<semantics>
+<mrow>
+<mfrac>
+<mi>n</mi>
+<mn>2</mn>
+</mfrac>
+<mo>-</mo>
+<mn>1</mn>
+</mrow>
+<annotation-xml encoding="MathML-Content">
+<apply>
+<minus></minus>
+<apply>
+<divide></divide>
+<ci>n</ci>
+<cn type="integer">2</cn>
+</apply>
+<cn type="integer">1</cn>
+</apply>
+</annotation-xml>
+<annotation encoding="application/x-tex">
+   \frac{n}{2}-1
+  </annotation>
+</semantics>
+</math>
+
+.</p>
+<h2 id="encodercompressor">Encoder/compressor</h2>
+
+<p>During the compression stage, it is the <em>encoder</em> that chooses the amount of time spent looking for matching strings. The zlib/gzip reference implementation allows the user to select from a <a href="sliding_scale" title="wikilink">sliding scale</a> of likely resulting compression-level vs. speed of encoding. Options range from <code>-0</code> (do not attempt compression, just store uncompressed) to <code>-9</code> representing the maximum capability of the reference implementation in zlib/gzip.</p>
+
+<p>Other Deflate encoders have been produced, all of which will also produce a compatible <a class="uri" href="bitstream" title="wikilink">bitstream</a> capable of being decompressed by any existing Deflate decoder. Differing implementations will likely produce variations on the final encoded bit-stream produced. The focus with non-zlib versions of an encoder has normally been to produce a more efficiently compressed and smaller encoded stream.</p>
+<h3 id="deflate64enhanced-deflate">Deflate64/Enhanced Deflate</h3>
+
+<p>Deflate64, specified by PKWare, is a proprietary variant of the Deflate procedure. The fundamental mechanisms remain the same. What has changed is the increase in dictionary size from 32kB to 64kB, an addition of 14 bits to the distance codes so that they may address a range of 64kB, and the length code has been extended by 16 bits so that it may define lengths of 3 to 65538 bytes.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> This leads to Deflate64 having a slightly higher compression ratio and a slightly lower compression time than Deflate.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Several free and/or open source projects support Deflate64, such as <a class="uri" href="7-Zip" title="wikilink">7-Zip</a>,<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> while others, such as <a class="uri" href="zlib" title="wikilink">zlib</a>, do not, as a result of the proprietary nature of the procedure<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> and the very modest performance increase over Deflate.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+<h2 id="using-deflate-in-new-software">Using Deflate in new software</h2>
+
+<p>Implementations of Deflate are freely available in many languages. C programs typically use the zlib library (licensed under the <a href="zlib_License" title="wikilink">zlib License</a>, which allows use with both free and proprietary software). Programs written using the <a class="uri" href="Borland" title="wikilink">Borland</a> dialects of Pascal can use paszlib; a <a class="uri" href="C++" title="wikilink">C++</a> library is included as part of <a class="uri" href="7-Zip" title="wikilink">7-Zip</a>/<a class="uri" href="AdvanceCOMP" title="wikilink">AdvanceCOMP</a>. Java includes support as part of the standard library (in java.util.zip). <a href="Microsoft_.NET_Framework" title="wikilink">Microsoft .NET Framework</a> 2.0 base class library supports it in the System.IO.Compression namespace.</p>
+<h3 id="encoder-implementations">Encoder implementations</h3>
+<ul>
+<li><a class="uri" href="PKZIP" title="wikilink">PKZIP</a>: the first implementation, originally done by <a href="Phil_Katz" title="wikilink">Phil Katz</a> as part of <a class="uri" href="PKZip" title="wikilink">PKZip</a>.</li>
+<li><a class="uri" href="zlib" title="wikilink">zlib</a>/<a class="uri" href="gzip" title="wikilink">gzip</a>: standard reference implementation used in a huge amount of software, owing to public availability of the source code and a license allowing inclusion into other software.
+<ul>
+<li><a href="http://www.jcraft.com/jzlib/">jzlib</a>: Rewrite/re-implementation/port of the <code>zlib</code> encoder into pure <a href="Java_(programming_language)" title="wikilink">Java</a> and distributed under a <a href="BSD_license" title="wikilink">BSD license</a>. (Fully featured replacement for <code>java.util.zip</code>).</li>
+<li><a href="http://www.nomssi.de/paszlib/paszlib.html">PasZLIB</a>: Translation/port of the <code>zlib</code> code into <a href="Pascal_(programming_language)" title="wikilink">Pascal</a> source code by Jacques Nomssi-Nzali.</li>
+<li><a href="http://sourceforge.net/projects/gziplite/">gziplite</a>: Minimalist rework of <code>gzip</code> / <code>gunzip</code> with minimal memory requirement, also supporting on-the-fly data compression/decompression (no need to bufferize all input) and input/output to/from memory.</li>
+<li><a href="https://github.com/nodeca/pako">pako</a>: full featured zlib port to JavaScript, optimized for high speed. Works in browsers and node.js.</li>
+</ul></li>
+<li><a href="http://code.google.com/p/miniz/">miniz</a> – Public domain Deflate/Inflate implementation with a zlib-compatible API in a single .C source file</li>
+<li><a href="http://lodev.org/lodepng/">lodepng</a> by Lode Vandevenne. A <a href="BSD_license" title="wikilink">BSD-licensed</a> single file PNG file reader with built-in C++ Inflate implementation and no external dependencies.</li>
+<li><a href="http://advsys.net/ken/utils.htm#kzip">KZIP</a>/<a class="uri" href="PNGOUT" title="wikilink">PNGOUT</a>: an encoder by the game-programmer <a href="Ken_Silverman" title="wikilink">Ken Silverman</a> using <cite>"an exhaustive search of all patterns"</cite> and <cite>"[an] advanced block splitter"</cite>.</li>
+<li><a href="http://www.cs.tut.fi/~albert/Dev/puzip/">PuZip</a>: designed for <a href="Commodore_64" title="wikilink">Commodore 64</a>/<a href="Commodore_128" title="wikilink">C128</a> computers. PuZip is limited to an 8kB LZ77 window size, with only the store (type <code>00</code>) and fixed Huffman (type <code>01</code>) methods.</li>
+<li><a href="http://www.bigspeed.net/index.php?page=bsdefdll">BigSpeed Deflate</a>: <cite>"Tiny in-memory compression library"</cite> available as a MS Windows DLL limited to 32kB blocks at a time and three compression settings.</li>
+<li><a href="http://www.walbeehm.com/download/">BJWFlate &amp; DeflOpt</a>/<a class="uri" href="DeflOpt" title="wikilink">DeflOpt</a>: Ben Jos Walbeehm's utilities <cite>"designed to attempt to squeeze every possible byte out of the files it compresses"</cite>. Note that the author has stopped development on BJWFlate (but not DeflOpt) in March 2004.</li>
+<li><a class="uri" href="Crypto++" title="wikilink">Crypto++</a>: contains a public domain implementation in <a class="uri" href="C++" title="wikilink">C++</a> aimed mainly at reducing potential <a href="Vulnerability_(computing)" title="wikilink">security vulnerabilities</a>. The author, Wei Dai states "<cite>This code is less clever, but hopefully more understandable and maintainable [than zlib]</cite>".</li>
+<li><a href="http://msdn.microsoft.com/en-us/library/system.io.compression.deflatestream.aspx">DeflateStream</a> - an implementation of a stream that performs DEFLATE compression, it is packaged with the Base Class Library included with the .NET Framework.</li>
+<li><a href="http://cheeso.members.winisp.net/DotNetZipHelp/html/26cbdba2-021a-ccf1-a9c9-b7ae55f6ecb8.htm">ParallelDeflateOutputStream</a> – an open source stream that implements a parallel (multi-thread) deflating stream, for use in .NET programs.</li>
+<li><a href="https://www.noemax.com/dotnetcompression/">DotNetCompression</a> – a managed C# implementation of DEFLATE/ZLIB/GZIP that is optimized for high speed, conforms to the streaming API of System.IO.Compression and includes assemblies for <a href=".NET_Framework" title="wikilink">.NET Framework</a>, <a href=".NET_Compact_Framework" title="wikilink">.NET Compact Framework</a>, <a class="uri" href="Xamarin" title="wikilink">Xamarin</a>.<a class="uri" href="iOS" title="wikilink">iOS</a>, <a class="uri" href="Xamarin" title="wikilink">Xamarin</a>.<a href="Android_(operating_system)" title="wikilink">Android</a>, <a class="uri" href="Xamarin" title="wikilink">Xamarin</a>.<a href="Mac_OS" title="wikilink">Mac</a>, <a href="Windows_Phone" title="wikilink">Windows Phone</a>, <a href="Xbox_360" title="wikilink">Xbox 360</a>, <a class="uri" href="Silverlight" title="wikilink">Silverlight</a>, <a href="Mono_(software)" title="wikilink">Mono</a> and as a Portable Class Library.</li>
+<li><a class="uri" href="7-Zip" title="wikilink">7-Zip</a>/<a class="uri" href="AdvanceCOMP" title="wikilink">AdvanceCOMP</a>: written by Igor Pavlov in <a class="uri" href="C++" title="wikilink">C++</a>, this version is freely licensed and tends to achieve higher compression than zlib at the expense of CPU usage. Has an option to use the DEFLATE64 storage format.</li>
+</ul>
+<ul>
+<li><a href="http://seed7.sourceforge.net/libraries/deflate.htm">deflate.s7i</a>/<a href="http://seed7.sourceforge.net/libraries/gzip.htm">gzip.s7i</a>, a pure-<a class="uri" href="Seed7" title="wikilink">Seed7</a> implementation of Deflate and gzip compression, by Thomas Mertes. Made available under the GNU <a href="GNU_Lesser_General_Public_License" title="wikilink">LGPL</a> license.</li>
+<li><a class="uri" href="PuTTY" title="wikilink">PuTTY</a> ‘sshzlib.c’: a standalone implementation, capable of full decode, but static tree only creation, by Simon Tatham. <a href="MIT_License" title="wikilink">MIT licensed</a>.</li>
+<li><a href="http://www.chiark.greenend.org.uk/~sgtatham/halibut/">Halibut</a> ‘deflate.c’: a standalone implementation capable of full decode. Forked from PuTTY's ‘sshzlib.c’, but extended to write dynamic Huffman trees and provides Adler-32 and CRC-32 checksum support.</li>
+<li><a href="Plan_9_from_Bell_Labs" title="wikilink">Plan 9 from Bell Labs</a> operating system's <a href="http://plan9.bell-labs.com/sources/plan9/sys/src/libflate/">libflate</a> implements deflate compression.</li>
+<li><a href="Red_Gate_Software#HyperBac" title="wikilink">Hyperbac</a>: uses its own proprietary lossless compression library (written in C++ and Assembly) with an option to implement the DEFLATE64 storage format.</li>
+<li><a href="http://gildas-lormeau.github.com/zip.js/">zip.js</a>: JavaScript implementation.</li>
+<li><a class="uri" href="Zopfli" title="wikilink">Zopfli</a>: C implementation by Google that achieves highest compression at the expense of CPU usage. <a href="Apache_license" title="wikilink">Apache licensed</a>.</li>
+</ul>
+
+<p><a class="uri" href="AdvanceCOMP" title="wikilink">AdvanceCOMP</a> uses the higher compression ratio version of Deflate as implemented by 7-Zip (or optionally Zopfli in recent versions) to enable recompression of <a class="uri" href="gzip" title="wikilink">gzip</a>, <a href="Portable_Network_Graphics" title="wikilink">PNG</a>, <a href="Multiple-image_Network_Graphics" title="wikilink">MNG</a> and <a href="ZIP_file_format" title="wikilink">ZIP</a> files with the possibility of achieving smaller file sizes than zlib is able to at maximum settings. An even more effective (but also more user-input-demanding and CPU intensive) Deflate encoder is employed inside <a href="Ken_Silverman" title="wikilink">Ken Silverman</a>'s KZIP and <a class="uri" href="PNGOUT" title="wikilink">PNGOUT</a> utilities, although recent versions of AdvanceCOMP have surpassed KZIP and PNGOUT when using AdvanceCOMP's Zopfli mode.</p>
+<h3 id="hardware-encoders">Hardware encoders</h3>
+<ul>
+<li>AHA361-PCIX/AHA362-PCIX from <a href="http://www.aha.com/">Comtech AHA</a>. Comtech produced a <a class="uri" href="PCI-X" title="wikilink">PCI-X</a> card (PCI-ID: <code>193f:0001</code>) capable of compressing streams using Deflate at a rate of up to 3.0 Gbit/s (375 MB/s) for incoming uncompressed data. Accompanying the <a href="Linux_(kernel)" title="wikilink">Linux kernel</a> <a href="Device_driver" title="wikilink">driver</a> for the AHA361-PCIX is an "<code>ahagzip</code>" utility and customised "<code>mod_deflate_aha</code>" capable of using the hardware compression from <a href="Apache_HTTP_Server" title="wikilink">Apache</a>. The hardware is based on a <a class="uri" href="Xilinx" title="wikilink">Xilinx</a> <a href="Virtex_(FPGA)" title="wikilink">Virtex</a> <a class="uri" href="FPGA" title="wikilink">FPGA</a> and four custom AHA3601 <a href="Application-specific_integrated_circuit" title="wikilink">ASICs</a>. The AHA361/AHA362 boards are limited to only handling static Huffman blocks and require software to be modified to add support — the cards were not able to support the full Deflate specification, meaning they could only reliably decode their own output (a stream that did not contain any dynamic Huffman type 2 blocks).</li>
+<li><a href="http://www.indranetworks.com/SC300.html">StorCompress 300</a>/<a href="http://www.indranetworks.com/SCMX3.html">MX3</a> from <a href="http://www.indranetworks.com/">Indra Networks</a>. This is a range of <a href="PCI_Local_Bus" title="wikilink">PCI</a> (PCI-ID: <code>17b4:0011</code>) or PCI-X cards featuring between one and six compression engines with claimed processing speeds of up to 3.6 Gbit/s (450 MB/s). A version of the cards are available with the separate brand <em>WebEnhance</em> specifically designed for web-serving use rather than <a href="Storage_area_network" title="wikilink">SAN</a> or backup use; a <a class="uri" href="PCIe" title="wikilink">PCIe</a> revision, the <a href="http://www.indranetworks.com/SCMX4E.html">MX4E</a> is also produced.</li>
+<li><a href="http://www.aha.com/show_prod.php?id=36">AHA363-PCIe</a>/<a href="http://www.aha.com/show_prod.php?id=37">AHA364-PCIe</a>/<a href="http://www.aha.com/show_prod.php?id=38">AHA367-PCIe</a>. In 2008, Comtech started producing two PCIe cards (<code>PCI-ID: 193f:0363</code>/<code>193f:0364</code>) with a new hardware AHA3610 encoder chip. The new chip was designed to be capable of a sustained 2.5Gbit/s. Using two of these chips, the AHA363-PCIe board can process Deflate at a rate of up to 5.0 Gbit/s (625 MB/s) using the two channels (two compression and two decompression). The AHA364-PCIe variant is an encode-only version of the card designed for out-going <a href="load_balancer" title="wikilink">load balancers</a> and instead has multiple register sets to allow 32 independent <em>virtual</em> compression channels feeding two physical compression engines. Linux, <a href="Microsoft_Windows" title="wikilink">Microsoft Windows</a>, and <a class="uri" href="OpenSolaris" title="wikilink">OpenSolaris</a> kernel device drivers are available for both of the new cards, along with a modified zlib system library so that dynamically linked applications can automatically use the hardware support without internal modification. The AHA367-PCIe board (<code>PCI-ID: 193f:0367</code>) is similar to the AHA363-PCIe but uses four AHA3610 chips for a sustained compression rate of 10 Gbit/s (1250 MB/s). Unlike the AHA362-PCIX, the decompression engines on the AHA363-PCIe and AHA367-PCIe boards are fully deflate compliant.</li>
+<li><a href="http://cavium.com/processor_security_nitrox-III.html">Nitrox</a> and <a href="https://github.com/zerix/Cavium-SDK-2.0/tree/master/examples/zip">Octeon</a> processors from <a href="http://cavium.com">Cavium, Inc.</a> contain high-speed hardware deflate and inflate engines compatible with both ZLIB and GZIP with some devices able to handle multiple simultaneous data streams.</li>
+</ul>
+<h2 id="decoderdecompressor">Decoder/decompressor</h2>
+
+<p>Inflate is the decoding process that takes a Deflate bit stream for decompression and correctly produces the original full-size data or file.</p>
+<h3 id="inflate-only-implementations">Inflate-only implementations</h3>
+
+<p>The normal intent with an alternative Inflate implementation is highly optimised decoding speed, or extremely predictable RAM usage for micro-controller embedded systems.</p>
+<ul>
+<li><a href="Assembly_language" title="wikilink">Assembly</a>
+<ul>
+<li><a href="https://github.com/pfusik/zlib6502">6502 inflate</a>, written by Piotr Fusik in <a href="MOS_Technology_6502" title="wikilink">6502</a> assembly language.</li>
+<li><a href="http://www.pisi.com.pl/piotr433/mk90mc1e.htm#inflate">Elektronika MK-90 inflate</a>, the above 6502 program ported by Piotr Piatek to the <a href="PDP-11_architecture" title="wikilink">PDP-11 architecture</a>.</li>
+<li><a href="http://sourceforge.net/projects/samflate/">SAMflate</a>, written by Andrew Collier in <a class="uri" href="Z80" title="wikilink">Z80</a> assembly language with optional memory paging support for the <a href="SAM_Coupé" title="wikilink">SAM Coupé</a>, and made available under the <a href="BSD_license" title="wikilink">BSD</a>/<a href="GNU_General_Public_License" title="wikilink">GPL</a>/<a href="GNU_Lesser_General_Public_License" title="wikilink">LGPL</a>/<a href="Debian_Free_Software_Guidelines" title="wikilink">DFSG</a> licenses.</li>
+<li><a href="https://github.com/keirf/Amiga-Stuff">inflate.asm</a>, a fast and efficient implementation in <a class="uri" href="M68000" title="wikilink">M68000</a> machine language, written by Keir Fraser and released into the <a href="Public_Domain" title="wikilink">Public Domain</a>.</li>
+</ul></li>
+</ul>
+<ul>
+<li><a href="C_(programming_language)" title="wikilink">C</a>/<a class="uri" href="C++" title="wikilink">C++</a>
+<ul>
+<li><a href="http://www.mikekohn.net/file_formats/kunzip.php">kunzip</a> by Michael Kohn and unrelated to "KZIP". Comes with <a href="C_(programming_language)" title="wikilink">C</a> source-code under the GNU <a class="uri" href="LGPL" title="wikilink">LGPL</a> license. Used in the <a class="uri" href="GIMP" title="wikilink">GIMP</a> installer.</li>
+<li>puff.c (<a class="uri" href="zlib" title="wikilink">zlib</a>), a small, unencumbered, single-file reference implementation included in the /contrib/puff directory of the zlib distribution.</li>
+<li><a href="http://www.ibsensoftware.com/download.html">tinf</a> written by Jørgen Ibsen in ANSI C and comes with zlib license. Adds about 2k code.</li>
+<li><a href="http://code.google.com/p/miniz/source/browse/trunk/tinfl.c">tinfl.c</a> (<a href="http://code.google.com/p/miniz/">miniz</a>), Public domain Inflate implementation contained entirely in a single C function.</li>
+</ul></li>
+</ul>
+<ul>
+<li><code>PCDEZIP</code>, Bob Flanders and Michael Holmes, published in PC Magazine 1994–01–11.</li>
+<li><a href="http://opensource.franz.com/deflate/">inflate.cl</a> by John Foderaro. Self-standing <a href="Common_Lisp" title="wikilink">Common Lisp</a> decoder distributed with a GNU <a class="uri" href="LGPL" title="wikilink">LGPL</a> license.</li>
+<li><a href="http://seed7.sourceforge.net/libraries/inflate.htm">inflate.s7i</a>/<a href="http://seed7.sourceforge.net/libraries/gzip.htm">gzip.s7i</a>, a pure-<a class="uri" href="Seed7" title="wikilink">Seed7</a> implementation of Deflate and gzip decompression, by Thomas Mertes. Made available under the GNU <a href="GNU_Lesser_General_Public_License" title="wikilink">LGPL</a> license.</li>
+<li><a href="http://www.paul.sladen.org/projects/pyflate/">pyflate</a>, a pure-<a href="Python_(programming_language)" title="wikilink">Python</a> stand-alone Deflate (<a class="uri" href="gzip" title="wikilink">gzip</a>) and <a class="uri" href="bzip2" title="wikilink">bzip2</a> decoder by Paul Sladen. Written for research/prototyping and made available under the <a href="BSD_license" title="wikilink">BSD</a>/<a href="GNU_General_Public_License" title="wikilink">GPL</a>/<a href="GNU_Lesser_General_Public_License" title="wikilink">LGPL</a>/<a href="Debian_Free_Software_Guidelines" title="wikilink">DFSG</a> licenses.</li>
+<li><a href="http://lua-users.org/wiki/ModuleCompressDeflateLua">deflatelua</a>, a pure-<a href="Lua_(programming_language)" title="wikilink">Lua</a> implementation of Deflate and <a class="uri" href="gzip" title="wikilink">gzip</a>/zlib decompression, by David Manura.</li>
+<li><a href="https://github.com/chrisdickinson/inflate">inflate</a> a pure-<a href="Javascript_(programming_language)" title="wikilink">Javascript</a> implementation of Inflate by Chris Dickinson</li>
+<li><a href="https://github.com/nodeca/pako">pako</a>: JavaScript speed-optimized port of zlib. Contains separate build with inflate only.</li>
+</ul>
+<h3 id="hardware-decoders">Hardware decoders</h3>
+<ul>
+<li><a href="http://www.bitsim.com/en/badge.htm">Serial Inflate GPU</a> from BitSim. Hardware implementation of Inflate. Part of BitSim's <em>BADGE</em> (Bitsim Accelerated Display Graphics Engine) controller offering for embedded systems.</li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="List_of_archive_formats" title="wikilink">List of archive formats</a></li>
+<li><a href="List_of_file_archivers" title="wikilink">List of file archivers</a></li>
+<li><a href="Comparison_of_file_archivers" title="wikilink">Comparison of file archivers</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="PKWARE,_Inc." title="wikilink">PKWARE, Inc.</a>'s <code>appnote.txt</code>, <a href="http://www.pkware.com/documents/casestudies/APPNOTE.TXT"><em>.ZIP File Format Specification</em></a>; Section 10, <em>X. Deflating - Method 8</em>.</li>
+<li>RFC 1951 – <em>Deflate Compressed Data Format Specification version 1.3</em></li>
+<li><a href="http://www.zlib.net">zlib Home Page</a></li>
+<li><a href="http://zlib.net/feldspar.html"><em>An Explanation of the Deflate Algorithm</em></a> by Antaeus Feldspar.</li>
+<li><a href="http://www.larsson.dogma.net/dccpaper.pdf"><em>Extended Application of Suffix Trees to Data Compression</em></a> An excellent algorithm to implement Deflate by Jesper Larsson</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Lossless_compression_algorithms" title="wikilink">Category:Lossless compression algorithms</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"></li>
+<li id="fn5"><a href="http://www.binaryessence.com/dct/imp/en000225.htm">Binary Essence - Deflate64</a><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="http://www.binaryessence.com/dct/apc/en000263.htm">Binary Essence - "Calgary Corpus" compression comparisons</a><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="http://sevenzip.sourceforge.jp/chm/cmdline/switches/method.htm">7-Zip Manual and Documentation - compression Method</a><a href="#fnref7">↩</a></li>
+<li id="fn8">History of Lossless Data Compression Algorithms - <a href="http://ieeeghn.org/wiki/index.php/History_of_Lossless_Data_Compression_Algorithms#DEFLATE64">Deflate64</a><a href="#fnref8">↩</a></li>
+<li id="fn9">zlib FAQ - <a href="http://www.zlib.net/zlib_faq.html#faq40">Does zlib support the new "Deflate64" format introduced by PKWare?</a><a href="#fnref9">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

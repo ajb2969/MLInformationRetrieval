@@ -1,0 +1,554 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="385">Schönhage–Strassen algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Schönhage–Strassen algorithm</h1>
+<hr/>
+
+<p> The <strong>Schönhage–Strassen algorithm</strong> is an asymptotically fast <a href="multiplication_algorithm" title="wikilink">multiplication algorithm</a> for large <a href="integer" title="wikilink">integers</a>. It was developed by <a href="Arnold_Schönhage" title="wikilink">Arnold Schönhage</a> and <a href="Volker_Strassen" title="wikilink">Volker Strassen</a> in 1971.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> The run-time <a href="bit_complexity" title="wikilink">bit complexity</a> is, in <a href="Big_O_notation" title="wikilink">Big O notation</a>, O(<em>n</em> log <em>n</em> log log <em>n</em>) for two <em>n</em>-digit numbers. The algorithm uses recursive <a href="Fast_Fourier_transform" title="wikilink">Fast Fourier transforms</a> in <a href="Ring_(mathematics)" title="wikilink">rings</a> with 2<sup>2<sup><em>n</em></sup></sup> + 1 elements, a specific type of <a href="Discrete_Fourier_transform_(general)#Number-theoretic_transform" title="wikilink">number theoretic transform</a>.</p>
+
+<p>The Schönhage–Strassen algorithm was the asymptotically fastest multiplication method known from 1971 until 2007, when a new method, <a href="Fürer's_algorithm" title="wikilink">Fürer's algorithm</a>, was announced with lower asymptotic complexity;<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> however, Fürer's algorithm currently only achieves an advantage for astronomically large values and is not used in practice.</p>
+
+<p>In practice the Schönhage–Strassen algorithm starts to outperform older methods such as <a href="Karatsuba_multiplication" title="wikilink">Karatsuba</a> and <a href="Toom–Cook_multiplication" title="wikilink">Toom–Cook multiplication</a> for numbers beyond 2<sup>2<sup>15</sup></sup> to 2<sup>2<sup>17</sup></sup> (10,000 to 40,000 decimal digits).<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a><a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> The <a href="GNU_Multi-Precision_Library" title="wikilink">GNU Multi-Precision Library</a> uses it for values of at least 1728 to 7808 64-bit words (33,000 to 150,000 decimal digits), depending on architecture.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> There is a Java implementation of Schönhage–Strassen which uses it above 74,000 decimal digits.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+
+<p>Applications of the Schönhage–Strassen algorithm include <a href="mathematical_empiricism" title="wikilink">mathematical empiricism</a>, such as the <a href="Great_Internet_Mersenne_Prime_Search" title="wikilink">Great Internet Mersenne Prime Search</a> and computing <a href="Approximations_of_π" title="wikilink">approximations of <em>π</em></a>, as well as practical applications such as <a href="Kronecker_substitution" title="wikilink">Kronecker substitution</a>, in which multiplication of polynomials with integer coefficients can be efficiently reduced to large integer multiplication; this is used in practice by GMP-ECM for <a href="Lenstra_elliptic_curve_factorization" title="wikilink">Lenstra elliptic curve factorization</a>.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+<h2 id="details">Details</h2>
+
+<p>This section explains in detail how Schönhage–Strassen is implemented. It is based primarily on an overview of the method by Crandall and Pomerance in their <em>Prime Numbers: A Computational Perspective</em>.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> This variant differs somewhat from Schönhage's original method in that it exploits the <a href="discrete_weighted_transform" title="wikilink">discrete weighted transform</a> to perform negacyclic convolutions more efficiently. Another source for detailed information is <a href="Donald_Knuth" title="wikilink">Knuth</a>'s <em>The Art of Computer Programming</em>.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+<h3 id="convolutions">Convolutions</h3>
+
+<p>Suppose we are multiplying two numbers like 123 and 456 using long multiplication with base <em>B</em> digits, but without performing any carrying. The result might look something like this:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>3</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>×</p></td>
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>5</p></td>
+<td style="text-align: left;">
+<p>6</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><hr/></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>6</p></td>
+<td style="text-align: left;">
+<p>12</p></td>
+<td style="text-align: left;">
+<p>18</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>5</p></td>
+<td style="text-align: left;">
+<p>10</p></td>
+<td style="text-align: left;">
+<p>15</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>8</p></td>
+<td style="text-align: left;">
+<p>12</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><hr/></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>13</p></td>
+<td style="text-align: left;">
+<p>28</p></td>
+<td style="text-align: left;">
+<p>27</p></td>
+<td style="text-align: left;">
+<p>18</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>This sequence (4, 13, 28, 27, 18) is called the <em>acyclic</em> or <em>linear convolution</em> of the two original sequences (1,2,3) and (4,5,6). Once you have the acyclic convolution of two sequences, computing the product of the original numbers is easy: you just perform the carrying (for example, in the rightmost column, you'd keep the 8 and add the 1 to the column containing 27). In the example this yields the correct product 56088.</p>
+
+<p>There are two other types of convolutions that will be useful. Suppose the input sequences have <em>n</em> elements (here 3). Then the acyclic convolution has <em>n</em>+<em>n</em>−1 elements; if we take the rightmost <em>n</em> elements and add the leftmost <em>n</em>−1 elements, this produces the <a href="cyclic_convolution" title="wikilink">cyclic convolution</a>:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>28</p></td>
+<td style="text-align: left;">
+<p>27</p></td>
+<td style="text-align: left;">
+<p>18</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>+</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>13</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><hr/></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>28</p></td>
+<td style="text-align: left;">
+<p>31</p></td>
+<td style="text-align: left;">
+<p>31</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>If we perform carrying on the cyclic convolution, the result is equivalent to the product of the inputs mod B<sup><em>n</em></sup> − 1. In the example, 10<sup>3</sup> − 1 = 999, performing carrying on (28, 31, 31) yields 3141, and 3141 ≡ 56088 (mod 999).</p>
+
+<p>Conversely, if we take the rightmost <em>n</em> elements and <em>subtract</em> the leftmost <em>n</em>−1 elements, this produces the <a href="negacyclic_convolution" title="wikilink">negacyclic convolution</a>:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>28</p></td>
+<td style="text-align: left;">
+<p>27</p></td>
+<td style="text-align: left;">
+<p>18</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;">
+<p>13</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><hr/></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>28</p></td>
+<td style="text-align: left;">
+<p>23</p></td>
+<td style="text-align: left;">
+<p>5</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>If we perform carrying on the negacyclic convolution, the result is equivalent to the product of the inputs mod B<sup><em>n</em></sup> + 1. In the example, 10<sup>3</sup> + 1 = 1001, performing carrying on (28, 23, 5) yields 3035, and 3035 ≡ 56088 (mod 1001). The negacyclic convolution can contain negative numbers, which can be eliminated during carrying using borrowing, as is done in long subtraction.</p>
+<h3 id="convolution-theorem">Convolution theorem</h3>
+
+<p>Like other <a href="Multiplication_algorithm#Fourier_transform_methods" title="wikilink">multiplication methods based on the Fast Fourier transform</a>, Schönhage–Strassen depends fundamentally on the <a href="convolution_theorem" title="wikilink">convolution theorem</a>, which provides an efficient way to compute the cyclic convolution of two sequences. It states that:</p>
+<dl>
+<dd>The cyclic convolution of two vectors can be found by taking the <a href="discrete_Fourier_transform" title="wikilink">discrete Fourier transform</a> (DFT) of each of them, multiplying the resulting vectors element by element, and then taking the inverse discrete Fourier transform (IDFT).
+</dd>
+</dl>
+
+<p>Or in symbols:</p>
+<dl>
+<dd>CyclicConvolution(X, Y) = IDFT(DFT(X) · DFT(Y))
+</dd>
+</dl>
+
+<p>If we compute the DFT and IDFT using a <a href="fast_Fourier_transform" title="wikilink">fast Fourier transform</a> algorithm, and invoke our multiplication algorithm recursively to multiply the entries of the transformed vectors DFT(X) and DFT(Y), this yields an efficient algorithm for computing the cyclic convolution.</p>
+
+<p>In this algorithm, it will be more useful to compute the <em>negacyclic</em> convolution; as it turns out, a slightly modified version of the convolution theorem (see <a href="Discrete_Fourier_transform_(general)#Discrete_weighted_transform" title="wikilink">discrete weighted transform</a>) can enable this as well. Suppose the vectors X and Y have length <em>n</em>, and <em>a</em> is a primitive root of unity of <a href="Order_(group_theory)" title="wikilink">order</a> 2<em>n</em> (that is, <em>a</em><sup>2<em>n</em></sup> = 1 and <em>a</em> to all smaller powers is not 1). Then we can define a third vector <em>A</em>, called the <em>weight vector</em>, as:</p>
+<dl>
+<dd><em>A</em> = (<em>a</em><sup><em>j</em></sup>), 0 ≤ <em>j</em> &lt; <em>n</em>
+</dd>
+<dd><em>A</em><sup>−1</sup> = (<em>a</em><sup>−j''</sup>), 0 ≤ <em>j</em> &lt; <em>n</em>
+</dd>
+</dl>
+
+<p>Now, we can state:</p>
+<dl>
+<dd>NegacyclicConvolution(<em>X</em>, <em>Y</em>) = <em>A</em><sup>−1</sup> · IDFT(DFT(<em>A</em> · <em>X</em>) · DFT(<em>A</em> · <em>Y</em>))
+</dd>
+</dl>
+
+<p>In other words, it's the same as before except that the inputs are first multiplied by <em>A</em>, and the result is multiplied by <em>A</em><sup>−1</sup>.</p>
+<h3 id="choice-of-ring">Choice of ring</h3>
+
+<p>The discrete Fourier transform is an abstract operation that can be performed in any <a href="Ring_(mathematics)" title="wikilink">algebraic ring</a>; typically it's performed in the complex numbers, but actually performing complex arithmetic to sufficient precision to ensure accurate results for multiplication is slow and error-prone. Instead, we will use the approach of the <a href="Discrete_Fourier_transform_(general)#Number-theoretic_transform" title="wikilink">number theoretic transform</a>, which is to perform the transform in the integers mod N for some integer N.</p>
+
+<p>Just like there are primitive roots of unity of every order in the complex plane, given any order <em>n</em> we can choose a suitable N such that <em>b</em> is a primitive root of unity of order <em>n</em> in the integers mod N (in other words, <em>b</em><sup><em>n</em></sup> ≡ 1 (mod N), and no smaller power of <em>b</em> is equivalent to 1 mod N).</p>
+
+<p>The algorithm will spend most of its time performing recursive multiplications of smaller numbers; with a naive algorithm, these occur in a number of places:</p>
+<ol>
+<li>Inside the fast Fourier transform algorithm, where the primitive root of unity <em>b</em> is repeatedly powered, squared, and multiplied by other values.</li>
+<li>When taking powers of the primitive root of unity <em>a</em> to form the weight vector A and when multiplying A or A<sup>−1</sup> by other vectors.</li>
+<li>When performing element-by-element multiplication of the transformed vectors.</li>
+</ol>
+
+<p>The key insight to Schönhage–Strassen is to choose N, the modulus, to be equal to 2<sup><em>n</em></sup> + 1 for some integer <em>n</em>. This has a number of benefits in standard systems that represent large integers in binary form:</p>
+<ul>
+<li>Any value can be rapidly reduced modulo 2<sup><em>n</em></sup> + 1 using only shifts and adds, as explained in the <a href="#Shift_optimizations" title="wikilink">next section</a>.</li>
+<li>All roots of unity in this ring can be written in the form 2<sup><em>k</em></sup>; consequently we can multiply or divide any number by a root of unity using a shift, and power or square a root of unity by operating only on its exponent.</li>
+<li>The element-by-element recursive multiplications of the transformed vectors can be performed using a negacyclic convolution, which is faster than an acyclic convolution and already has "for free" the effect of reducing its result mod 2<sup><em>n</em></sup> + 1.</li>
+</ul>
+
+<p>To make the recursive multiplications convenient, we will frame Schönhage–Strassen as being a specialized multiplication algorithm for computing not just the product of two numbers, but the product of two numbers mod 2<sup>n</sup> + 1 for some given <em>n</em>. This is not a loss of generality, since one can always choose <em>n</em> large enough so that the product mod 2<sup>n</sup> + 1 is simply the product.</p>
+<h3 id="shift-optimizations">Shift optimizations</h3>
+
+<p>In the course of the algorithm, there are many cases in which multiplication or division by a power of two (including all roots of unity) can be profitably replaced by a small number of shifts and adds. This makes use of the observation that:</p>
+<dl>
+<dd>(2<sup><em>n</em></sup>)<sup>k</sup> ≡ (−1)<sup>k</sup> mod (2<sup><em>n</em></sup> + 1)
+</dd>
+</dl>
+
+<p>Note that a <em>k</em>-digit number in base 2<sup>n</sup> written in <a href="positional_notation" title="wikilink">positional notation</a> can be expressed as 
+
+<math display="inline" id="Schönhage–Strassen_algorithm:0">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <msub>
+    <mi>d</mi>
+    <mrow>
+     <mi>k</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mo>,</mo>
+   <mi mathvariant="normal">…</mi>
+   <mo>,</mo>
+   <msub>
+    <mi>d</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>d</mi>
+    <mn>0</mn>
+   </msub>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <vector>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>d</ci>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <ci>normal-…</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>d</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>d</ci>
+     <cn type="integer">0</cn>
+    </apply>
+   </vector>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (d_{k-1},\dots,d_{1},d_{0})
+  </annotation>
+ </semantics>
+</math>
+
+. It represents the number 
+
+<math display="inline" id="Schönhage–Strassen_algorithm:1">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mo largeop="true" symmetric="true">∑</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>=</mo>
+     <mn>0</mn>
+    </mrow>
+    <mrow>
+     <mi>k</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msubsup>
+   <mrow>
+    <msub>
+     <mi>d</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>⋅</mo>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msup>
+       <mn>2</mn>
+       <mi>n</mi>
+      </msup>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>i</mi>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <eq></eq>
+       <ci>i</ci>
+       <cn type="integer">0</cn>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <ci>normal-⋅</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>d</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">2</cn>
+       <ci>n</ci>
+      </apply>
+      <ci>i</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sum_{i=0}^{k-1}d_{i}\cdot(2^{n})^{i}
+  </annotation>
+ </semantics>
+</math>
+
+. Also note that for each 
+
+<math display="inline" id="Schönhage–Strassen_algorithm:2">
+ <semantics>
+  <msub>
+   <mi>d</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>d</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d_{i}
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Schönhage–Strassen_algorithm:3">
+ <semantics>
+  <mrow>
+   <mn>0</mn>
+   <mo>≤</mo>
+   <msub>
+    <mi>d</mi>
+    <mi>i</mi>
+   </msub>
+   <mo><</mo>
+   <msup>
+    <mn>2</mn>
+    <mi>n</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <leq></leq>
+     <cn type="integer">0</cn>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>d</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+    <apply>
+     <lt></lt>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <cn type="integer">2</cn>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   0\leq d_{i}<2^{n}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>This makes it simple to reduce a number represented in binary mod 2<sup><em>n</em></sup> + 1: take the rightmost (least significant) <em>n</em> bits, subtract the next <em>n</em> bits, add the next <em>n</em> bits, and so on until the bits are exhausted. If the resulting value is still not between 0 and 2<sup><em>n</em></sup>, normalize it by adding or subtracting a multiple of the modulus 2<sup><em>n</em></sup> + 1. For example, if <em>n</em>=3 (and so the modulus is 2<sup>3</sup>+1 = 9) and the number being reduced is 656, we have:</p>
+<dl>
+<dd>656 = 1010010000<sub>2</sub> ≡ 000<sub>2</sub> − 010<sub>2</sub> + 010<sub>2</sub> − 1<sub>2</sub> = 0 − 2 + 2 − 1 = −1 ≡ 8 (mod 2<sup>3</sup> + 1).
+</dd>
+</dl>
+
+<p>Moreover, it's possible to effect very large shifts without ever constructing the shifted result. Suppose we have a number A between 0 and 2<sup><em>n</em></sup>, and wish to multiply it by 2<sup><em>k</em></sup>. Dividing <em>k</em> by <em>n</em> we find <em>k</em> = <em>qn</em> + <em>r</em> with <em>r</em> <em>k</em>) = A(2<sup><em>qn</em> + <em>r</em></sup>) = A[(2<sup><em>n</em></sup>)<sup><em>q</em></sup>(2<sup><em>r</em></sup>)] ≡ (−1)<sup><em>q</em></sup>(A shift-left <em>r</em>) (mod 2<sup><em>n</em></sup> + 1).</p>
+
+<p>Since A is ≤ 2<sup><em>n</em></sup> and <em>r</em> <em>k</em>, observe that squaring the first equivalence above yields:</p>
+<dl>
+<dd>2<sup>2<em>n</em></sup> ≡ 1 (mod 2<sup><em>n</em></sup> + 1)
+</dd>
+</dl>
+
+<p>Hence,</p>
+<dl>
+<dd>A/2<sup><em>k</em></sup> = A(2<sup>−<em>k</em></sup>) ≡ A(2<sup>2<em>n</em> − <em>k</em></sup>) = A shift-left (2<em>n</em> − <em>k</em>) (mod 2<sup><em>n</em></sup> + 1).
+</dd>
+</dl>
+<h3 id="overview">Overview</h3>
+
+<p>The algorithm follows a split, evaluate (forward FFT), pointwise multiply, interpolate (inverse FFT), and combine phases similar to Karatsuba and Toom-Cook methods.</p>
+
+<p>Given input numbers <em>x</em> and <em>y</em>, and an integer <em>N</em>, the following algorithm computes the product <em>xy</em> mod 2<sup><em>N</em></sup> + 1. Provided N is sufficiently large this is simply the product.</p>
+<ol>
+<li>Split each input number into vectors X and Y of 2<sup><em>k</em></sup> parts each, where 2<sup><em>k</em></sup> divides <em>N</em>. (e.g. 12345678 -&gt; (12, 34, 56, 78)).</li>
+<li>In order to make progress, it's necessary to use a smaller <em>N</em> for recursive multiplications. For this purpose choose <em>n</em> as the smallest integer at least 2<em>N</em>/2<sup><em>k</em></sup> + <em>k</em> and divisible by 2<sup><em>k</em></sup>.</li>
+<li>Compute the product of X and Y mod 2<sup><em>n</em></sup> + 1 using the negacyclic convolution:
+<ol>
+<li>Multiply X and Y each by the weight vector A using shifts (shift the <em>j</em>th entry left by <em>jn</em>/2<sup><em>k</em></sup>).</li>
+<li>Compute the DFT of X and Y using the number-theoretic FFT (perform all multiplications using shifts; for the 2<sup><em>k</em></sup>-th root of unity, use 2<sup>2<em>n</em>/2<sup><em>k</em></sup></sup>).</li>
+<li>Recursively apply this algorithm to multiply corresponding elements of the transformed X and Y.</li>
+<li>Compute the IDFT of the resulting vector to get the result vector C (perform all multiplications using shifts). This corresponds to interpolation phase.</li>
+<li>Multiply the result vector C by A<sup>−1</sup> using shifts.</li>
+<li>Adjust signs: some elements of the result may be negative. We compute the largest possible positive value for the <em>j</em>th element of C, (j + 1)2<sup>2N/2<sup><em>k</em></sup></sup>, and if it exceeds this we subtract the modulus 2<sup><em>n</em></sup> + 1.</li>
+</ol></li>
+<li>Finally, perform carrying mod 2<sup>N</sup>+1 to get the final result.</li>
+</ol>
+
+<p>The optimal number of pieces to divide the input into is proportional to 
+
+<math display="inline" id="Schönhage–Strassen_algorithm:4">
+ <semantics>
+  <msqrt>
+   <mi>N</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>N</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{N}
+  </annotation>
+ </semantics>
+</math>
+
+, where <em>N</em> is the number of input bits, and this setting achieves the running time of O(<em>N</em> log <em>N</em> log log <em>N</em>),<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a><a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> so the parameter <em>k</em> should be set accordingly. In practice, it is set empirically based on the input sizes and the architecture, typically to a value between 4 and 16.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+
+<p>In step 2, the observation is used that:</p>
+<ul>
+<li>Each element of the input vectors has at most <em>n</em>/2<sup><em>k</em></sup> bits;</li>
+<li>The product of any two input vector elements has at most 2<em>n</em>/2<sup><em>k</em></sup> bits;</li>
+<li>Each element of the convolution is the sum of at most 2<sup><em>k</em></sup> such products, and so cannot exceed 2<em>n</em>/2<sup><em>k</em></sup> + <em>k</em> bits.</li>
+<li><em>n</em> must be divisible by 2<sup><em>k</em></sup> to ensure that in the recursive calls the condition "2<sup><em>k</em></sup> divides <em>N</em>" holds in step 1.</li>
+</ul>
+<h2 id="optimizations">Optimizations</h2>
+
+<p>This section explains a number of important practical optimizations that have been considered when implementing Schönhage–Strassen in real systems. It is based primarily on a 2007 work by Gaudry, Kruppa, and Zimmermann describing enhancements to the <a href="GNU_Multi-Precision_Library" title="wikilink">GNU Multi-Precision Library</a>.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a></p>
+
+<p>Below a certain cutoff point, it's more efficient to perform the recursive multiplications using other algorithms, such as <a href="Toom–Cook_multiplication" title="wikilink">Toom–Cook multiplication</a>. The results must be reduced mod 2<sup><em>n</em></sup> + 1, which can be done efficiently as explained above in <a href="#Shift_optimizations" title="wikilink">Shift optimizations</a> with shifts and adds/subtracts.</p>
+
+<p>Computing the IDFT involves dividing each entry by the primitive root of unity 2<sup>2<em>n</em>/2<sup><em>k</em></sup></sup>, an operation that is frequently combined with multiplying the vector by A<sup>−1</sup> afterwards, since both involve division by a power of two.</p>
+
+<p>In a system where a large number is represented as an array of 2<sup><em>w</em></sup>-bit words, it's useful to ensure that the vector size 2<sup><em>k</em></sup> is also a multiple of the bits per word by choosing <em>k</em> ≥ <em>w</em> (e.g. choose <em>k</em> ≥ 5 on a 32-bit computer and <em>k</em> ≥ 6 on a 64-bit computer); this allows the inputs to be broken up into pieces without bit shifts, and provides a uniform representation for values mod 2<sup><em>n</em></sup> + 1 where the high word can only be zero or one.</p>
+
+<p>Normalization involves adding or subtracting the modulus 2<sup><em>n</em></sup>+1; this value has only two bits set, which means this can be done in constant time on average with a specialized operation.</p>
+
+<p>Iterative FFT algorithms such as the <a href="Cooley–Tukey_FFT_algorithm" title="wikilink">Cooley–Tukey FFT algorithm</a>, although frequently used for FFTs on vectors of complex numbers, tend to exhibit very poor cache <a href="Locality_of_reference" title="wikilink">locality</a> with the large vector entries used in Schönhage–Strassen. The straightforward recursive, not in-place implementation of FFT is more successful, with all operations fitting in the cache beyond a certain point in the call depth, but still makes suboptimal use of the cache in higher call depths. Gaudry, Kruppa, and Zimmerman used a technique combining Bailey's 4-step algorithm with higher radix transforms that combine multiple recursive steps. They also mix phases, going as far into the algorithm as possible on each element of the vector before moving on to the next one.</p>
+
+<p>The "square root of 2 trick", first described by Schönhage, is to note that, provided <em>k</em> ≥ 2, 2<sup>3<em>n</em>/4</sup>−2<sup><em>n</em>/4</sup> is a square root of 2 mod 2<sup><em>n</em></sup>+1, and so a 4<em>n</em>-th root of unity (since 2<sup>2<em>n</em></sup> ≡ 1). This allows the transform length to be extended from 2<sup><em>k</em></sup> to 2<sup><em>k</em> + 1</sup>.</p>
+
+<p>Finally, the authors are careful to choose the right value of <em>k</em> for different ranges of input numbers, noting that the optimal value of <em>k</em> may go back and forth between the same values several times as the input size increases.</p>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Computer_arithmetic_algorithms" title="wikilink">Category:Computer arithmetic algorithms</a> <a class="uri" href="Category:Multiplication" title="wikilink">Category:Multiplication</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">A. Schönhage and V. Strassen, "Schnelle Multiplikation großer Zahlen", <em>Computing</em> <strong>7</strong> (1971), pp. 281–292.<a href="#fnref1">↩</a></li>
+<li id="fn2">Martin Fürer, "<a href="http://www.cse.psu.edu/~furer/Papers/mult.pdf">Faster integer multiplication</a>", STOC 2007 Proceedings, pp. 57–66.<a href="#fnref2">↩</a></li>
+<li id="fn3">Rodney Van Meter and Kohei M. Itoh, "<a href="http://www.appi.keio.ac.jp/Itoh_group/publications/PhysRevA_71_052320.pdf">Fast quantum modular exponentiation</a>", <em>Physical Review</em> A, Vol. 71 (2005).<a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="http://magma.maths.usyd.edu.au/magma/Features/node86.html">Overview of Magma V2.9 Features, arithmetic section</a>: Discusses practical crossover points between various algorithms.<a href="#fnref4">↩</a></li>
+<li id="fn5">Luis Carlos Coronado García, "<a href="http://www.cdc.informatik.tu-darmstadt.de/~coronado/Vortrag/MoraviaCrypt-talk-s.pdf">Can Schönhage multiplication speed up the RSA encryption or decryption?</a>", <em>University of Technology, Darmstadt</em> (2005)<a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"></li>
+<li id="fn9">R. Crandall &amp; C. Pomerance. <em>Prime Numbers – A Computational Perspective</em>. Second Edition, Springer, 2005. Section 9.5.6: Schönhage method, p. 502. ISBN 0-387-94777-9<a href="#fnref9">↩</a></li>
+<li id="fn10">Donald E. Knuth, <a href="The_Art_of_Computer_Programming" title="wikilink">The Art of Computer Programming</a>, Volume 2: Seminumerical Algorithms (3rd Edition), 1997. Addison-Wesley Professional, ISBN 0-201-89684-2. Section 4.3.3.C: Discrete Fourier transforms, pg.305.<a href="#fnref10">↩</a></li>
+<li id="fn11"></li>
+<li id="fn12"></li>
+<li id="fn13"></li>
+<li id="fn14">Pierrick Gaudry, Alexander Kruppa, and Paul Zimmermann. <a href="http://www.loria.fr/~gaudry/publis/issac07.pdf">A GMP-based Implementation of Schönhage–Strassen’s Large Integer Multiplication Algorithm</a>. Proceedings of the 2007 International Symposium on Symbolic and Algebraic Computation, pp.167–174.<a href="#fnref14">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

@@ -1,0 +1,2515 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1381">Commitment ordering</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Commitment ordering</h1>
+<hr/>
+
+<p><strong>Commitment ordering</strong> (<strong>CO</strong>) is a class of interoperable <em><a class="uri" href="serializability" title="wikilink">serializability</a></em> techniques in <a href="concurrency_control" title="wikilink">concurrency control</a> of <a href="database" title="wikilink">databases</a>, <a href="transaction_processing" title="wikilink">transaction processing</a>, and related applications. It allows <a href="Serializability#Optimistic_versus_pessimistic_techniques" title="wikilink">optimistic</a> (non-blocking) implementations. With the proliferation of <a href="multi-core_processor" title="wikilink">multi-core processors</a>, CO has been also increasingly utilized in <a href="Concurrent_computing" title="wikilink">concurrent programming</a>, <a href="transactional_memory" title="wikilink">transactional memory</a>, and especially in <a href="software_transactional_memory" title="wikilink">software transactional memory</a> (STM) for achieving serializability <a href="Optimistic_concurrency_control" title="wikilink">optimistically</a>. CO is also the name of the resulting transaction <a href="Schedule_(computer_science)" title="wikilink">schedule</a> (history) property, which was originally defined in 1988 with the name <em>dynamic atomicity</em>.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> In a CO compliant schedule the chronological order of commitment events of transactions is compatible with the <a href="Serializability#Testing_conflict_serializability" title="wikilink">precedence</a> order of the respective transactions. CO is a broad special case of <em><a href="serializability#View_and_conflict_serializability" title="wikilink">conflict serializability</a></em>, and effective means (<a href="Reliability_engineering" title="wikilink">reliable</a>, high-performance, distributed, and <a href="Scalability" title="wikilink">scalable</a>) to achieve <a href="global_serializability" title="wikilink">global serializability</a> (modular serializability) across any collection of database systems that possibly use different concurrency control mechanisms (CO also makes each system serializability compliant, if not already).</p>
+
+<p>Each not-CO-compliant database system is augmented with a CO component (the commitment order coordinator—COCO) which orders the commitment events for CO compliance, with neither data-access nor any other transaction operation interference. As such CO provides a low overhead, general solution for global serializability (and distributed serializability), instrumental for <a href="global_concurrency_control" title="wikilink">global concurrency control</a> (and <a href="distributed_concurrency_control" title="wikilink">distributed concurrency control</a>) of multi database systems and other <a href="transactional_object" title="wikilink">transactional objects</a>, possibly highly distributed (e.g., within <a href="cloud_computing" title="wikilink">cloud computing</a>, <a href="grid_computing" title="wikilink">grid computing</a>, and networks of <a href="smartphone" title="wikilink">smartphones</a>). An <a href="atomic_commitment_protocol" title="wikilink">atomic commitment protocol</a> (ACP; of any type) is a fundamental part of the solution, utilized to break global cycles in the conflict (precedence, serializability) graph. CO is the most general property (a <a href="necessary_condition" title="wikilink">necessary condition</a>) that guarantees global serializability, if the database systems involved do not share concurrency control information beyond atomic commitment protocol (unmodified) messages, and have no knowledge whether transactions are global or local (the database systems are <em>autonomous</em>). Thus CO (with its variants) is the only general technique that does not require the typically costly distribution of local concurrency control information (e.g., local precedence relations, locks, timestamps, or tickets). It generalizes the popular <em><a href="Two-phase_locking" title="wikilink">strong strict two-phase locking</a></em> (SS2PL) property, which in conjunction with the <em><a href="two-phase_commit_protocol" title="wikilink">two-phase commit protocol</a></em> (2PC) is the <a href="de_facto_standard" title="wikilink">de facto standard</a> to achieve global serializability across (SS2PL based) database systems. As a result CO compliant database systems (with any, different concurrency control types) can transparently join such SS2PL based solutions for global serializability.</p>
+
+<p>In addition, locking based <em>global deadlocks</em> are resolved automatically in a CO based multi-database environment, an important side-benefit (including the special case of a completely SS2PL based environment; a previously unnoticed fact for SS2PL).</p>
+
+<p>Furthermore, <strong>strict commitment ordering</strong> (SCO; <a href="#Raz1991c" title="wikilink">Raz 1991c</a>), the intersection of <em><a href="Schedule_(computer_science)#Strict" title="wikilink">Strictness</a></em> and CO, provides better performance (shorter average transaction completion time and resulting better transaction <a class="uri" href="throughput" title="wikilink">throughput</a>) than SS2PL whenever read-write conflicts are present (identical blocking behavior for write-read and write-write conflicts; comparable locking overhead). The advantage of SCO is especially significant during lock contention. Strictness allows both SS2PL and SCO to use the same effective <em>database recovery</em> mechanisms.</p>
+
+<p>Two major generalizing variants of CO exist, <strong>extended CO</strong> (ECO; <a href="#Raz1993a" title="wikilink">Raz 1993a</a>) and <strong>multi-version CO</strong> (MVCO; <a href="#Raz1993b" title="wikilink">Raz 1993b</a>). They as well provide global serializability without local concurrency control information distribution, can be combined with any relevant concurrency control, and allow optimistic (non-blocking) implementations. Both use additional information for relaxing CO constraints and achieving better concurrency and performance. <strong>Vote ordering</strong> (VO or Generalized CO (GCO); <a href="#Raz2009" title="wikilink">Raz 2009</a>) is a container schedule set (property) and technique for CO and all its variants. Local VO is a necessary condition for guaranteeing global serializability, if the atomic commitment protocol (ACP) participants do not share concurrency control information (have the <em>generalized autonomy</em> property). CO and its variants inter-operate transparently, guaranteeing global serializability and automatic global deadlock resolution also together in a mixed, heterogeneous environment with different variants.</p>
+<h2 id="overview">Overview</h2>
+
+<p>The <em>Commitment ordering</em> (CO; <a href="#Raz1990" title="wikilink">Raz 1990</a>, <a href="#Raz1992" title="wikilink">1992</a>, <a href="#Raz1994" title="wikilink">1994</a>, <a href="#Raz2009" title="wikilink">2009</a>) schedule property has been referred to also as <em>Dynamic atomicity</em> (since 1988<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a>), <em>commit ordering</em>, <em>commit order serializability</em>, and <em>strong recoverability</em> (since 1991). The latter is a misleading name since CO is incomparable with <em><a href="serializability#Correctness_-_recoverability" title="wikilink">recoverability</a></em>, and the term "strong" implies a special case. This means that a schedule with a strong recoverability property does not necessarily have the CO property, and vice versa.</p>
+
+<p>In 2009 CO has been characterized as a major concurrency control method, together with the previously known (since the 1980s) three major methods: <em>Locking</em>, <em>Time-stamp ordering</em>, and <em>Serialization graph testing</em>, and as an enabler for the interoperability of systems using different concurrency control mechanisms.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>In a <a href="federated_database_system" title="wikilink">federated database system</a> or any other more loosely defined multidatabase system, which are typically distributed in a communication network, transactions span multiple and possibly <a href="Distributed_database" title="wikilink">Distributed databases</a>. Enforcing <a href="global_serializability" title="wikilink">global serializability</a> in such system is problematic. Even if every local schedule of a single database is serializable, still, the global schedule of a whole system is not necessarily serializable. The massive communication exchanges of conflict information needed between databases to reach conflict serializability would lead to unacceptable performance, primarily due to computer and communication <a href="latency_(engineering)" title="wikilink">latency</a>. The problem of achieving global serializability effectively had been characterized as <a href="open_problem" title="wikilink">open</a> until the public disclosure of CO in 1991 by its <a href="Invention" title="wikilink">inventor</a> <a href="Yoav_Raz" title="wikilink">Yoav Raz</a> (<a href="#Raz1991a" title="wikilink">Raz 1991a</a>; see also <a href="Global_serializability" title="wikilink">Global serializability</a>).</p>
+
+<p>Enforcing CO is an effective way to enforce conflict serializability globally in a distributed system, since enforcing CO locally in each database (or other transactional object) also enforces it globally. Each database may use any, possibly different, type of concurrency control mechanism. With a local mechanism that already provides conflict serializability, enforcing CO locally does not cause any additional aborts, since enforcing CO locally does not affect the data access scheduling strategy of the mechanism (this scheduling determines the serializability related aborts; such a mechanism typically does not consider the commitment events or their order). The CO solution requires no communication overhead, since it uses (unmodified) <em><a href="atomic_commitment" title="wikilink">atomic commitment</a></em> protocol messages only, already needed by each distributed transaction to reach atomicity. An atomic commitment protocol plays a central role in the distributed CO algorithm, which enforces CO globally, by breaking global cycles (cycles that span two or more databases) in the global conflict graph. CO, its special cases, and its generalizations are interoperable, and achieve global serializability while transparently being utilized together in a single heterogeneous distributed environment comprising objects with possibly different concurrency control mechanisms. As such, <em>Commitment ordering</em>, including its special cases, and together with its generalizations (see CO variants below), provides a general, high performance, fully distributed solution (no central processing component or central data structure are needed) for guaranteeing global serializability in heterogeneous environments of multidatabase systems and other multiple transactional objects (objects with states accessed and modified only by transactions; e.g., in the framework of <a href="transactional_processes" title="wikilink">transactional processes</a>, and within Cloud computing and Grid computing). The CO solution scales up with network size and the number of databases without any negative impact on performance (assuming the statistics of a single distributed transaction, e.g., the average number of databases involved with a single transaction, are unchanged).</p>
+
+<p>With the proliferation of <a href="Multi-core_processor" title="wikilink">Multi-core processors</a>, Optimistic CO (OCO) has been also increasingly utilized to achieve serializability in software transactional memory, and numerous STM articles and patents utilizing "commit order" have already been published (e.g., Zhang et al. 2006<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a>).</p>
+<h2 id="the-commitment-ordering-solution-for-global-serializability">The commitment ordering solution for global serializability</h2>
+<h3 id="general-characterization-of-co">General characterization of CO</h3>
+
+<p><em>Commitment ordering</em> (CO) is a special case of conflict serializability. CO can be enforced with <em>non-blocking</em> mechanisms (each transaction can complete its task without having its data-access blocked, which allows <a href="optimistic_concurrency_control" title="wikilink">optimistic concurrency control</a>; however, commitment could be blocked). In a CO schedule the commitment events' (<a href="partial_order" title="wikilink">partial</a>) precedence order of the transactions corresponds to the precedence (partial) order of the respective transactions in the (<a href="directed_graph" title="wikilink">directed</a>) conflict graph (precedence graph, serializability graph), as induced by their conflicting access operations (usually read and write (insert/modify/delete) operations; CO also applies to higher level operations, where they are conflicting if <a class="uri" href="noncommutative" title="wikilink">noncommutative</a>, as well as to conflicts between operations upon multi-version data).</p>
+<ul>
+<li><strong>Definition: commitment ordering</strong></li>
+</ul>
+<dl>
+<dd>Let 
+
+<math display="inline" id="Commitment_ordering:0">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>T</mi>
+    <mn>2</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1},T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ be two <em>committed</em> transactions in a schedule, such that 
+
+<math display="inline" id="Commitment_ordering:1">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ is <em>in a conflict</em> with 
+
+<math display="inline" id="Commitment_ordering:2">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ (
+
+<math display="inline" id="Commitment_ordering:3">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ <em>precedes</em> 
+
+<math display="inline" id="Commitment_ordering:4">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+). The schedule has the <strong>Commitment ordering</strong> (CO) property, if for every two such transactions 
+
+<math display="inline" id="Commitment_ordering:5">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ commits before 
+
+<math display="inline" id="Commitment_ordering:6">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ commits.
+</dd>
+</dl>
+
+<p>The commitment decision events are generated by either a local commitment mechanism, or an atomic commitment protocol, if different processes need to reach consensus on whether to commit or abort. The protocol may be distributed or centralized. Transactions may be committed concurrently, if the commit partial order allows (if they do not have conflicting operations). If different conflicting operations induce different partial orders of same transactions, then the conflict graph has <a href="cyclic_graph" title="wikilink">cycles</a>, and the schedule will violate serializability when all the transactions on a cycle are committed. In this case no partial order for commitment events can be found. Thus, cycles in the conflict graph need to be broken by aborting transactions. However, any conflict serializable schedule can be made CO without aborting any transaction, by properly delaying commit events to comply with the transactions' precedence partial order.</p>
+
+<p>CO enforcement by itself is not sufficient as a concurrency control mechanism, since CO lacks the recoverability property, which should be supported as well.</p>
+<h3 id="the-distributed-co-algorithm">The distributed CO algorithm</h3>
+
+<p>A fully distributed <em>Global commitment ordering</em> enforcement algorithm exists, that uses local CO of each participating database, and needs only (unmodified) Atomic commitment protocol messages with no further communication. The distributed algorithm is the combination of local (to each database) CO algorithm processes, and an atomic commitment protocol (which can be fully distributed). Atomic commitment protocol is essential to enforce atomicity of each distributed transaction (to decide whether to commit or abort it; this procedure is always carried out for distributed transactions, independently of concurrency control and CO). A common example of an atomic commitment protocol is the <em><a href="two-phase_commit_protocol" title="wikilink">two-phase commit protocol</a></em>, which is resilient to many types of system failure. In a reliable environment, or when processes usually fail together (e.g., in the same <a href="integrated_circuit" title="wikilink">integrated circuit</a>), a simpler protocol for atomic commitment may be used (e.g., a simple handshake of distributed transaction's participating processes with some arbitrary but known special participant, the transaction's coordinator, i.e., a type of <em>one-phase commit</em> protocol). An atomic commitment protocol reaches consensus among participants on whether to <em>commit</em> or <em>abort</em> a distributed (global) transaction that spans these participants. An essential stage in each such protocol is the <strong>YES vote</strong> (either explicit, or implicit) by each participant, which means an obligation of the voting participant to obey the decision of the protocol, either commit or abort. Otherwise a participant can unilaterally abort the transaction by an explicit NO vote. The protocol commits the transaction only if YES votes have been received from <em>all</em> participants, and thus typically a missing YES vote of a participant is considered a NO vote by this participant. Otherwise the protocol aborts the transaction. The various atomic commit protocols only differ in their abilities to handle different computing environment failure situations, and the amounts of work and other computing resources needed in different situations.</p>
+
+<p>The entire CO solution for global serializability is based on the fact that in case of a missing vote for a distributed transaction, the atomic commitment protocol eventually aborts this transaction.</p>
+<h4 id="enforcing-global-co">Enforcing global CO</h4>
+
+<p>In each database system a local CO algorithm determines the needed commitment order for that database. By the characterization of CO above, this order depends on the local precedence order of transactions, which results from the local data access scheduling mechanisms. Accordingly YES votes in the atomic commitment protocol are scheduled for each (unaborted) distributed transaction (in what follows "a vote" means a YES vote). If a precedence relation (conflict) exists between two transactions, then the second will not be voted on before the first is completed (either committed or aborted), to prevent possible commit order violation by the atomic commitment protocol. Such can happen since the commit order by the protocol is not necessarily the same as the voting order. If no precedence relation exists, both can be voted on concurrently. This <em>vote ordering strategy</em> ensures that also the atomic commitment protocol maintains commitment order, and it is a <em>necessary condition</em> for guaranteeing Global CO (and the local CO of a database; without it both Global CO and Local CO (a property meaning that each database is CO compliant) may be violated).</p>
+
+<p>However, since database systems schedule their transactions independently, it is possible that the transactions' precedence orders in two databases or more are not compatible (no global partial order exists that can <a href="Embedding" title="wikilink">embed</a> the respective local partial orders together). With CO precedence orders are also the commitment orders. When participating databases in a same distributed transaction do not have compatible local precedence orders for that transaction (without "knowing" it; typically no coordination between database systems exists on conflicts, since the needed communication is massive and unacceptably degrades performance) it means that the transaction resides on a global cycle (involving two or more databases) in the global conflict graph. In this case the atomic commitment protocol will fail to collect all the votes needed to commit that transaction: By the <em>vote ordering strategy</em> above at least one database will delay its vote for that transaction indefinitely, to comply with its own commitment (precedence) order, since it will be waiting to the completion of another, preceding transaction on that global cycle, delayed indefinitely by another database with a different order. This means a <strong><em>voting-<a class="uri" href="deadlock" title="wikilink">deadlock</a></em></strong> situation involving the databases on that cycle. As a result the protocol will eventually abort some deadlocked transaction on this global cycle, since each such transaction is missing at least one participant's vote. Selection of the specific transaction on the cycle to be aborted depends on the atomic commitment protocol's abort policies (a <a href="timeout_(telecommunication)" title="wikilink">timeout</a> mechanism is common, but it may result in more than one needed abort per cycle; both preventing unnecessary aborts and abort time shortening can be achieved by a dedicated abort mechanism for CO). Such abort will break the global cycle involving that distributed transaction. Both deadlocked transactions and possibly other in conflict with the deadlocked (and thus blocked) will be free to be voted on. It is worthwhile noting that each database involved with the voting-deadlock continues to vote regularly on transactions that are not in conflict with its deadlocked transaction, typically almost all the outstanding transactions. Thus, in case of incompatible local (partial) commitment orders, no action is needed since the atomic commitment protocol resolves it automatically by aborting a transaction that is a cause of incompatibility. This means that the above <em>vote ordering strategy</em> is also a <em>sufficient condition</em> for guaranteeing Global CO.</p>
+
+<p>The following is concluded:</p>
+<ul>
+<li><strong>The Vote ordering strategy for Global CO Enforcing <a class="uri" href="Theorem" title="wikilink">Theorem</a></strong></li>
+</ul>
+<dl>
+<dd>Let 
+
+<math display="inline" id="Commitment_ordering:7">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>T</mi>
+    <mn>2</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1},T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ be undecided (neither committed nor aborted) transactions in a database system that enforces CO for local transactions, such that 
+
+<math display="inline" id="Commitment_ordering:8">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ is <em>global</em> and <em>in conflict</em> with 
+
+<math display="inline" id="Commitment_ordering:9">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ (
+
+<math display="inline" id="Commitment_ordering:10">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ <em>precedes</em> 
+
+<math display="inline" id="Commitment_ordering:11">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+). Then, having 
+
+<math display="inline" id="Commitment_ordering:12">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ ended (either committed or aborted) before 
+
+<math display="inline" id="Commitment_ordering:13">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ is voted on to be committed (the <em>vote ordering strategy</em>), in each such database system in a multidatabase environment, is a <a href="necessary_and_sufficient_condition" title="wikilink">necessary and sufficient condition</a> for guaranteeing Global CO (the condition guarantees Global CO, which may be violated without it).
+</dd>
+</dl>
+<dl>
+<dd><strong>Comments:</strong>
+</dd>
+</dl>
+<ol>
+<li>The <em>vote ordering strategy</em> that enforces global CO is referred to as 
+
+<math display="inline" id="Commitment_ordering:14">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <msup>
+    <mi>D</mi>
+    <mn>3</mn>
+   </msup>
+   <mi>C</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>C</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>D</ci>
+     <cn type="integer">3</cn>
+    </apply>
+    <ci>C</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   CD^{3}C
+  </annotation>
+ </semantics>
+</math>
+
+ in (<a href="#Raz1992" title="wikilink">Raz 1992</a>).</li>
+<li>The Local CO property of a global schedule means that each database is CO compliant. From the necessity discussion part above it directly follows that the theorem is true also when replacing "Global CO" with "Local CO" when global transactions are present. Together it means that Global CO is guaranteed <a href="if_and_only_if" title="wikilink">if and only if</a> Local CO is guaranteed (which is untrue for Global conflict serializability and Local conflict serializability: Global implies Local, but not the opposite).</li>
+</ol>
+
+<p>Global CO implies Global serializability.</p>
+
+<p>The <strong>Global CO algorithm</strong> comprises enforcing (local) CO in each participating database system by ordering commits of local transactions (see <a href="Commitment_ordering#Enforcing_CO_locally" title="wikilink">Enforcing CO locally</a> below) and enforcing the <em>vote ordering strategy</em> in the theorem above (for global transactions).</p>
+<h4 id="exact-characterization-of-voting-deadlocks-by-global-cycles">Exact characterization of voting-deadlocks by global cycles</h4>
+
+<p>The above global cycle elimination process by a <strong>voting deadlock</strong> can be explained in detail by the following observation:</p>
+
+<p>First it is assumed, for simplicity, that every transaction reaches the ready-to-commit state and is voted on by at least one database (this implies that no blocking by locks occurs). Define a <em>"wait for vote to commit" graph</em> as a directed graph with transactions as nodes, and a directed edge from any first transaction to a second transaction if the first transaction blocks the vote to commit of the second transaction (opposite to conventional edge direction in a <a href="wait-for_graph" title="wikilink">wait-for graph</a>). Such blocking happens only if the second transaction is in a conflict with the first transaction (see above). Thus this "wait for vote to commit" graph is identical to the global conflict graph. A cycle in the "wait for vote to commit" graph means a deadlock in voting. Hence there is a deadlock in voting if and only if there is a cycle in the conflict graph. Local cycles (confined to a single database) are eliminated by the local serializability mechanisms. Consequently only global cycles are left, which are then eliminated by the atomic commitment protocol when it aborts deadlocked transactions with missing (blocked) respective votes.</p>
+
+<p>Secondly, also local commits are dealt with: Note that when enforcing CO also waiting for a regular local commit of a local transaction can block local commits and votes of other transactions upon conflicts, and the situation for global transactions does not change also without the simplifying assumption above: The final result is the same also with local commitment for local transactions, without voting in atomic commitment for them.</p>
+
+<p>Finally, blocking by a lock (which has been excluded so far) needs to be considered: A lock blocks a conflicting operation and prevents a conflict from being materialized. If the lock is released only after transaction end, it may block indirectly either a vote or a local commit of another transaction (which now cannot get to ready state), with the same effect as of a direct blocking of a vote or a local commit. In this case a cycle is generated in the conflict graph only if such a blocking by a lock is also represented by an edge. With such added edges representing events of blocking-by-a-lock, the conflict graph is becoming an <em>augmented conflict graph</em>.</p>
+<ul>
+<li><strong>Definition: augmented conflict graph</strong></li>
+</ul>
+<dl>
+<dd>An <strong>augmented conflict graph</strong> is a <a href="serializability#Testing_conflict_serializability" title="wikilink">conflict graph</a> with added edges: In addition to the original edges a directed edge exists from transaction 
+
+<math display="inline" id="Commitment_ordering:15">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ to transaction 
+
+<math display="inline" id="Commitment_ordering:16">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ if two conditions are met:
+</dd>
+</dl>
+<ol>
+<li>
+
+<math display="inline" id="Commitment_ordering:17">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ is blocked by a data-access lock applied by 
+
+<math display="inline" id="Commitment_ordering:18">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ (the blocking prevents the conflict of 
+
+<math display="inline" id="Commitment_ordering:19">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ with 
+
+<math display="inline" id="Commitment_ordering:20">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ from being materialized and have an edge in the regular conflict graph), and</li>
+<li>This blocking will not stop before 
+
+<math display="inline" id="Commitment_ordering:21">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ ends (commits or aborts; true for any locking-based CO)</li>
+</ol>
+<dl>
+<dd>The graph can also be defined as the <a href="Union_(set_theory)" title="wikilink">union</a> of the (regular) <em>conflict graph</em> with the (reversed edge, regular) <em>wait-for graph</em>
+</dd>
+</dl>
+<dl>
+<dd><strong>Comments:</strong>
+</dd>
+</dl>
+<ol>
+<li>Here, unlike the regular conflict graph, which has edges only for materialized conflicts, all conflicts, both materialized and non-materialized, are represented by edges.</li>
+<li>Note that all the new edges are all the (reversed to the conventional) edges of the <em>wait-for graph</em>. The <em>wait-for graph</em> can be defined also as the graph of non-materialized conflicts. By the common conventions edge direction in a <em>conflict graph</em> defines time order between conflicting operations which is opposite to the time order defined by an edge in a <em>wait-for graph</em>.</li>
+<li>Note that such global graph contains (has embedded) all the (reversed edge) regular local <em>wait-for</em> graphs, and also may include locking based global cycles (which cannot exist in the local graphs). For example, if all the databases on a global cycle are SS2PL based, then all the related vote blocking situations are caused by locks (this is the classical, and probably the only global deadlock situation dealt with in the database research literature). This is a global deadlock case where each related database creates a portion of the cycle, but the complete cycle does not reside in any local wait-for graph.</li>
+</ol>
+
+<p>In the presence of CO the <em>augmented conflict graph</em> is in fact a (reversed edge) <em>local-commit and voting wait-for graph</em>: An edge exists from a first transaction, either local or global, to a second, if the second is waiting for the first to end in order to be either voted on (if global), or locally committed (if local). All <em>global cycles</em> (across two or more databases) in this graph generate voting-deadlocks. The graph's global cycles provide complete characterization for voting deadlocks and may include any combination of materialized and non-materialized conflicts. Only cycles of (only) materialized conflicts are also cycles of the regular conflict graph and affect serializability. One or more (lock related) non-materialized conflicts on a cycle prevent it from being a cycle in the regular conflict graph, and make it a locking related deadlock. All the global cycles (voting-deadlocks) need to be broken (resolved) to both maintain global serializability and resolve global deadlocks involving data access locking, and indeed they are all broken by the atomic commitment protocol due to missing votes upon a voting deadlock.</p>
+
+<p><strong>Comment:</strong> This observation also explains the correctness of <em><a href="Commitment_ordering#Extended_CO_(ECO)" title="wikilink">Extended CO (ECO)</a></em> below: Global transactions' voting order must follow the conflict graph order with vote blocking when order relation (graph path) exists between two global transactions. Local transactions are not voted on, and their (local) commits are not blocked upon conflicts. This results in same voting-deadlock situations and resulting global cycle elimination process for ECO.</p>
+
+<p>The <em>voting-deadlock</em> situation can be summarized as follows:</p>
+<ul>
+<li><strong>The CO Voting-Deadlock Theorem</strong></li>
+</ul>
+<dl>
+<dd>Let a multidatabase environment comprise CO compliant (which eliminates <em>local cycles</em>) database systems that enforce, each, <em>Global CO</em> (using the condition in the theorem above). Then a <em>voting-deadlock</em> occurs if and only if a <em>global cycle</em> (spans two or more databases) exists in the <em>Global augmented conflict graph</em> (also blocking by a data-access lock is represented by an edge). If the cycle does not break by any abort, then all the <em>global transactions</em> on it are involved with the respective voting-deadlock, and eventually each has its vote blocked (either directly, or indirectly by a data-access lock); if a local transaction resides on the cycle, eventually it has its (local) commit blocked.
+</dd>
+</dl>
+<dl>
+<dd><strong>Comment:</strong> A rare situation of a voting deadlock (by missing blocked votes) can happen, with no voting for any transaction on the related cycle by any of the database systems involved with these transactions. This can occur when local sub-transactions are <a href="Thread_(computer_science)" title="wikilink">multi-threaded</a>. The highest probability instance of such rare event involves two transactions on two simultaneous opposite cycles. Such global cycles (deadlocks) overlap with local cycles which are resolved locally, and thus typically resolved by local mechanisms without involving atomic commitment. Formally it is also a global cycle, but practically it is local (portions of local cycles generate a global one; to see this, split each global transaction (node) to local sub-transactions (its portions confined each to a single database); a directed edge exists between transactions if an edge exists between any respective local sub-transactions; a cycle is local if all its edges originate from a cycle among sub-transactions of the same database, and global if not; global and local can overlap: a same cycle among transactions can result from several different cycles among sub-transactions, and be both local and global).
+</dd>
+</dl>
+
+<p>Also the following locking based special case is concluded:</p>
+<ul>
+<li><strong>The CO Locking-based Global-Deadlock Theorem</strong></li>
+</ul>
+<dl>
+<dd>In a CO compliant multidatabase system a locking-based global-deadlock, involving at least one data-access lock (non-materialized conflict), and two or more database systems, is a reflection of a global cycle in the <em>Global augmented conflict graph</em>, which results in a voting-deadlock. Such cycle is not a cycle in the (regular) <em>Global conflict graph</em> (which reflects only materialized conflicts, and thus such cycle does not affect <em><a class="uri" href="serializability" title="wikilink">serializability</a></em>).
+</dd>
+</dl>
+<dl>
+<dd><strong>Comments:</strong>
+</dd>
+</dl>
+<ol>
+<li>Any blocking (edge) in the cycle that is not by a data-access lock is a direct blocking of either voting or local commit. All voting-deadlocks are resolved (almost all by <em>Atomic commitment</em>; see comment above), including this locking-based type.</li>
+<li>Locking-based global-deadlocks can be generated also in a completely SS2PL-based distributed environment (special case of CO based), where all the vote blocking (and voting-deadlocks) are caused by data-access locks. Many research articles have dealt for years with resolving such global deadlocks, but none (except the CO articles) is known (as of 2009) to notice that <em>atomic commitment</em> automatically resolves them. Such automatic resolutions are regularly occurring unnoticed in all existing SS2PL based multidatabase systems, often bypassing dedicated resolution mechanisms.</li>
+</ol>
+
+<p>Voting-deadlocks are the key for the operation of distributed CO.</p>
+
+<p>Global cycle elimination (here voting-deadlock resolution by <em>atomic commitment</em>) and resulting aborted transactions' re-executions are time consuming, regardless of concurrency control used. If databases schedule transactions independently, global cycles are unavoidable (in a complete analogy to cycles/deadlocks generated in local SS2PL; with distribution, any transaction or operation scheduling coordination results in autonomy violation, and typically also in substantial performance penalty). However, in many cases their likelihood can be made very low by implementing database and transaction design guidelines that reduce the number of conflicts involving a global transaction. This, primarily by properly handling hot spots (database objects with frequent access), and avoiding conflicts by using commutativity when possible (e.g., when extensively using counters, as in finances, and especially multi-transaction <em>accumulation counters</em>, which are typically hot spots).</p>
+
+<p>Atomic commitment protocols are intended and designed to achieve atomicity without considering database concurrency control. They abort upon detecting or <a href="Heuristic_algorithm" title="wikilink">heuristically</a> finding (e.g., by timeout; sometimes mistakenly, unnecessarily) missing votes, and typically unaware of global cycles. These protocols can be specially enhanced for CO (including CO's variants below) both to prevent unnecessary aborts, and to accelerate aborts used for breaking global cycles in the global augmented conflict graph (for better performance by earlier release upon transaction-end of computing resources and typically locked data). For example, existing locking based global deadlock detection methods, other than timeout, can be generalized to consider also local commit and vote direct blocking, besides data access blocking. A possible compromise in such mechanisms is effectively detecting and breaking the most frequent and relatively simple to handle length-2 global cycles, and using timeout for undetected, much less frequent, longer cycles.</p>
+<h3 id="enforcing-co-locally">Enforcing CO locally</h3>
+
+<p><em>Commitment ordering</em> can be enforced locally (in a single database) by a dedicated CO algorithm, or by any algorithm/protocol that provides any special case of CO. An important such protocol, being utilized extensively in database systems, which generates a CO schedule, is the <em>strong strict <a href="two_phase_locking" title="wikilink">two phase locking</a></em> protocol (SS2PL: "release transaction's locks only after the transaction has been either committed or aborted"; see below). SS2PL is a <a href="proper_subset" title="wikilink">proper subset</a> of the intersection of <a href="Two-phase_locking" title="wikilink">2PL</a> and strictness.</p>
+<h4 id="a-generic-local-co-algorithm">A generic local CO algorithm</h4>
+
+<p>A <strong>generic local CO algorithm</strong> (<a href="#Raz1992" title="wikilink">Raz 1992</a>; Algorithm 4.1) is an algorithm independent of implementation details, that enforces exactly the CO property. It does not block data access (nonblocking), and consists of aborting a certain set of transactions (only if needed) upon committing a transaction. It aborts a (uniquely determined at any given time) minimal set of other undecided (neither committed, nor aborted) transactions that run locally and can cause serializability violation in the future (can later generate cycles of committed transactions in the conflict graph; this is the ABORT set of a committed transaction T; after committing T no transaction in ABORT at commit time can be committed, and all of them are doomed to be aborted). This set consists of all undecided transactions with directed edges in the conflict graph to the committed transaction. The size of this set cannot increase when that transaction is waiting to be committed (in ready state: processing has ended), and typically decreases in time as its transactions are being decided. Thus, unless <a href="Real-time_computing" title="wikilink">real-time</a> constraints exist to complete that transaction, it is preferred to wait with committing that transaction and let this set decrease in size. If another serializability mechanism exists locally (which eliminates cycles in the local conflict graph), or if no cycle involving that transaction exists, the set will be empty eventually, and no abort of set member is needed. Otherwise the set will stabilize with transactions on local cycles, and aborting set members will have to occur to break the cycles. Since in the case of CO conflicts generate blocking on commit, local cycles in the <em>augments conflict graph</em> (see above) indicate local commit-deadlocks, and deadlock resolution techniques as in <a href="Serializability#Common_mechanism_-_SS2PL" title="wikilink">SS2PL</a> can be used (e.g., like <em>timeout</em> and <em>wait-for graph</em>). A local cycle in the <em>augmented conflict graph</em> with at least one non-materialized conflict reflects a locking-based deadlock. The local algorithm above, applied to the local augmented conflict graph rather than the regular local conflict graph, comprises the <strong>generic enhanced local CO algorithm</strong>, a single local cycle elimination mechanism, for both guaranteeing local serializability and handling locking based local deadlocks. Practically an additional concurrency control mechanism is always utilized, even solely to enforce recoverability. The generic CO algorithm does not affect local data access scheduling strategy, when it runs alongside of any other local concurrency control mechanism. It affects only the commit order, and for this reason it does not need to abort more transactions than those needed to be aborted for serializability violation prevention by any combined local concurrency control mechanism. The net effect of CO may be, at most, a delay of commit events (or voting in a distributed environment), to comply with the needed commit order (but not more delay than its special cases, for example, SS2PL, and on the average significantly less).</p>
+
+<p>The following theorem is concluded:</p>
+<ul>
+<li><strong>The Generic Local CO Algorithm Theorem</strong></li>
+</ul>
+<dl>
+<dd>When running alone or alongside any concurrency control mechanism in a database system then
+</dd>
+</dl>
+<ol>
+<li>The <em>Generic local CO algorithm</em> guarantees (local) CO (a CO compliant schedule).</li>
+<li>The <em>Generic enhanced local CO algorithm</em> guarantees both (local) CO and (local) locking based deadlock resolution.</li>
+</ol>
+<dl>
+<dd>and (when not using <em>timeout</em>, and no <em>real-time</em> transaction completion constraints are applied) neither algorithm aborts more transactions than the minimum needed (which is determined by the transactions' operations scheduling, out of the scope of the algorithms).
+</dd>
+</dl>
+<h4 id="example-concurrent-programming-and-transactional-memory">Example: Concurrent programming and Transactional memory</h4>
+<dl>
+<dd>See also <em><a href="The_History_of_Commitment_Ordering#Concurrent_programming_and_Transactional_memory" title="wikilink">Concurrent programming and Transactional memory</a></em>
+</dd>
+</dl>
+
+<p>With the proliferation of Multi-core processors, variants of the Generic local CO algorithm have been also increasingly utilized in Concurrent programming, <a href="Transactional_memory" title="wikilink">Transactional memory</a>, and especially in Software transactional memory for achieving serializability optimistically by "commit order" (e.g., Ramadan et al. 2009,<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> Zhang et al. 2006,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> von Parun et al. 2007<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a>). Numerous related articles and patents utilizing CO have already been published.</p>
+<h4 id="implementation-considerations-the-commitment-order-coordinator-coco">Implementation considerations: The Commitment Order Coordinator (COCO)</h4>
+
+<p>A database system in a multidatabase environment is assumed. From a <a href="software_architecture" title="wikilink">software architecture</a> point of view a CO component that implements the generic CO algorithm locally, the <em>Commitment Order Coordinator</em> (COCO), can be designed in a straightforward way as a <a href="mediator_pattern" title="wikilink">mediator</a> between a (single) database system and an atomic commitment protocol component (<a href="#Raz1991b" title="wikilink">Raz 1991b</a>). However, the COCO is typically an integral part of the database system. The COCO's functions are to vote to commit on ready global transactions (processing has ended) according to the local commitment order, to vote to abort on transactions for which the database system has initiated an abort (the database system can initiate abort for any transaction, for many reasons), and to pass the atomic commitment decision to the database system. For local transactions (when can be identified) no voting is needed. For determining the commitment order the COCO maintains an updated representation of the local conflict graph (or local augmented conflict graph for capturing also locking deadlocks) of the undecided (neither committed nor aborted) transactions as a data structure (e.g., utilizing mechanisms similar to <a href="lock_(computer_science)" title="wikilink">locking</a> for capturing conflicts, but with no data-access blocking). The COCO component has an <a href="interface_(computer_science)" title="wikilink">interface</a> with its database system to receive "conflict," "ready" (processing has ended; readiness to vote on a global transaction or commit a local one), and "abort" notifications from the database system. It also interfaces with the atomic commitment protocol to vote and to receive the atomic commitment protocol's decision on each global transaction. The decisions are delivered from the COCO to the database system through their interface, as well as local transactions' commit notifications, at a proper commit order. The COCO, including its interfaces, can be enhanced, if it implements another variant of CO (see below), or plays a role in the database's concurrency control mechanism beyond voting in atomic commitment.</p>
+
+<p>The COCO also guarantees CO locally in a single, isolated database system with no interface with an atomic commitment protocol.</p>
+<h3 id="co-is-a-necessary-condition-for-global-serializability-across-autonomous-database-systems">CO is a necessary condition for global serializability across autonomous database systems</h3>
+
+<p>If the databases that participate in distributed transactions (i.e., transactions that span more than a single database) do not use any shared concurrency control information and use unmodified atomic commitment protocol messages (for reaching atomicity), then maintaining (local) <em>commitment ordering</em> or one of its generalizing variants (see below) is a <a href="necessary_condition" title="wikilink">necessary condition</a> for guaranteeing global serializability (a proof technique can be found in (<a href="#Raz1992" title="wikilink">Raz 1992</a>), and a different proof method for this in (<a href="#Raz1993a" title="wikilink">Raz 1993a</a>)); it is also a <a href="sufficient_condition" title="wikilink">sufficient condition</a>. This is a mathematical fact derived from the definitions of <em>serializability</em> and a <em><a href="Database_transaction" title="wikilink">transaction</a></em>. It means that if not complying with CO, then global serializability cannot be guaranteed under this condition (the condition of no local concurrency control information sharing between databases beyond atomic commit protocol messages). Atomic commitment is a minimal requirement for a distributed transaction since it is always needed, which is implied by the definition of transaction.</p>
+
+<p>(<a href="#Raz1992" title="wikilink">Raz 1992</a>) defines <em>database autonomy</em> and <em>independence</em> as complying with this requirement without using any additional local knowledge:</p>
+<ul>
+<li><strong>Definition:</strong> (concurrency control based) <strong>autonomous database system</strong></li>
+</ul>
+<dl>
+<dd>A database system is <strong>Autonomous</strong>, if it does not share with any other entity any concurrency control information beyond unmodified <a href="atomic_commitment_protocol" title="wikilink">atomic commitment protocol</a> messages. In addition it does not use for concurrency control any additional local information beyond conflicts (the last sentence does not appear explicitly but rather implied by further discussion in <a href="#Raz1992" title="wikilink">Raz 1992</a>).
+</dd>
+</dl>
+
+<p>Using this definition the following is concluded:</p>
+<ul>
+<li><strong>The CO and Global serializability Theorem</strong></li>
+</ul>
+<ol>
+<li>CO compliance of every <em>autonomous</em> database system (or transactional object) in a multidatabase environment is a <em>necessary condition</em> for guaranteeing Global serializability (without CO Global serializability may be violated).</li>
+<li>CO compliance of every database system is a <em>sufficient condition</em> for guaranteeing Global serializability.</li>
+</ol>
+
+<p>However, the definition of autonomy above implies, for example, that transactions are scheduled in a way that local transactions (confined to a single database) cannot be identified as such by an autonomous database system. This is realistic for some transactional objects, but too restrictive and less realistic for general purpose database systems. If autonomy is augmented with the ability to identify local transactions, then compliance with a more general property, <em>Extended commitment ordering</em> (ECO, see below), makes ECO the necessary condition.</p>
+
+<p>Only in (<a href="#Raz2009" title="wikilink">Raz 2009</a>) the notion of <em>Generalized autonomy</em> captures the intended notion of autonomy:</p>
+<ul>
+<li><strong>Definition: generalized autonomy</strong></li>
+</ul>
+<dl>
+<dd>A database system has the <em>Generalized autonomy</em> property, if it does not share with any other database system any local concurrency information beyond (unmodified) atomic commit protocol messages (however any local information can be utilized).
+</dd>
+</dl>
+
+<p>This definition is probably the broadest such definition possible in the context of database concurrency control, and it makes CO together with any of its (useful: No concurrency control information distribution) generalizing variants (Vote ordering (VO); see CO variants below) the necessary condition for Global serializability (i.e., the union of CO and its generalizing variants is the necessary set VO, which may include also new unknown useful generalizing variants).</p>
+<h3 id="summary">Summary</h3>
+
+<p>The <em>Commitment ordering</em> (CO) solution (technique) for global serializability can be summarized as follows:</p>
+
+<p>If each <em>database</em> (or any other <em>transactional object</em>) in a multidatabase environment complies with CO, i.e., arranges its local transactions' commitments and its votes on (global, distributed) transactions to the <em><a href="atomic_commitment" title="wikilink">atomic commitment</a></em> protocol according to the local (to the database) <a href="partial_order" title="wikilink">partial order</a> induced by the local conflict graph (serializability graph) for the respective transactions, then <em>Global CO</em> and <em>Global serializability</em> are guaranteed. A database's CO compliance can be achieved effectively with any local <a href="Serializability#View_serializability_and_conflict_serializability" title="wikilink">conflict serializability</a> based concurrency control mechanism, with neither affecting any transaction's execution process or scheduling, nor aborting it. Also the database's autonomy is not violated. The only low overhead incurred is detecting conflicts (e.g., as with locking, but with no data-access blocking; if not already detected for other purposes), and ordering votes and local transactions' commits according to the conflicts.</p>
+
+<p>[[Image:CO-ScheduleClasses.jpg|thumb|350px| <strong>Schedule classes containment:</strong> An arrow from class A to class B indicates that class A strictly contains B; a lack of a directed path between classes means that the classes are incomparable.</p>
+
+<p>A property is <strong>inherently blocking</strong>, if it can be enforced only by blocking transaction’s data access operations until certain events occur in other transactions. (<a href="#Raz1992" title="wikilink">Raz 1992</a>)]]</p>
+
+<p>In case of incompatible partial orders of two or more databases (no global partial order can <a href="Embedding" title="wikilink">embed</a> the respective local partial orders together), a global cycle (spans two databases or more) in the global conflict graph is generated. This, together with CO, results in a cycle of blocked votes, and a <em>voting-<a class="uri" href="deadlock" title="wikilink">deadlock</a></em> occurs for the databases on that cycle (however, allowed concurrent voting in each database, typically for almost all the outstanding votes, continue to execute). In this case the atomic commitment protocol fails to collect all the votes needed for the blocked transactions on that global cycle, and consequently the protocol aborts some transaction with a missing vote. This breaks the global cycle, the voting-deadlock is resolved, and the related blocked votes are free to be executed. Breaking the global cycle in the global conflict graph ensures that both global CO and global serializability are maintained. Thus, in case of incompatible local (partial) commitment orders no action is needed since the atomic commitment protocol resolves it automatically by aborting a transaction that is a cause for the incompatibility. Furthermore, also global deadlocks due to locking (global cycles in the <em>augmented conflict graph</em> with at least one data access blocking) result in voting deadlocks and are resolved automatically by the same mechanism.</p>
+
+<p><em>Local CO</em> is a necessary condition for guaranteeing <em>Global serializability,</em> if the databases involved do not share any concurrency control information beyond (unmodified) atomic commitment protocol messages, i.e., if the databases are <em>autonomous</em> in the context of concurrency control. This means that every global serializability solution for autonomous databases must comply with CO. Otherwise global serializability may be violated (and thus, is likely to be violated very quickly in a high-performance environment).</p>
+
+<p>The CO solution <a href="Scalability" title="wikilink">scales up</a> with network size and the number of databases without performance penalty when it utilizes <a href="Two-phase_commit_protocol#Common_architecture" title="wikilink">common distributed atomic commitment architecture</a>.</p>
+<h2 id="distributed-serializability-and-co">Distributed serializability and CO</h2>
+<h3 id="distributed-co">Distributed CO</h3>
+
+<p>A distinguishing characteristic of the CO solution to distributed serializability from other techniques is the fact that it requires no conflict information distributed (e.g., local precedence relations, locks, <a href="Timestamp-based_concurrency_control" title="wikilink">timestamps</a>, tickets), which makes it uniquely effective. It utilizes (unmodified) atomic commitment protocol messages (which are already used) instead.</p>
+
+<p>A common way to achieve distributed serializability in a <a href="Distributed_system" title="wikilink">(distributed) system</a> is by a <a href="distributed_lock_manager" title="wikilink">distributed lock manager</a> (DLM). DLMs, which communicate lock (non-materialized conflict) information in a distributed environment, typically suffer from computer and communication <a href="Latency_(engineering)" title="wikilink">latency</a>, which reduces the performance of the system. CO allows to achieve distributed serializability under very general conditions, without a distributed lock manager, exhibiting the benefits already explored above for multidatabase environments; in particular: reliability, high performance, scalability, possibility of using <em>optimistic concurrency control</em> when desired, no conflict information related communications over the network (which have incurred overhead and delays), and automatic distributed deadlock resolution.</p>
+
+<p>All <em>distributed transactional systems</em> rely on some atomic commitment protocol to coordinate atomicity (whether to commit or abort) among processes in a <a href="distributed_transaction" title="wikilink">distributed transaction</a>. Also, typically <em>recoverable data</em> (i.e., data under transactions' control, e.g., database data; not to be confused with the <em>recoverability</em> property of a schedule) are directly accessed by a single <em>transactional data manager</em> component (also referred to as a <em>resource manager</em>) that handles local sub-transactions (the distributed transaction's portion in a single location, e.g., network node), even if these data are accessed indirectly by other entities in the distributed system during a transaction (i.e., indirect access requires a direct access through a local sub-transaction). Thus recoverable data in a distributed transactional system are typically partitioned among transactional data managers. In such system these transactional data managers typically comprise the participants in the system's atomic commitment protocol. If each participant complies with CO (e.g., by using SS2PL, or COCOs, or a combination; see above), then the entire distributed system provides CO (by the theorems above; each participant can be considered a separate transactional object), and thus (distributed) serializability. Furthermore: When CO is utilized together with an atomic commitment protocol also <em>distributed deadlocks</em> (i.e., deadlocks that span two or more data managers) caused by data-access locking are resolved automatically. Thus the following corollary is concluded:</p>
+<ul>
+<li><strong>The CO Based Distributed Serializability Theorem</strong></li>
+</ul>
+<dl>
+<dd>Let a <em>distributed transactional system</em> (e.g., a <a href="distributed_database" title="wikilink">distributed database</a> system) comprise <em>transactional data managers</em> (also called <em>resource managers</em>) that manage all the system's <em>recoverable data</em>. The data managers meet three conditions:
+</dd>
+</dl>
+<ol>
+<li><strong>Data partition:</strong> Recoverable data are partitioned among the data managers, i.e., each recoverable datum (data item) is controlled by a single data manager (e.g., as common in a <a href="Shared_nothing_architecture" title="wikilink">Shared nothing architecture</a>; even copies of a same datum under different data managers are physically distinct, <em>replicated</em>).</li>
+<li><strong>Participants in atomic commitment protocol:</strong> These data managers are the participants in the system's atomic commitment protocol for coordinating distributed transactions' atomicity.</li>
+<li><strong>CO compliance:</strong> Each such data manager is CO compliant (or some CO variant compliant; see below).</li>
+</ol>
+<dl>
+<dd>Then
+</dd>
+</dl>
+<ol>
+<li>The entire distributed system guarantees (distributed CO and) <em>serializability</em>, and</li>
+<li>Data-access based <em>distributed deadlocks</em> (deadlocks involving two or more data managers with at least one non-materialized conflict) are resolved automatically.</li>
+</ol>
+<dl>
+<dd>Furthermore: The data managers being CO compliant is a <em>necessary condition</em> for (distributed) serializability in a system meeting conditions 1, 2 above, when the data managers are <em>autonomous</em>, i.e., do not share concurrency control information beyond unmodified messages of atomic commitment protocol.
+</dd>
+</dl>
+
+<p>This theorem also means that when SS2PL (or any other CO variant) is used locally in each transactional data manager, and each data manager has exclusive control of its data, no distributed lock manager (which is often utilized to enforce distributed SS2PL) is needed for distributed SS2PL and serializability. It is relevant to a wide range of distributed transactional applications, which can be easily designed to meet the theorem's conditions.</p>
+<h3 id="distributed-optimistic-co-doco">Distributed optimistic CO (DOCO)</h3>
+
+<p>For implementing Distributed Optimistic CO (DOCO) the generic local CO algorithm is utilized in all the atomic commitment protocol participants in the system with no data access blocking and thus with no local deadlocks. The previous theorem has the following corollary:</p>
+<ul>
+<li><strong>The Distributed optimistic CO (DOCO) Theorem</strong></li>
+</ul>
+<dl>
+<dd>If DOCO is utilized, then:
+<ol>
+<li>No local deadlocks occur, and</li>
+<li>Global (voting) deadlocks are resolved automatically (and all are serializability related (with non-blocking conflicts) rather than locking related (with blocking and possibly also non-blocking conflicts)).</li>
+</ol>
+</dd>
+</dl>
+<dl>
+<dd>Thus, no deadlock handling is needed.
+</dd>
+</dl>
+<h3 id="examples">Examples</h3>
+<h4 id="distributed-ss2pl">Distributed SS2PL</h4>
+
+<p>A distributed database system that utilizes <a href="Two-phase_locking#Strong_strict_two-phase_locking" title="wikilink">SS2PL</a> resides on two remote nodes, A and B. The database system has two <em>transactional data managers</em> (<em>resource managers</em>), one on each node, and the database data are partitioned between the two data managers in a way that each has an exclusive control of its own (local to the node) portion of data: Each handles its own data and locks without any knowledge on the other manager's. For each distributed transaction such data managers need to execute the available atomic commitment protocol.</p>
+
+<p>Two distributed transactions, 
+
+<math display="inline" id="Commitment_ordering:22">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Commitment_ordering:23">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, are running concurrently, and both access data x and y. x is under the exclusive control of the data manager on A (B's manager cannot access x), and y under that on B.</p>
+
+<p>
+
+<math display="block" id="Commitment_ordering:24">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ reads x on A and writes y on B, i.e., 
+
+<math display="inline" id="Commitment_ordering:25">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>R</mi>
+     <mrow>
+      <mn>1</mn>
+      <mi>A</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>R</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>A</ci>
+      </apply>
+     </apply>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}=R_{1A}(x)
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Commitment_ordering:26">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>W</mi>
+    <mrow>
+     <mn>1</mn>
+     <mi>B</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>y</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>W</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>B</ci>
+     </apply>
+    </apply>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W_{1B}(y)
+  </annotation>
+ </semantics>
+</math>
+
+ when using notation common for concurrency control.</p>
+
+<p>
+
+<math display="block" id="Commitment_ordering:27">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ reads y on B and writes x on A, i.e., 
+
+<math display="inline" id="Commitment_ordering:28">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>R</mi>
+     <mrow>
+      <mn>2</mn>
+      <mi>B</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>y</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>R</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <ci>B</ci>
+      </apply>
+     </apply>
+     <ci>y</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}=R_{2B}(y)
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Commitment_ordering:29">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>W</mi>
+    <mrow>
+     <mn>2</mn>
+     <mi>A</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>W</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>A</ci>
+     </apply>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W_{2A}(x)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The respective <em>local sub-transactions</em> on A and B (the portions of 
+
+<math display="inline" id="Commitment_ordering:30">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Commitment_ordering:31">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ on each of the nodes) are the following:</p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Local sub-transactions</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Transaction \ Node</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Commitment_ordering:32">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Commitment_ordering:33">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>The database system's <a href="Schedule_(computer_science)" title="wikilink">schedule</a> at a certain point in time is the following:</p>
+
+<p>
+
+<math display="block" id="Commitment_ordering:34">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>R</mi>
+    <mrow>
+     <mn>1</mn>
+     <mi>A</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>R</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>A</ci>
+     </apply>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R_{1A}(x)
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Commitment_ordering:35">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>R</mi>
+    <mrow>
+     <mn>2</mn>
+     <mi>B</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>y</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>R</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>B</ci>
+     </apply>
+    </apply>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R_{2B}(y)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<dl>
+<dd>(also 
+
+<math display="inline" id="Commitment_ordering:36">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>R</mi>
+    <mrow>
+     <mn>2</mn>
+     <mi>B</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>y</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>R</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>B</ci>
+     </apply>
+    </apply>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R_{2B}(y)
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Commitment_ordering:37">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>R</mi>
+    <mrow>
+     <mn>1</mn>
+     <mi>A</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>R</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>A</ci>
+     </apply>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R_{1A}(x)
+  </annotation>
+ </semantics>
+</math>
+
+ is possible)
+</dd>
+</dl>
+
+<p>
+
+<math display="inline" id="Commitment_ordering:38">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ holds a read-lock on x and 
+
+<math display="inline" id="Commitment_ordering:39">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ holds read-locks on y. Thus 
+
+<math display="inline" id="Commitment_ordering:40">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>W</mi>
+    <mrow>
+     <mn>1</mn>
+     <mi>B</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>y</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>W</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>B</ci>
+     </apply>
+    </apply>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W_{1B}(y)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Commitment_ordering:41">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>W</mi>
+    <mrow>
+     <mn>2</mn>
+     <mi>A</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>W</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>A</ci>
+     </apply>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W_{2A}(x)
+  </annotation>
+ </semantics>
+</math>
+
+ are blocked by the <a href="Two-phase_locking#Data-access_locks" title="wikilink">lock compatibility</a> rules of SS2PL and cannot be executed. This is a distributed deadlock situation, which is also a voting-deadlock (see below) with a distributed (global) cycle of length 2 (number of edges, conflicts; 2 is the most frequent length). The local sub-transactions are in the following states:</p>
+
+<p>
+
+<math display="block" id="Commitment_ordering:42">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mrow>
+    <mn>1</mn>
+    <mi>A</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">1</cn>
+     <ci>A</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1A}
+  </annotation>
+ </semantics>
+</math>
+
+ is <em>ready</em> (execution has ended) and <em>voted</em> (in atomic commitment)</p>
+
+<p>
+
+<math display="block" id="Commitment_ordering:43">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mrow>
+    <mn>1</mn>
+    <mi>B</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">1</cn>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1B}
+  </annotation>
+ </semantics>
+</math>
+
+ is <em>running</em> and blocked (a non-materialized conflict situation; no vote on it can occur)</p>
+
+<p>
+
+<math display="block" id="Commitment_ordering:44">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mrow>
+    <mn>2</mn>
+    <mi>B</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2B}
+  </annotation>
+ </semantics>
+</math>
+
+ is <em>ready</em> and <em>voted</em></p>
+
+<p>
+
+<math display="block" id="Commitment_ordering:45">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mrow>
+    <mn>2</mn>
+    <mi>A</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <ci>A</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2A}
+  </annotation>
+ </semantics>
+</math>
+
+ is <em>running</em> and blocked (a non-materialized conflict; no vote).</p>
+
+<p>Since the atomic commitment protocol cannot receive votes for blocked sub-transactions (a voting-deadlock), it will eventually abort some transaction with a missing vote(s) by <a href="Timeout_(computing)" title="wikilink">timeout</a>, either 
+
+<math display="inline" id="Commitment_ordering:46">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+, or 
+
+<math display="inline" id="Commitment_ordering:47">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, (or both, if the timeouts fall very close). This will resolve the global deadlock. The remaining transaction will complete running, be voted on, and committed. An aborted transaction is immediately <em>restarted</em> and re-executed.</p>
+
+<p><strong>Comments:</strong></p>
+<ol>
+<li>The data partition (x on A; y on B) is important since without it, for example, x can be accessed directly from B. If a transaction 
+
+<math display="inline" id="Commitment_ordering:48">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>3</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{3}
+  </annotation>
+ </semantics>
+</math>
+
+ is running on B concurrently with 
+
+<math display="inline" id="Commitment_ordering:49">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Commitment_ordering:50">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ and directly writes x, then, without a distributed lock manager the read-lock for x held by 
+
+<math display="inline" id="Commitment_ordering:51">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ on A is not visible on B and cannot block the write of 
+
+<math display="inline" id="Commitment_ordering:52">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>3</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{3}
+  </annotation>
+ </semantics>
+</math>
+
+ (or signal a materialized conflict for a non-blocking CO variant; see below). Thus serializability can be violated.</li>
+<li>Due to data partition, x cannot be accessed directly from B. However, functionality is not limited, and a transaction running on B still can issue a write or read request of x (not common). This request is communicated to the transaction's local sub-transaction on A (which is generated, if does not exist already) which issues this request to the local data manager on A.</li>
+</ol>
+<h4 id="variations">Variations</h4>
+
+<p>In the scenario above both conflicts are <em>non-materialized</em>, and the global voting-deadlock is reflected as a cycle in the global <em>wait-for graph</em> (but not in the global <em>conflict graph</em>; see <a href="Commitment_ordering#Exact_characterization_of_voting-deadlocks_by_global_cycles" title="wikilink">Exact characterization of voting-deadlocks by global cycles</a> above). However the database system can utilize any CO variant with exactly the same conflicts and voting-deadlock situation, and same resolution. Conflicts can be either <em>materialized</em> or <em>non-materialized</em>, depending on CO variant used. For example, if <a href="Commitment_ordering#Strict_CO_(SCO)" title="wikilink">SCO</a> (below) is used by the distributed database system instead of SS2PL, then the two conflicts in the example are <em>materialized</em>, all local sub-transactions are in <em>ready</em> states, and vote blocking occurs in the two transactions, one on each node, because of the CO voting rule applied independently on both A and B: due to conflicts 
+
+<math display="inline" id="Commitment_ordering:53">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mn>2</mn>
+     <mi>A</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>W</mi>
+     <mrow>
+      <mn>2</mn>
+      <mi>A</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>A</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>W</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <ci>A</ci>
+      </apply>
+     </apply>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2A}=W_{2A}(x)
+  </annotation>
+ </semantics>
+</math>
+
+ is not voted on before 
+
+<math display="inline" id="Commitment_ordering:54">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mn>1</mn>
+     <mi>A</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>R</mi>
+     <mrow>
+      <mn>1</mn>
+      <mi>A</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>A</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>R</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>A</ci>
+      </apply>
+     </apply>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1A}=R_{1A}(x)
+  </annotation>
+ </semantics>
+</math>
+
+ ends, and 
+
+<math display="inline" id="Commitment_ordering:55">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mn>1</mn>
+     <mi>B</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>W</mi>
+     <mrow>
+      <mn>1</mn>
+      <mi>B</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>y</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>B</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>W</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>B</ci>
+      </apply>
+     </apply>
+     <ci>y</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1B}=W_{1B}(y)
+  </annotation>
+ </semantics>
+</math>
+
+ is not voted on before 
+
+<math display="inline" id="Commitment_ordering:56">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mn>2</mn>
+     <mi>B</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>R</mi>
+     <mrow>
+      <mn>2</mn>
+      <mi>B</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>y</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>B</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>R</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <ci>B</ci>
+      </apply>
+     </apply>
+     <ci>y</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2B}=R_{2B}(y)
+  </annotation>
+ </semantics>
+</math>
+
+ ends, which is a voting-deadlock. Now the <em>conflict graph</em> has the global cycle (all conflicts are materialized), and again it is resolved by the atomic commitment protocol, and distributed serializability is maintained. Unlikely for a distributed database system, but possible in principle (and occurs in a multi-database), A can employ SS2PL while B employs SCO. In this case the global cycle is neither in the wait-for graph nor in the serializability graph, but still in the <em>augmented conflict graph</em> (the union of the two). The various combinations are summarized in the following table:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Voting-deadlock situations</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Case</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>3</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>4</p></td>
+</tr>
+</tbody>
+</table>
+<dl>
+<dd><strong>Comments:</strong>
+</dd>
+</dl>
+<ol>
+<li>Conflicts and thus cycles in the <em>augmented conflict graph</em> are determined by the transactions and their initial scheduling only, independently of the concurrency control utilized. With any variant of CO, any <em>global cycle</em> (i.e., spans two databases or more) causes a <em>voting deadlock</em>. Different CO variants may differ on whether a certain conflict is <em>materialized</em> or <em>non-materialized</em>.</li>
+<li>Some limited operation order changes in the schedules above are possible, constrained by the orders inside the transactions, but such changes do not change the rest of the table.</li>
+<li>As noted above, only case 4 describes a cycle in the (regular) conflict graph which affects serializability. Cases 1-3 describe cycles of locking based global deadlocks (at least one lock blocking exists). All cycle types are equally resolved by the atomic commitment protocol. Case 1 is the common Distributed SS2PL, utilized since the 1980s. However, no research article, except the CO articles, is known to notice this automatic locking global deadlock resolution as of 2009. Such global deadlocks typically have been dealt with by dedicated mechanisms.</li>
+<li>Case 4 above is also an example for a typical voting-deadlock when <a href="Commitment_ordering#Distributed_optimistic_CO_(DOCO)" title="wikilink">Distributed optimistic CO (DOCO)</a> is used (i.e., Case 4 is unchanged when Optimistic CO (OCO; see below) replaces SCO on both A and B): No data-access blocking occurs, and only materialized conflicts exist.</li>
+</ol>
+<h4 id="hypothetical-multi-single-threaded-core-music-environment">Hypothetical Multi Single-Threaded Core (MuSiC) environment</h4>
+
+<p><strong>Comment:</strong> While the examples above describe real, recommended utilization of CO, this example is hypothetical, for demonstration only.</p>
+
+<p>Certain experimental distributed memory-resident databases advocate multi single-threaded core (MuSiC) transactional environments. "Single-threaded" refers to transaction <a href="Thread_(computer_science)" title="wikilink">threads</a> only, and to <em>serial</em> execution of transactions. The purpose is possible orders of magnitude gain in performance (e.g., <a href="Michael_Stonebraker#H-Store_and_VoltDB" title="wikilink">H-Store</a><a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> and <a class="uri" href="VoltDB" title="wikilink">VoltDB</a>) relatively to conventional transaction execution in multiple threads on a same core. In what described below MuSiC is independent of the way the cores are distributed. They may reside in one <a href="integrated_circuit" title="wikilink">integrated circuit</a> (chip), or in many chips, possibly distributed geographically in many computers. In such an environment, if recoverable (transactional) data are partitioned among threads (cores), and it is implemented in the conventional way for distributed CO, as described in previous sections, then DOCO and Strictness exist automatically. However, downsides exist with this straightforward implementation of such environment, and its practicality as a general-purpose solution is questionable. On the other hand tremendous performance gain can be achieved in applications that can bypass these downsides in most situations.</p>
+
+<p><strong>Comment:</strong> The MuSiC straightforward implementation described here (which uses, for example, as usual in distributed CO, voting (and transaction thread) blocking in atomic commitment protocol when needed) is for demonstration only, and has <strong>no connection</strong> to the implementation in H-Store or any other project.</p>
+
+<p>In a MuSiC environment local schedules are <em>serial</em>. Thus both local Optimistic CO (OCO; see below) and the <em>Global CO enforcement vote ordering strategy</em> condition for the atomic commitment protocol are met automatically. This results in both distributed CO compliance (and thus distributed serializability) and automatic global (voting) deadlock resolution.</p>
+
+<p>Furthermore, also local <em>Strictness</em> follows automatically in a serial schedule. By Theorem 5.2 in (<a href="#Raz1992" title="wikilink">Raz 1992</a>; page 307), when the CO vote ordering strategy is applied, also Global Strictness is guaranteed. Note that <em>serial</em> locally is the only mode that allows strictness and "optimistic" (no data access blocking) together.</p>
+
+<p>The following is concluded:</p>
+<ul>
+<li><strong>The MuSiC Theorem</strong></li>
+</ul>
+<dl>
+<dd>In MuSiC environments, if recoverable (transactional) data are partitioned among cores (threads), then both
+<ol>
+<li><em>OCO</em> (and implied <em>Serializability</em>; i.e., DOCO and Distributed serializability)</li>
+<li><em>Strictness</em> (allowing effective recovery; 1 and 2 implying Strict CO—see SCO below) and</li>
+<li>(voting) <em>deadlock resolution</em></li>
+</ol>
+</dd>
+<dd>automatically exist globally with unbounded scalability in number of cores used.
+</dd>
+</dl>
+<dl>
+<dd><strong>Comment:</strong> However, two major downsides, which need special handling, may exist:
+</dd>
+</dl>
+<ol>
+<li>Local sub-transactions of a global transaction are blocked until commit, which makes the respective cores idle. This reduces core utilization substantially, even if scheduling of the local sub-transactions attempts to execute all of them in time proximity, almost together. It can be overcome by detaching execution from commit (with some atomic commitment protocol) for global transactions, at the cost of possible cascading aborts.</li>
+<li>increasing the number of cores for a given amount of recoverable data (database size) decreases the average amount of (partitioned) data per core. This may make some cores idle, while others very busy, depending on data utilization distribution. Also a local (to a core) transaction may become global (multi-core) to reach its needed data, with additional incurred overhead. Thus, as the number of cores increases, the amount and type of data assigned to each core should be balanced according to data usage, so a core is neither overwhelmed to become a bottleneck, nor becoming idle too frequently and underutilized in a busy system. Another consideration is putting in a same core partition all the data that are usually accessed by a same transaction (if possible), to maximize the number of local transactions (and minimize the number of global, distributed transactions). This may be achieved by occasional data re-partition among cores based on load balancing (data access balancing) and patterns of data usage by transactions. Another way to considerably mitigate this downside is by proper physical data replication among some core partitions in a way that read-only global transactions are possibly (depending on usage patterns) completely avoided, and replication changes are synchronized by a dedicated commit mechanism.</li>
+</ol>
+<h2 id="co-variants-interesting-special-cases-and-generalizations">CO variants: Interesting special cases and generalizations</h2>
+
+<p>Special case schedule property classes (e.g., SS2PL and SCO below) are strictly contained in the CO class. The generalizing classes (ECO and MVCO) strictly contain the CO class (i.e., include also schedules that are not CO compliant). The generalizing variants also guarantee global serializability without distributing local concurrency control information (each database has the <em>generalized autonomy</em> property: it uses only local information), while relaxing CO constraints and utilizing additional (local) information for better concurrency and performance: ECO uses knowledge about transactions being local (i.e., confined to a single database), and MVCO uses availability of data versions values. Like CO, both generalizing variants are <em>non-blocking</em>, do not interfere with any transaction's operation scheduling, and can be seamlessly combined with any relevant concurrency control mechanism.</p>
+
+<p>The term <strong>CO variant</strong> refers in general to CO, ECO, MVCO, or a combination of each of them with any relevant concurrency control mechanism or property (including Multi-version based ECO, MVECO). No other interesting generalizing variants (which guarantee global serializability with no local concurrency control information distribution) are known, but may be discovered.</p>
+<h3 id="strong-strict-two-phase-locking-ss2pl">Strong strict two phase locking (SS2PL)</h3>
+
+<p><strong>Strong Strict Two Phase Locking</strong> (SS2PL; also referred to as <em>Rigorousness</em> or <em>Rigorous scheduling</em>) means that both read and write locks of a transaction are released only after the transaction has ended (either committed or aborted). The set of SS2PL schedules is a <a href="proper_subset" title="wikilink">proper subset</a> of the set of CO schedules. This property is widely utilized in database systems, and since it implies CO, databases that use it and participate in global transactions generate together a serializable global schedule (when using any atomic commitment protocol, which is needed for atomicity in a multi-database environment). No database modification or addition is needed in this case to participate in a CO distributed solution: The set of undecided transactions to be aborted before committing in the <a href="Commitment_ordering#The_algorithm" title="wikilink">local generic CO algorithm</a> above is empty because of the locks, and hence such an algorithm is unnecessary in this case. A transaction can be voted on by a database system immediately after entering a "ready" state, i.e., completing running its task locally. Its locks are released by the database system only after it is decided by the atomic commitment protocol, and thus the condition in the <em>Global CO enforcing theorem</em> above is kept automatically. Interestingly, if a local timeout mechanism is used by a database system to resolve (local) SS2PL deadlocks, then aborting blocked transactions breaks not only potential local cycles in the global conflict graph (real cycles in the augmented conflict graph), but also database system's potential global cycles as a side effect, if the <a href="atomic_commitment" title="wikilink">atomic commitment</a> protocol's abort mechanism is relatively slow. Such independent aborts by several entities typically may result in unnecessary aborts for more than one transaction per global cycle. The situation is different for a local <em>wait-for graph</em> based mechanisms: Such cannot identify global cycles, and the atomic commitment protocol will break the global cycle, if the resulting voting deadlock is not resolved earlier in another database.</p>
+
+<p>Local SS2PL together with atomic commitment implying global serializability can also be deduced directly: All transactions, including distributed, obey the <a href="Two-phase_locking" title="wikilink">2PL</a> (SS2PL) rules. The atomic commitment protocol mechanism is not needed here for consensus on commit, but rather for the end of phase-two synchronization point. Probably for this reason, without considering the atomic commitment voting mechanism, automatic global deadlock resolution has not been noticed before CO.</p>
+<h3 id="strict-co-sco">Strict CO (SCO)</h3>
+
+<p>[[Image:SCO-VS-SS2PL.jpg|thumb|450px|<strong>Read-write conflict: SCO Vs. SS2PL</strong>. Duration of transaction T2 is longer with SS2PL than with SCO.</p>
+
+<p>SS2PL delays write operation w2[x] of T2 until T1 commits, due to a lock on x by T1 following read operation r1[x]. If t time units are needed for transaction T2 after starting write operation w2[x] in order to reach ready state, than T2 commits t time units after T1 commits. However, SCO does not block w2[x], and T2 can commit immediately after T1 commits. (<a href="#Raz1991c" title="wikilink">Raz 1991c</a>)]]</p>
+
+<p><strong>Strict Commitment Ordering</strong> (SCO; (<a href="#Raz1991c" title="wikilink">Raz 1991c</a>)) is the intersection of <a href="Schedule_(computer_science)#Strict" title="wikilink">strictness</a> (a special case of recoverability) and CO, and provides an upper bound for a schedule's concurrency when both properties exist. It can be implemented using blocking mechanisms (locking) similar to those used for the popular SS2PL with similar overheads.</p>
+
+<p>Unlike SS2PL, SCO does not block on a read-write conflict but possibly blocks on commit instead. SCO and SS2PL have identical blocking behavior for the other two conflict types: write-read, and write-write. As a result SCO has shorter average blocking periods, and more concurrency (e.g., performance simulations of a single database for the most significant variant of <em><a href="locks_with_ordered_sharing" title="wikilink">locks with ordered sharing</a>,</em> which is identical to SCO, clearly show this, with approximately 100% gain for some transaction loads; also for identical transaction loads SCO can reach higher transaction rates than SS2PL before <em>lock <a href="Thrashing_(computer_science)" title="wikilink">thrashing</a></em> occurs). More concurrency means that with given computing resources more transactions are completed in time unit (higher transaction rate, <a class="uri" href="throughput" title="wikilink">throughput</a>), and the average duration of a transaction is shorter (faster completion; see chart). The advantage of SCO is especially significant during lock contention.</p>
+<ul>
+<li><strong>The SCO Vs. SS2PL Performance Theorem</strong></li>
+</ul>
+<dl>
+<dd>SCO provides shorter average transaction completion time than SS2PL, if read-write conflicts exist. SCO and SS2PL are identical otherwise (have identical blocking behavior with write-read and write-write conflicts).
+</dd>
+</dl>
+
+<p>SCO is as practical as SS2PL since as SS2PL it provides besides serializability also strictness, which is widely utilized as a basis for efficient recovery of databases from failure. An SS2PL mechanism can be converted to an SCO one for better performance in a straightforward way without changing recovery methods. A description of a SCO implementation can be found in (Perrizo and Tatarinov 1998).<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> See also <em><a href="The_History_of_Commitment_Ordering#Semi-optimistic_database_scheduler" title="wikilink">Semi-optimistic database scheduler</a></em>.</p>
+
+<p>SS2PL is a proper subset of SCO (which is another explanation why SCO is less constraining and provides more concurrency than SS2PL).</p>
+<h3 id="optimistic-co-oco">Optimistic CO (OCO)</h3>
+
+<p>For implementing <strong>Optimistic commitment ordering</strong> (OCO) the generic local CO algorithm is utilized without data access blocking, and thus without local deadlocks. OCO without transaction or operation scheduling constraints covers the entire CO class, and is not a special case of the CO class, but rather a useful CO variant and mechanism characterization.</p>
+<h3 id="extended-co-eco">Extended CO (ECO)</h3>
+<h4 id="general-characterization-of-eco">General characterization of ECO</h4>
+
+<p><strong>Extended Commitment Ordering</strong> (ECO; (<a href="#Raz1993a" title="wikilink">Raz 1993a</a>)) generalizes CO. When local transactions (transactions confined to a single database) can be distinguished from global (distributed) transactions (transactions that span two databases or more), commitment order is applied to global transactions only. Thus, for a local (to a database) schedule to have the ECO property, the chronological (partial) order of commit events of global transactions only (unimportant for local transactions) is consistent with their order on the respective local conflict graph.</p>
+<ul>
+<li><strong>Definition: extended commitment ordering</strong></li>
+</ul>
+<dl>
+<dd>Let 
+
+<math display="inline" id="Commitment_ordering:57">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>T</mi>
+    <mn>2</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1},T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ be two committed <em>global</em> transactions in a schedule, such that a <em>directed path</em> of unaborted transactions exists in the <em>conflict graph</em> (<a href="precedence_graph" title="wikilink">precedence graph</a>) from 
+
+<math display="inline" id="Commitment_ordering:58">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Commitment_ordering:59">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ (
+
+<math display="inline" id="Commitment_ordering:60">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ precedes 
+
+<math display="inline" id="Commitment_ordering:61">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, possibly <a href="transitive_relation" title="wikilink">transitively</a>, indirectly). The schedule has the <strong>Extended commitment ordering</strong> (ECO) property, if for every two such transactions 
+
+<math display="inline" id="Commitment_ordering:62">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ commits before 
+
+<math display="inline" id="Commitment_ordering:63">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ commits.
+</dd>
+</dl>
+
+<p>A distributed algorithm to guarantee global ECO exists. As for CO, the algorithm needs only (unmodified) atomic commitment protocol messages. In order to guarantee global serializability, each database needs to guarantee also the conflict serializability of its own transactions by any (local) concurrency control mechanism.</p>
+<ul>
+<li><strong>The ECO and Global Serializability Theorem</strong></li>
+</ul>
+<ol>
+<li>(Local, which implies global) ECO together with local conflict serializability, is a sufficient condition to guarantee global conflict serializability.</li>
+<li>When no concurrency control information beyond atomic commitment messages is shared outside a database (autonomy), and local transactions can be identified, it is also a necessary condition.</li>
+</ol>
+<dl>
+<dd>See a necessity proof in (<a href="#Raz1993a" title="wikilink">Raz 1993a</a>).
+</dd>
+</dl>
+
+<p>This condition (ECO with local serializability) is weaker than CO, and allows more concurrency at the cost of a little more complicated local algorithm (however, no practical overhead difference with CO exists).</p>
+
+<p>When all the transactions are assumed to be global (e.g., if no information is available about transactions being local), ECO reduces to CO.</p>
+<h4 id="the-eco-algorithm">The ECO algorithm</h4>
+
+<p>Before a global transaction is committed, a generic local (to a database) ECO algorithm aborts a minimal set of undecided transactions (neither committed, nor aborted; either local transactions, or global that run locally), that can cause later a cycle in the conflict graph. This set of aborted transactions (not unique, contrary to CO) can be optimized, if each transaction is assigned with a weight (that can be determined by transaction's importance and by the computing resources already invested in the running transaction; optimization can be carried out, for example, by a reduction from the <em><a href="Max_flow_in_networks" title="wikilink">Max flow in networks</a></em> problem (<a href="#Raz1993a" title="wikilink">Raz 1993a</a>)). Like for CO such a set is time dependent, and becomes empty eventually. Practically, almost in all needed implementations a transaction should be committed only when the set is empty (and no set optimization is applicable). The local (to the database) concurrency control mechanism (separate from the ECO algorithm) ensures that local cycles are eliminated (unlike with CO, which implies serializability by itself; however, practically also for CO a local concurrency mechanism is utilized, at least to ensure Recoverability). Local transactions can be always committed concurrently (even if a precedence relation exists, unlike CO). When the overall transactions' local partial order (which is determined by the local conflict graph, now only with possible temporary local cycles, since cycles are eliminated by a local serializability mechanism) allows, also global transactions can be voted on to be committed concurrently (when all their transitively (indirect) preceding (via conflict) <em>global</em> transactions are committed, while transitively preceding local transactions can be at any state. This in analogy to the distributed CO algorithm's stronger concurrent voting condition, where all the transitively preceding transactions need to be committed).</p>
+
+<p>The condition for guaranteeing <em>Global ECO</em> can be summarized similarly to CO:</p>
+<ul>
+<li><strong>The Global ECO Enforcing Vote ordering strategy Theorem</strong></li>
+</ul>
+<dl>
+<dd>Let 
+
+<math display="inline" id="Commitment_ordering:64">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>T</mi>
+    <mn>2</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1},T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ be undecided (neither committed nor aborted) <em>global transactions</em> in a database system that ensures serializability locally, such that a <em>directed path</em> of unaborted transactions exists in the <em>local conflict graph</em> (that of the database itself) from 
+
+<math display="inline" id="Commitment_ordering:65">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Commitment_ordering:66">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+. Then, having 
+
+<math display="inline" id="Commitment_ordering:67">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ ended (either committed or aborted) before 
+
+<math display="inline" id="Commitment_ordering:68">
+ <semantics>
+  <msub>
+   <mi>T</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ is voted on to be committed, in every such database system in a multidatabase environment, is a <a href="necessary_and_sufficient_condition" title="wikilink">necessary and sufficient condition</a> for guaranteeing Global ECO (the condition guarantees Global ECO, which may be violated without it).
+</dd>
+</dl>
+
+<p>Global ECO (all global cycles in the global conflict graph are eliminated by atomic commitment) together with Local serializability (i.e., each database system maintains serializability locally; all local cycles are eliminated) imply Global serializability (all cycles are eliminated). This means that if each database system in a multidatabase environment provides local serializability (by <em>any</em> mechanism) and enforces the <em>vote ordering strategy</em> in the theorem above (a generalization of CO's vote ordering strategy), then <em>Global serializability</em> is guaranteed (no local CO is needed anymore).</p>
+
+<p>Similarly to CO as well, the ECO <em>voting-deadlock</em> situation can be summarized as follows:</p>
+<ul>
+<li><strong>The ECO Voting-Deadlock Theorem</strong></li>
+</ul>
+<dl>
+<dd>Let a multidatabase environment comprise database systems that enforce, each, both <em>Global ECO</em> (using the condition in the theorem above) and <em>local conflict serializability</em> (which eliminates local cycles in the global conflict graph). Then, a <em>voting-deadlock</em> occurs if and only if a <em>global cycle</em> (spans two or more databases) exists in the <em>Global augmented conflict graph</em> (also blocking by a data-access lock is represented by an edge). If the cycle does not break by any abort, then all the <em>global transactions</em> on it are involved with the respective voting-deadlock, and eventually each has its vote blocked (either directly, or indirectly by a data-access lock). If a local transaction resides on the cycle, it may be in any unaborted state (running, ready, or committed; unlike CO no local commit blocking is needed).
+</dd>
+</dl>
+
+<p>As with CO this means that also global deadlocks due to data-access locking (with at least one lock blocking) are voting deadlocks, and are automatically resolved by atomic commitment.</p>
+<h3 id="multi-version-co-mvco">Multi-version CO (MVCO)</h3>
+
+<p><strong>Multi-version Commitment Ordering</strong> (MVCO; (<a href="#Raz1993b" title="wikilink">Raz 1993b</a>)) is a generalization of CO for databases with <a href="Multiversion_concurrency_control" title="wikilink">multi-version resources</a>. With such resources <em>read-only transactions</em> do not block or being blocked for better performance. Utilizing such resources is a common way nowadays to increase concurrency and performance by generating a new version of a database object each time the object is written, and allowing transactions' read operations of several last relevant versions (of each object). MVCO implies <em>One-copy-serializability</em> (1SER or 1SR) which is the generalization of <a class="uri" href="serializability" title="wikilink">serializability</a> for multi-version resources. Like CO, MVCO is non-blocking, and can be combined with any relevant multi-version concurrency control mechanism without interfering with it. In the introduced underlying theory for MVCO conflicts are generalized for different versions of a same resource (differently from earlier multi-version theories). For different versions conflict chronological order is replaced by version order, and possibly reversed, while keeping the usual definitions for conflicting operations. Results for the regular and augmented conflict graphs remain unchanged, and similarly to CO a distributed MVCO enforcing algorithm exists, now for a mixed environment with both single-version and multi-version resources (now single-version is a special case of multi-version). As for CO, the MVCO algorithm needs only (unmodified) <a href="atomic_commitment" title="wikilink">atomic commitment</a> protocol messages with no additional communication overhead. Locking-based global deadlocks translate to voting deadlocks and are resolved automatically. In analogy to CO the following holds:</p>
+<ul>
+<li><strong>The MVCO and Global one-copy-serializability Theorem</strong></li>
+</ul>
+<ol>
+<li>MVCO compliance of every <em>autonomous</em> database system (or transactional object) in a mixed multidatabase environment of single-version and multi-version databases is a <em>necessary condition</em> for guaranteeing Global one-copy-serializability (1SER).</li>
+<li>MVCO compliance of every database system is a <em>sufficient condition</em> for guaranteeing Global 1SER.</li>
+<li>Locking-based global deadlocks are resolved automatically.</li>
+</ol>
+<dl>
+<dd><strong>Comment</strong>: Now a CO compliant single-version database system is automatically also MVCO compliant.
+</dd>
+</dl>
+
+<p>MVCO can be further generalized to employ the generalization of ECO (MVECO).</p>
+<h4 id="example-co-based-snapshot-isolation-cosi">Example: CO based snapshot isolation (COSI)</h4>
+
+<p><strong>CO based snapshot isolation</strong> (COSI) is the intersection of <em><a href="Snapshot_isolation" title="wikilink">Snapshot isolation</a></em> (SI) with MVCO. SI is a <a href="multiversion_concurrency_control" title="wikilink">multiversion concurrency control</a> method widely utilized due to good performance and similarity to serializability (1SER) in several aspects. The theory in (Raz 1993b) for MVCO described above is utilized later in (Fekete et al. 2005) and other articles on SI, e.g., (Cahill et al. 2008);<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> see also <a href="Snapshot_isolation#Making_Snapshot_Isolation_Serializable" title="wikilink">Making snapshot isolation serializable</a> and the references there), for analyzing conflicts in SI in order to make it serializable. The method presented in (Cahill et al. 2008), <em>Serializable snapshot isolation</em> (SerializableSI), a low overhead modification of SI, provides good performance results versus SI, with only small penalty for enforcing serializability. A different method, by combining SI with MVCO (COSI), makes SI serializable as well, with a relatively low overhead, similarly to combining the generic CO algorithm with single-version mechanisms. Furthermore, the resulting combination, COSI, being MVCO compliant, allows COSI compliant database systems to inter-operate and transparently participate in a CO solution for distributed/global serializability (see below). Besides overheads also protocols' behaviors need to be compared quantitatively. On one hand, all serializable SI schedules can be made MVCO by COSI (by possible commit delays when needed) without aborting transactions. On the other hand, SerializableSI is known to unnecessarily abort and restart certain percentages of transactions also in serializable SI schedules.</p>
+<h3 id="co-and-its-variants-are-transparently-interoperable-for-global-serializability">CO and its variants are transparently interoperable for global serializability</h3>
+
+<p>With CO and its variants (e.g., SS2PL, SCO, OCO, ECO, and MVCO above) global serializability is achieved via <em>atomic commitment</em> protocol based distributed algorithms. For CO and all its variants atomic commitment protocol is the instrument to eliminate global cycles (cycles that span two or more databases) in the <em>global augmented</em> (and thus also regular) <em>conflict graph</em> (implicitly; no global data structure implementation is needed). In cases of either incompatible local commitment orders in two or more databases (when no global <a href="partial_order" title="wikilink">partial order</a> can <a href="Embedding" title="wikilink">embed</a> the respective local partial orders together), or a data-access locking related voting deadlock, both implying a global cycle in the global augmented conflict graph and missing votes, the atomic commitment protocol breaks such cycle by aborting an undecided transaction on it (see <a href="commitment_ordering#The_distributed_CO_algorithm" title="wikilink">The distributed CO algorithm</a> above). Differences between the various variants exist at the local level only (within the participating database systems). Each local CO instance of any variant has the same role, to determine the position of every global transaction (a transaction that spans two or more databases) within the local commitment order, i.e., to determine when it is the transaction's turn to be voted on locally in the atomic commitment protocol. Thus, all the CO variants exhibit the same behavior in regard to atomic commitment. This means that they are all interoperable via atomic commitment (using the same software interfaces, typically provided as <a href="Service_(systems_architecture)" title="wikilink">services</a>, some already <a href="international_standard" title="wikilink">standardized</a> for atomic commitment, primarily for the <a href="two_phase_commit" title="wikilink">two phase commit</a> protocol, e.g., <a href="X/Open_XA" title="wikilink">X/Open XA</a>) and transparently can be utilized together in any distributed environment (while each CO variant instance is possibly associated with any relevant local concurrency control mechanism type).</p>
+
+<p>In summary, any single global transaction can participate simultaneously in databases that may employ each any, possibly different, CO variant (while concurrently running processes in each such database, and running concurrently with local and other global transactions in each such database). The atomic commitment protocol is indifferent to CO, and does not distinguish between the various CO variants. Any <em>global cycle</em> generated in the augmented global conflict graph may span databases of different CO variants, and generate (if not broken by any local abort) a voting deadlock that is resolved by atomic commitment exactly the same way as in a single CO variant environment. <em>local cycles</em> (now possibly with mixed materialized and non-materialized conflicts, both serializability and data-access-locking deadlock related, e.g., SCO) are resolved locally (each by its respective variant instance's own local mechanisms).</p>
+
+<p><strong>Vote ordering</strong> (VO or Generalized CO (GCO); <a href="#Raz2009" title="wikilink">Raz 2009</a>), the union of CO and all its above variants, is a useful concept and global serializability technique. To comply with VO, local serializability (in it most general form, commutativity based, and including multi-versioning) and the <em>vote order strategy</em> (voting by local precedence order) are needed.</p>
+
+<p>Combining results for CO and its variants, the following is concluded:</p>
+<ul>
+<li><strong>The CO Variants Interoperability Theorem</strong></li>
+</ul>
+<ol>
+<li>In a multi-database environment, where each database system (transactional object) is compliant with some CO variant property (VO compliant), any global transaction can participate simultaneously in databases of possibly different CO variants, and Global serializability is guaranteed (<em>sufficient condition</em> for Global serializability; and Global one-copy-serializability (1SER), for a case when a multi-version database exists).</li>
+<li>If only local (to a database system) concurrency control information is utilized by every database system (each has the <em>generalized autonomy</em> property, a generalization of <em>autonomy</em>), then compliance of each with some (any) CO variant property (VO compliance) is a <em>necessary condition</em> for guaranteeing Global serializability (and Global 1SER; otherwise they may be violated).</li>
+<li>Furthermore, in such environment data-access-locking related global deadlocks are resolved automatically (each such deadlock is generated by a global cycle in the <em>augmented conflict graph</em> (i.e., a <em>voting deadlock</em>; see above), involving at least one data-access lock (non-materialized conflict) and two database systems; thus, not a cycle in the regular conflict graph and does not affect serializability).</li>
+</ol>
+<h2 id="references">References</h2>
+<ul>
+<li>
+
+<p>(also DEC-TR 841, <a href="Digital_Equipment_Corporation" title="wikilink">Digital Equipment Corporation</a>, November 1990)</p></li>
+</ul>
+<ul>
+<li></li>
+</ul>
+<ul>
+<li></li>
+</ul>
+<ul>
+<li></li>
+</ul>
+<ul>
+<li><cite id="Raz1991a">Yoav Raz (1991a): US patents [<a class="uri" href="http://patft1.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&amp;Sect2">http://patft1.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&amp;Sect2;</a>;=HITOFF&amp;p;=1&amp;u;=%2Fnetahtml%2FPTO%2Fsearch-bool.html&amp;r;=3&amp;f;=G&amp;l;=50&amp;co1;=AND&amp;d;=PTXT&amp;s1;=%22commitment+ordering%22.TI.&amp;OS;=TTL/ 5,504,899 (ECO)] [<a class="uri" href="http://patft1.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&amp;Sect2">http://patft1.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&amp;Sect2;</a>;=HITOFF&amp;p;=1&amp;u;=%2Fnetahtml%2FPTO%2Fsearch-bool.html&amp;r;=2&amp;f;=G&amp;l;=50&amp;co1;=AND&amp;d;=PTXT&amp;s1;=%22commitment+ordering%22.TI.&amp;OS;=TTL/ 5,504,900 (CO)] [<a class="uri" href="http://patft1.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&amp;Sect2">http://patft1.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&amp;Sect2;</a>;=HITOFF&amp;p;=1&amp;u;=%2Fnetahtml%2FPTO%2Fsearch-bool.html&amp;r;=1&amp;f;=G&amp;l;=50&amp;co1;=AND&amp;d;=PTXT&amp;s1;=%22commitment+ordering%22.TI.&amp;OS;=TTL/ 5,701,480 (MVCO)] </cite></li>
+</ul>
+<ul>
+<li><cite id="Raz1991b">Yoav Raz (1991b): "The Commitment Order Coordinator (COCO) of a Resource Manager, or Architecture for Distributed Commitment Ordering Based Concurrency Control", DEC-TR 843, Digital Equipment Corporation, December 1991. </cite></li>
+</ul>
+<ul>
+<li><cite id="Raz1991c">Yoav Raz (1991c): "Locking Based Strict Commitment Ordering, or How to improve Concurrency in Locking Based Resource Managers", DEC-TR 844, December 1991. </cite></li>
+</ul>
+<ul>
+<li><cite id="Raz1993a">Yoav Raz (1993a): <a href="http://portal.acm.org/citation.cfm?id=153858">"Extended Commitment Ordering or Guaranteeing Global Serializability by Applying Commitment Order Selectivity to Global Transactions."</a> <em>Proceedings of the Twelfth ACM Symposium on Principles of Database Systems</em> (PODS), Washington, DC, pp. 83-96, May 1993. (also DEC-TR 842, November 1991) </cite></li>
+</ul>
+<ul>
+<li><cite id="Raz1993b">Yoav Raz (1993b): <a href="http://ieeexplore.ieee.org/xpl/freeabs_all.jsp?arnumber=281924">"Commitment Ordering Based Distributed Concurrency Control for Bridging Single and Multi Version Resources."</a> <em>Proceedings of the Third IEEE International Workshop on Research Issues on Data Engineering: Interoperability in Multidatabase Systems</em> (RIDE-IMS), Vienna, Austria, pp. 189-198, April 1993. (also DEC-TR 853, July 1992) </cite></li>
+</ul>
+<h2 id="footnotes">Footnotes</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://sites.google.com/site/yoavraz2/the_principle_of_co">Yoav Raz's Commitment ordering page</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Data_management" title="wikilink">Category:Data management</a> <a class="uri" href="Category:Databases" title="wikilink">Category:Databases</a> <a href="Category:Transaction_processing" title="wikilink">Category:Transaction processing</a> <a href="Category:Concurrency_control" title="wikilink">Category:Concurrency control</a> <a href="Category:Distributed_algorithms" title="wikilink">Category:Distributed algorithms</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Alan Fekete, <a href="Nancy_Lynch" title="wikilink">Nancy Lynch</a>, Michael Merritt, William Weihl (1988): [<a class="uri" href="http://www.dtic.mil/cgi-bin/GetTRDoc?AD=ADA200980&amp;Location">http://www.dtic.mil/cgi-bin/GetTRDoc?AD=ADA200980&amp;Location;</a>;=U2&amp;doc;=GetTRDoc.pdf <em>Commutativity-based locking for nested transactions</em> (PDF)] MIT, LCS lab, Technical report MIT/LCS/TM-370, August 1988.<a href="#fnref1">↩</a></li>
+<li id="fn2"></li>
+<li id="fn3"><a href="Phil_Bernstein" title="wikilink">Philip A. Bernstein</a>, Eric Newcomer (2009): <a href="http://www.elsevierdirect.com/product.jsp?isbn=9781558606234"><em>Principles of Transaction Processing</em>, 2nd Edition</a>, Morgan Kaufmann (Elsevier), June 2009, ISBN 978-1-55860-623-4 (pages 145, 360)<a href="#fnref3">↩</a></li>
+<li id="fn4"></li>
+<li id="fn5">Hany E. Ramadan, Indrajit Roy, Maurice Herlihy, Emmett Witchel (2009): <a href="http://portal.acm.org/citation.cfm?id=1504201">"Committing conflicting transactions in an STM"</a> (<a href="http://www.cs.utexas.edu/~indrajit/pubs/ppopp121-ramadan.pdf">PDF</a>) <em>Proceedings of the 14th ACM SIGPLAN symposium on Principles and practice of parallel programming</em> (PPoPP '09), ISBN 978-1-60558-397-6<a href="#fnref5">↩</a></li>
+<li id="fn6">Lingli Zhang, Vinod K.Grover, Michael M. Magruder, David Detlefs, John Joseph Duffy, Goetz Graefe (2006): <a href="http://www.freepatentsonline.com/7711678.html">Software transaction commit order and conflict management</a> United States Patent 7711678, Granted 05/04/2010.<a href="#fnref6">↩</a></li>
+<li id="fn7">Christoph von Praun, Luis Ceze, Calin Cascaval (2007) <a href="http://portal.acm.org/citation.cfm?id=1229443">"Implicit Parallelism with Ordered Transactions"</a> (<a href="http://www.cs.washington.edu/homes/luisceze/publications/ipot_ppopp07.pdf">PDF</a>), <em>Proceedings of the 12th ACM SIGPLAN symposium on Principles and practice of parallel programming</em> (PPoPP '07), ACM New York ©2007, ISBN 978-1-59593-602-8 doi 10.1145/1229428.1229443<a href="#fnref7">↩</a></li>
+<li id="fn8">Robert Kallman, Hideaki Kimura, Jonathan Natkins, Andrew Pavlo, Alex Rasin, <a href="Stanley_Zdonik" title="wikilink">Stanley Zdonik</a>, Evan Jones, Yang Zhang, Samuel Madden, <a href="Michael_Stonebraker" title="wikilink">Michael Stonebraker</a>, John Hugg, Daniel Abadi (2008): <a href="http://portal.acm.org/citation.cfm?id=1454211">"H-Store: A High-Performance, Distributed Main Memory Transaction Processing System"</a>, <em>Proceedings of the 2008 VLDB</em>, pages 1496 - 1499, Auckland, New-Zealand, August 2008.<a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10">Michael J. Cahill, Uwe Röhm, Alan D. Fekete (2008): <a href="http://portal.acm.org/citation.cfm?id=1376690">"Serializable isolation for snapshot databases"</a>, <em>Proceedings of the 2008 ACM SIGMOD international conference on Management of data</em>, pp. 729-738, Vancouver, Canada, June 2008, ISBN 978-1-60558-102-6 (SIGMOD 2008 best paper award<a href="#fnref10">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

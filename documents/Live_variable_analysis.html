@@ -1,0 +1,725 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1048">Live variable analysis</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Live variable analysis</h1>
+<hr/>
+
+<p>In <a href="compiler_theory" title="wikilink">compiler theory</a>, <strong>live variable analysis</strong> (or simply <strong>liveness analysis</strong>) is a classic <a href="data-flow_analysis" title="wikilink">data-flow analysis</a> performed by <a href="compiler" title="wikilink">compilers</a> to calculate for each program point the <a href="Variable_(programming)" title="wikilink">variables</a> that may be potentially read before their next write, that is, the variables that are <em>live</em> at the exit from each program point.</p>
+
+<p>Stated simply: a variable is <strong>live</strong> if it holds a value that may be needed in the future.</p>
+
+<p>Recently , various program analyses such as live variable analysis have been solved using <a class="uri" href="Datalog" title="wikilink">Datalog</a>. The Datalog specifications for such analyses are generally an order of magnitude shorter than their imperative counterparts (e.g. <a href="iterative_analysis" title="wikilink">iterative analysis</a>), and are at least as efficient.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h2 id="example">Example</h2>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><code>
+ L1: b := 3;
+ L2: c := 5;
+ L3: a := f(b + c);
+ goto L1;
+</code></p></td>
+</tr>
+</tbody>
+</table>
+
+<p>The set of live variables at line L3 is {<code>b</code>, <code>c</code>} because both are used in the addition, and thereby the call to <code>f</code> and assignment to <code>a</code>. But the set of live variables at line L1 is only {<code>b</code>} since variable <code>c</code> is updated in L2. The value of variable <code>a</code> is never used. Note that <code>f</code> may be stateful, so the never-live assignment to <code>a</code> can be eliminated, but there is insufficient information to rule on the entirety of <code>L3</code>.</p>
+<h2 id="expression-in-terms-of-dataflow-equations">Expression in terms of dataflow equations</h2>
+
+<p>Liveness analysis is a "backwards may" analysis. The analysis is done in a backwards order, and the dataflow <a href="confluence_operator" title="wikilink">confluence operator</a> is <a href="set_union" title="wikilink">set union</a>.</p>
+
+<p>The dataflow equations used for a given basic block <em>s</em> and exiting block <em>f</em> in live variable analysis are the following:</p>
+
+<p>
+
+<math display="block" id="Live_variable_analysis:0">
+ <semantics>
+  <mrow>
+   <mtext>GEN</mtext>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>s</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <mtext>GEN</mtext>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <ci>s</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mbox{GEN}}[s]
+  </annotation>
+ </semantics>
+</math>
+
+: The set of variables that are used in s before any assignment.</p>
+
+<p>
+
+<math display="block" id="Live_variable_analysis:1">
+ <semantics>
+  <mrow>
+   <mtext>KILL</mtext>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>s</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <mtext>KILL</mtext>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <ci>s</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mbox{KILL}}[s]
+  </annotation>
+ </semantics>
+</math>
+
+: The set of variables that are assigned a value in s (in many books, KILL (s) is also defined as the set of variables assigned a value in s <em>before any use</em>, but this doesn't change the solution of the dataflow equation):</p>
+
+<p>
+
+<math display="block" id="Live_variable_analysis:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mtext>LIVE</mtext>
+     <mrow>
+      <mi>i</mi>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>s</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mtext>GEN</mtext>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mi>s</mi>
+      <mo stretchy="false">]</mo>
+     </mrow>
+    </mrow>
+    <mo>∪</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mrow>
+       <msub>
+        <mtext>LIVE</mtext>
+        <mrow>
+         <mi>o</mi>
+         <mi>u</mi>
+         <mi>t</mi>
+        </mrow>
+       </msub>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>s</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+      </mrow>
+      <mo>-</mo>
+      <mrow>
+       <mtext>KILL</mtext>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>s</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <mtext>LIVE</mtext>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>s</ci>
+     </apply>
+    </apply>
+    <apply>
+     <union></union>
+     <apply>
+      <times></times>
+      <mtext>GEN</mtext>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>s</ci>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <mtext>LIVE</mtext>
+        <apply>
+         <times></times>
+         <ci>o</ci>
+         <ci>u</ci>
+         <ci>t</ci>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>s</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <mtext>KILL</mtext>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>s</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mbox{LIVE}}_{in}[s]={\mbox{GEN}}[s]\cup({\mbox{LIVE}}_{out}[s]-{\mbox{KILL}}%
+[s])
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Live_variable_analysis:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mtext>LIVE</mtext>
+     <mrow>
+      <mi>o</mi>
+      <mi>u</mi>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mrow>
+      <mi>f</mi>
+      <mi>i</mi>
+      <mi>n</mi>
+      <mi>a</mi>
+      <mi>l</mi>
+     </mrow>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mi mathvariant="normal">∅</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <mtext>LIVE</mtext>
+      <apply>
+       <times></times>
+       <ci>o</ci>
+       <ci>u</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>i</ci>
+       <ci>n</ci>
+       <ci>a</ci>
+       <ci>l</ci>
+      </apply>
+     </apply>
+    </apply>
+    <emptyset></emptyset>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mbox{LIVE}}_{out}[final]={\emptyset}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Live_variable_analysis:4">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mtext>LIVE</mtext>
+     <mrow>
+      <mi>o</mi>
+      <mi>u</mi>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>s</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munder>
+     <mo largeop="true" mathsize="160%" movablelimits="false" stretchy="false" symmetric="true">⋃</mo>
+     <mrow>
+      <mi>p</mi>
+      <mo>∈</mo>
+      <mrow>
+       <mi>s</mi>
+       <mi>u</mi>
+       <mi>c</mi>
+       <mi>c</mi>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>S</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </munder>
+    <mrow>
+     <msub>
+      <mtext>LIVE</mtext>
+      <mrow>
+       <mi>i</mi>
+       <mi>n</mi>
+      </mrow>
+     </msub>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mi>p</mi>
+      <mo stretchy="false">]</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <mtext>LIVE</mtext>
+      <apply>
+       <times></times>
+       <ci>o</ci>
+       <ci>u</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>s</ci>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <union></union>
+      <apply>
+       <in></in>
+       <ci>p</ci>
+       <apply>
+        <times></times>
+        <ci>s</ci>
+        <ci>u</ci>
+        <ci>c</ci>
+        <ci>c</ci>
+        <apply>
+         <csymbol cd="latexml">delimited-[]</csymbol>
+         <ci>S</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <mtext>LIVE</mtext>
+       <apply>
+        <times></times>
+        <ci>i</ci>
+        <ci>n</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>p</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mbox{LIVE}}_{out}[s]=\bigcup_{p\in succ[S]}{\mbox{LIVE}}_{in}[p]
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Live_variable_analysis:5">
+ <semantics>
+  <mrow>
+   <mtext>GEN</mtext>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>d</mi>
+    <mo>:</mo>
+    <mi>y</mi>
+    <mo>←</mo>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>x</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">⋯</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>x</mi>
+      <mi>n</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <msub>
+     <mi>x</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <mtext>GEN</mtext>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <csymbol cd="unknown">d</csymbol>
+     <ci>normal-:</ci>
+     <csymbol cd="unknown">y</csymbol>
+     <ci>normal-←</ci>
+     <csymbol cd="unknown">f</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-,</ci>
+      <ci>normal-⋯</ci>
+      <ci>normal-,</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>n</ci>
+      </apply>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+    <eq></eq>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>normal-}</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mbox{GEN}}[d:y\leftarrow f(x_{1},\cdots,x_{n})]=\{x_{1},...,x_{n}\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Live_variable_analysis:6">
+ <semantics>
+  <mrow>
+   <mtext>KILL</mtext>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>d</mi>
+    <mo>:</mo>
+    <mi>y</mi>
+    <mo>←</mo>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>x</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">⋯</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>x</mi>
+      <mi>n</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mi>y</mi>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <mtext>KILL</mtext>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <csymbol cd="unknown">d</csymbol>
+     <ci>normal-:</ci>
+     <csymbol cd="unknown">y</csymbol>
+     <ci>normal-←</ci>
+     <csymbol cd="unknown">f</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-,</ci>
+      <ci>normal-⋯</ci>
+      <ci>normal-,</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>n</ci>
+      </apply>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+    <eq></eq>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <csymbol cd="unknown">y</csymbol>
+     <ci>normal-}</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mbox{KILL}}[d:y\leftarrow f(x_{1},\cdots,x_{n})]=\{y\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The in-state of a block is the set of variables that are live at the start of the block. Its out-state is the set of variables that are live at the end of it. The out-state is the union of the in-states of the block's successors. The transfer function of a statement is applied by making the variables that are written dead, then making the variables that are read live.</p>
+<h2 id="second-example">Second example</h2>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><code>// in: {}</code><br/>
+<code>b1: a = 3; </code><br/>
+<code>    b = 5;</code><br/>
+<code>    d = 4;</code><br/>
+<code>    x = 100; //x is never being used later thus not in the out set {a,b,d}</code><br/>
+<code>    if a &gt; b then</code><br/>
+<code>// out: {a,b,d}    //union of all (in) successors of b1 =&gt; b2: {a,b}, and b3:{b,d}  </code><br/>
+<code>// in: {a,b}</code><br/>
+<code>b2: c = a + b;</code><br/>
+<code>    d = 2;</code><br/>
+<code>// out: {b,d}</code><br/>
+<code>// in: {b,d}</code><br/>
+<code>b3: endif</code><br/>
+<code>    c = 4;</code><br/>
+<code>    return b * d + c;</code><br/>
+<code>// out:{}</code></p></td>
+</tr>
+</tbody>
+</table>
+
+<p>The in-state of b3 only contains <em>b</em> and <em>d</em>, since <em>c</em> has been written. The out-state of b1 is the union of the in-states of b2 and b3. The definition of <em>c</em> in b2 can be removed, since <em>c</em> is not live immediately after the statement.</p>
+
+<p>Solving the data flow equations starts with initializing all in-states and out-states to the empty set. The work list is initialized by inserting the exit point (b3) in the work list (typical for backward flow). Its computed in-state differs from the previous one, so its predecessors b1 and b2 are inserted and the process continues. The progress is summarized in the table below.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>processing</p></th>
+<th style="text-align: left;">
+<p>out-state</p></th>
+<th style="text-align: left;">
+<p>old in-state</p></th>
+<th style="text-align: left;">
+<p>new in-state</p></th>
+<th style="text-align: left;">
+<p>work list</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>b3</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{b,d}</p></td>
+<td style="text-align: left;">
+<p>(b1,b2)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>b1</p></td>
+<td style="text-align: left;">
+<p>{b,d}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>(b2)</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>b2</p></td>
+<td style="text-align: left;">
+<p>{b,d}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{a,b}</p></td>
+<td style="text-align: left;">
+<p>(b1)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>b1</p></td>
+<td style="text-align: left;">
+<p>{a,b,d}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>{}</p></td>
+<td style="text-align: left;">
+<p>()</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>Note that b1 was entered in the list before b2, which forced processing b1 twice (b1 was re-entered as predecessor of b2). Inserting b2 before b1 would have allowed earlier completion.</p>
+
+<p>Initializing with the empty set is an optimistic initialization: all variables start out as dead. Note that the out-states cannot shrink from one iteration to the next, although the out-state can be smaller than the in-state. This can be seen from the fact that after the first iteration the out-state can only change by a change of the in-state. Since the in-state starts as the empty set, it can only grow in further iterations.</p>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Compiler_optimizations" title="wikilink">Category:Compiler optimizations</a> <a href="Category:Data-flow_analysis" title="wikilink">Category:Data-flow analysis</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

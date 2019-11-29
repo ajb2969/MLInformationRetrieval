@@ -1,0 +1,402 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="45">Bcrypt</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Bcrypt</h1>
+<hr/>
+
+<p><strong>bcrypt</strong> is a <a href="key_derivation_function" title="wikilink">key derivation function</a> for <a href="password" title="wikilink">passwords</a> designed by <a href="Niels_Provos" title="wikilink">Niels Provos</a> and <a href="David_Mazières" title="wikilink">David Mazières</a>, based on the <a href="Blowfish_(cipher)" title="wikilink">Blowfish</a> cipher, and presented at <a class="uri" href="USENIX" title="wikilink">USENIX</a> in 1999.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Besides incorporating a <a href="Salt_(cryptography)" title="wikilink">salt</a> to protect against <a href="rainbow_table" title="wikilink">rainbow table</a> attacks, bcrypt is an adaptive function: over time, the iteration count can be increased to make it slower, so it remains resistant to <a href="brute-force_search" title="wikilink">brute-force search</a> attacks even with increasing computation power.</p>
+
+<p>The bcrypt function is the default password hash algorithm for BSD and many other systems. The prefix "$2a$" or "$2b$" (or "$2y$") in a hash string in a <a href="shadow_password" title="wikilink">shadow password</a> file indicates that hash string is a bcrypt hash in modular crypt format.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> The rest of the hash string includes the cost parameter, a 128-bit salt (base-64 encoded as 22 characters), and 184 bits of the resulting hash value (base-64 encoded as 31 characters).<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>For example <code>$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy</code> uses 10 rounds, has <code>N9qo8uLOickgx2ZMRZoMye</code> as salt and the resulting hash is <code>IjZAgcfl7p92ldGxad68LJZdL17lhWy</code>.</p>
+
+<p>Blowfish is notable among block ciphers for its expensive key setup phase. It starts off with subkeys in a standard state, then uses this state to perform a block encryption using part of the key, and uses the result of that encryption (which is more accurately a hashing) to replace some of the subkeys. Then it uses this modified state to encrypt another part of the key, and uses the result to replace more of the subkeys. It proceeds in this fashion, using a progressively modified state to hash the key and replace bits of state, until all subkeys have been set.</p>
+
+<p>Provos and Mazières took advantage of this, and took it further. They developed a new key setup algorithm for Blowfish, dubbing the resulting cipher "Eksblowfish" ("expensive key schedule Blowfish"). The key setup begins with a modified form of the standard Blowfish key setup, in which both the salt and password are used to set all subkeys. There are then a number of rounds in which the standard Blowfish keying algorithm is applied, using alternately the salt and the password as the key, each round starting with the subkey state from the previous round. Cryptotheoretically, this is no stronger than the standard Blowfish key schedule, but the number of rekeying rounds is configurable; this process can therefore be made arbitrarily slow, which helps deter brute-force attacks upon the hash or salt.</p>
+
+<p>The iteration count is a power of two, which is an input to the algorithm. The number is encoded in the textual result.</p>
+
+<p>There are implementations of bcrypt for Ruby, Python, C, C#, Perl, PHP, Java, JavaScript, and other languages.</p>
+<h2 id="algorithm">Algorithm</h2>
+
+<p>The bcrypt algorithm depends heavily on its "Eksblowfish" key setup algorithm, which runs as follows:</p>
+
+<p><code>EksBlowfishSetup(</code><em><code>cost</code></em><code>, </code><em><code>salt</code></em><code>, </code><em><code>key</code></em><code>)</code><br/>
+<code>    </code><em><code>state</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:0">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> InitState()</code><br/>
+<code>    </code><em><code>state</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:1">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> ExpandKey(</code><em><code>state</code></em><code>, </code><em><code>salt</code></em><code>, </code><em><code>key</code></em><code>)</code><br/>
+<code>    </code><strong><code>repeat</code></strong><code> (2</code><sup><em><code>cost</code></em></sup><code>)</code><br/>
+<code>        </code><em><code>state</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:2">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> ExpandKey(state, 0, key)</code><br/>
+<code>        </code><em><code>state</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:3">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+
+<code> ExpandKey(state, 0, salt)</code><br/>
+<code>    </code><strong><code>return</code></strong><code> </code><em><code>state</code></em></p>
+
+<p>InitState works as in the original Blowfish algorithm, populating the P-array and S-box entries with the fractional part of 
+
+<math display="inline" id="Bcrypt:4">
+ <semantics>
+  <mi>π</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>π</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \pi
+  </annotation>
+ </semantics>
+</math>
+
+ in hexadecimal.</p>
+
+<p>The ExpandKey function does the following:</p>
+
+<p><code>ExpandKey(</code><em><code>state</code></em><code>, </code><em><code>salt</code></em><code>, </code><em><code>key</code></em><code>)</code><br/>
+<code>    for(</code><em><code>n</code></em><code> = 1..18)</code><br/>
+<code>        P</code><sub><code>n</code></sub><code> </code>
+
+<math display="inline" id="Bcrypt:5">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> </code><em><code>key</code></em><code>[32(n-1)..32n-1] </code>
+
+<math display="inline" id="Bcrypt:6">
+ <semantics>
+  <mo>⊕</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">direct-sum</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \oplus
+  </annotation>
+ </semantics>
+</math>
+
+<code> P</code><sub><code>n</code></sub><code> //treat the key as cyclic</code><br/>
+<code>    </code><em><code>ctext</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:7">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> Encrypt(</code><em><code>salt</code></em><code>[0..63])</code><br/>
+<code>    P</code><sub><code>1</code></sub><code> </code>
+
+<math display="inline" id="Bcrypt:8">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+
+<code> </code><em><code>ctext</code></em><code>[0..31]</code><br/>
+<code>    P</code><sub><code>2</code></sub><code> </code>
+
+<math display="inline" id="Bcrypt:9">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> </code><em><code>ctext</code></em><code>[32..63]</code><br/>
+<code>    for(</code><em><code>n</code></em><code> = 2..9)</code><br/>
+<code>        </code><em><code>ctext</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:10">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> Encrypt(</code><em><code>ctext</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:11">
+ <semantics>
+  <mo>⊕</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">direct-sum</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \oplus
+  </annotation>
+ </semantics>
+</math>
+
+<code> </code><em><code>salt</code></em><code>[64(n-1)..64n-1]) //encrypt using the current key schedule and treat the salt as cyclic</code><br/>
+<code>        P</code><sub><code>2n-1)</code></sub><code> </code>
+
+<math display="inline" id="Bcrypt:12">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> </code><em><code>ctext</code></em><code>[0..31]</code><br/>
+<code>        P</code><sub><code>2n</code></sub><code> </code>
+
+<math display="inline" id="Bcrypt:13">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+
+<code> </code><em><code>ctext</code></em><code>[32..63]</code><br/>
+<code>    for(</code><em><code>i</code></em><code> = 1..4)</code><br/>
+<code>        for(</code><em><code>n</code></em><code> = 0..127)</code><br/>
+<code>            </code><em><code>ctext</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:14">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> Encrypt(</code><em><code>ctext</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:15">
+ <semantics>
+  <mo>⊕</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">direct-sum</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \oplus
+  </annotation>
+ </semantics>
+</math>
+
+<code> </code><em><code>salt</code></em><code>[64(n-1)..64n-1]) //as above</code><br/>
+<code>            S</code><sub><code>i</code></sub><code>[2n] </code>
+
+<math display="inline" id="Bcrypt:16">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> </code><em><code>ctext</code></em><code>[0..31]</code><br/>
+<code>            S</code><sub><code>i</code></sub><code>[2n+1] </code>
+
+<math display="inline" id="Bcrypt:17">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> </code><em><code>ctext</code></em><code>[32..63]</code><br/>
+<code>    </code><strong><code>return</code></strong><code> </code><em><code>state</code></em></p>
+
+<p>Hence, <code>ExpandKey(''state'', 0, ''key'')</code> is the same as regular Blowfish key schedule since all XORs with the all-zero salt value are ineffectual. <code>ExpandKey(''state'', 0, ''salt'')</code> is similar, but uses the salt as a 128-bit key.</p>
+
+<p>The full bcrypt algorithm utilizes these functions to compute a hash from a given input derived from the password, as follows:</p>
+
+<p><code>bcrypt(</code><em><code>cost</code></em><code>, </code><em><code>salt</code></em><code>, </code><em><code>input</code></em><code>)</code><br/>
+<code>    </code><em><code>state</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:18">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+
+<code> EksBlowfishSetup(</code><em><code>cost</code></em><code>, </code><em><code>salt</code></em><code>, </code><em><code>input</code></em><code>)</code><br/>
+<code>    </code><em><code>ctext</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:19">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> "OrpheanBeholderScryDoubt" //three 64-bit blocks</code><br/>
+<code>    </code><strong><code>repeat</code></strong><code> (64)</code><br/>
+<code>        </code><em><code>ctext</code></em><code> </code>
+
+<math display="inline" id="Bcrypt:20">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+<code> EncryptECB(</code><em><code>state</code></em><code>, </code><em><code>ctext</code></em><code>) //encrypt using standard Blowfish in ECB mode</code><br/>
+<code>    </code><strong><code>return</code></strong><code> Concatenate(</code><em><code>cost</code></em><code>, </code><em><code>salt</code></em><code>, </code><em><code>ctext</code></em><code>)</code></p>
+<h2 id="user-input">User input</h2>
+
+<p>Many implementations of bcrypt truncate the password to the first 72 bytes.</p>
+
+<p>The mathematical algorithm itself requires initialization with 18 32-bit subkeys (equivalent to 72 octets/bytes). The original specification<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> of bcrypt does not mandate any one particular method for mapping text-based passwords from <a href="User_space" title="wikilink">userland</a> into numeric values for the algorithm. One brief comment in the text mentions, but does not mandate, the possibility of simply using the ASCII encoded value of a character string, "Finally, the key argument is a secret encryption key, which can be a user-chosen password of up to 56 bytes (including a terminating zero byte when the key is an ASCII string)."</p>
+
+<p>Note that the quote above mentions passwords "up to 56 bytes" even though the algorithm itself makes use of a 72 byte initial value. Although Provos and Mazières do not state the reason for the shorter restriction, they may have been motivated by the following statement from Bruce Schneier's original specification of Blowfish,<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> "The 448 [bit] limit on the key size ensures that the[sic] every bit of every subkey depends on every bit of the key."</p>
+
+<p>Implementations have varied in their approach of converting passwords into initial numeric values, including sometimes reducing the strength of passwords containing special characters. <small>See e.g. <a href="http://www.mindrot.org/files/jBCrypt/internat.adv">Feb 1, 2010 jBCrypt security advisory</a> or <a href="http://php.net/security/crypt_blowfish.php">Changes in CRYPT_BLOWFISH in PHP 5.3.7</a>.</small></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Crypt_(C)#Blowfish-based_scheme" title="wikilink">crypt - password storage and verification scheme - Blowfish</a></li>
+<li><a class="uri" href="scrypt" title="wikilink">scrypt</a></li>
+<li><a href="Key_stretching" title="wikilink">Key stretching</a></li>
+<li><a href="PBKDF2" title="wikilink">PBKDF2 (Password-Based Key Derivation Function 2)</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://bcrypt.sourceforge.net">bcrypt file encryption program homepage</a> - <strong>bcrypt</strong> is also the name of a cross-<a href="Platform_(computing)" title="wikilink">platform</a> file <a class="uri" href="encryption" title="wikilink">encryption</a> utility implementing the <a href="Blowfish_(cipher)" title="wikilink">Blowfish</a> <a class="uri" href="cipher" title="wikilink">cipher</a>, developed in 2002.</li>
+</ul>
+
+<p>"</p>
+
+<p><a class="uri" href="Category:Cryptography" title="wikilink">Category:Cryptography</a> <a href="Category:Cryptographic_software" title="wikilink">Category:Cryptographic software</a> <a href="Category:Computer_access_control_protocols" title="wikilink">Category:Computer access control protocols</a> <a href="Category:Key_derivation_functions" title="wikilink">Category:Key derivation functions</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2">passlib. <a href="http://pythonhosted.org/passlib/modular_crypt_format.html">"Modular Crypt Format"</a>.<a href="#fnref2">↩</a></li>
+<li id="fn3">passlib. <a href="http://pythonhosted.org/passlib/lib/passlib.hash.bcrypt.html">"BCrypt"</a>.<a href="#fnref3">↩</a></li>
+<li id="fn4"></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

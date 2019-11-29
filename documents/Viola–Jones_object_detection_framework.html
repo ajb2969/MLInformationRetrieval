@@ -1,0 +1,1364 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1396">Viola–Jones object detection framework</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Viola–Jones object detection framework</h1>
+<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</body></html>
+<body>
+<hr/>
+
+<p>The <strong>Viola–Jones object detection framework</strong> is the first <a href="object_detection" title="wikilink">object detection</a> framework to provide competitive object detection rates in real-time proposed in 2001 by <a href="Paul_Viola" title="wikilink">Paul Viola</a> and Michael Jones.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> Although it can be trained to detect a variety of object classes, it was motivated primarily by the problem of <a href="face_detection" title="wikilink">face detection</a>. This algorithm is implemented in <a class="uri" href="OpenCV" title="wikilink">OpenCV</a> as <code>cvHaarDetectObjects()</code>.</p>
+<h2 id="problem-description">Problem description</h2>
+
+<p>The basic problem to be solved is to implement an algorithm for detection of faces in an image. This can be solved easily by humans. However there is a task contrast to how difficult it actually is to make a computer successfully solve this task. In order to ease the task Viola–Jones limit themselves to full view frontal upright faces. That is, in order to be detected the entire face must point towards the camera and it should not be tilted to any side. This may compromise the requirement for being unconstrained a little bit, but considering that the detection algorithm most often will be succeeded by a recognition algorithm these demands seem quite reasonable.</p>
+<h2 id="components-of-the-framework">Components of the framework</h2>
+<figure><b>(Figure)</b>
+<figcaption>Feature types used by Viola and Jones</figcaption>
+</figure>
+<h3 id="feature-types-and-evaluation">Feature types and evaluation</h3>
+
+<p>The main characteristics of Viola–Jones algorithm which makes it a good detection algorithm are:</p>
+<ul>
+<li>Robust – very high detection rate (true-positive rate) &amp; very low false-positive rate always.</li>
+<li>Real time – For practical applications at least 2 frames per second must be processed.</li>
+<li>Face detection and not recognition - The goal is to distinguish faces from non-faces (face detection is the first step in the identification process)</li>
+</ul>
+
+<p>The algorithm has mainly 4 stages:</p>
+<ol>
+<li>Haar Features Selection</li>
+<li>Creating Integral Image</li>
+<li>Adaboost Training algorithm</li>
+<li>Cascaded Classifiers</li>
+</ol>
+
+<p>The features employed by the detection framework universally involve the sums of image pixels within rectangular areas. As such, they bear some resemblance to <a href="Haar-like_features" title="wikilink">Haar basis functions</a>, which have been used previously in the realm of image-based object detection.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> However, since the features used by Viola and Jones all rely on more than one rectangular area, they are generally more complex. The figure at right illustrates the four different types of features used in the framework. The value of any given feature is always simply the sum of the pixels within clear rectangles subtracted from the sum of the pixels within shaded rectangles. As is to be expected, rectangular features of this sort are rather primitive when compared to alternatives such as <a href="steerable_filter" title="wikilink">steerable filters</a>. Although they are sensitive to vertical and horizontal features, their feedback is considerably coarser.</p>
+
+<p> </p>
+
+<p>1. Haar Features – All human faces share some similar properties. This knowledge is used to construct certain features known as <strong>Haar Features</strong>.</p>
+
+<p>The properties that are similar for a human face are:</p>
+<ul>
+<li>The eyes region is darker than the upper-cheeks.</li>
+<li>The nose bridge region is brighter than the eyes.</li>
+</ul>
+
+<p>That is useful domain knowledge:</p>
+<ul>
+<li>Location - Size: eyes &amp; nose bridge region</li>
+<li>Value: darker / brighter</li>
+</ul>
+
+<p>The four features applied in this algorithm are applied onto a face and shown on the left.</p>
+
+<p>Rectangle features:</p>
+<ul>
+<li>Value = Σ (pixels in black area) - Σ (pixels in white area)</li>
+<li>Three types: two-, three-, four-rectangles, Viola &amp; Jones used two-rectangle features</li>
+<li>For example: the difference in brightness between the white &amp;black; rectangles over a specific area</li>
+<li>Each feature is related to a special location in the sub-window</li>
+</ul>
+
+<p>However, with the use of an image representation called the <a href="summed_area_table" title="wikilink">integral image</a>, rectangular features can be evaluated in <em>constant</em> time, which gives them a considerable speed advantage over their more sophisticated relatives. Because each rectangular area in a feature is always adjacent to at least one other rectangle, it follows that any two-rectangle feature can be computed in six array references, any three-rectangle feature in eight,and any four-rectangle feature in just ten.</p>
+
+<p>The integral image at location (x,y), is the sum of the pixels above and to the left of (x,y), inclusive.</p>
+<h3 id="learning-algorithm">Learning algorithm</h3>
+
+<p>The speed with which features may be evaluated does not adequately compensate for their number, however. For example, in a standard 24x24 pixel sub-window, there are a total of 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:0">
+ <semantics>
+  <mrow>
+   <mi>M</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>162</mn>
+    <mo>,</mo>
+    <mn>336</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>M</ci>
+    <list>
+     <cn type="integer">162</cn>
+     <cn type="integer">336</cn>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M=162,336
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> possible features, and it would be prohibitively expensive to evaluate them all when testing an image. Thus, the object detection framework employs a variant of the learning algorithm <a class="uri" href="AdaBoost" title="wikilink">AdaBoost</a> to both select the best features and to train classifiers that use them. This algorithm constructs a “strong” classifier as a linear combination of weighted simple “weak” classifiers.</p>
+
+<p>
+
+<math display="inline" id="Viola–Jones_object_detection_framework:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>h</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mtext>sign</mtext>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>j</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>M</mi>
+      </msubsup>
+      <mrow>
+       <msub>
+        <mi>α</mi>
+        <mi>j</mi>
+       </msub>
+       <msub>
+        <mi>h</mi>
+        <mi>j</mi>
+       </msub>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>𝐱</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>h</ci>
+     <ci>𝐱</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <mtext>sign</mtext>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>M</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <ci>j</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>h</ci>
+        <ci>j</ci>
+       </apply>
+       <ci>𝐱</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(\mathbf{x})=\text{sign}\left(\sum_{j=1}^{M}\alpha_{j}h_{j}(\mathbf{x})\right)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Each weak classifier is a threshold function based on the feature 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:2">
+ <semantics>
+  <msub>
+   <mi>f</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>f</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f_{j}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>
+
+<math display="inline" id="Viola–Jones_object_detection_framework:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>h</mi>
+     <mi>j</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>{</mo>
+    <mtable>
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mo>-</mo>
+        <msub>
+         <mi>s</mi>
+         <mi>j</mi>
+        </msub>
+       </mrow>
+      </mtd>
+      <mtd columnalign="left">
+       <mrow>
+        <mrow>
+         <mtext>if</mtext>
+         <msub>
+          <mi>f</mi>
+          <mi>j</mi>
+         </msub>
+        </mrow>
+        <mo><</mo>
+        <msub>
+         <mi>θ</mi>
+         <mi>j</mi>
+        </msub>
+       </mrow>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="left">
+       <msub>
+        <mi>s</mi>
+        <mi>j</mi>
+       </msub>
+      </mtd>
+      <mtd columnalign="left">
+       <mtext>otherwise</mtext>
+      </mtd>
+     </mtr>
+    </mtable>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>h</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>𝐱</ci>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">cases</csymbol>
+     <apply>
+      <minus></minus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>s</ci>
+       <ci>j</ci>
+      </apply>
+     </apply>
+     <apply>
+      <lt></lt>
+      <apply>
+       <times></times>
+       <mtext>if</mtext>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>f</ci>
+        <ci>j</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>θ</ci>
+       <ci>j</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>j</ci>
+     </apply>
+     <mtext>otherwise</mtext>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h_{j}(\mathbf{x})=\begin{cases}-s_{j}&\text{if }f_{j}<\theta_{j}\\
+s_{j}&\text{otherwise}\end{cases}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The threshold value 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:4">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ and the polarity 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:5">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>∈</mo>
+   <mrow>
+    <mo>±</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">plus-or-minus</csymbol>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{j}\in\pm 1
+  </annotation>
+ </semantics>
+</math>
+
+ are determined in the training, as well as the coefficients 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:6">
+ <semantics>
+  <msub>
+   <mi>α</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>α</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha_{j}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Here a simplified version of the learning algorithm is reported:<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+
+<p><strong>Input:</strong> Set of 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:7">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+ positive and negative training images with their labels 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:8">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <msup>
+    <mi>𝐱</mi>
+    <mi>i</mi>
+   </msup>
+   <mo>,</mo>
+   <msup>
+    <mi>y</mi>
+    <mi>i</mi>
+   </msup>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open">
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>𝐱</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <ci>i</ci>
+    </apply>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {(\mathbf{x}^{i},y^{i})}
+  </annotation>
+ </semantics>
+</math>
+
+. If image 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:9">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+ is a face 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:10">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>y</mi>
+    <mi>i</mi>
+   </msup>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <ci>i</ci>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y^{i}=1
+  </annotation>
+ </semantics>
+</math>
+
+, if not 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:11">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>y</mi>
+    <mi>i</mi>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y^{i}=-1
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<ol>
+<li>Initialization: assign a weight 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:12">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>w</mi>
+    <mn>1</mn>
+    <mi>i</mi>
+   </msubsup>
+   <mo>=</mo>
+   <mfrac>
+    <mn>1</mn>
+    <mi>N</mi>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>w</ci>
+      <ci>i</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w^{i}_{1}=\frac{1}{N}
+  </annotation>
+ </semantics>
+</math>
+
+ to each image 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:13">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+<li>For each feature 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:14">
+ <semantics>
+  <msub>
+   <mi>f</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>f</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ with 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:15">
+ <semantics>
+  <mrow>
+   <mi>j</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mi>M</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>j</ci>
+    <list>
+     <cn type="integer">1</cn>
+     <ci>normal-…</ci>
+     <ci>M</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j=1,...,M
+  </annotation>
+ </semantics>
+</math>
+
+
+<ol>
+<li>Renormalize the weights such that they sum to one.</li>
+<li>Apply the feature to each image in the training set, then find the optimal threshold and polarity 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:16">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>θ</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>s</mi>
+    <mi>j</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>θ</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>j</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{j},s_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ that minimizes the weighted classification error. That is 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:17">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>s</mi>
+     <mi>j</mi>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>arg</mi>
+     <mpadded width="+2.8pt">
+      <msub>
+       <mi>min</mi>
+       <mrow>
+        <mi>θ</mi>
+        <mo>,</mo>
+        <mi>s</mi>
+       </mrow>
+      </msub>
+     </mpadded>
+    </mrow>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>N</mi>
+     </msubsup>
+     <mrow>
+      <msubsup>
+       <mi>w</mi>
+       <mi>j</mi>
+       <mi>i</mi>
+      </msubsup>
+      <msubsup>
+       <mi>ε</mi>
+       <mi>j</mi>
+       <mi>i</mi>
+      </msubsup>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>j</ci>
+     </apply>
+    </list>
+    <apply>
+     <times></times>
+     <apply>
+      <arg></arg>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <min></min>
+       <list>
+        <ci>θ</ci>
+        <ci>s</ci>
+       </list>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>w</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>j</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>ε</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>j</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{j},s_{j}=\arg\min_{\theta,s}\;\sum_{i=1}^{N}w^{i}_{j}\varepsilon^{i}_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ where <math>\varepsilon^i_{j} =</math></li>
+</ol></li>
+</ol>
+
+<p>\begin{cases} 0 &amp;\text{if }y^i = h_j(\mathbf{x}^i,\theta_j,s_j)\\ 1 &amp;\text{otherwise} \end{cases} </p>
+<ol>
+<li><ol>
+<li>Assign a weight 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:18">
+ <semantics>
+  <msub>
+   <mi>α</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>α</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:19">
+ <semantics>
+  <msub>
+   <mi>h</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>h</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ that is inversely proportional to the error rate. In this way best classifiers are considered more.</li>
+<li>The weights for the next iteration, i.e. 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:20">
+ <semantics>
+  <msubsup>
+   <mi>w</mi>
+   <mrow>
+    <mi>j</mi>
+    <mo>+</mo>
+    <mn>1</mn>
+   </mrow>
+   <mi>i</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>w</ci>
+     <apply>
+      <plus></plus>
+      <ci>j</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{j+1}^{i}
+  </annotation>
+ </semantics>
+</math>
+
+, are reduced for the images 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:21">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+ that were correctly classified.</li>
+</ol></li>
+<li>Set the final classifier to 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>h</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mtext>sign</mtext>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>j</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>M</mi>
+      </msubsup>
+      <mrow>
+       <msub>
+        <mi>α</mi>
+        <mi>j</mi>
+       </msub>
+       <msub>
+        <mi>h</mi>
+        <mi>j</mi>
+       </msub>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>𝐱</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>h</ci>
+     <ci>𝐱</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <mtext>sign</mtext>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>M</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <ci>j</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>h</ci>
+        <ci>j</ci>
+       </apply>
+       <ci>𝐱</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(\mathbf{x})=\text{sign}\left(\sum_{j=1}^{M}\alpha_{j}h_{j}(\mathbf{x})\right)
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+</ol>
+<h3 id="cascade-architecture">Cascade architecture</h3>
+<ul>
+<li>On average only 0.01% of all sub-windows are positive (faces)</li>
+<li>Equal computation time is spent on all sub-windows</li>
+<li>Must spend most time only on potentially positive sub-windows.</li>
+<li>A simple 2-feature classifier can achieve almost 100% detection rate with 50% FP rate.</li>
+<li>That classifier can act as a 1st layer of a series to filter out most negative windows</li>
+<li>2nd layer with 10 features can tackle “harder” negative-windows which survived the 1st layer, and so on…</li>
+<li>A cascade of gradually more complex classifiers achieves even better detection rates.The evaluation of the strong classifiers generated by the learning process can be done quickly, but it isn’t fast enough to run in real-time. For this reason, the strong classifiers are arranged in a cascade in order of complexity, where each successive classifier is trained only on those selected samples which pass through the preceding classifiers. If at any stage in the cascade a classifier rejects the sub-window under inspection, no further processing is performed and continue on searching the next sub-window (see figure at right). The cascade therefore has the form of a degenerate tree. In the case of faces, the first classifier in the cascade – called the attentional operator – uses only two features to achieve a false negative rate of approximately 0% and a false positive rate of 40%.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> The effect of this single classifier is to reduce by roughly half the number of times the entire cascade is evaluated.</li>
+</ul>
+
+<p>In cascading, each stage consists of a strong classifier. So all the features are grouped into several stages where each stage has certain number of features.</p>
+
+<p>The job of each stage is to determine whether a given sub-window is definitely not a face or may be a face. A given sub-window is immediately discarded as not a face if it fails in any of the stages.</p>
+
+<p>A simple framework for cascade training is given below:</p>
+<ul>
+<li>User selects values for f, the maximum acceptable false positive rate per layer and d, the minimum acceptable detection rate per layer.</li>
+<li>User selects target overall false positive rate Ftarget.</li>
+<li>P = set of positive examples</li>
+<li>N = set of negative examples</li>
+<li>F(0) = 1.0; D(0) = 1.0; i = 0</li>
+</ul>
+<pre><code> while F(i) &gt; Ftarget
+     i++
+     n(i) = 0; F(i)= F(i-1)
+
+     while F(I) &gt; f x F(i-1)
+      - n(i) ++
+      - use P and N to train a classifier with n(I) features using AdaBoost
+      - Evaluate current cascaded classifier on validation set to determine F(i) &amp; D(i)
+      - decrease threshold for the ith classifier until the current cascaded classifier has a detection rate of at least d x D(i-1) (this also affects F(i))
+      - N = ∅
+      - If F(i) &gt; Ftarget then evaluate the current cascaded detector on the set of non-face images and put any false detections into the set N.</code></pre>
+
+<p>The cascade architecture has interesting implications for the performance of the individual classifiers. Because the activation of each classifier depends entirely on the behavior of its predecessor, the false positive rate for an entire cascade is:</p>
+
+<p>
+
+<math display="block" id="Viola–Jones_object_detection_framework:23">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>F</mi>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>K</mi>
+     </munderover>
+     <msub>
+      <mi>f</mi>
+      <mi>i</mi>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>F</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>K</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>f</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F=\prod_{i=1}^{K}f_{i}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Similarly, the detection rate is:</p>
+
+<p>
+
+<math display="block" id="Viola–Jones_object_detection_framework:24">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>D</mi>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>K</mi>
+     </munderover>
+     <msub>
+      <mi>d</mi>
+      <mi>i</mi>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>D</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>K</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>d</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D=\prod_{i=1}^{K}d_{i}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Thus, to match the false positive rates typically achieved by other detectors, each classifier can get away with having surprisingly poor performance. For example, for a 32-stage cascade to achieve a false positive rate of 
+
+<math display="inline" id="Viola–Jones_object_detection_framework:25">
+ <semantics>
+  <msup>
+   <mn>10</mn>
+   <mrow>
+    <mo>-</mo>
+    <mn>6</mn>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <cn type="integer">10</cn>
+    <apply>
+     <minus></minus>
+     <cn type="integer">6</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   10^{-6}
+  </annotation>
+ </semantics>
+</math>
+
+, each classifier need only achieve a false positive rate of about 65%. At the same time, however, each classifier needs to be exceptionally capable if it is to achieve adequate detection rates. For example, to achieve a detection rate of about 90%, each classifier in the aforementioned cascade needs to achieve a detection rate of approximately 99.7%. </p>
+<h2 id="advantages-of-violajones-algorithm">Advantages of Viola–Jones algorithm</h2>
+<ul>
+<li>Extremely fast feature computation</li>
+<li>Efficient feature selection</li>
+<li>Scale and location invariant detector</li>
+<li>Instead of scaling the image itself (e.g. pyramid-filters), we scale the features.</li>
+<li>Such a generic detection scheme can be trained for detection of other types of objects (e.g. cars, hands)</li>
+</ul>
+<h2 id="disadvantages-of-violajones-algorithm">Disadvantages of Viola–Jones algorithm</h2>
+<ul>
+<li>Detector is most effective only on frontal images of faces</li>
+<li>It can hardly cope with 45° face rotation both around the vertical and horizontal axis.</li>
+<li>Sensitive to lighting conditions</li>
+<li>We might get multiple detections of the same face, due to overlapping sub-windows.</li>
+</ul>
+<figure><b>(Figure)</b>
+<figcaption>Detected Face using the cascadeObjectDetector function in MATLAB. This function uses the Viola–Jones algorithm to detect faces</figcaption>
+</figure>
+<h2 id="matlab-code-for-using-the-cascadeobjectdetector-function-with-webcam">MATLAB code for using the cascadeObjectDetector() function with webcam</h2>
+<div class="sourceCode"><pre class="sourceCode matlab"><code class="sourceCode matlab">clear all
+vid = videoinput(<span class="st">'winvideo'</span>, <span class="fl">1</span>, <span class="st">'YUY2_640x480'</span>); <span class="co">% Giving the framesize</span>
+vid.ReturnedColorSpace = <span class="st">'RGB'</span>; <span class="co">% Mentioning RGB format</span>
+vid.TriggerRepeat = Inf; <span class="co">% Triggers the camera repeatedly</span>
+vid.FrameGrabInterval = <span class="fl">1</span>; <span class="co">% Time between successive frames</span>
+start(vid); <span class="co">% Starts capturing video</span>
+detector = vision.CascadeObjectDetector(); <span class="co">% Create a detector using Viola-Jones</span>
+while true <span class="co">% Infinite loop to continuously detect the face</span>
+    img = flipdim(getdata(vid, <span class="fl">1</span>), <span class="fl">2</span>); <span class="co">% Flips the image horizontally</span>
+    imshow(img); hold on; <span class="co">% Displays image</span>
+    bbox = step(detector, img); <span class="co">% Creating bounding box using detector</span>
+    if ~ isempty(bbox)
+        for i=<span class="fl">1</span>:size(bbox,<span class="fl">1</span>)
+            rectangle(<span class="st">'position'</span>, bbox(i, :), <span class="st">'lineWidth'</span>, <span class="fl">2</span>, <span class="st">'edgeColor'</span>, <span class="st">'y'</span>);
+        end
+    end <span class="co">% Draws a yellow rectangle around the detected face</span>
+    flushdata(vid);
+    hold off;
+end</code></pre></div>
+<h2 id="matlab-code-for-using-the-cascadeobjectdetector-function-on-pictures">MATLAB code for using the cascadeObjectDetector() function on pictures</h2>
+<div class="sourceCode"><pre class="sourceCode matlab"><code class="sourceCode matlab">function [ ] = Viola_Jones_img( Img )
+<span class="co">%Viola_Jones_img( Img )</span>
+<span class="co">% Img - input image</span>
+<span class="co">% Example how to call function: Viola_Jones_img(imread('name_of_the_picture.jpg'))</span>
+
+faceDetector = vision.CascadeObjectDetector;
+bboxes = step(faceDetector, Img);
+figure, imshow(Img), title(<span class="st">'Detected faces'</span>);hold on
+for i=<span class="fl">1</span>:size(bboxes,<span class="fl">1</span>)
+    rectangle(<span class="st">'Position'</span>,bboxes(i,:),<span class="st">'LineWidth'</span>,<span class="fl">2</span>,<span class="st">'EdgeColor'</span>,<span class="st">'y'</span>);
+end
+end</code></pre></div>
+<h2 id="related-face-detection-and-tracking-algorithm">Related face detection and tracking algorithm</h2>
+
+<p>The algorithm that is similar to Viola–Jones but can detect and track even tilted and rotated faces is the KLT algorithm. Here the feature points are detected by scanning the face initially. Thereafter, the face can be detected and tracked even when the face is tilted and further away from the camera, which is not possible in case of Viola–Jones algorithm.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+<h2 id="improvements-over-the-violajones-algorithm">Improvements over the Viola–Jones algorithm</h2>
+
+<p>An improved algorithm on Viola–Jones object detector<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+
+<p><strong>MATLAB implementation of Viola–Jones algorithm</strong><a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+
+<p><strong>OpenCV implementation of Viola–Jones algorithm</strong></p>
+
+<p>Haar Cascade Detection in OpenCV<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>Cascade Classifier Training in OpenCV<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+
+<p><strong>Citations of the Viola–Jones algorithm in Google Scholar</strong><a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+
+<p>Implementing the Viola–Jones Face Detection Algorithm by Ole Helvig Jensen<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+
+<p>Adaboost Explanation from ppt by Qing Chen, Discovery Labs, University of Ottawa and a video lecture by Ramsri Goutham.</p>
+
+<p>Video link - <a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a></p>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.mathworks.com/matlabcentral/fileexchange/29437-viola-jones-object-detection">MATLAB implementation Viola–Jones detection</a></li>
+<li><a href="http://www.slideshare.net/wolf/avihu-efrats-viola-and-jones-face-detection-slides/">Slides Presenting the Framework</a></li>
+<li><a href="http://mathworld.wolfram.com/HaarFunction.html">Information Regarding Haar Basis Functions</a></li>
+<li><a href="https://sites.google.com/site/leeplus/publications/learningsurfcascadeforfastandaccurateobjectdetection">Extension of Viola–Jones framework using SURF feature</a></li>
+<li><a href="http://www.burgsys.com/mumi-image-mining-community.php">IMMI - Rapidminer Image Mining Extension</a> - open-source tool for image mining</li>
+<li><a href="Wikipedia:WikiProject_Computer_Vision" title="wikilink">Wikipedia:WikiProject Computer Vision</a></li>
+<li><a href="http://www.vision.caltech.edu/html-files/EE148-2005-Spring/pprs/viola04ijcv.pdf">Robust Real-Time Face Detection</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Object_recognition_and_categorization" title="wikilink">Category:Object recognition and categorization</a> <a href="Category:Face_recognition" title="wikilink">Category:Face recognition</a> <a href="Category:Articles_with_example_code" title="wikilink">Category:Articles with example code</a> <a href="Category:Articles_with_example_MATLAB/Octave_code" title="wikilink">Category:Articles with example MATLAB/Octave code</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.10.6807">Rapid object detection using a boosted cascade of simple features</a><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.110.4868">Viola, Jones: Robust Real-time Object Detection, IJCV 2001</a> See pages 1,3.<a href="#fnref2">↩</a></li>
+<li id="fn3">C. Papageorgiou, M. Oren and T. Poggio. A General Framework for Object Detection. <em>International Conference on Computer Vision</em>, 1998<a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="http://stackoverflow.com/questions/1707620/viola-jones-face-detection-claims-180k-features">Viola-Jones’ face detection claims 180k features</a><a href="#fnref4">↩</a></li>
+<li id="fn5">R. Szeliski, <em>Computer Vision, algorithms and applications</em>, Springer<a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="http://research.microsoft.com/~viola/Pubs/Detect/violaJones_IJCV.pdf">Viola, Jones: Robust Real-time Object Detection, IJCV 2001</a> See page 11.<a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="http://in.mathworks.com/help/vision/examples/face-detection-and-tracking-using-the-klt-algorithm.html">Face Detection and Tracking using the KLT algorithm</a><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="http://ieeexplore.ieee.org/xpl/articleDetails.jsp?arnumber=6269796">Improved algorithm than Viola–Jones</a><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="http://in.mathworks.com/help/vision/ref/vision.cascadeobjectdetector-class.html">MATLAB implementation of Viola–Jones algorithm</a><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="http://docs.opencv.org/trunk/doc/py_tutorials/py_objdetect/py_face_detection/py_face_detection.html">OpenCV Implementation of Viola–Jones</a><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="http://docs.opencv.org/doc/user_guide/ug_traincascade.html">Cascade Classifier Training in OpenCV</a><a href="#fnref11">↩</a></li>
+<li id="fn12">[<a class="uri" href="http://scholar.google.com/citations?view_op=view_citation&amp;hl">http://scholar.google.com/citations?view_op=view_citation&amp;hl;</a>;=en&amp;user;=G2-nFaIAAAAJ&amp;citation;_for_view=G2-nFaIAAAAJ:u5HHmVD_uO8C Citations of the Viola–Jones algorithm in Google Scholar]<a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="http://etd.dtu.dk/thesis/223656/ep08_93.pdf">Implementing Viola–Jones</a><a href="#fnref13">↩</a></li>
+<li id="fn14"><a href="http://www.youtube.com/watch?v=WfdYYNamHZ8">Video lecture on Viola–Jones algorithm</a><a href="#fnref14">↩</a></li>
+</ol>
+</section>
+</body>
+

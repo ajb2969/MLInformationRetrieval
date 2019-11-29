@@ -1,0 +1,917 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="146">Monte Carlo method for photon transport</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Monte Carlo method for photon transport</h1>
+<hr>Modeling photon propagation with [[Monte Carlo method]]s is a flexible yet rigorous approach to simulate photon transport. In the method, local rules of photon transport are expressed as probability distributions which describe the step size of photon movement between sites of photon-tis
+<p>sue interaction and the angles of deflection in a photon's trajectory when a scattering event occurs. This is equivalent to modeling photon transport analytically by the <a href="Radiative_transfer_equation_and_diffusion_theory_for_photon_transport_in_biological_tissue" title="wikilink">radiative transfer equation</a> (RTE), which describes the motion of photons using a differential equation. However, closed-form solutions of the RTE are often not possible; for some geometries, the <a href="Radiative_transfer_equation_and_diffusion_theory_for_photon_transport_in_biological_tissue" title="wikilink">diffusion approximation</a> can be used to simplify the RTE, although this, in turn, introduces many inaccuracies, especially near sources and boundaries. In contrast, Monte Carlo simulations can be made arbitrarily accurate by increasing the number of photons traced. For example, see the movie, where a Monte Carlo simulation of a <a href="pencil_beam" title="wikilink">pencil beam</a> incident on a <a class="uri" href="semi-infinite" title="wikilink">semi-infinite</a> medium models both the initial ballistic photon flow and the later diffuse propagation.</p>
+
+<p>The Monte Carlo method is necessarily statistical and therefore requires significant computation time to achieve precision. In addition Monte Carlo simulations can keep track of multiple physical quantities simultaneously, with any desired spatial and temporal resolution. This flexibility makes Monte Carlo modeling a powerful tool. Thus, while computationally inefficient, Monte Carlo methods are often considered the standard for simulated measurements of photon transport for many biomedical applications. </p>
+<h2 id="biomedical-applications-of-monte-carlo-methods">Biomedical applications of Monte Carlo methods</h2>
+<h3 id="biomedical-imaging">Biomedical imaging</h3>
+
+<p>The optical properties of biological tissue offer an exciting approach to biomedical imaging. There are many interesting endogenous contrasts, including absorption from blood and melanin and scattering from nerve cells and cancer cell nuclei. In addition, fluorescent probes can be targeted to many different tissues. Microscopy techniques (including <a href="Confocal_microscopy" title="wikilink">confocal</a>, <a href="Two-photon_excitation_microscopy" title="wikilink">two-photon</a>, and <a href="optical_coherence_tomography" title="wikilink">optical coherence tomography</a>) have the ability to image these properties with high spatial resolution, but, since they rely on ballistic photons, their depth penetration is limited to a few millimeters. Imaging deeper into tissues, where photons have been multiply scattered, requires a deeper understanding of the statistical behavior of large numbers of photons in such an environment. Monte Carlo methods provide a flexible framework that has been used by different techniques to reconstruct optical properties deep within tissue. A brief introduction to a few of these techniques is presented here.</p>
+<ul>
+<li><a href="Photoacoustic_imaging_in_biomedicine" title="wikilink">Photoacoustic tomography</a> In PAT, diffuse laser light is absorbed which generates a local temperature rise. This local temperature variation in turn generates ultrasound waves via thermoelastic expansion which are detected via an ultrasonic transducer. In practice, a variety of setup parameters are varied (i.e. light wavelength, transducer numerical aperture) and as a result Monte Carlo modeling is a valuable tool for predicting tissue response prior to experimental methods.</li>
+<li><a href="Diffuse_optical_imaging" title="wikilink">Diffuse optical tomography</a> DOT is an imaging technique that uses an array of near-infrared light sources and detectors to measure optical properties of biological tissues. A variety of contrasts can be measured including the absorption due to oxy- and deoxy-hemoglobin (for functional neuro-imaging or cancer detection) and the concentration of fluorescent probes. In order to reconstruct an image, one must know the manner in which light traveled from a given source to a given detector and how the measurement depends on the distribution and changes in the optical properties (known as the forward model). Due to the highly scattering nature of biological tissue, such paths are complicated and the sensitivity functions are diffuse. The forward model is often generated using Monte Carlo methods.</li>
+</ul>
+<h3 id="radiation-therapy">Radiation therapy</h3>
+
+<p>The goal of <a href="radiation_therapy" title="wikilink">radiation therapy</a> is to deliver energy, generally in the form of ionizing radiation, to cancerous tissue while sparing the surrounding normal tissue. Monte Carlo modeling is commonly employed in radiation therapy to determine the peripheral dose the patient will experience due to scattering, both from the patient tissue as well as scattering from collimation upstream in the linear accelerator.</p>
+<h3 id="photodynamic-therapy">Photodynamic therapy</h3>
+
+<p>In <a href="Photodynamic_therapy" title="wikilink">Photodynamic therapy</a> (PDT) light is used to activate chemotherapy agents. Due to the nature of PDT, it is useful to use Monte Carlo methods for modeling scattering and absorption in the tissue in order to ensure appropriate levels of light are delivered to activate chemotherapy agents.</p>
+<h2 id="implementation-of-photon-transport-in-a-scattering-medium">Implementation of photon transport in a scattering medium</h2>
+
+<p>Presented here is a model of a photon Monte Carlo method in a homogeneous infinite medium. The model is easily extended for multi-layered media, however. For an inhomogeneous medium, boundaries must be considered. In addition for a semi-infinite medium (in which photons are considered lost if they exit the top boundary), special consideration must be taken. For more information, please visit the links at the bottom of the page. We will solve the problem using an infinitely small point source (represented analytically as a <a href="Dirac_delta_function" title="wikilink">Dirac delta function</a> in space and time). Responses to arbitrary source geometries can be constructed using the method of <a href="Green's_functions" title="wikilink">Green's functions</a> (or <a class="uri" href="convolution" title="wikilink">convolution</a>, if enough spatial symmetry exists). The required parameters are the <a href="absorption_coefficient" title="wikilink">absorption coefficient</a>, the scattering coefficient, and the scattering phase function. (If boundaries are considered the index of refraction for each medium must also be provided.) Time-resolved responses are found by keeping track of the total elapsed time of the photon's flight using the <a href="optical_path_length" title="wikilink">optical path length</a>. Responses to sources with arbitrary time profiles can then be modeled through convolution in time.</p>
+
+<p>In our simplified model we use the following variance reduction technique to reduce computational time. Instead of propagating photons individually, we create a photon packet with a specific weight (generally initialized as unity). As the photon interacts in the turbid medium, it will deposit weight due to absorption and the remaining weight will be scattered to other parts of the medium. Any number of variables can be logged along the way, depending on the interest of a particular application. Each photon packet will repeatedly undergo the following numbered steps until it is either terminated, reflected, or transmitted. The process is diagrammed in the schematic to the right. Any number of photon packets can be launched and modeled, until the resulting simulated measurements have the desired signal-to-noise ratio. Note that as Monte Carlo modeling is a statistical process involving random numbers, we will be using the variable ξ throughout as a <a href="Pseudorandom_number_generator" title="wikilink">pseudo-random number</a> for many calculations.</p>
+<h3 id="step-1-launching-a-photon-packet">Step 1: Launching a photon packet</h3>
+
+<p>In our model, we are ignoring initial specular reflectance associated with entering a medium that is not refractive index matched. With this in mind, we simply need to set the initial position of the photon packet as well as the initial direction. It is convenient to use a global coordinate system. We will use three <a href="Cartesian_coordinate_system" title="wikilink">Cartesian coordinates</a> to determine position, along with three <a href="Unit_vector" title="wikilink">direction cosines</a> to determine the direction of propagation. The initial start conditions will vary based on application, however for a pencil beam initialized at the origin, we can set the initial position and direction cosines as follows (isotropic sources can easily be modeled by randomizing the initial direction of each packet):</p>
+
+<p>
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:0">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle x
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+<h3 id="step-2-step-size-selection-and-photon-packet-movement">Step 2: Step size selection and photon packet movement</h3>
+
+<p>The step size, <em>s</em>, is the distance the photon packet travels between interaction sites. There are a variety of methods for step size selection. Below is a basic form of photon step size selection (derived using the <a href="Inverse_transform_sampling" title="wikilink">inverse distribution method</a> and the <a href="Beer–Lambert_law" title="wikilink">Beer–Lambert law</a>) from which we use for our homogeneous model:</p>
+
+<p>
+
+<math display="block" id="Monte_Carlo_method_for_photon_transport:1">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mfrac>
+     <mrow>
+      <mi>ln</mi>
+      <mi>ξ</mi>
+     </mrow>
+     <msub>
+      <mi>μ</mi>
+      <mi>t</mi>
+     </msub>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>s</ci>
+    <apply>
+     <minus></minus>
+     <apply>
+      <divide></divide>
+      <apply>
+       <ln></ln>
+       <ci>ξ</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>μ</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s=-\frac{\ln\xi}{\mu_{t}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:2">
+ <semantics>
+  <mi>ξ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ξ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \xi
+  </annotation>
+ </semantics>
+</math>
+
+ is a random number and 
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:3">
+ <semantics>
+  <msub>
+   <mi>μ</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>μ</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mu_{t}}
+  </annotation>
+ </semantics>
+</math>
+
+ is the total interaction coefficient (i.e., the sum of the absorption and scattering coefficients).</p>
+
+<p>Once a step size is selected, the photon packet is propagated by a distance <em>s</em> in a direction defined by the direction cosines. This is easily accomplished by simply updating the coordinates as follows:</p>
+
+<p>
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:4">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle x
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+<h3 id="step-3-absorption-and-scattering">Step 3: Absorption and scattering</h3>
+
+<p>A portion of the photon weight is absorbed at each interaction site. This fraction of the weight is determined as follows:</p>
+
+<p>
+
+<math display="block" id="Monte_Carlo_method_for_photon_transport:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi mathvariant="normal">Δ</mi>
+    <mi>W</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <msub>
+      <mi>μ</mi>
+      <mi>a</mi>
+     </msub>
+     <msub>
+      <mi>μ</mi>
+      <mi>t</mi>
+     </msub>
+    </mfrac>
+    <mi>W</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>normal-Δ</ci>
+     <ci>W</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>μ</ci>
+       <ci>a</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>μ</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <ci>W</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta W=\frac{\mu_{a}}{\mu_{t}}W
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:6">
+ <semantics>
+  <msub>
+   <mi>μ</mi>
+   <mi>a</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>μ</ci>
+    <ci>a</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\mu_{a}}
+  </annotation>
+ </semantics>
+</math>
+
+ is the absorption coefficient.</p>
+
+<p>The weight fraction can then be recorded in an array if an absorption distribution is of interest for the particular study. The weight of the photon packet must then be updated as follows:</p>
+
+<p>
+
+<math display="block" id="Monte_Carlo_method_for_photon_transport:7">
+ <semantics>
+  <mrow>
+   <mi>W</mi>
+   <mo>←</mo>
+   <mrow>
+    <mi>W</mi>
+    <mo>-</mo>
+    <mrow>
+     <mi mathvariant="normal">Δ</mi>
+     <mpadded width="+1.7pt">
+      <mi>W</mi>
+     </mpadded>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-←</ci>
+    <ci>W</ci>
+    <apply>
+     <minus></minus>
+     <ci>W</ci>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>W</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W\leftarrow W-\Delta W\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Following absorption, the photon packet is scattered. The weighted average of the cosine of the photon scattering angle is known as scattering anisotropy (<em>g</em>), which has a value between −1 and 1. If the optical anisotropy is 0, this generally indicates that the scattering is isotropic. If <em>g</em> approaches a value of 1 this indicates that the scattering is primarily in the forward direction. In order to determine the new direction of the photon packet (and hence the photon direction cosines), we need to know the scattering phase function. Often the Henyey-Greenstein phase function is used. Then the scattering angle, θ, is determined using the following formula.</p>
+
+<p>
+
+<math display="block" id="Monte_Carlo_method_for_photon_transport:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>cos</mi>
+    <mi>θ</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>{</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mstyle displaystyle="false">
+         <mfrac>
+          <mn>1</mn>
+          <mrow>
+           <mn>2</mn>
+           <mi>g</mi>
+          </mrow>
+         </mfrac>
+        </mstyle>
+        <mrow>
+         <mo>[</mo>
+         <mrow>
+          <mrow>
+           <mn>1</mn>
+           <mo>+</mo>
+           <msup>
+            <mi>g</mi>
+            <mn>2</mn>
+           </msup>
+          </mrow>
+          <mo>-</mo>
+          <msup>
+           <mrow>
+            <mo>(</mo>
+            <mstyle displaystyle="false">
+             <mfrac>
+              <mrow>
+               <mn>1</mn>
+               <mo>-</mo>
+               <msup>
+                <mi>g</mi>
+                <mn>2</mn>
+               </msup>
+              </mrow>
+              <mrow>
+               <mrow>
+                <mn>1</mn>
+                <mo>-</mo>
+                <mi>g</mi>
+               </mrow>
+               <mo>+</mo>
+               <mrow>
+                <mn>2</mn>
+                <mi>g</mi>
+                <mi>ξ</mi>
+               </mrow>
+              </mrow>
+             </mfrac>
+            </mstyle>
+            <mo>)</mo>
+           </mrow>
+           <mn>2</mn>
+          </msup>
+         </mrow>
+         <mo>]</mo>
+        </mrow>
+       </mrow>
+      </mtd>
+      <mtd columnalign="left">
+       <mrow>
+        <mrow>
+         <mtext>if</mtext>
+         <mi>g</mi>
+        </mrow>
+        <mo>≠</mo>
+        <mn>0</mn>
+       </mrow>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mn>1</mn>
+        <mo>-</mo>
+        <mrow>
+         <mn>2</mn>
+         <mi>ξ</mi>
+        </mrow>
+       </mrow>
+      </mtd>
+      <mtd columnalign="left">
+       <mrow>
+        <mrow>
+         <mtext>if</mtext>
+         <mi>g</mi>
+        </mrow>
+        <mo>=</mo>
+        <mn>0</mn>
+       </mrow>
+      </mtd>
+     </mtr>
+    </mtable>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <cos></cos>
+     <ci>θ</ci>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">cases</csymbol>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <ci>g</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <plus></plus>
+         <cn type="integer">1</cn>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>g</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <divide></divide>
+          <apply>
+           <minus></minus>
+           <cn type="integer">1</cn>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <ci>g</ci>
+            <cn type="integer">2</cn>
+           </apply>
+          </apply>
+          <apply>
+           <plus></plus>
+           <apply>
+            <minus></minus>
+            <cn type="integer">1</cn>
+            <ci>g</ci>
+           </apply>
+           <apply>
+            <times></times>
+            <cn type="integer">2</cn>
+            <ci>g</ci>
+            <ci>ξ</ci>
+           </apply>
+          </apply>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <neq></neq>
+      <apply>
+       <times></times>
+       <mtext>if</mtext>
+       <ci>g</ci>
+      </apply>
+      <cn type="integer">0</cn>
+     </apply>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <ci>ξ</ci>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <apply>
+       <times></times>
+       <mtext>if</mtext>
+       <ci>g</ci>
+      </apply>
+      <cn type="integer">0</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \cos\theta=\begin{cases}\frac{1}{2g}\left[1+g^{2}-\left(\frac{1-g^{2}}{1-g+2g%
+\xi}\right)^{2}\right]&\text{ if }g\neq 0\\
+1-2\xi&\text{ if }g=0\end{cases}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>And, the polar angle <em>φ</em> is generally assumed to be uniformly distributed between 0 and 
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:9">
+ <semantics>
+  <mrow>
+   <mn>2</mn>
+   <mi>π</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <cn type="integer">2</cn>
+    <ci>π</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   2\pi
+  </annotation>
+ </semantics>
+</math>
+
+. Based on this assumption, we can set:</p>
+
+<p>
+
+<math display="block" id="Monte_Carlo_method_for_photon_transport:10">
+ <semantics>
+  <mrow>
+   <mi>φ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>2</mn>
+    <mi>π</mi>
+    <mi>ξ</mi>
+    <mfrac>
+     <mi></mi>
+     <mi></mi>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>φ</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <ci>π</ci>
+     <ci>ξ</ci>
+     <apply>
+      <divide></divide>
+      <csymbol cd="latexml">absent</csymbol>
+      <csymbol cd="latexml">absent</csymbol>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varphi=2\pi\xi\frac{}{}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Based on these angles and the original direction cosines, we can find a new set of direction cosines. The new propagation direction can be represented in the global coordinate system as follows:</p>
+
+<p>
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:11">
+ <semantics>
+  <msubsup>
+   <mi>μ</mi>
+   <mi>x</mi>
+   <mo>′</mo>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>μ</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\mu^{\prime}_{x}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>For a special case</p>
+
+<p>
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:12">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>μ</mi>
+    <mi>z</mi>
+   </msub>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>μ</ci>
+     <ci>z</ci>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\mu_{z}=1
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>use</p>
+
+<p>
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:13">
+ <semantics>
+  <msubsup>
+   <mi>μ</mi>
+   <mi>x</mi>
+   <mo>′</mo>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>μ</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\mu^{\prime}_{x}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>or</p>
+
+<p>
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:14">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>μ</mi>
+    <mi>z</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>μ</ci>
+     <ci>z</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\mu_{z}=-1
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>use</p>
+
+<p>
+
+<math display="inline" id="Monte_Carlo_method_for_photon_transport:15">
+ <semantics>
+  <msubsup>
+   <mi>μ</mi>
+   <mi>x</mi>
+   <mo>′</mo>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>μ</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\mu^{\prime}_{x}
+  </annotation>
+ </semantics>
+</math>
+
+
+ C-code:</p>
+
+<p><code>/*********************** Indicatrix *********************</code><br/>
+<code>*New direction cosines after scattering by angle theta, fi.</code><br/>
+<code>*See </code><a href="http://en.wikipedia.org/wiki/Monte_Carlo_method_for_photon_transport"><code>http://en.wikipedia.org/wiki/Monte_Carlo_method_for_photon_transport</code></a><br/>
+<code>* mux new=(sin(theta)*(mux*muz*cos(fi)-muy*sin(fi)))/sqrt(1-muz^2)+mux*cos(theta)</code><br/>
+<code>* muy new=(sin(theta)*(muy*muz*cos(fi)+mux*sin(fi)))/sqrt(1-muz^2)+muy*cos(theta)</code><br/>
+<code>* muz new= - sqrt(1-muz^2)*sin(theta)*cos(fi)+muz*cos(theta)</code><br/>
+<code>*---------------------------------------------------------</code><br/>
+<code>*Input:</code><br/>
+<code>* muxs,muys,muzs - direction cosine before collision</code><br/>
+<code>* mutheta, fi - cosine of polar angle and the azimuthal angle</code><br/>
+<code>*---------------------------------------------------------</code><br/>
+<code>*Output:</code><br/>
+<code>*  muxd,muyd,muzd - direction cosine after collision</code><br/>
+<code>*---------------------------------------------------------</code><br/>
+<code>*/</code><br/>
+<code>void Indicatrix(double muxs, double muys, double muzs, double mutheta, double fi, double *muxd, double *muyd, double *muzd)</code><br/>
+<code>{</code><br/>
+<code> double costheta = mutheta;</code><br/>
+<code> double sintheta = sqrt(1.0-costheta*costheta); // sin(theta)</code><br/>
+<code> double sinfi = sin(fi);</code><br/>
+<code> double cosfi = cos(fi);</code><br/>
+<code> if (muzs == 1.0) {</code><br/>
+<code>   *muxd = sintheta*cosfi;</code><br/>
+<code>   *muyd = sintheta*sinfi;</code><br/>
+<code>   *muzd = costheta;</code><br/>
+<code> } elseif (muzs == -1.0) {</code><br/>
+<code>   *muxd = sintheta*cosfi;</code><br/>
+<code>   *muyd = -sintheta*sinfi;</code><br/>
+<code>   *muzd = -costheta;</code><br/>
+<code> } else {</code><br/>
+<code>   double denom = sqrt(1.0-muzs*muzs);</code><br/>
+<code>   double muzcosfi = muzs*cosfi;</code><br/>
+<code>   *muxd = sintheta*(muxs*muzcosfi-muys*sinfi)/denom + muxs*costheta;</code><br/>
+<code>   *muyd = sintheta*(muys*muzcosfi+muxs*sinfi)/denom + muys*costheta;</code><br/>
+<code>   *muzd = -denom*sintheta*cosfi + muzs*costheta;</code><br/>
+<code> }</code><br/>
+<code>}</code></p>
+<h3 id="step-4-photon-termination">Step 4: Photon termination</h3>
+
+<p>If a photon packet has experienced many interactions, for most applications the weight left in the packet is of little consequence. As a result it is necessary to determine a means for terminating photon packets of sufficiently small weight. A simple method would use a threshold, and if the weight of the photon packet is below the threshold, the packet is considered dead. The aforementioned method is limited as it does not conserve energy. To keep total energy constant, a <a href="Russian_roulette" title="wikilink">Russian roulette</a> technique is often employed for photons below a certain weight threshold. This technique uses a roulette constant <em>m</em> to determine whether or not the photon will survive. The photon packet has one chance in <em>m</em> to survive, in which case it will be given a new weight of <em>mW</em> where <em>W</em> is the initial weight (this new weight, on average, conserves energy). All other times, the photon weight is set to 0 and the photon is terminated. This is expressed mathematically below:</p>
+
+<p>
+
+<math display="block" id="Monte_Carlo_method_for_photon_transport:16">
+ <semantics>
+  <mrow>
+   <mi>W</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo>{</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mi>m</mi>
+        <mi>W</mi>
+       </mrow>
+      </mtd>
+      <mtd columnalign="left">
+       <mrow>
+        <mi>ξ</mi>
+        <mo>≤</mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <mi>m</mi>
+        </mrow>
+       </mrow>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="left">
+       <mn>0</mn>
+      </mtd>
+      <mtd columnalign="left">
+       <mrow>
+        <mi>ξ</mi>
+        <mo>></mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <mi>m</mi>
+        </mrow>
+       </mrow>
+      </mtd>
+     </mtr>
+    </mtable>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>W</ci>
+    <apply>
+     <csymbol cd="latexml">cases</csymbol>
+     <apply>
+      <times></times>
+      <ci>m</ci>
+      <ci>W</ci>
+     </apply>
+     <apply>
+      <leq></leq>
+      <ci>ξ</ci>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>m</ci>
+      </apply>
+     </apply>
+     <cn type="integer">0</cn>
+     <apply>
+      <gt></gt>
+      <ci>ξ</ci>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>m</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W=\begin{cases}mW&\xi\leq 1/m\\
+0&\xi>1/m\end{cases}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="graphics-processing-units-gpu-and-fast-monte-carlo-simulations-of-photon-transport">Graphics Processing Units (GPU) and fast Monte Carlo simulations of photon transport</h2>
+
+<p>Monte Carlo simulation of photon migration in turbid media is a highly parallelable problem, where a large number of photons are propagated independently, but according to identical rules and different random number sequences. The parallel nature of this special type of Monte Carlo simulation renders it highly suitable for execution on a graphics processing unit (GPU). The release of programmable GPUs started such a development, and since 2008 there have been a few reports on the use of GPU for high-speed Monte Carlo simulation of photon migration.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a><a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<h2 id="acceleration-of-monte-carlo-simulation-using-gpu-cluster">Acceleration of Monte Carlo simulation using GPU cluster</h2>
+
+<p>Monte Carlo simulation is of great significance in simulating the light propagation in tissues, which quantifies the light delivered to the treated tissue and is an important factor for improving clinical results. However, Monte Carlo simulation is very time-consuming because of the extensive computational burden. It limits the practical application of Monte Carlo method greatly. To improve the performance of Monte Carlo simulation for photon transport in turbid media, a new version of Monte Carlo program for simulation of light transport in multi-layered tissues is developed base on the GPU Cluster. it is called "GPU Cluster MCML" in simple words. It has the same function as Lihong Wang and Steven L. Jacques' "MCML" running on the CPU. In the "GPU Cluster MCML", Distributed Computing of GPU Clusters installed in different personal computers within a local area network (LAN) are employed to accelerating the simulation greatly.</p>
+
+<p>The executable for tests can be download from the website (Monte Carlo Simulation of Light Transport in Multi-layered Turbid Media Based on GPU Clusters): <a class="uri" href="http://bmp.hust.edu.cn/GPU_Cluster/GPU_Cluster_MCML.HTM">http://bmp.hust.edu.cn/GPU_Cluster/GPU_Cluster_MCML.HTM</a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Radiative_transfer_equation_and_diffusion_theory_for_photon_transport_in_biological_tissue" title="wikilink">Radiative transfer equation and diffusion theory for photon transport in biological tissue</a></li>
+<li><a href="Monte_Carlo_method" title="wikilink">Monte Carlo method</a></li>
+<li><a href="Convolution_for_optical_broad-beam_responses_in_scattering_media" title="wikilink">Convolution for optical broad-beam responses in scattering media</a></li>
+<li><a href="Monte_Carlo_methods_for_electron_transport" title="wikilink">Monte Carlo methods for electron transport</a></li>
+</ul>
+<h2 id="links-to-other-monte-carlo-resources">Links to other Monte Carlo resources</h2>
+<ul>
+<li><a href="http://labs.seas.wustl.edu/bme/Wang/mc.html">Optical Imaging Laboratory at Washington University in St. Louis (MCML)</a></li>
+<li><a href="http://omlc.ogi.edu/software/mc/">Oregon Medical Laser Center</a></li>
+<li><a href="http://www.atomic.physics.lu.se/biophotonics/our_research/monte_carlo_simulations/">Photon migration Monte Carlo research at Lund University, Sweden</a> GPU acceleration of Monte Carlo simulations and scalable Monte Carlo. Open source code for download.</li>
+<li><a href="http://biophotonics.otago.ac.nz/MCOnline.aspx">Biophotonics &amp; Biomedical Imaging Research Group, University of Otago, Dunedin, New Zealand</a> Online GPU-accelerated multipurpose Monte Carlo simulation tool for the needs of Biophotonics and Biomedical Optics. The tool is free to use in research and non-commercial activities.</li>
+<li><a href="http://scratchapixel.com/old/lessons/3d-basic-lessons/lesson-17-monte-carlo-methods-in-practice/monte-carlo-simulation-2/">Light Transport in Tissue as an Example of Monte Carlo Simulation (with C++ source code).</a></li>
+</ul>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+<h2 id="inline-references">Inline references</h2>
+
+<p>"</p>
+
+<p><a href="Category:Monte_Carlo_methods" title="wikilink">Category:Monte Carlo methods</a> <a class="uri" href="Category:Photonics" title="wikilink">Category:Photonics</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"></li>
+<li id="fn2"></li>
+<li id="fn3"></li>
+<li id="fn4"></li>
+</ol>
+</section>
+</hr></body>
+</html>

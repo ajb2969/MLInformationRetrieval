@@ -1,0 +1,4756 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="525">Constraint algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Constraint algorithm</h1>
+<hr/>
+
+<p>In <a href="computational_chemistry" title="wikilink">computational chemistry</a>, a <strong>constraint algorithm</strong> is a method for satisfying a Newtonian motion of a rigid which consists of mass points. By this algorithm, the distance between mass points is maintained constant. In general, the algorithm is constructed by following procedures; (i) choosing novel unconstrained coordinates (internal coordinates), (ii) introducing explicit constraint forces, (iii) minimizing constraint forces implicitly by the technique of <a href="Lagrange_multipliers" title="wikilink">Lagrange multipliers</a> or projection methods.</p>
+
+<p>Constraint algorithms are often applied to <a href="molecular_dynamics" title="wikilink">molecular dynamics</a> simulations. Although such simulations are sometimes performed using internal coordinates that automatically satisfy the bond-length, bond-angle and torsion-angle constraints, simulations may also be performed using explicit or implicit constraint forces for these three constraints. However, explicit constraint forces give a cause of the inefficient computation; more computational power is required to get a trajectory of a given length. Therefore, internal coordinates and implicit-force constraint solvers are generally preferred.</p>
+
+<p>Constraint algorithms achieve efficient computational time by neglecting motions of intramolecular atoms. If intramolecular behavior is important, e.g. hydrogen bonding and its behavior, constraint algorithms should not be used.</p>
+<h2 id="mathematical-background">Mathematical background</h2>
+
+<p>The motion of a set of <em>N</em> particles can be described by a set of second-order ordinary differential equations, Newton's second law, which can be written in matrix form</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝐌</mi>
+    <mo>⋅</mo>
+    <mfrac>
+     <mrow>
+      <msup>
+       <mi>d</mi>
+       <mn>2</mn>
+      </msup>
+      <mi>𝐪</mi>
+     </mrow>
+     <mrow>
+      <mi>d</mi>
+      <msup>
+       <mi>t</mi>
+       <mn>2</mn>
+      </msup>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mi>𝐟</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <mi>V</mi>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <mi>𝐪</mi>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <ci>normal-⋅</ci>
+      <ci>𝐌</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>d</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>𝐪</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>t</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <ci>𝐟</ci>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <minus></minus>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>V</ci>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>𝐪</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{M}\cdot\frac{d^{2}\mathbf{q}}{dt^{2}}=\mathbf{f}=-\frac{\partial V}{%
+\partial\mathbf{q}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where <strong>M</strong> is a <em>mass matrix</em> and <strong>q</strong> is the <a href="Vector_(geometric)" title="wikilink">vector</a> of <a href="generalized_coordinate" title="wikilink">generalized coordinates</a> that describe the particles' positions. For example, the vector <strong>q</strong> may be a <em>3N</em> Cartesian coordinates of the particle positions <strong>r</strong><sub><em>k</em></sub>, where <em>k</em> runs from 1 to <em>N</em>; in the absence of constraints, <strong>M</strong> would be the <em>3N</em>x<em>3N</em> diagonal square matrix of the particle masses. The vector <strong>f</strong> represents the generalized forces and the scalar <em>V</em>(<strong>q</strong>) represents the potential energy, both of which are functions of the generalized coordinates <strong>q</strong>.</p>
+
+<p>If <em>M</em> constraints are present, the coordinates must also satisfy <em>M</em> time-independent algebraic equations</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>g</mi>
+     <mi>j</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐪</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>g</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>𝐪</ci>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g_{j}(\mathbf{q})=0
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where the index <em>j</em> runs from 1 to <em>M</em>. For brevity, these functions <em>g</em><sub><em>i</em></sub> are grouped into an <em>M</em>-dimensional vector <strong>g</strong> below. The task is to solve the combined set of differential-algebraic (DAE) equations, instead of just the ordinary differential equations (ODE) of Newton's second law.</p>
+
+<p>This problem was studied in detail by <a href="Joseph_Louis_Lagrange" title="wikilink">Joseph Louis Lagrange</a>, who laid out most of the methods for solving it.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> The simplest approach is to define new generalized coordinates that are unconstrained; this approach eliminates the algebraic equations and reduces the problem once again to solving an ordinary differential equation. Such an approach is used, for example, in describing the motion of a rigid body; the position and orientation of a rigid body can be described by six independent, unconstrained coordinates, rather than describing the positions of the particles that make it up and the constraints among them that maintain their relative distances. The drawback of this approach is that the equations may become unwieldy and complex; for example, the mass matrix <strong>M</strong> may become non-diagonal and depend on the generalized coordinates.</p>
+
+<p>A second approach is to introduce explicit forces that work to maintain the constraint; for example, one could introduce strong spring forces that enforce the distances among mass points within a "rigid" body. The two difficulties of this approach are that the constraints are not satisfied exactly, and the strong forces may require very short time-steps, making simulations inefficient computationally.</p>
+
+<p>A third approach is to use a method such as <a href="Lagrange_multipliers" title="wikilink">Lagrange multipliers</a> or projection to the constraint manifold to determine the coordinate adjustments necessary to satisfy the constraints. Finally, there are various hybrid approaches in which different sets of constraints are satisfied by different methods, e.g., internal coordinates, explicit forces and implicit-force solutions.</p>
+<h2 id="internal-coordinate-methods">Internal coordinate methods</h2>
+
+<p>The simplest approach to satisfying constraints in energy minimization and molecular dynamics is to represent the mechanical system in so-called <em>internal coordinates</em> corresponding to unconstrained independent degrees of freedom of the system. For example, the dihedral angles of a protein are an independent set of coordinates that specify the positions of all the atoms without requiring any constraints. The difficulty of such internal-coordinate approaches is twofold: the Newtonian equations of motion become much more complex and the internal coordinates may be difficult to define for cyclic systems of constraints, e.g., in ring puckering or when a protein has a disulfide bond.</p>
+
+<p>The original methods for efficient recursive energy minimization in internal coordinates were developed by Gō and coworkers.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>Efficient recursive, internal-coordinate constraint solvers were extended to molecular dynamics.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> Analogous methods were applied later to other systems.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a><a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a><a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+<h2 id="lagrange-multiplier-based-methods">Lagrange multiplier-based methods</h2>
+<figure><b>(Figure)</b>
+<figcaption>Resolving the constraints of a rigid water molecule using <a href="Lagrange_multipliers" title="wikilink">Lagrange multipliers</a>: a) the unconstrained positions are obtained after a simulation time-step, b) the <a class="uri" href="gradients" title="wikilink">gradients</a> of each constraint over each particle are computed and c) the Lagrange multipliers are computed for each gradient such that the constraints are satisfied.</figcaption>
+</figure>
+
+<p>In most of <a href="molecular_dynamics" title="wikilink">molecular dynamics</a> simulations that use constraint algorithms, constraints are enforced using the method of <a href="Lagrange_multipliers" title="wikilink">Lagrange multipliers</a>. Given a set of <em>n</em> linear (<a href="Holonomic_constraints" title="wikilink">holonomic</a>) constraints at the time <em>t</em>,</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>σ</mi>
+      <mi>k</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>:=</mo>
+    <mrow>
+     <msup>
+      <mrow>
+       <mo>∥</mo>
+       <mrow>
+        <mrow>
+         <msub>
+          <mi>𝐱</mi>
+          <mrow>
+           <mi>k</mi>
+           <mi>α</mi>
+          </mrow>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>t</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>-</mo>
+        <mrow>
+         <msub>
+          <mi>𝐱</mi>
+          <mrow>
+           <mi>k</mi>
+           <mi>β</mi>
+          </mrow>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>t</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>∥</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+     <mo>-</mo>
+     <msubsup>
+      <mi>d</mi>
+      <mi>k</mi>
+      <mn>2</mn>
+     </msubsup>
+    </mrow>
+    <mo>=</mo>
+    <mn>0</mn>
+   </mrow>
+   <mo rspace="12.5pt">,</mo>
+   <mrow>
+    <mi>k</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>n</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <and></and>
+     <apply>
+      <csymbol cd="latexml">assign</csymbol>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>k</ci>
+       </apply>
+       <ci>t</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="latexml">norm</csymbol>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>𝐱</ci>
+            <apply>
+             <times></times>
+             <ci>k</ci>
+             <ci>α</ci>
+            </apply>
+           </apply>
+           <ci>t</ci>
+          </apply>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>𝐱</ci>
+            <apply>
+             <times></times>
+             <ci>k</ci>
+             <ci>β</ci>
+            </apply>
+           </apply>
+           <ci>t</ci>
+          </apply>
+         </apply>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>d</ci>
+         <ci>k</ci>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <share href="#.cmml">
+      </share>
+      <cn type="integer">0</cn>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <ci>k</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{k}(t):=\|\mathbf{x}_{k\alpha}(t)-\mathbf{x}_{k\beta}(t)\|^{2}-d_{k}^{2%
+}=0,\quad k=1\dots n
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Constraint_algorithm:3">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>𝐱</mi>
+    <mrow>
+     <mi>k</mi>
+     <mi>α</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>t</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐱</ci>
+     <apply>
+      <times></times>
+      <ci>k</ci>
+      <ci>α</ci>
+     </apply>
+    </apply>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\mathbf{x}_{k\alpha}(t)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Constraint_algorithm:4">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>𝐱</mi>
+    <mrow>
+     <mi>k</mi>
+     <mi>β</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>t</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐱</ci>
+     <apply>
+      <times></times>
+      <ci>k</ci>
+      <ci>β</ci>
+     </apply>
+    </apply>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\mathbf{x}_{k\beta}(t)
+  </annotation>
+ </semantics>
+</math>
+
+ are the positions of the two particles involved in the <em>k</em>th constraint at the time <em>t</em> and 
+
+<math display="inline" id="Constraint_algorithm:5">
+ <semantics>
+  <msub>
+   <mi>d</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>d</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ is the prescribed inter-particle distance.</p>
+
+<p>The forces due to these constraints are added in the equations of motion, resulting in, for each of the <em>N</em> particles in the system</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mfrac>
+       <mrow>
+        <mrow>
+         <msup>
+          <mo>∂</mo>
+          <mn>2</mn>
+         </msup>
+         <msub>
+          <mi>𝐱</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>t</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mrow>
+        <mo>∂</mo>
+        <msup>
+         <mi>t</mi>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+      </mfrac>
+      <msub>
+       <mi>m</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+     <mo>=</mo>
+     <mrow>
+      <mo>-</mo>
+      <mrow>
+       <mfrac>
+        <mo>∂</mo>
+        <mrow>
+         <mo>∂</mo>
+         <msub>
+          <mi>𝐱</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+       </mfrac>
+       <mrow>
+        <mo>[</mo>
+        <mrow>
+         <mrow>
+          <mi>V</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <msub>
+             <mi>𝐱</mi>
+             <mi>i</mi>
+            </msub>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mi>t</mi>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>+</mo>
+         <mrow>
+          <munderover>
+           <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+           <mrow>
+            <mi>k</mi>
+            <mo>=</mo>
+            <mn>1</mn>
+           </mrow>
+           <mi>n</mi>
+          </munderover>
+          <mrow>
+           <msub>
+            <mi>λ</mi>
+            <mi>k</mi>
+           </msub>
+           <msub>
+            <mi>σ</mi>
+            <mi>k</mi>
+           </msub>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mi>t</mi>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo>]</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo rspace="12.5pt">,</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <mi>N</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <partialdiff></partialdiff>
+          <cn type="integer">2</cn>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+        <ci>t</ci>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>t</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>m</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <partialdiff></partialdiff>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <apply>
+         <plus></plus>
+         <apply>
+          <times></times>
+          <ci>V</ci>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>𝐱</ci>
+            <ci>i</ci>
+           </apply>
+           <ci>t</ci>
+          </apply>
+         </apply>
+         <apply>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <sum></sum>
+            <apply>
+             <eq></eq>
+             <ci>k</ci>
+             <cn type="integer">1</cn>
+            </apply>
+           </apply>
+           <ci>n</ci>
+          </apply>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>λ</ci>
+            <ci>k</ci>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>k</ci>
+           </apply>
+           <ci>t</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <ci>i</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>N</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\partial^{2}\mathbf{x}_{i}(t)}{\partial t^{2}}m_{i}=-\frac{\partial}{%
+\partial\mathbf{x}_{i}}\left[V(\mathbf{x}_{i}(t))+\sum_{k=1}^{n}\lambda_{k}%
+\sigma_{k}(t)\right],\quad i=1\dots N.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Adding the constraint forces does not change the total energy, as the net work done by the constraint forces (taken over the set of particles that the constraints act on) is zero.</p>
+
+<p>From integrating both sides of the equation with respect to the time, the constrainted coordinates of particles at the time, 
+
+<math display="inline" id="Constraint_algorithm:7">
+ <semantics>
+  <mrow>
+   <mi>t</mi>
+   <mo>+</mo>
+   <mrow>
+    <mi mathvariant="normal">Δ</mi>
+    <mi>t</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <ci>t</ci>
+    <apply>
+     <times></times>
+     <ci>normal-Δ</ci>
+     <ci>t</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t+\Delta t
+  </annotation>
+ </semantics>
+</math>
+
+
+, are given,</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>𝐱</mi>
+      <mi>i</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>t</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi mathvariant="normal">Δ</mi>
+        <mi>t</mi>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <msub>
+       <mover accent="true">
+        <mi>𝐱</mi>
+        <mo stretchy="false">^</mo>
+       </mover>
+       <mi>i</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>t</mi>
+        <mo>+</mo>
+        <mrow>
+         <mi mathvariant="normal">Δ</mi>
+         <mi>t</mi>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+       <mrow>
+        <mi>k</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>n</mi>
+      </munderover>
+      <mrow>
+       <msub>
+        <mi>λ</mi>
+        <mi>k</mi>
+       </msub>
+       <mfrac>
+        <mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>k</mi>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>t</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mrow>
+         <mo>∂</mo>
+         <msub>
+          <mi>𝐱</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+       </mfrac>
+       <msup>
+        <mrow>
+         <mo>(</mo>
+         <mrow>
+          <mi mathvariant="normal">Δ</mi>
+          <mi>t</mi>
+         </mrow>
+         <mo>)</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+       <msubsup>
+        <mi>m</mi>
+        <mi>i</mi>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msubsup>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo rspace="12.5pt">,</mo>
+   <mrow>
+    <mi>i</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐱</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <plus></plus>
+       <ci>t</ci>
+       <apply>
+        <times></times>
+        <ci>normal-Δ</ci>
+        <ci>t</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-^</ci>
+         <ci>𝐱</ci>
+        </apply>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <plus></plus>
+        <ci>t</ci>
+        <apply>
+         <times></times>
+         <ci>normal-Δ</ci>
+         <ci>t</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>k</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <ci>k</ci>
+        </apply>
+        <apply>
+         <divide></divide>
+         <apply>
+          <times></times>
+          <apply>
+           <partialdiff></partialdiff>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>k</ci>
+           </apply>
+          </apply>
+          <ci>t</ci>
+         </apply>
+         <apply>
+          <partialdiff></partialdiff>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝐱</ci>
+           <ci>i</ci>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <times></times>
+          <ci>normal-Δ</ci>
+          <ci>t</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>m</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <ci>i</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>N</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{i}(t+\Delta t)=\hat{\mathbf{x}}_{i}(t+\Delta t)+\sum_{k=1}^{n}%
+\lambda_{k}\frac{\partial\sigma_{k}(t)}{\partial\mathbf{x}_{i}}\left(\Delta t%
+\right)^{2}m_{i}^{-1},\quad i=1\dots N
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Constraint_algorithm:9">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>𝐱</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+    <mi>i</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi mathvariant="normal">Δ</mi>
+      <mi>t</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-^</ci>
+      <ci>𝐱</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>t</ci>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{\mathbf{x}}_{i}(t+\Delta t)
+  </annotation>
+ </semantics>
+</math>
+
+ is the unconstrained (or uncorrected) position of the <em>i</em>th particle after integrating the unconstrained equations of motion.</p>
+
+<p>To satisfy the constraints 
+
+<math display="inline" id="Constraint_algorithm:10">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>σ</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi mathvariant="normal">Δ</mi>
+      <mi>t</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>t</ci>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{k}(t+\Delta t)
+  </annotation>
+ </semantics>
+</math>
+
+ in the next timestep, the <a href="Lagrange_multipliers" title="wikilink">Lagrange multipliers</a> should be determined as the following equation,</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:11">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>σ</mi>
+     <mi>k</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mrow>
+       <mi mathvariant="normal">Δ</mi>
+       <mi>t</mi>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>:=</mo>
+   <mrow>
+    <msup>
+     <mrow>
+      <mo>∥</mo>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>𝐱</mi>
+         <mrow>
+          <mi>k</mi>
+          <mi>α</mi>
+         </mrow>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>t</mi>
+          <mo>+</mo>
+          <mrow>
+           <mi mathvariant="normal">Δ</mi>
+           <mi>t</mi>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <msub>
+         <mi>𝐱</mi>
+         <mrow>
+          <mi>k</mi>
+          <mi>β</mi>
+         </mrow>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>t</mi>
+          <mo>+</mo>
+          <mrow>
+           <mi mathvariant="normal">Δ</mi>
+           <mi>t</mi>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>∥</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+    <mo>-</mo>
+    <msubsup>
+     <mi>d</mi>
+     <mi>k</mi>
+     <mn>2</mn>
+    </msubsup>
+   </mrow>
+   <mo>=</mo>
+   <mn>0.</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <csymbol cd="latexml">assign</csymbol>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <plus></plus>
+       <ci>t</ci>
+       <apply>
+        <times></times>
+        <ci>normal-Δ</ci>
+        <ci>t</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="latexml">norm</csymbol>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝐱</ci>
+           <apply>
+            <times></times>
+            <ci>k</ci>
+            <ci>α</ci>
+           </apply>
+          </apply>
+          <apply>
+           <plus></plus>
+           <ci>t</ci>
+           <apply>
+            <times></times>
+            <ci>normal-Δ</ci>
+            <ci>t</ci>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝐱</ci>
+           <apply>
+            <times></times>
+            <ci>k</ci>
+            <ci>β</ci>
+           </apply>
+          </apply>
+          <apply>
+           <plus></plus>
+           <ci>t</ci>
+           <apply>
+            <times></times>
+            <ci>normal-Δ</ci>
+            <ci>t</ci>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>d</ci>
+        <ci>k</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <cn type="float">0.</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{k}(t+\Delta t):=\left\|\mathbf{x}_{k\alpha}(t+\Delta t)-\mathbf{x}_{k%
+\beta}(t+\Delta t)\right\|^{2}-d_{k}^{2}=0.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This implies solving a system of 
+
+<math display="inline" id="Constraint_algorithm:12">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+
+ non-linear equations</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:13">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>σ</mi>
+      <mi>j</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>t</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi mathvariant="normal">Δ</mi>
+        <mi>t</mi>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>:=</mo>
+    <mrow>
+     <msup>
+      <mrow>
+       <mo>∥</mo>
+       <mrow>
+        <mrow>
+         <mrow>
+          <msub>
+           <mover accent="true">
+            <mi>𝐱</mi>
+            <mo stretchy="false">^</mo>
+           </mover>
+           <mrow>
+            <mi>j</mi>
+            <mi>α</mi>
+           </mrow>
+          </msub>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mi>t</mi>
+            <mo>+</mo>
+            <mrow>
+             <mi mathvariant="normal">Δ</mi>
+             <mi>t</mi>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>-</mo>
+         <mrow>
+          <msub>
+           <mover accent="true">
+            <mi>𝐱</mi>
+            <mo stretchy="false">^</mo>
+           </mover>
+           <mrow>
+            <mi>j</mi>
+            <mi>β</mi>
+           </mrow>
+          </msub>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mi>t</mi>
+            <mo>+</mo>
+            <mrow>
+             <mi mathvariant="normal">Δ</mi>
+             <mi>t</mi>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo>+</mo>
+        <mrow>
+         <munderover>
+          <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+          <mrow>
+           <mi>k</mi>
+           <mo>=</mo>
+           <mn>1</mn>
+          </mrow>
+          <mi>n</mi>
+         </munderover>
+         <mrow>
+          <msub>
+           <mi>λ</mi>
+           <mi>k</mi>
+          </msub>
+          <msup>
+           <mrow>
+            <mo>(</mo>
+            <mrow>
+             <mi mathvariant="normal">Δ</mi>
+             <mi>t</mi>
+            </mrow>
+            <mo>)</mo>
+           </mrow>
+           <mn>2</mn>
+          </msup>
+          <mrow>
+           <mo>[</mo>
+           <mrow>
+            <mrow>
+             <mfrac>
+              <mrow>
+               <mrow>
+                <mo>∂</mo>
+                <msub>
+                 <mi>σ</mi>
+                 <mi>k</mi>
+                </msub>
+               </mrow>
+               <mrow>
+                <mo stretchy="false">(</mo>
+                <mi>t</mi>
+                <mo stretchy="false">)</mo>
+               </mrow>
+              </mrow>
+              <mrow>
+               <mo>∂</mo>
+               <msub>
+                <mi>𝐱</mi>
+                <mrow>
+                 <mi>j</mi>
+                 <mi>α</mi>
+                </mrow>
+               </msub>
+              </mrow>
+             </mfrac>
+             <msubsup>
+              <mi>m</mi>
+              <mrow>
+               <mi>j</mi>
+               <mi>α</mi>
+              </mrow>
+              <mrow>
+               <mo>-</mo>
+               <mn>1</mn>
+              </mrow>
+             </msubsup>
+            </mrow>
+            <mo>-</mo>
+            <mrow>
+             <mfrac>
+              <mrow>
+               <mrow>
+                <mo>∂</mo>
+                <msub>
+                 <mi>σ</mi>
+                 <mi>k</mi>
+                </msub>
+               </mrow>
+               <mrow>
+                <mo stretchy="false">(</mo>
+                <mi>t</mi>
+                <mo stretchy="false">)</mo>
+               </mrow>
+              </mrow>
+              <mrow>
+               <mo>∂</mo>
+               <msub>
+                <mi>𝐱</mi>
+                <mrow>
+                 <mi>j</mi>
+                 <mi>β</mi>
+                </mrow>
+               </msub>
+              </mrow>
+             </mfrac>
+             <msubsup>
+              <mi>m</mi>
+              <mrow>
+               <mi>j</mi>
+               <mi>β</mi>
+              </mrow>
+              <mrow>
+               <mo>-</mo>
+               <mn>1</mn>
+              </mrow>
+             </msubsup>
+            </mrow>
+           </mrow>
+           <mo>]</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>∥</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+     <mo>-</mo>
+     <msubsup>
+      <mi>d</mi>
+      <mi>j</mi>
+      <mn>2</mn>
+     </msubsup>
+    </mrow>
+    <mo>=</mo>
+    <mn>0</mn>
+   </mrow>
+   <mo rspace="12.5pt">,</mo>
+   <mrow>
+    <mi>j</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>n</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <and></and>
+     <apply>
+      <csymbol cd="latexml">assign</csymbol>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>j</ci>
+       </apply>
+       <apply>
+        <plus></plus>
+        <ci>t</ci>
+        <apply>
+         <times></times>
+         <ci>normal-Δ</ci>
+         <ci>t</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="latexml">norm</csymbol>
+         <apply>
+          <plus></plus>
+          <apply>
+           <minus></minus>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <apply>
+              <ci>normal-^</ci>
+              <ci>𝐱</ci>
+             </apply>
+             <apply>
+              <times></times>
+              <ci>j</ci>
+              <ci>α</ci>
+             </apply>
+            </apply>
+            <apply>
+             <plus></plus>
+             <ci>t</ci>
+             <apply>
+              <times></times>
+              <ci>normal-Δ</ci>
+              <ci>t</ci>
+             </apply>
+            </apply>
+           </apply>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <apply>
+              <ci>normal-^</ci>
+              <ci>𝐱</ci>
+             </apply>
+             <apply>
+              <times></times>
+              <ci>j</ci>
+              <ci>β</ci>
+             </apply>
+            </apply>
+            <apply>
+             <plus></plus>
+             <ci>t</ci>
+             <apply>
+              <times></times>
+              <ci>normal-Δ</ci>
+              <ci>t</ci>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+          <apply>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <sum></sum>
+             <apply>
+              <eq></eq>
+              <ci>k</ci>
+              <cn type="integer">1</cn>
+             </apply>
+            </apply>
+            <ci>n</ci>
+           </apply>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>λ</ci>
+             <ci>k</ci>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">superscript</csymbol>
+             <apply>
+              <times></times>
+              <ci>normal-Δ</ci>
+              <ci>t</ci>
+             </apply>
+             <cn type="integer">2</cn>
+            </apply>
+            <apply>
+             <csymbol cd="latexml">delimited-[]</csymbol>
+             <apply>
+              <minus></minus>
+              <apply>
+               <times></times>
+               <apply>
+                <divide></divide>
+                <apply>
+                 <times></times>
+                 <apply>
+                  <partialdiff></partialdiff>
+                  <apply>
+                   <csymbol cd="ambiguous">subscript</csymbol>
+                   <ci>σ</ci>
+                   <ci>k</ci>
+                  </apply>
+                 </apply>
+                 <ci>t</ci>
+                </apply>
+                <apply>
+                 <partialdiff></partialdiff>
+                 <apply>
+                  <csymbol cd="ambiguous">subscript</csymbol>
+                  <ci>𝐱</ci>
+                  <apply>
+                   <times></times>
+                   <ci>j</ci>
+                   <ci>α</ci>
+                  </apply>
+                 </apply>
+                </apply>
+               </apply>
+               <apply>
+                <csymbol cd="ambiguous">superscript</csymbol>
+                <apply>
+                 <csymbol cd="ambiguous">subscript</csymbol>
+                 <ci>m</ci>
+                 <apply>
+                  <times></times>
+                  <ci>j</ci>
+                  <ci>α</ci>
+                 </apply>
+                </apply>
+                <apply>
+                 <minus></minus>
+                 <cn type="integer">1</cn>
+                </apply>
+               </apply>
+              </apply>
+              <apply>
+               <times></times>
+               <apply>
+                <divide></divide>
+                <apply>
+                 <times></times>
+                 <apply>
+                  <partialdiff></partialdiff>
+                  <apply>
+                   <csymbol cd="ambiguous">subscript</csymbol>
+                   <ci>σ</ci>
+                   <ci>k</ci>
+                  </apply>
+                 </apply>
+                 <ci>t</ci>
+                </apply>
+                <apply>
+                 <partialdiff></partialdiff>
+                 <apply>
+                  <csymbol cd="ambiguous">subscript</csymbol>
+                  <ci>𝐱</ci>
+                  <apply>
+                   <times></times>
+                   <ci>j</ci>
+                   <ci>β</ci>
+                  </apply>
+                 </apply>
+                </apply>
+               </apply>
+               <apply>
+                <csymbol cd="ambiguous">superscript</csymbol>
+                <apply>
+                 <csymbol cd="ambiguous">subscript</csymbol>
+                 <ci>m</ci>
+                 <apply>
+                  <times></times>
+                  <ci>j</ci>
+                  <ci>β</ci>
+                 </apply>
+                </apply>
+                <apply>
+                 <minus></minus>
+                 <cn type="integer">1</cn>
+                </apply>
+               </apply>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>d</ci>
+         <ci>j</ci>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <share href="#.cmml">
+      </share>
+      <cn type="integer">0</cn>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <ci>j</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{j}(t+\Delta t):=\left\|\hat{\mathbf{x}}_{j\alpha}(t+\Delta t)-\hat{%
+\mathbf{x}}_{j\beta}(t+\Delta t)+\sum_{k=1}^{n}\lambda_{k}\left(\Delta t\right%
+)^{2}\left[\frac{\partial\sigma_{k}(t)}{\partial\mathbf{x}_{j\alpha}}m_{j%
+\alpha}^{-1}-\frac{\partial\sigma_{k}(t)}{\partial\mathbf{x}_{j\beta}}m_{j%
+\beta}^{-1}\right]\right\|^{2}-d_{j}^{2}=0,\quad j=1\dots n
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>simultaneously for the 
+
+<math display="inline" id="Constraint_algorithm:14">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ unknown Lagrange multipliers 
+
+<math display="inline" id="Constraint_algorithm:15">
+ <semantics>
+  <msub>
+   <mi>λ</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>λ</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda_{k}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>This system of 
+
+<math display="inline" id="Constraint_algorithm:16">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ non-linear equations in 
+
+<math display="inline" id="Constraint_algorithm:17">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+
+ unknowns is commonly solved using <a href="Newton's_method" title="wikilink">Newton–Raphson method</a> where the solution vector 
+
+<math display="inline" id="Constraint_algorithm:18">
+ <semantics>
+  <munder accentunder="true">
+   <mi>λ</mi>
+   <mo>¯</mo>
+  </munder>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-¯</ci>
+    <ci>λ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \underline{\lambda}
+  </annotation>
+ </semantics>
+</math>
+
+ is updated using</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:19">
+ <semantics>
+  <mrow>
+   <msup>
+    <munder accentunder="true">
+     <mi>λ</mi>
+     <mo>¯</mo>
+    </munder>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>l</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>←</mo>
+   <mrow>
+    <msup>
+     <munder accentunder="true">
+      <mi>λ</mi>
+      <mo>¯</mo>
+     </munder>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>l</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo>-</mo>
+    <mrow>
+     <msubsup>
+      <mi>𝐉</mi>
+      <mi>σ</mi>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+     <munder accentunder="true">
+      <mi>σ</mi>
+      <mo>¯</mo>
+     </munder>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>t</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi mathvariant="normal">Δ</mi>
+        <mi>t</mi>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-←</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>λ</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>l</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <ci>normal-¯</ci>
+       <ci>λ</ci>
+      </apply>
+      <ci>l</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐉</ci>
+        <ci>σ</ci>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <ci>normal-¯</ci>
+       <ci>σ</ci>
+      </apply>
+      <apply>
+       <plus></plus>
+       <ci>t</ci>
+       <apply>
+        <times></times>
+        <ci>normal-Δ</ci>
+        <ci>t</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \underline{\lambda}^{(l+1)}\leftarrow\underline{\lambda}^{(l)}-\mathbf{J}_{%
+\sigma}^{-1}\underline{\sigma}(t+\Delta t)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Constraint_algorithm:20">
+ <semantics>
+  <msub>
+   <mi>𝐉</mi>
+   <mi>σ</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐉</ci>
+    <ci>σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{J}_{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+ is the <a href="Jacobian_matrix_and_determinant" title="wikilink">Jacobian</a> of the equations σ<sub><em>k</em></sub>:</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:21">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝐉</mi>
+    <mo>=</mo>
+    <mrow>
+     <mo>(</mo>
+     <mtable displaystyle="true">
+      <mtr>
+       <mtd columnalign="center">
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>λ</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mtd>
+       <mtd columnalign="center">
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>λ</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mtd>
+       <mtd columnalign="center">
+        <mi mathvariant="normal">…</mi>
+       </mtd>
+       <mtd columnalign="center">
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>λ</mi>
+           <mi>n</mi>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mtd>
+      </mtr>
+      <mtr>
+       <mtd columnalign="center">
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>λ</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mtd>
+       <mtd columnalign="center">
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>λ</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mtd>
+       <mtd columnalign="center">
+        <mi mathvariant="normal">…</mi>
+       </mtd>
+       <mtd columnalign="center">
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>λ</mi>
+           <mi>n</mi>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mtd>
+      </mtr>
+      <mtr>
+       <mtd columnalign="center">
+        <mi mathvariant="normal">⋮</mi>
+       </mtd>
+       <mtd columnalign="center">
+        <mi mathvariant="normal">⋮</mi>
+       </mtd>
+       <mtd columnalign="center">
+        <mi mathvariant="normal">⋱</mi>
+       </mtd>
+       <mtd columnalign="center">
+        <mi mathvariant="normal">⋮</mi>
+       </mtd>
+      </mtr>
+      <mtr>
+       <mtd columnalign="center">
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>n</mi>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>λ</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mtd>
+       <mtd columnalign="center">
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>n</mi>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>λ</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mtd>
+       <mtd columnalign="center">
+        <mi mathvariant="normal">…</mi>
+       </mtd>
+       <mtd columnalign="center">
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>n</mi>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>λ</mi>
+           <mi>n</mi>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mtd>
+      </mtr>
+     </mtable>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐉</ci>
+    <matrix>
+     <matrixrow>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <ci>n</ci>
+        </apply>
+       </apply>
+      </apply>
+     </matrixrow>
+     <matrixrow>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <ci>n</ci>
+        </apply>
+       </apply>
+      </apply>
+     </matrixrow>
+     <matrixrow>
+      <ci>normal-⋮</ci>
+      <ci>normal-⋮</ci>
+      <ci>normal-⋱</ci>
+      <ci>normal-⋮</ci>
+     </matrixrow>
+     <matrixrow>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>n</ci>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>n</ci>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>n</ci>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <ci>n</ci>
+        </apply>
+       </apply>
+      </apply>
+     </matrixrow>
+    </matrix>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{J}=\left(\begin{array}[]{cccc}\frac{\partial\sigma_{1}}{\partial%
+\lambda_{1}}&\frac{\partial\sigma_{1}}{\partial\lambda_{2}}&\dots&\frac{%
+\partial\sigma_{1}}{\partial\lambda_{n}}\\
+\frac{\partial\sigma_{2}}{\partial\lambda_{1}}&\frac{\partial\sigma_{2}}{%
+\partial\lambda_{2}}&\dots&\frac{\partial\sigma_{2}}{\partial\lambda_{n}}\\
+\vdots&\vdots&\ddots&\vdots\\
+\frac{\partial\sigma_{n}}{\partial\lambda_{1}}&\frac{\partial\sigma_{n}}{%
+\partial\lambda_{2}}&\dots&\frac{\partial\sigma_{n}}{\partial\lambda_{n}}\end{%
+array}\right).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Since not all particles contribute to all of constraints, 
+
+<math display="inline" id="Constraint_algorithm:22">
+ <semantics>
+  <msub>
+   <mi>𝐉</mi>
+   <mi>σ</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐉</ci>
+    <ci>σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{J}_{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+ is a <a href="block_matrix" title="wikilink">block matrix</a> and can be solved individually to block-unit of the matrix. In other words, 
+
+<math display="inline" id="Constraint_algorithm:23">
+ <semantics>
+  <msub>
+   <mi>𝐉</mi>
+   <mi>σ</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐉</ci>
+    <ci>σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{J}_{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+ can be solved individually for each molecule.</p>
+
+<p>Instead of constantly updating the vector 
+
+<math display="inline" id="Constraint_algorithm:24">
+ <semantics>
+  <munder accentunder="true">
+   <mi>λ</mi>
+   <mo>¯</mo>
+  </munder>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-¯</ci>
+    <ci>λ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \underline{\lambda}
+  </annotation>
+ </semantics>
+</math>
+
+, the iteration can be started with 
+
+<math display="inline" id="Constraint_algorithm:25">
+ <semantics>
+  <mrow>
+   <msup>
+    <munder accentunder="true">
+     <mi>λ</mi>
+     <mo>¯</mo>
+    </munder>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>0</mn>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mn>𝟎</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>λ</ci>
+     </apply>
+     <cn type="integer">0</cn>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \underline{\lambda}^{(0)}=\mathbf{0}
+  </annotation>
+ </semantics>
+</math>
+
+, resulting in simpler expressions for 
+
+<math display="inline" id="Constraint_algorithm:26">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>σ</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>t</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>k</ci>
+    </apply>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{k}(t)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Constraint_algorithm:27">
+ <semantics>
+  <mfrac>
+   <mrow>
+    <mrow>
+     <mo>∂</mo>
+     <msub>
+      <mi>σ</mi>
+      <mi>k</mi>
+     </msub>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mrow>
+    <mo>∂</mo>
+    <msub>
+     <mi>λ</mi>
+     <mi>j</mi>
+    </msub>
+   </mrow>
+  </mfrac>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <times></times>
+     <apply>
+      <partialdiff></partialdiff>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <partialdiff></partialdiff>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>λ</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\partial\sigma_{k}(t)}{\partial\lambda_{j}}
+  </annotation>
+ </semantics>
+</math>
+
+. In this case</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:28">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>J</mi>
+     <mrow>
+      <mi>i</mi>
+      <mi>j</mi>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <msub>
+     <mrow>
+      <mfrac>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>σ</mi>
+         <mi>j</mi>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>λ</mi>
+         <mi>i</mi>
+        </msub>
+       </mrow>
+      </mfrac>
+      <mo fence="true">|</mo>
+     </mrow>
+     <mrow>
+      <mi>λ</mi>
+      <mo>=</mo>
+      <mn>0</mn>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <mn>2</mn>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <msub>
+        <mover accent="true">
+         <mi>x</mi>
+         <mo stretchy="false">^</mo>
+        </mover>
+        <mrow>
+         <mi>j</mi>
+         <mi>α</mi>
+        </mrow>
+       </msub>
+       <mo>-</mo>
+       <msub>
+        <mover accent="true">
+         <mi>x</mi>
+         <mo stretchy="false">^</mo>
+        </mover>
+        <mrow>
+         <mi>j</mi>
+         <mi>β</mi>
+        </mrow>
+       </msub>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <mrow>
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>i</mi>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>x</mi>
+           <mrow>
+            <mi>j</mi>
+            <mi>α</mi>
+           </mrow>
+          </msub>
+         </mrow>
+        </mfrac>
+        <msubsup>
+         <mi>m</mi>
+         <mrow>
+          <mi>j</mi>
+          <mi>α</mi>
+         </mrow>
+         <mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </msubsup>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>i</mi>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>x</mi>
+           <mrow>
+            <mi>j</mi>
+            <mi>β</mi>
+           </mrow>
+          </msub>
+         </mrow>
+        </mfrac>
+        <msubsup>
+         <mi>m</mi>
+         <mrow>
+          <mi>j</mi>
+          <mi>β</mi>
+         </mrow>
+         <mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </msubsup>
+       </mrow>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>J</ci>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <ci>j</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">evaluated-at</csymbol>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>j</ci>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>λ</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <eq></eq>
+       <ci>λ</ci>
+       <cn type="integer">0</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <ci>normal-^</ci>
+          <ci>x</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <ci>j</ci>
+          <ci>α</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <ci>normal-^</ci>
+          <ci>x</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <ci>j</ci>
+          <ci>β</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <divide></divide>
+          <apply>
+           <partialdiff></partialdiff>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>i</ci>
+           </apply>
+          </apply>
+          <apply>
+           <partialdiff></partialdiff>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>x</ci>
+            <apply>
+             <times></times>
+             <ci>j</ci>
+             <ci>α</ci>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>m</ci>
+           <apply>
+            <times></times>
+            <ci>j</ci>
+            <ci>α</ci>
+           </apply>
+          </apply>
+          <apply>
+           <minus></minus>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <divide></divide>
+          <apply>
+           <partialdiff></partialdiff>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>i</ci>
+           </apply>
+          </apply>
+          <apply>
+           <partialdiff></partialdiff>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>x</ci>
+            <apply>
+             <times></times>
+             <ci>j</ci>
+             <ci>β</ci>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>m</ci>
+           <apply>
+            <times></times>
+            <ci>j</ci>
+            <ci>β</ci>
+           </apply>
+          </apply>
+          <apply>
+           <minus></minus>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J_{ij}=\left.\frac{\partial\sigma_{j}}{\partial\lambda_{i}}\right|_{\mathbf{%
+\lambda}=0}=2\left[\hat{x}_{j\alpha}-\hat{x}_{j\beta}\right]\left[\frac{%
+\partial\sigma_{i}}{\partial x_{j\alpha}}m_{j\alpha}^{-1}-\frac{\partial\sigma%
+_{i}}{\partial x_{j\beta}}m_{j\beta}^{-1}\right].
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>then 
+
+<math display="inline" id="Constraint_algorithm:29">
+ <semantics>
+  <mi>λ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>λ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda
+  </annotation>
+ </semantics>
+</math>
+
+ is updated to</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:30">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>λ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <msup>
+       <mi>𝐉</mi>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+      <mrow>
+       <mo>[</mo>
+       <mrow>
+        <msup>
+         <mrow>
+          <mo>∥</mo>
+          <mrow>
+           <mrow>
+            <msub>
+             <mover accent="true">
+              <mi>𝐱</mi>
+              <mo stretchy="false">^</mo>
+             </mover>
+             <mrow>
+              <mi>j</mi>
+              <mi>α</mi>
+             </mrow>
+            </msub>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mrow>
+              <mi>t</mi>
+              <mo>+</mo>
+              <mrow>
+               <mi mathvariant="normal">Δ</mi>
+               <mi>t</mi>
+              </mrow>
+             </mrow>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+           <mo>-</mo>
+           <mrow>
+            <msub>
+             <mover accent="true">
+              <mi>𝐱</mi>
+              <mo stretchy="false">^</mo>
+             </mover>
+             <mrow>
+              <mi>j</mi>
+              <mi>β</mi>
+             </mrow>
+            </msub>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mrow>
+              <mi>t</mi>
+              <mo>+</mo>
+              <mrow>
+               <mi mathvariant="normal">Δ</mi>
+               <mi>t</mi>
+              </mrow>
+             </mrow>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+          </mrow>
+          <mo>∥</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+        <mo>-</mo>
+        <msubsup>
+         <mi>d</mi>
+         <mi>j</mi>
+         <mn>2</mn>
+        </msubsup>
+       </mrow>
+       <mo>]</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>λ</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>𝐉</ci>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="latexml">norm</csymbol>
+          <apply>
+           <minus></minus>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <apply>
+              <ci>normal-^</ci>
+              <ci>𝐱</ci>
+             </apply>
+             <apply>
+              <times></times>
+              <ci>j</ci>
+              <ci>α</ci>
+             </apply>
+            </apply>
+            <apply>
+             <plus></plus>
+             <ci>t</ci>
+             <apply>
+              <times></times>
+              <ci>normal-Δ</ci>
+              <ci>t</ci>
+             </apply>
+            </apply>
+           </apply>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <apply>
+              <ci>normal-^</ci>
+              <ci>𝐱</ci>
+             </apply>
+             <apply>
+              <times></times>
+              <ci>j</ci>
+              <ci>β</ci>
+             </apply>
+            </apply>
+            <apply>
+             <plus></plus>
+             <ci>t</ci>
+             <apply>
+              <times></times>
+              <ci>normal-Δ</ci>
+              <ci>t</ci>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>d</ci>
+          <ci>j</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\lambda}_{j}=-\mathbf{J}^{-1}\left[\left\|\hat{\mathbf{x}}_{j\alpha}(t%
++\Delta t)-\hat{\mathbf{x}}_{j\beta}(t+\Delta t)\right\|^{2}-d_{j}^{2}\right].
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>After each iteration, the unconstrained particle positions are updated using</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:31">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mover accent="true">
+      <mi>𝐱</mi>
+      <mo stretchy="false">^</mo>
+     </mover>
+     <mi>i</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mrow>
+       <mi mathvariant="normal">Δ</mi>
+       <mi>t</mi>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>←</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mover accent="true">
+       <mi>𝐱</mi>
+       <mo stretchy="false">^</mo>
+      </mover>
+      <mi>i</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>t</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi mathvariant="normal">Δ</mi>
+        <mi>t</mi>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </munderover>
+     <mrow>
+      <msub>
+       <mi>λ</mi>
+       <mi>k</mi>
+      </msub>
+      <mfrac>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>σ</mi>
+         <mi>k</mi>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>𝐱</mi>
+         <mi>i</mi>
+        </msub>
+       </mrow>
+      </mfrac>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-←</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-^</ci>
+       <ci>𝐱</ci>
+      </apply>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <apply>
+       <times></times>
+       <ci>normal-Δ</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-^</ci>
+        <ci>𝐱</ci>
+       </apply>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <plus></plus>
+       <ci>t</ci>
+       <apply>
+        <times></times>
+        <ci>normal-Δ</ci>
+        <ci>t</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>λ</ci>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <divide></divide>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>σ</ci>
+          <ci>k</ci>
+         </apply>
+        </apply>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{\mathbf{x}}_{i}(t+\Delta t)\leftarrow\hat{\mathbf{x}}_{i}(t+\Delta t)+%
+\sum_{k=1}^{n}\lambda_{k}\frac{\partial\sigma_{k}}{\partial\mathbf{x}_{i}}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The vector is then reset to</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:32">
+ <semantics>
+  <mrow>
+   <munder accentunder="true">
+    <mi>λ</mi>
+    <mo>¯</mo>
+   </munder>
+   <mo>=</mo>
+   <mn>0.</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-¯</ci>
+     <ci>λ</ci>
+    </apply>
+    <cn type="float">0.</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \underline{\lambda}=\mathbf{0}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The above procedure is repeated until the solution of constraint equations, 
+
+<math display="inline" id="Constraint_algorithm:33">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>σ</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi mathvariant="normal">Δ</mi>
+      <mi>t</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>t</ci>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{k}(t+\Delta t)
+  </annotation>
+ </semantics>
+</math>
+
+, converges to a prescribed tolerance of a numerical error.</p>
+
+<p>Although there are a number of algorithms to compute the Lagrange multipliers, these difference is rely only on the methods to solve the system of equations. For this methods, <a href="quasi-Newton_method" title="wikilink">quasi-Newton methods</a> are commonly used.</p>
+<h3 id="the-settle-algorithm">The SETTLE algorithm</h3>
+
+<p>The SETTLE algorithm<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> solves the system of non-linear equations analytically for 
+
+<math display="inline" id="Constraint_algorithm:34">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>=</mo>
+   <mn>3</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>n</ci>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n=3
+  </annotation>
+ </semantics>
+</math>
+
+ constraints in constant time. Although it does not scale to larger numbers of constraints, it is very often used to constrain rigid water molecules, which are present in almost all biological simulations and are usually modelled using three constraints (e.g. SPC/E and <a class="uri" href="TIP3P" title="wikilink">TIP3P</a> <a href="water_model" title="wikilink">water models</a>).</p>
+<h3 id="the-shake-algorithm">The SHAKE algorithm</h3>
+
+<p>The SHAKE algorithm was first developed for satisfying a bond geometry constraint during molecular dynamics simulations.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> In SHAKE algorithm, the system of non-linear constraint equations is solved using the <a href="Gauss-Seidel_method" title="wikilink">Gauss-Seidel method</a> which approximates the solution of the linear system of equations using the <a href="Newton_iteration" title="wikilink">Newton-Raphson method</a>;</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:35">
+ <semantics>
+  <mrow>
+   <munder accentunder="true">
+    <mi>λ</mi>
+    <mo>¯</mo>
+   </munder>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mrow>
+     <msubsup>
+      <mi>𝐉</mi>
+      <mi>σ</mi>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+     <munder accentunder="true">
+      <mi>σ</mi>
+      <mo>¯</mo>
+     </munder>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-¯</ci>
+     <ci>λ</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐉</ci>
+        <ci>σ</ci>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <ci>normal-¯</ci>
+       <ci>σ</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \underline{\lambda}=-\mathbf{J}_{\sigma}^{-1}\underline{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>This amounts to assuming that 
+
+<math display="inline" id="Constraint_algorithm:36">
+ <semantics>
+  <msub>
+   <mi>𝐉</mi>
+   <mi>σ</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐉</ci>
+    <ci>σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{J}_{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+ is diagonally dominant and solving the 
+
+<math display="inline" id="Constraint_algorithm:37">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+th equation only for the 
+
+<math display="inline" id="Constraint_algorithm:38">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ unknown. In practice, we compute</p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Constraint_algorithm:39">
+ <semantics>
+  <msub>
+   <mi>λ</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>λ</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda_{k}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Constraint_algorithm:40">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Constraint_algorithm:41">
+ <semantics>
+  <mfrac>
+   <mrow>
+    <msub>
+     <mi>σ</mi>
+     <mi>k</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>σ</mi>
+       <mi>k</mi>
+      </msub>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>/</mo>
+    <mrow>
+     <mo>∂</mo>
+     <msub>
+      <mi>λ</mi>
+      <mi>k</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </mfrac>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>k</ci>
+     </apply>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <partialdiff></partialdiff>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>k</ci>
+       </apply>
+      </apply>
+      <ci>t</ci>
+     </apply>
+     <apply>
+      <partialdiff></partialdiff>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>λ</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\sigma_{k}(t)}{\partial\sigma_{k}(t)/\partial\lambda_{k}}
+  </annotation>
+ </semantics>
+</math>
+
+,</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Constraint_algorithm:42">
+ <semantics>
+  <msub>
+   <mi>𝐱</mi>
+   <mrow>
+    <mi>k</mi>
+    <mi>α</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐱</ci>
+    <apply>
+     <times></times>
+     <ci>k</ci>
+     <ci>α</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{k\alpha}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Constraint_algorithm:43">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Constraint_algorithm:44">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>𝐱</mi>
+    <mrow>
+     <mi>k</mi>
+     <mi>α</mi>
+    </mrow>
+   </msub>
+   <mo>+</mo>
+   <mrow>
+    <msub>
+     <mi>λ</mi>
+     <mi>k</mi>
+    </msub>
+    <mfrac>
+     <mrow>
+      <mrow>
+       <mo>∂</mo>
+       <msub>
+        <mi>σ</mi>
+        <mi>k</mi>
+       </msub>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>𝐱</mi>
+       <mrow>
+        <mi>k</mi>
+        <mi>α</mi>
+       </mrow>
+      </msub>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐱</ci>
+     <apply>
+      <times></times>
+      <ci>k</ci>
+      <ci>α</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>λ</ci>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>k</ci>
+        </apply>
+       </apply>
+       <ci>t</ci>
+      </apply>
+      <apply>
+       <partialdiff></partialdiff>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <apply>
+         <times></times>
+         <ci>k</ci>
+         <ci>α</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{k\alpha}+\lambda_{k}\frac{\partial\sigma_{k}(t)}{\partial\mathbf{x%
+}_{k\alpha}}
+  </annotation>
+ </semantics>
+</math>
+
+,</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Constraint_algorithm:45">
+ <semantics>
+  <msub>
+   <mi>𝐱</mi>
+   <mrow>
+    <mi>k</mi>
+    <mi>β</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐱</ci>
+    <apply>
+     <times></times>
+     <ci>k</ci>
+     <ci>β</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{k\beta}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Constraint_algorithm:46">
+ <semantics>
+  <mo>←</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-←</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leftarrow
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Constraint_algorithm:47">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>𝐱</mi>
+    <mrow>
+     <mi>k</mi>
+     <mi>β</mi>
+    </mrow>
+   </msub>
+   <mo>+</mo>
+   <mrow>
+    <msub>
+     <mi>λ</mi>
+     <mi>k</mi>
+    </msub>
+    <mfrac>
+     <mrow>
+      <mrow>
+       <mo>∂</mo>
+       <msub>
+        <mi>σ</mi>
+        <mi>k</mi>
+       </msub>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>𝐱</mi>
+       <mrow>
+        <mi>k</mi>
+        <mi>β</mi>
+       </mrow>
+      </msub>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐱</ci>
+     <apply>
+      <times></times>
+      <ci>k</ci>
+      <ci>β</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>λ</ci>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>k</ci>
+        </apply>
+       </apply>
+       <ci>t</ci>
+      </apply>
+      <apply>
+       <partialdiff></partialdiff>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <apply>
+         <times></times>
+         <ci>k</ci>
+         <ci>β</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{k\beta}+\lambda_{k}\frac{\partial\sigma_{k}(t)}{\partial\mathbf{x}%
+_{k\beta}}
+  </annotation>
+ </semantics>
+</math>
+
+,</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>for all 
+
+<math display="inline" id="Constraint_algorithm:48">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mi mathvariant="normal">…</mi>
+    <mi>n</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>k</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">1</cn>
+     <ci>normal-…</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k=1\dots n
+  </annotation>
+ </semantics>
+</math>
+
+ iteratively until the constraint equations 
+
+<math display="inline" id="Constraint_algorithm:49">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>σ</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi mathvariant="normal">Δ</mi>
+      <mi>t</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>t</ci>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{k}(t+\Delta t)
+  </annotation>
+ </semantics>
+</math>
+
+ are solved to a given tolerance.</p>
+
+<p>The calculation cost of each iteration is 
+
+<math display="inline" id="Constraint_algorithm:50">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒪</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>𝒪</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{O}(n)
+  </annotation>
+ </semantics>
+</math>
+
+, and the iterations themselves converge linearly.</p>
+
+<p>A noniterative form of SHAKE was developed later.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+
+<p>Several variants of the SHAKE algorithm exist. Although they differ in how they compute or apply the constraints themselves, the constraints are still modelled using <a href="Lagrange_multipliers" title="wikilink">Lagrange multipliers</a> which are computed using the <a href="Gauss-Seidel_method" title="wikilink">Gauss-Seidel method</a>.</p>
+
+<p>The original SHAKE algorithm is limited to mechanical systems with a tree structure, i.e., no closed loops of constraints. A later extension of the method, QSHAKE (<a class="uri" href="Quaternion" title="wikilink">Quaternion</a> SHAKE) was developed to amend this.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> It works satisfactorily for <em>rigid</em> loops such as aromatic ring systems but fails for flexible loops, such as when a protein has a disulfide bond.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+
+<p>Further extensions include RATTLE,<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> WIGGLE<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> and MSHAKE.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a> RATTLE works the same way as SHAKE,<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a> yet using the <a href="Velocity_Verlet" title="wikilink">Velocity Verlet</a> time integration scheme. WIGGLE extends SHAKE and RATTLE by using an initial estimate for the <a href="Lagrange_multipliers" title="wikilink">Lagrange multipliers</a> 
+
+<math display="inline" id="Constraint_algorithm:51">
+ <semantics>
+  <msub>
+   <mi>λ</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>λ</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ based on the particle velocities. Finally, MSHAKE computes corrections on the constraint <em>forces</em>, achieving better convergence.</p>
+
+<p>A final modification is the P-SHAKE algorithm<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> for rigid or semi-rigid molecules. P-SHAKE computes and updates a pre-conditioner which is applied to the constraint gradients before the SHAKE iteration, causing the Jacobian 
+
+<math display="inline" id="Constraint_algorithm:52">
+ <semantics>
+  <msub>
+   <mi>𝐉</mi>
+   <mi>σ</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐉</ci>
+    <ci>σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{J}_{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+ to become diagonal or strongly diagonally dominant. The thus de-coupled constraints converge much faster (quadratically as opposed to linearly) at a cost of 
+
+<math display="inline" id="Constraint_algorithm:53">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒪</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>2</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>𝒪</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{O}(n^{2})
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h3 id="the-m-shake-algorithm">The M-SHAKE algorithm</h3>
+
+<p>The M-SHAKE algorithm<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a> solves the non-linear system of equations using <a href="Newton's_method" title="wikilink">Newton's method</a> directly. In each iteration, the linear system of equations</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:54">
+ <semantics>
+  <mrow>
+   <munder accentunder="true">
+    <mi>λ</mi>
+    <mo>¯</mo>
+   </munder>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mrow>
+     <msubsup>
+      <mi>𝐉</mi>
+      <mi>σ</mi>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+     <munder accentunder="true">
+      <mi>σ</mi>
+      <mo>¯</mo>
+     </munder>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-¯</ci>
+     <ci>λ</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐉</ci>
+        <ci>σ</ci>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <ci>normal-¯</ci>
+       <ci>σ</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \underline{\lambda}=-\mathbf{J}_{\sigma}^{-1}\underline{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>is solved exactly using an <a href="LU_decomposition" title="wikilink">LU decomposition</a>. Each iteration costs 
+
+<math display="inline" id="Constraint_algorithm:55">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒪</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>3</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>𝒪</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{O}(n^{3})
+  </annotation>
+ </semantics>
+</math>
+
+ operations, yet the solution converges <a href="Quadratic_convergence" title="wikilink">quadratically</a>, requiring fewer iterations than SHAKE.</p>
+
+<p>This solution was first proposed in 1986 by <a href="Giovanni_Ciccotti" title="wikilink">Ciccotti</a> and Ryckaert<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a> under the title "the matrix method", yet differed in the solution of the linear system of equations. Ciccotti and Ryckaert suggest inverting the matrix 
+
+<math display="inline" id="Constraint_algorithm:56">
+ <semantics>
+  <msub>
+   <mi>𝐉</mi>
+   <mi>σ</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐉</ci>
+    <ci>σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{J}_{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+ directly, yet doing so only once, in the first iteration. The first iteration then costs 
+
+<math display="inline" id="Constraint_algorithm:57">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒪</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>3</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>𝒪</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{O}(n^{3})
+  </annotation>
+ </semantics>
+</math>
+
+ operations, whereas the following iterations cost only 
+
+<math display="inline" id="Constraint_algorithm:58">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒪</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>2</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>𝒪</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{O}(n^{2})
+  </annotation>
+ </semantics>
+</math>
+
+ operations (for the matrix-vector multiplication). This improvement comes at a cost though, since the Jacobian is no longer updated, convergence is only <a href="Linear_convergence" title="wikilink">linear</a>, albeit at a much faster rate than for the SHAKE algorithm.</p>
+
+<p>Several variants of this approach based on sparse matrix techniques were studied by Barth <em>et al.</em>.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a></p>
+<h3 id="the-shape-algorithm">The SHAPE algorithm</h3>
+
+<p>The SHAPE algorithm<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a> is a multicenter analog of SHAKE for constraining rigid bodies of three or more centers. Like SHAKE, an unconstrained step is taken and then corrected by directly calculating and applying the rigid body rotation matrix that satisfies:</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:59">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>L</mi>
+     <mrow>
+      <mi>r</mi>
+      <mi>i</mi>
+      <mi>g</mi>
+      <mi>i</mi>
+      <mi>d</mi>
+     </mrow>
+    </msup>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mfrac>
+       <mrow>
+        <mi mathvariant="normal">Δ</mi>
+        <mi>t</mi>
+       </mrow>
+       <mn>2</mn>
+      </mfrac>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>L</mi>
+     <mrow>
+      <mi>n</mi>
+      <mi>o</mi>
+      <mi>n</mi>
+      <mi>r</mi>
+      <mi>i</mi>
+      <mi>g</mi>
+      <mi>i</mi>
+      <mi>d</mi>
+     </mrow>
+    </msup>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mfrac>
+       <mrow>
+        <mi mathvariant="normal">Δ</mi>
+        <mi>t</mi>
+       </mrow>
+       <mn>2</mn>
+      </mfrac>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>L</ci>
+      <apply>
+       <times></times>
+       <ci>r</ci>
+       <ci>i</ci>
+       <ci>g</ci>
+       <ci>i</ci>
+       <ci>d</ci>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <ci>normal-Δ</ci>
+        <ci>t</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>L</ci>
+      <apply>
+       <times></times>
+       <ci>n</ci>
+       <ci>o</ci>
+       <ci>n</ci>
+       <ci>r</ci>
+       <ci>i</ci>
+       <ci>g</ci>
+       <ci>i</ci>
+       <ci>d</ci>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <ci>normal-Δ</ci>
+        <ci>t</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L^{rigid}\left(t+\frac{\Delta t}{2}\right)=L^{nonrigid}\left(t+\frac{\Delta t}%
+{2}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ This approach involves a single 3x3 matrix diagonalization followed by three or four rapid Newton iterations to determine the rotation matrix. SHAPE provides the identical trajectory that is provided with fully converged iterative SHAKE, yet it is found to be more efficient and more accurate than SHAKE when applied to systems involving three or more centers. It extends the ability of SHAKE like constraints to linear systems with three or more atoms, planar systems with four or more atoms, and to significantly larger rigid structures where SHAKE is intractable. It also allows rigid bodies to be linked with one or two common centers (e.g. peptide planes) by solving rigid body constraints iteratively in the same basic manner that SHAKE is used for atoms involving more than one SHAKE constraint.</p>
+<h3 id="the-lincs-algorithm">The LINCS algorithm</h3>
+
+<p>An alternative constraint method, LINCS (Linear Constraint Solver) was developed in 1997 by Hess, Bekker, Berendsen and Fraaije,<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a> and was based on the 1986 method of Edberg, Evans and Morriss (EEM),<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a> and a modification thereof by Baranyai and Evans (BE).<a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a></p>
+
+<p>LINCS applies <a href="Lagrange_multipliers" title="wikilink">Lagrange multipliers</a> to the constraint forces and solves for the multipliers by using a series expansion to approximate the inverse of the Jacobian 
+
+<math display="inline" id="Constraint_algorithm:60">
+ <semantics>
+  <msub>
+   <mi>𝐉</mi>
+   <mi>σ</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐉</ci>
+    <ci>σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{J}_{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="block" id="Constraint_algorithm:61">
+ <semantics>
+  <mrow>
+   <msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>𝐈</mi>
+      <mo>-</mo>
+      <msub>
+       <mi>𝐉</mi>
+       <mi>σ</mi>
+      </msub>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mi>𝐈</mi>
+    <mo>+</mo>
+    <msub>
+     <mi>𝐉</mi>
+     <mi>σ</mi>
+    </msub>
+    <mo>+</mo>
+    <msubsup>
+     <mi>𝐉</mi>
+     <mi>σ</mi>
+     <mn>2</mn>
+    </msubsup>
+    <mo>+</mo>
+    <msubsup>
+     <mi>𝐉</mi>
+     <mi>σ</mi>
+     <mn>3</mn>
+    </msubsup>
+    <mo>+</mo>
+    <mi mathvariant="normal">…</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <minus></minus>
+      <ci>𝐈</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐉</ci>
+       <ci>σ</ci>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>𝐈</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐉</ci>
+      <ci>σ</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐉</ci>
+       <ci>σ</ci>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐉</ci>
+       <ci>σ</ci>
+      </apply>
+      <cn type="integer">3</cn>
+     </apply>
+     <ci>normal-…</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (\mathbf{I}-\mathbf{J}_{\sigma})^{-1}=\mathbf{I}+\mathbf{J}_{\sigma}+\mathbf{J%
+}_{\sigma}^{2}+\mathbf{J}_{\sigma}^{3}+\dots
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>in each step of the Newton iteration. This approximation only works for matrices with <a class="uri" href="Eigenvalues" title="wikilink">Eigenvalues</a> smaller than 1, making the LINCS algorithm suitable only for molecules with low connectivity.</p>
+
+<p>LINCS has been reported to be 3-4 times faster than SHAKE.<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a></p>
+<h2 id="hybrid-methods">Hybrid methods</h2>
+
+<p>Hybrid methods have also been introduced in which the constraints are divided into two groups; the constraints of the first group are solved using internal coordinates whereas those of the second group are solved using constraint forces, e.g., by a Lagrange multiplier or projection method.<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a><a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a><a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a> This approach was pioneered by <a href="Joseph_Louis_Lagrange" title="wikilink">Lagrange</a>,<a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a> and result in <em>Lagrange equations of the mixed type</em>.<a class="footnoteRef" href="#fn31" id="fnref31"><sup>31</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Molecular_dynamics" title="wikilink">Molecular dynamics</a></li>
+<li><a href="List_of_software_for_molecular_mechanics_modeling" title="wikilink">Software for molecular mechanics modeling</a></li>
+</ul>
+<h2 id="references-and-footnotes">References and footnotes</h2>
+
+<p>"</p>
+
+<p><a href="Category:Molecular_dynamics" title="wikilink">Category:Molecular dynamics</a> <a href="Category:Computational_chemistry" title="wikilink">Category:Computational chemistry</a> <a href="Category:Molecular_physics" title="wikilink">Category:Molecular physics</a> <a href="Category:Computational_physics" title="wikilink">Category:Computational physics</a> <a href="Category:Numerical_differential_equations" title="wikilink">Category:Numerical differential equations</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+<li id="fn14"><a href="#fnref14">↩</a></li>
+<li id="fn15"><a href="#fnref15">↩</a></li>
+<li id="fn16"><a href="#fnref16">↩</a></li>
+<li id="fn17"><a href="#fnref17">↩</a></li>
+<li id="fn18"><mtpl></mtpl><a href="#fnref18">↩</a></li>
+<li id="fn19"><a href="#fnref19">↩</a></li>
+<li id="fn20"><a href="#fnref20">↩</a></li>
+<li id="fn21"><a href="#fnref21">↩</a></li>
+<li id="fn22"><a href="#fnref22">↩</a></li>
+<li id="fn23"><a href="#fnref23">↩</a></li>
+<li id="fn24"><a href="#fnref24">↩</a></li>
+<li id="fn25"><a href="#fnref25">↩</a></li>
+<li id="fn26"></li>
+<li id="fn27"><a href="#fnref27">↩</a></li>
+<li id="fn28"><a href="#fnref28">↩</a></li>
+<li id="fn29"><a href="#fnref29">↩</a></li>
+<li id="fn30"></li>
+<li id="fn31"><a href="#fnref31">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="470">Liblzg</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Liblzg</h1>
+<hr/>
+
+<p><strong>liblzg</strong> is a compression library for performing <a href="lossless_data_compression" title="wikilink">lossless data compression</a>. It implements an algorithm that is a variation of the <a href="LZ77_and_LZ78" title="wikilink">LZ77</a> algorithm, called the LZG algorithm, with the primary focus of providing a very simple and fast decoding method. One of the key features of the algorithm is that it requires no memory during decompression. The software library is <a href="free_software" title="wikilink">free software</a>, distributed under the <a href="zlib_license" title="wikilink">zlib license</a>.</p>
+<h2 id="algorithm">Algorithm</h2>
+
+<p>If a duplicate series of bytes (a repeated string) is spotted in the uncompressed data stream, then a back-<a href="Reference_(computer_science)" title="wikilink">reference</a> is inserted, linking to the previous location of that identical string instead. An encoded match to an earlier string consists of a length (3–128 bytes) and a distance (1–526,341 bytes). The level of compression can be controlled by specifying the maximum distance for which duplicated strings will be searched (this is the size of the <em>sliding window</em>).</p>
+<h2 id="data-format">Data format</h2>
+
+<p>The data format consists of a header, followed by the compressed data. The header contains an identifier and house keeping information, such as compressed and decompressed data sizes and a 32-bit checksum (a variant of the <a href="Fletcher's_checksum" title="wikilink">Fletcher checksum</a>).</p>
+
+<p>The compressed data starts with four bytes, identifying four unique 8-bit marker symbols (<em>m1</em>, <em>m2</em>, <em>m3</em> and <em>m4</em>). These are used to separate literal data bytes from various forms of <em>length-distance</em> pair encodings.</p>
+
+<p>Any symbol that is not a marker byte is considered a literal byte, and will be copied as is to the decompressed data buffer. However, if the decoder encounters any of the four marker bytes, it will decode a <em>length-distance</em> pair that is used as a back reference into the previously decompressed data.</p>
+
+<p>The marker bytes are interpreted as follows (% denotes a binary number):</p>
+<h3 id="general-copy-m1">General copy (m1)</h3>
+
+<p><em>m1</em> represents the most general form of a copy operation, and it occupies four bytes in the compressed data stream:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><code>m1</code></p></td>
+<td style="text-align: left;">
+<p><code>%ooolllll</code></p></td>
+<td style="text-align: left;">
+<p><code>%mmmmmmmm</code></p></td>
+<td style="text-align: left;">
+<p><code>%nnnnnnnn</code></p></td>
+</tr>
+</tbody>
+</table>
+
+<p>...where length=<code>DECODELENGTH(%lllll+2)</code>, and offset=<code>%ooommmmmmmmnnnnnnnn + 2056</code>.</p>
+<h3 id="medium-copy-m2">Medium copy (m2)</h3>
+
+<p><em>m2</em> is a shorter form of a copy operation, occupying three bytes in the compressed data stream:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><code>m2</code></p></td>
+<td style="text-align: left;">
+<p><code>%ooolllll</code></p></td>
+<td style="text-align: left;">
+<p><code>%mmmmmmmm</code></p></td>
+</tr>
+</tbody>
+</table>
+
+<p>...where length=<code>DECODELENGTH(%lllll+2)</code>, and offset=<code>%ooommmmmmmm + 8</code>.</p>
+<h3 id="short-copy-m3">Short copy (m3)</h3>
+
+<p><em>m3</em> requires only two bytes, and is used for short lengths, close to the marker:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><code>m3</code></p></td>
+<td style="text-align: left;">
+<p><code>%lloooooo</code></p></td>
+</tr>
+</tbody>
+</table>
+
+<p>...where length=<code>%ll+3</code>, and offset=<code>%oooooo + 8</code>.</p>
+<h3 id="near-copy-m4">Near copy (m4)</h3>
+
+<p><em>m4</em> requires only two bytes, and is used for nearby copies (including <a href="Run-length_encoding" title="wikilink">RLE</a>, when the offset is 1):</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><code>m4</code></p></td>
+<td style="text-align: left;">
+<p><code>%ooolllll</code></p></td>
+</tr>
+</tbody>
+</table>
+
+<p>...where length=<code>DECODELENGTH(%lllll+2)</code>, and offset=<code>%ooo + 1</code>.</p>
+<h3 id="literal-copy">Literal copy</h3>
+
+<p>As a special case, if any of the marker symbols are followed by a zero byte (0), the marker symbol itself is written to the decompressed buffer.</p>
+<h3 id="non-linear-length-encoding">Non-linear length encoding</h3>
+
+<p>The <code>DECODELENGTH</code> function implements a non-linear mapping of a number in the range 3-33 to a number in the range 3-128, according to the following table:</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Length parameter, <em>L</em> (3-33)</p></th>
+<th style="text-align: left;">
+<p>Decoded length (3-128)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>33</p></td>
+<td style="text-align: left;">
+<p>128</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>32</p></td>
+<td style="text-align: left;">
+<p>72</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>31</p></td>
+<td style="text-align: left;">
+<p>48</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>30</p></td>
+<td style="text-align: left;">
+<p>35</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>&lt;30</p></td>
+<td style="text-align: left;">
+<p><em>L</em></p></td>
+</tr>
+</tbody>
+</table>
+<h2 id="worst-case-data-growth">Worst case data growth</h2>
+
+<p>As the marker symbols are chosen as the four least common symbols in the uncompressed data stream (with a probability of at most 
+
+<math display="inline" id="Liblzg:0">
+ <semantics>
+  <mfrac>
+   <mn>1</mn>
+   <mn>256</mn>
+  </mfrac>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <cn type="integer">1</cn>
+    <cn type="integer">256</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tfrac{1}{256}
+  </annotation>
+ </semantics>
+</math>
+
+ each), and a single occurrence of a marker symbol requires two bytes to encode, the compressed data may grow by at most 
+
+<math display="inline" id="Liblzg:1">
+ <semantics>
+  <mfrac>
+   <mn>4</mn>
+   <mn>256</mn>
+  </mfrac>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <cn type="integer">4</cn>
+    <cn type="integer">256</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tfrac{4}{256}
+  </annotation>
+ </semantics>
+</math>
+
+ </p>
+</body>
+</html>

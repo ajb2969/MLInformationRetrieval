@@ -1,0 +1,1762 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1202">Natural evolution strategy</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Natural evolution strategy</h1>
+<hr/>
+
+<p><strong>Natural evolution strategies (NES)</strong> are a family of <a href="numerical_optimization" title="wikilink">numerical optimization</a> algorithms for <a href="Black_box" title="wikilink">black-box</a> problems. Similar in spirit to <a href="evolution_strategies" title="wikilink">evolution strategies</a>, they iteratively update the (continuous) parameters of a <em>search distribution</em> by following the <a href="Information_geometry#Natural_gradient" title="wikilink">natural gradient</a> towards higher expected fitness.</p>
+<h2 id="method">Method</h2>
+
+<p>The general procedure is as follows: the <em>parameterized</em> search distribution is used to produce a batch of search points, and the <a href="fitness_function" title="wikilink">fitness function</a> is evaluated at each such point. The distribution’s parameters (which include <em>strategy parameters</em>) allow the algorithm to adaptively capture the (local) structure of the fitness function. For example, in the case of a <a href="Gaussian_distribution" title="wikilink">Gaussian distribution</a>, this comprises the mean and the <a href="covariance_matrix" title="wikilink">covariance matrix</a>. From the samples, NES estimates a search gradient on the parameters towards higher expected fitness. NES then performs a gradient ascent step along the <strong><a href="Information_geometry#Natural_gradient" title="wikilink">natural gradient</a></strong>, a second order method which, unlike the plain gradient, renormalizes the update w.r.t. uncertainty. This step is crucial, since it prevents oscillations, premature convergence, and undesired effects stemming from a given parameterization. The entire process reiterates until a stopping criterion is met.</p>
+
+<p>All members of the NES family operate based on the same principles. They differ in the type of <a href="probability_distribution" title="wikilink">probability distribution</a> and the gradient <a class="uri" href="approximation" title="wikilink">approximation</a> method used. Different search spaces require different search distributions; for example, in low dimensionality it can be highly beneficial to model the full covariance matrix. In high dimensions, on the other hand, a more scalable alternative is to limit the covariance to the <a href="diagonal_matrix" title="wikilink">diagonal</a> only. In addition, highly multi-modal search spaces may benefit from more <a href="Heavy-tailed_distribution" title="wikilink">heavy-tailed distributions</a> (such as <a href="Cauchy_distribution" title="wikilink">Cauchy</a>, as opposed to the Gaussian). A last distinction arises between distributions where we can analytically compute the natural gradient, and more general distributions where we need to estimate it from samples.</p>
+<h3 id="search-gradients">Search gradients</h3>
+
+<p>Let 
+
+<math display="inline" id="Natural_evolution_strategy:0">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ denote the parameters of the search distribution 
+
+<math display="inline" id="Natural_evolution_strategy:1">
+ <semantics>
+  <mrow>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mpadded width="+1.7pt">
+     <mi>x</mi>
+    </mpadded>
+    <mo rspace="4.2pt" stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \pi(x\,|\,\theta)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Natural_evolution_strategy:2">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>f</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f(x)
+  </annotation>
+ </semantics>
+</math>
+
+ the fitness function evaluated at 
+
+<math display="inline" id="Natural_evolution_strategy:3">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+. NES then pursues the objective of maximizing the <em>expected fitness under the search distribution</em></p>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Natural_evolution_strategy:4">
+ <semantics>
+  <mrow>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mo>E</mo>
+    <mi>θ</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mo>=</mo>
+   <mo largeop="true" symmetric="true">∫</mo>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo rspace="5.3pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mpadded width="+1.7pt">
+     <mi>x</mi>
+    </mpadded>
+    <mo rspace="4.2pt" stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo rspace="5.3pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">J</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-E</ci>
+     <ci>θ</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <csymbol cd="unknown">f</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+    <eq></eq>
+    <int></int>
+    <csymbol cd="unknown">f</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <csymbol cd="unknown">x</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(\theta)=\operatorname{E}_{\theta}[f(x)]=\int f(x)\;\pi(x\,|\,\theta)\;dx
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+
+<p>through <a href="gradient_ascent" title="wikilink">gradient ascent</a>. The gradient can be rewritten as</p>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Natural_evolution_strategy:5">
+ <semantics>
+  <mrow>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mo largeop="true" symmetric="true">∫</mo>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo rspace="5.3pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mpadded width="+1.7pt">
+     <mi>x</mi>
+    </mpadded>
+    <mo rspace="4.2pt" stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo rspace="5.3pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <csymbol cd="unknown">J</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <int></int>
+    <csymbol cd="unknown">f</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <csymbol cd="unknown">x</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla_{\theta}J(\theta)=\nabla_{\theta}\int f(x)\;\pi(x\,|\,\theta)\;dx
+  </annotation>
+ </semantics>
+</math>
+
+
+
+<p>
+
+<math display="block" id="Natural_evolution_strategy:6">
+ <semantics>
+  <mrow>
+   <mo>=</mo>
+   <mo largeop="true" symmetric="true">∫</mo>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo rspace="5.3pt" stretchy="false">)</mo>
+   </mrow>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mpadded width="+1.7pt">
+     <mi>x</mi>
+    </mpadded>
+    <mo rspace="4.2pt" stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo rspace="5.3pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <eq></eq>
+    <int></int>
+    <csymbol cd="unknown">f</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <csymbol cd="unknown">x</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   =\int f(x)\;\nabla_{\theta}\pi(x\,|\,\theta)\;dx
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Natural_evolution_strategy:7">
+ <semantics>
+  <mrow>
+   <mo>=</mo>
+   <mo largeop="true" symmetric="true">∫</mo>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo rspace="5.3pt" stretchy="false">)</mo>
+   </mrow>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mpadded width="+1.7pt">
+     <mi>x</mi>
+    </mpadded>
+    <mo rspace="4.2pt" stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo rspace="5.3pt" stretchy="false">)</mo>
+   </mrow>
+   <mpadded width="+2.8pt">
+    <mfrac>
+     <mrow>
+      <mi>π</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mpadded width="+1.7pt">
+        <mi>x</mi>
+       </mpadded>
+       <mo rspace="4.2pt" stretchy="false">|</mo>
+       <mi>θ</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>π</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mpadded width="+1.7pt">
+        <mi>x</mi>
+       </mpadded>
+       <mo rspace="4.2pt" stretchy="false">|</mo>
+       <mi>θ</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mpadded>
+   <mi>d</mi>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <eq></eq>
+    <int></int>
+    <csymbol cd="unknown">f</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <divide></divide>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <csymbol cd="unknown">π</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">x</csymbol>
+       <ci>normal-|</ci>
+       <csymbol cd="unknown">θ</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+     </cerror>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <csymbol cd="unknown">π</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">x</csymbol>
+       <ci>normal-|</ci>
+       <csymbol cd="unknown">θ</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+     </cerror>
+    </apply>
+    <csymbol cd="unknown">d</csymbol>
+    <csymbol cd="unknown">x</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   =\int f(x)\;\nabla_{\theta}\pi(x\,|\,\theta)\;\frac{\pi(x\,|\,\theta)}{\pi(x\,%
+|\,\theta)}\;dx
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Natural_evolution_strategy:8">
+ <semantics>
+  <mrow>
+   <mo>=</mo>
+   <mo largeop="true" symmetric="true">∫</mo>
+   <mrow>
+    <mo maxsize="160%" minsize="160%">[</mo>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo rspace="5.3pt" stretchy="false">)</mo>
+    </mrow>
+    <msub>
+     <mo>∇</mo>
+     <mi>θ</mi>
+    </msub>
+    <mi>log</mi>
+    <mi>π</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mpadded width="+1.7pt">
+      <mi>x</mi>
+     </mpadded>
+     <mo rspace="4.2pt" stretchy="false">|</mo>
+     <mi>θ</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo maxsize="160%" minsize="160%" rspace="5.3pt">]</mo>
+   </mrow>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mpadded width="+1.7pt">
+     <mi>x</mi>
+    </mpadded>
+    <mo rspace="4.2pt" stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo rspace="5.3pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <eq></eq>
+    <int></int>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <csymbol cd="unknown">f</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-∇</ci>
+      <ci>θ</ci>
+     </apply>
+     <log></log>
+     <csymbol cd="unknown">π</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-|</ci>
+      <csymbol cd="unknown">θ</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <csymbol cd="unknown">x</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   =\int\Big[f(x)\;\nabla_{\theta}\log\pi(x\,|\,\theta)\Big]\;\pi(x\,|\,\theta)\;dx
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Natural_evolution_strategy:9">
+ <semantics>
+  <mrow>
+   <mo>=</mo>
+   <msub>
+    <mo>E</mo>
+    <mi>θ</mi>
+   </msub>
+   <mrow>
+    <mo>[</mo>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo rspace="5.3pt" stretchy="false">)</mo>
+    </mrow>
+    <msub>
+     <mo>∇</mo>
+     <mi>θ</mi>
+    </msub>
+    <mi>log</mi>
+    <mi>π</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mpadded width="+1.7pt">
+      <mi>x</mi>
+     </mpadded>
+     <mo rspace="4.2pt" stretchy="false">|</mo>
+     <mi>θ</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-E</ci>
+     <ci>θ</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <csymbol cd="unknown">f</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-∇</ci>
+      <ci>θ</ci>
+     </apply>
+     <log></log>
+     <csymbol cd="unknown">π</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-|</ci>
+      <csymbol cd="unknown">θ</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   =\operatorname{E}_{\theta}\left[f(x)\;\nabla_{\theta}\log\pi(x\,|\,\theta)\right]
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+</dd>
+</dl>
+</dd>
+</dl>
+
+<p>that is, the <a href="expected_value" title="wikilink">expected value</a> of 
+
+<math display="inline" id="Natural_evolution_strategy:10">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>f</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f(x)
+  </annotation>
+ </semantics>
+</math>
+
+ times the <a href="Logarithmic_derivative" title="wikilink">log-derivatives</a> at 
+
+<math display="inline" id="Natural_evolution_strategy:11">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+. In practice, it is possible to use the <a href="Monte_Carlo_method" title="wikilink">Monte Carlo</a> approximation based on a finite number of 
+
+<math display="inline" id="Natural_evolution_strategy:12">
+ <semantics>
+  <mi>λ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>λ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda
+  </annotation>
+ </semantics>
+</math>
+
+ samples</p>
+<dl>
+<dd><dl>
+<dd><math>\nabla_{\theta} J(\theta) \approx
+</math></dd>
+</dl>
+</dd>
+</dl>
+
+<p><code>  \frac{1}{\lambda} </code></p>
+
+<p>\sum_{k=1}^{\lambda} f(x_k) \; \nabla_{\theta} \log\pi(x_k \,|\, \theta). Finally, the parameters of the search distribution can be updated iteratively</p>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Natural_evolution_strategy:13">
+ <semantics>
+  <mrow>
+   <mi>θ</mi>
+   <mo>←</mo>
+   <mrow>
+    <mi>θ</mi>
+    <mo>+</mo>
+    <mrow>
+     <mi>η</mi>
+     <mrow>
+      <msub>
+       <mo>∇</mo>
+       <mi>θ</mi>
+      </msub>
+      <mi>J</mi>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-←</ci>
+    <ci>θ</ci>
+    <apply>
+     <plus></plus>
+     <ci>θ</ci>
+     <apply>
+      <times></times>
+      <ci>η</ci>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>normal-∇</ci>
+        <ci>θ</ci>
+       </apply>
+       <ci>J</ci>
+      </apply>
+      <ci>θ</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta\leftarrow\theta+\eta\nabla_{\theta}J(\theta)
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+<h3 id="natural-gradient-ascent">Natural gradient ascent</h3>
+
+<p>Instead of using the plain stochastic gradient for updates, NES follows the <strong>natural gradient</strong>, which has been shown to possess numerous advantages over the plain (<em>vanilla</em>) gradient, e.g.:</p>
+<ul>
+<li>the gradient direction is independent of the parameterization of the search distribution</li>
+<li>the updates magnitudes are automatically adjusted based on uncertainty, in turn speeding convergence on <a href="Plateau_(mathematics)" title="wikilink">plateaus</a> and ridges.</li>
+</ul>
+
+<p>The NES update is therefore</p>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Natural_evolution_strategy:14">
+ <semantics>
+  <mrow>
+   <mi>θ</mi>
+   <mo>←</mo>
+   <mrow>
+    <mi>θ</mi>
+    <mo>+</mo>
+    <mrow>
+     <mi>η</mi>
+     <msup>
+      <mi>𝐅</mi>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msup>
+     <mrow>
+      <msub>
+       <mo>∇</mo>
+       <mi>θ</mi>
+      </msub>
+      <mi>J</mi>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-←</ci>
+    <ci>θ</ci>
+    <apply>
+     <plus></plus>
+     <ci>θ</ci>
+     <apply>
+      <times></times>
+      <ci>η</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>𝐅</ci>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>normal-∇</ci>
+        <ci>θ</ci>
+       </apply>
+       <ci>J</ci>
+      </apply>
+      <ci>θ</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta\leftarrow\theta+\eta\mathbf{F}^{-1}\nabla_{\theta}J(\theta)
+  </annotation>
+ </semantics>
+</math>
+
+,
+</dd>
+</dl>
+</dd>
+</dl>
+
+<p>where 
+
+<math display="inline" id="Natural_evolution_strategy:15">
+ <semantics>
+  <mi>𝐅</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐅</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{F}
+  </annotation>
+ </semantics>
+</math>
+
+ is the <a href="Fisher_information#Matrix_form" title="wikilink">Fisher information matrix</a>. The Fisher matrix can sometimes be computed exactly, otherwise it is estimated from samples, reusing the log-derivatives 
+
+<math display="inline" id="Natural_evolution_strategy:16">
+ <semantics>
+  <mrow>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>log</mi>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <log></log>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla_{\theta}\log\pi(x|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h3 id="fitness-shaping">Fitness shaping</h3>
+
+<p>NES utilizes <a href="Ranking" title="wikilink">rank</a>-based fitness shaping in order to render the algorithm more robust, and <em>invariant</em> under monotonically increasing transformations of the fitness function. For this purpose, the fitness of the population is transformed into a set of <a class="uri" href="utility" title="wikilink">utility</a> values 
+
+<math display="inline" id="Natural_evolution_strategy:17">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>u</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>≥</mo>
+   <mi mathvariant="normal">…</mi>
+   <mo>≥</mo>
+   <msub>
+    <mi>u</mi>
+    <mi>λ</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <geq></geq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>u</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+    </apply>
+    <apply>
+     <geq></geq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>u</ci>
+      <ci>λ</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   u_{1}\geq\dots\geq u_{\lambda}
+  </annotation>
+ </semantics>
+</math>
+
+. Let 
+
+<math display="inline" id="Natural_evolution_strategy:18">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ denote the i<sup>th</sup> best individual. Replacing fitness with utility, the gradient estimate becomes</p>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Natural_evolution_strategy:19">
+ <semantics>
+  <mrow>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <msubsup>
+    <mo largeop="true" symmetric="true">∑</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>λ</mi>
+   </msubsup>
+   <mpadded width="+2.8pt">
+    <msub>
+     <mi>u</mi>
+     <mi>k</mi>
+    </msub>
+   </mpadded>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>log</mi>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mpadded width="+1.7pt">
+     <msub>
+      <mi>x</mi>
+      <mi>k</mi>
+     </msub>
+    </mpadded>
+    <mo rspace="4.2pt" stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <csymbol cd="unknown">J</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <eq></eq>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>λ</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>u</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <log></log>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>k</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla_{\theta}J(\theta)=\sum_{k=1}^{\lambda}u_{k}\;\nabla_{\theta}\log\pi(x_{%
+k}\,|\,\theta)
+  </annotation>
+ </semantics>
+</math>
+
+.
+</dd>
+</dl>
+</dd>
+</dl>
+
+<p>The choice of utility function is a free parameter of the algorithm.</p>
+<h3 id="pseudocode">Pseudocode</h3>
+
+<p><strong><code>input</code></strong>
+
+<math display="block" id="Natural_evolution_strategy:20">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mo rspace="8.1pt">,</mo>
+   <msub>
+    <mi>θ</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>n</mi>
+     <mi>i</mi>
+     <mi>t</mi>
+    </mrow>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>f</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>θ</ci>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>n</ci>
+      <ci>i</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f,\;\;\theta_{init}
+  </annotation>
+ </semantics>
+</math>
+
+<br/>
+<br/>
+<code>1  </code><strong><code>repeat</code></strong><br/>
+<code>   </code><br/>
+<code>2     '''for ''' </code>
+
+<math display="inline" id="Natural_evolution_strategy:21">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mi mathvariant="normal">…</mi>
+    <mi>λ</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>k</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">1</cn>
+     <ci>normal-…</ci>
+     <ci>λ</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k=1\ldots\lambda
+  </annotation>
+ </semantics>
+</math>
+
+<code> </code><strong><code>do</code></strong><code>                                              </code><em><code>//</code> 
+
+<math display="inline" id="Natural_evolution_strategy:22">
+ <semantics>
+  <mi>λ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>λ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda
+  </annotation>
+ </semantics>
+</math>
+
+ <code>is</code> <code>the</code> <code>population</code> <code>size</code></em><br/>
+<code>       </code><br/>
+<code>3         draw sample </code>
+
+<math display="inline" id="Natural_evolution_strategy:23">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>x</mi>
+    <mi>k</mi>
+   </msub>
+   <mo>∼</mo>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>⋅</mo>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>k</ci>
+    </apply>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <ci>normal-⋅</ci>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{k}\sim\pi(\cdot|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+<br/>
+<code>       </code><br/>
+<code>4         evaluate fitness </code>
+
+<math display="inline" id="Natural_evolution_strategy:24">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>k</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>f</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f(x_{k})
+  </annotation>
+ </semantics>
+</math>
+
+<br/>
+<code>       </code><br/>
+<code>5         calculate log-derivatives </code>
+
+<math display="inline" id="Natural_evolution_strategy:25">
+ <semantics>
+  <mrow>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>log</mi>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>k</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <log></log>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>k</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla_{\theta}\log\pi(x_{k}|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+<br/>
+<code>       </code><br/>
+<code>6     </code><strong><code>end</code></strong><br/>
+<code>   </code><br/>
+<code>7     assign the utilities </code>
+
+<math display="inline" id="Natural_evolution_strategy:26">
+ <semantics>
+  <msub>
+   <mi>u</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>u</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   u_{k}
+  </annotation>
+ </semantics>
+</math>
+
+<code>                                          </code><em><code>//</code> <code>based</code> <code>on</code> <code>rank</code></em><br/>
+<code>   </code><br/>
+<code>8     estimate the gradient </code>
+
+<math display="inline" id="Natural_evolution_strategy:27">
+ <semantics>
+  <mrow>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>J</mi>
+   <mo>←</mo>
+   <mfrac>
+    <mn>1</mn>
+    <mi>λ</mi>
+   </mfrac>
+   <msubsup>
+    <mo largeop="true" symmetric="true">∑</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>λ</mi>
+   </msubsup>
+   <msub>
+    <mi>u</mi>
+    <mi>k</mi>
+   </msub>
+   <mo>⋅</mo>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>log</mi>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>k</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <csymbol cd="unknown">J</csymbol>
+    <ci>normal-←</ci>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <ci>λ</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <eq></eq>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>λ</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>u</ci>
+     <ci>k</ci>
+    </apply>
+    <ci>normal-⋅</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <log></log>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>k</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla_{\theta}J\leftarrow\frac{1}{\lambda}\sum_{k=1}^{\lambda}u_{k}\cdot%
+\nabla_{\theta}\log\pi(x_{k}|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+<br/>
+<code>   </code><br/>
+<code>9     estimate </code>
+
+<math display="inline" id="Natural_evolution_strategy:28">
+ <semantics>
+  <mrow>
+   <mi>𝐅</mi>
+   <mo>←</mo>
+   <mfrac>
+    <mn>1</mn>
+    <mi>λ</mi>
+   </mfrac>
+   <msubsup>
+    <mo largeop="true" symmetric="true">∑</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>λ</mi>
+   </msubsup>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>log</mi>
+   <mi>π</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>k</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <msub>
+    <mo>∇</mo>
+    <mi>θ</mi>
+   </msub>
+   <mi>log</mi>
+   <mi>π</mi>
+   <msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>x</mi>
+      <mi>k</mi>
+     </msub>
+     <mo stretchy="false">|</mo>
+     <mi>θ</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>⊤</mo>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">F</csymbol>
+    <ci>normal-←</ci>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <ci>λ</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <eq></eq>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>λ</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <log></log>
+    <csymbol cd="unknown">π</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>k</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-∇</ci>
+     <ci>θ</ci>
+    </apply>
+    <log></log>
+    <csymbol cd="unknown">π</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>k</ci>
+      </apply>
+      <ci>normal-|</ci>
+      <csymbol cd="unknown">θ</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <csymbol cd="latexml">top</csymbol>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{F}\leftarrow\frac{1}{\lambda}\sum_{k=1}^{\lambda}\nabla_{\theta}\log%
+\pi(x_{k}|\theta)\nabla_{\theta}\log\pi(x_{k}|\theta)^{\top}
+  </annotation>
+ </semantics>
+</math>
+
+<code>           </code><em><code>//</code> <code>or</code> <code>compute</code> <code>it</code> <code>exactly</code></em><code> </code><br/>
+<code>   </code><br/>
+<code>10    update parameters </code>
+
+<math display="inline" id="Natural_evolution_strategy:29">
+ <semantics>
+  <mrow>
+   <mi>θ</mi>
+   <mo>←</mo>
+   <mrow>
+    <mi>θ</mi>
+    <mo>+</mo>
+    <mrow>
+     <mrow>
+      <mi>η</mi>
+      <mo>⋅</mo>
+      <msup>
+       <mi>𝐅</mi>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+     </mrow>
+     <mrow>
+      <msub>
+       <mo>∇</mo>
+       <mi>θ</mi>
+      </msub>
+      <mi>J</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-←</ci>
+    <ci>θ</ci>
+    <apply>
+     <plus></plus>
+     <ci>θ</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <ci>normal-⋅</ci>
+       <ci>η</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>𝐅</ci>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>normal-∇</ci>
+        <ci>θ</ci>
+       </apply>
+       <ci>J</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta\leftarrow\theta+\eta\cdot\mathbf{F}^{-1}\nabla_{\theta}J
+  </annotation>
+ </semantics>
+</math>
+
+<code>                        </code><em><code>//</code> 
+
+<math display="inline" id="Natural_evolution_strategy:30">
+ <semantics>
+  <mi>η</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>η</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \eta
+  </annotation>
+ </semantics>
+</math>
+
+ <code>is</code> <code>the</code> <code>learning</code> <code>rate</code></em><br/>
+<br/>
+<code>11 </code><strong><code>until</code></strong><code> stopping criterion is met</code></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Evolutionary_computation" title="wikilink">Evolutionary computation</a></li>
+<li><a href="CMA-ES" title="wikilink">Covariance matrix adaptation evolution strategy (CMA-ES)</a></li>
+</ul>
+<h2 id="bibliography">Bibliography</h2>
+<ul>
+<li>D. Wierstra, T. Schaul, J. Peters and J. Schmidhuber (2008). <a href="http://www.idsia.ch/~tom/publications/nes.pdf">Natural Evolution Strategies</a>. IEEE Congress on Evolutionary Computation (CEC).</li>
+<li>Y. Sun, D. Wierstra, T. Schaul and J. Schmidhuber (2009). <a href="http://www.idsia.ch/~tom/publications/ssng.pdf">Stochastic Search using the Natural Gradient</a>. International Conference on Machine Learning (ICML).</li>
+<li>T. Glasmachers, T. Schaul, Y. Sun, D. Wierstra and J. Schmidhuber (2010). <a href="http://www.idsia.ch/~tom/publications/xnes.pdf">Exponential Natural Evolution Strategies</a>. Genetic and Evolutionary Computation Conference (GECCO).</li>
+<li>T. Schaul, T. Glasmachers and J. Schmidhuber (2011). <a href="http://www.idsia.ch/~tom/publications/snes.pdf">High Dimensions and Heavy Tails for Natural Evolution Strategies</a>. Genetic and Evolutionary Computation Conference (GECCO).</li>
+<li>T. Schaul (2012). <a href="http://www.idsia.ch/~tom/publications/nesproof.pdf">Natural Evolution Strategies Converge on Sphere Functions</a>. Genetic and Evolutionary Computation Conference (GECCO).</li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://schaul.site44.com/nes.html">Collection of NES implementations in different languages</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Evolutionary_algorithms" title="wikilink">Category:Evolutionary algorithms</a> <a href="Category:Stochastic_optimization" title="wikilink">Category:Stochastic optimization</a> <a href="Category:Optimization_algorithms_and_methods" title="wikilink">Category:Optimization algorithms and methods</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a></p>
+</body>
+</html>

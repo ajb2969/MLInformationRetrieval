@@ -1,0 +1,4616 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="628">Ensemble Kalman filter</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Ensemble Kalman filter</h1>
+<hr/>
+
+<p>The <strong>ensemble Kalman filter</strong> (EnKF) is a <a href="recursive_filter" title="wikilink">recursive filter</a> suitable for problems with a large number of variables, such as <a href="discretization" title="wikilink">discretizations</a> of <a href="partial_differential_equation" title="wikilink">partial differential equations</a> in geophysical models. The EnKF originated as a version of the <a href="Kalman_filter" title="wikilink">Kalman filter</a> for large problems (essentially, the <a href="covariance_matrix" title="wikilink">covariance matrix</a> is replaced by the <a href="sample_covariance_matrix" title="wikilink">sample covariance</a>), and it is now an important <a href="data_assimilation" title="wikilink">data assimilation</a> component of <a href="ensemble_forecasting" title="wikilink">ensemble forecasting</a>. EnKF is related to the <a href="particle_filter" title="wikilink">particle filter</a> (in this context, a particle is the same thing as ensemble member) but the EnKF makes the assumption that all probability distributions involved are <a href="Normal_distribution" title="wikilink">Gaussian</a>; when it is applicable, it is much more efficient than the <a href="particle_filter" title="wikilink">particle filter</a>.</p>
+<h2 id="introduction">Introduction</h2>
+
+<p>The Ensemble Kalman Filter (EnKF) is a <a href="Monte_Carlo_method" title="wikilink">Monte Carlo</a> implementation of the <a href="Bayesian_inference" title="wikilink">Bayesian update</a> problem: given a <a href="probability_density_function" title="wikilink">probability density function</a> (pdf) of the state of the modeled system (the <em><a href="Prior_probability" title="wikilink">prior</a></em>, called often the forecast in geosciences) and the data likelihood, the <a href="Bayes_theorem" title="wikilink">Bayes theorem</a> is used to obtain the pdf after the data likelihood has been taken into account (the <em><a href="Posterior_probability" title="wikilink">posterior</a></em>, often called the analysis). This is called a Bayesian update. The Bayesian update is combined with advancing the model in time, incorporating new data from time to time. The original <a href="Kalman_Filter" title="wikilink">Kalman Filter</a><ref name="Kalman-1960-NAL">R. E. Kalman, <em>A new approach to linear filtering and prediction problems</em>, Transactions of the ASME -- Journal of Basic Engineering, Series D, 82 (1960), pp. 35--45.</ref></p>
+
+<p> assumes that all pdfs are <a href="normal_distribution" title="wikilink">Gaussian</a> (the Gaussian assumption) and provides algebraic formulas for the change of the <a class="uri" href="mean" title="wikilink">mean</a> and the <a href="covariance_matrix" title="wikilink">covariance matrix</a> by the Bayesian update, as well as a formula for advancing the covariance matrix in time provided the system is linear. However, maintaining the covariance matrix is not feasible computationally for high-dimensional systems. For this reason, EnKFs were developed.<ref name="Evensen-1994-SDA">G. Evensen, <em>Sequential data assimilation with nonlinear quasi-geostrophic model using Monte Carlo methods to forecast error statistics</em>, Journal of Geophysical Research, 99 (C5) (1994), pp. 143--162.</ref></p>
+
+<p><ref name="Houtekamer-1998-DAE">P. Houtekamer and H. L. Mitchell, <em>Data assimilation using an ensemble Kalman filter technique</em>, Monthly Weather Review, 126 (1998), pp. 796--811.</ref></p>
+
+<p> EnKFs represent the distribution of the system state using a collection of state vectors, called an <a href="Numerical_weather_prediction#Ensembles" title="wikilink">ensemble</a>, and replace the covariance matrix by the <a href="sample_covariance" title="wikilink">sample covariance</a> computed from the ensemble. The ensemble is operated with as if it were a <a href="random_sample" title="wikilink">random sample</a>, but the ensemble members are really not <a href="Statistical_independence" title="wikilink">independent</a> - the EnKF ties them together. One advantage of EnKFs is that advancing the pdf in time is achieved by simply advancing each member of the ensemble. For a survey of EnKF and related data assimilation techniques, see G. Evensen.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h2 id="a-derivation-of-the-enkf">A derivation of the EnKF</h2>
+<h3 id="the-kalman-filter">The Kalman Filter</h3>
+
+<p>Let us review first the <a href="Kalman_filter" title="wikilink">Kalman filter</a>. Let 
+
+<math display="inline" id="Ensemble_Kalman_filter:0">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ denote the 
+
+<math display="inline" id="Ensemble_Kalman_filter:1">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+-dimensional <a href="State_space_representation" title="wikilink">state vector</a> of a model, and assume that it has <a href="normal_distribution" title="wikilink">Gaussian probability distribution</a> with mean 
+
+<math display="inline" id="Ensemble_Kalman_filter:2">
+ <semantics>
+  <mi>μ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>μ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\mu}
+  </annotation>
+ </semantics>
+</math>
+
+ and covariance 
+
+<math display="inline" id="Ensemble_Kalman_filter:3">
+ <semantics>
+  <mi>Q</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Q</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q
+  </annotation>
+ </semantics>
+</math>
+
+, i.e., its pdf is</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:4">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>𝐱</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>∝</mo>
+    <mrow>
+     <mi>exp</mi>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <mo>-</mo>
+       <mrow>
+        <mfrac>
+         <mn>1</mn>
+         <mn>2</mn>
+        </mfrac>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mi>𝐱</mi>
+           <mo>-</mo>
+           <mi>μ</mi>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mi mathvariant="normal">T</mi>
+        </msup>
+        <msup>
+         <mi>Q</mi>
+         <mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>𝐱</mi>
+          <mo>-</mo>
+          <mi>μ</mi>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">proportional-to</csymbol>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <ci>𝐱</ci>
+    </apply>
+    <apply>
+     <exp></exp>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <minus></minus>
+         <ci>𝐱</ci>
+         <ci>μ</ci>
+        </apply>
+        <ci>normal-T</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>Q</ci>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <ci>𝐱</ci>
+        <ci>μ</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x})\propto\exp\left(-\frac{1}{2}(\mathbf{x}-\mathbf{\mu})^{\mathrm{T%
+}}Q^{-1}(\mathbf{x}-\mathbf{\mu})\right).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Here and below, 
+
+<math display="inline" id="Ensemble_Kalman_filter:5">
+ <semantics>
+  <mo>∝</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">proportional-to</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \propto
+  </annotation>
+ </semantics>
+</math>
+
+ means proportional; a pdf is always scaled so that its integral over the whole space is one. This 
+
+<math display="inline" id="Ensemble_Kalman_filter:6">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>𝐱</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{x})
+  </annotation>
+ </semantics>
+</math>
+
+, called the <em><a href="prior_probability" title="wikilink">prior</a></em>, was evolved in time by running the model and now is to be updated to account for new data. It is natural to assume that the error distribution of the data is known; data have to come with an error estimate, otherwise they are meaningless. Here, the data 
+
+<math display="inline" id="Ensemble_Kalman_filter:7">
+ <semantics>
+  <mi>𝐝</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐝</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{d}
+  </annotation>
+ </semantics>
+</math>
+
+ is assumed to have Gaussian pdf with covariance 
+
+<math display="inline" id="Ensemble_Kalman_filter:8">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ and mean 
+
+<math display="inline" id="Ensemble_Kalman_filter:9">
+ <semantics>
+  <mrow>
+   <mi>H</mi>
+   <mi>𝐱</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>H</ci>
+    <ci>𝐱</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H\mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Ensemble_Kalman_filter:10">
+ <semantics>
+  <mi>H</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>H</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H
+  </annotation>
+ </semantics>
+</math>
+
+ is the so-called <a href="Hat_matrix" title="wikilink">observation matrix</a>. The covariance matrix 
+
+<math display="inline" id="Ensemble_Kalman_filter:11">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ describes the estimate of the error of the data; if the random errors in the entries of the data vector 
+
+<math display="inline" id="Ensemble_Kalman_filter:12">
+ <semantics>
+  <mi>𝐝</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐝</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{d}
+  </annotation>
+ </semantics>
+</math>
+
+ are independent, 
+
+<math display="inline" id="Ensemble_Kalman_filter:13">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ is diagonal and its diagonal entries are the squares of the <a href="standard_deviation" title="wikilink">standard deviation</a> (“error size”) of the error of the corresponding entries of the data vector 
+
+<math display="inline" id="Ensemble_Kalman_filter:14">
+ <semantics>
+  <mi>𝐝</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐝</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{d}
+  </annotation>
+ </semantics>
+</math>
+
+. The value 
+
+<math display="inline" id="Ensemble_Kalman_filter:15">
+ <semantics>
+  <mrow>
+   <mi>H</mi>
+   <mi>𝐱</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>H</ci>
+    <ci>𝐱</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H\mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ is what the value of the data would be for the state 
+
+<math display="inline" id="Ensemble_Kalman_filter:16">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ in the absence of data errors. Then the probability density 
+
+<math display="inline" id="Ensemble_Kalman_filter:17">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐝</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">d</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{d}|\mathbf{x})
+  </annotation>
+ </semantics>
+</math>
+
+ of the data 
+
+<math display="inline" id="Ensemble_Kalman_filter:18">
+ <semantics>
+  <mi>𝐝</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐝</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{d}
+  </annotation>
+ </semantics>
+</math>
+
+ conditional of the system state 
+
+<math display="inline" id="Ensemble_Kalman_filter:19">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+, called the <a href="Likelihood_function" title="wikilink">data likelihood</a>, is</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:20">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo>(</mo>
+    <mi>𝐝</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝐱</mi>
+    <mo>)</mo>
+   </mrow>
+   <mo>∝</mo>
+   <mi>exp</mi>
+   <mrow>
+    <mo>(</mo>
+    <mo>-</mo>
+    <mfrac>
+     <mn>1</mn>
+     <mn>2</mn>
+    </mfrac>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>𝐝</mi>
+      <mo>-</mo>
+      <mi>H</mi>
+      <mi>𝐱</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi mathvariant="normal">T</mi>
+    </msup>
+    <msup>
+     <mi>R</mi>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐝</mi>
+     <mo>-</mo>
+     <mi>H</mi>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">d</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="latexml">proportional-to</csymbol>
+    <exp></exp>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <minus></minus>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">d</csymbol>
+       <minus></minus>
+       <csymbol cd="unknown">H</csymbol>
+       <csymbol cd="unknown">x</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-T</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>R</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">d</csymbol>
+      <minus></minus>
+      <csymbol cd="unknown">H</csymbol>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-)</ci>
+    </cerror>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p\left(\mathbf{d}|\mathbf{x}\right)\propto\exp\left(-\frac{1}{2}(\mathbf{d}-H%
+\mathbf{x})^{\mathrm{T}}R^{-1}(\mathbf{d}-H\mathbf{x})\right).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The pdf of the state and the <a href="Likelihood_function" title="wikilink">data likelihood</a> are combined to give the new probability density of the system state 
+
+<math display="inline" id="Ensemble_Kalman_filter:21">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ conditional on the value of the data 
+
+<math display="inline" id="Ensemble_Kalman_filter:22">
+ <semantics>
+  <mi>𝐝</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐝</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{d}
+  </annotation>
+ </semantics>
+</math>
+
+ (the ''<a href="posterior_probability" title="wikilink">posterior''</a>) by the <a href="Bayes_theorem#Bayes'_theorem_for_probability_densities" title="wikilink">Bayes theorem</a>,</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:23">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo>(</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝐝</mi>
+    <mo>)</mo>
+   </mrow>
+   <mo>∝</mo>
+   <mi>p</mi>
+   <mrow>
+    <mo>(</mo>
+    <mi>𝐝</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝐱</mi>
+    <mo>)</mo>
+   </mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">d</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="latexml">proportional-to</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">d</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p\left(\mathbf{x}|\mathbf{d}\right)\propto p\left(\mathbf{d}|\mathbf{x}\right)%
+p(\mathbf{x}).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The data 
+
+<math display="inline" id="Ensemble_Kalman_filter:24">
+ <semantics>
+  <mi>𝐝</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐝</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{d}
+  </annotation>
+ </semantics>
+</math>
+
+ is fixed once it is received, so denote the posterior state by 
+
+<math display="inline" id="Ensemble_Kalman_filter:25">
+ <semantics>
+  <mover accent="true">
+   <mi>𝐱</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>𝐱</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\hat{x}}
+  </annotation>
+ </semantics>
+</math>
+
+ instead of 
+
+<math display="inline" id="Ensemble_Kalman_filter:26">
+ <semantics>
+  <mrow>
+   <mi>𝐱</mi>
+   <mo stretchy="false">|</mo>
+   <mi>𝐝</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">x</csymbol>
+    <ci>normal-|</ci>
+    <csymbol cd="unknown">d</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}|\mathbf{d}
+  </annotation>
+ </semantics>
+</math>
+
+ and the posterior pdf by 
+
+<math display="inline" id="Ensemble_Kalman_filter:27">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo>(</mo>
+    <mover accent="true">
+     <mi>𝐱</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <apply>
+     <ci>normal-^</ci>
+     <ci>𝐱</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p\left(\mathbf{\hat{x}}\right)
+  </annotation>
+ </semantics>
+</math>
+
+. It can be shown by algebraic manipulations<ref name="Anderson-1979-OF">B. D. O. Anderson and J. B. Moore, <em>Optimal filtering</em>, Prentice-Hall, Englewood Cliffs, N.J., 1979.</ref></p>
+
+<p> that the posterior pdf is also Gaussian,</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:28">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo>(</mo>
+      <mover accent="true">
+       <mi>𝐱</mi>
+       <mo stretchy="false">^</mo>
+      </mover>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+    <mo>∝</mo>
+    <mrow>
+     <mi>exp</mi>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <mo>-</mo>
+       <mrow>
+        <mfrac>
+         <mn>1</mn>
+         <mn>2</mn>
+        </mfrac>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mover accent="true">
+            <mi>𝐱</mi>
+            <mo stretchy="false">^</mo>
+           </mover>
+           <mo>-</mo>
+           <mover accent="true">
+            <mi>μ</mi>
+            <mo stretchy="false">^</mo>
+           </mover>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mi mathvariant="normal">T</mi>
+        </msup>
+        <msup>
+         <mover accent="true">
+          <mi>Q</mi>
+          <mo stretchy="false">^</mo>
+         </mover>
+         <mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mover accent="true">
+           <mi>𝐱</mi>
+           <mo stretchy="false">^</mo>
+          </mover>
+          <mo>-</mo>
+          <mover accent="true">
+           <mi>μ</mi>
+           <mo stretchy="false">^</mo>
+          </mover>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">proportional-to</csymbol>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <apply>
+      <ci>normal-^</ci>
+      <ci>𝐱</ci>
+     </apply>
+    </apply>
+    <apply>
+     <exp></exp>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <minus></minus>
+         <apply>
+          <ci>normal-^</ci>
+          <ci>𝐱</ci>
+         </apply>
+         <apply>
+          <ci>normal-^</ci>
+          <ci>μ</ci>
+         </apply>
+        </apply>
+        <ci>normal-T</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <ci>normal-^</ci>
+         <ci>Q</ci>
+        </apply>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <ci>normal-^</ci>
+         <ci>𝐱</ci>
+        </apply>
+        <apply>
+         <ci>normal-^</ci>
+         <ci>μ</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p\left(\mathbf{\hat{x}}\right)\propto\exp\left(-\frac{1}{2}(\mathbf{\hat{x}}-%
+\mathbf{\hat{\mu}})^{\mathrm{T}}\hat{Q}^{-1}(\mathbf{\hat{x}}-\mathbf{\hat{\mu%
+}})\right),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>with the posterior mean 
+
+<math display="inline" id="Ensemble_Kalman_filter:29">
+ <semantics>
+  <mover accent="true">
+   <mi>μ</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>μ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\hat{\mu}}
+  </annotation>
+ </semantics>
+</math>
+
+ and covariance 
+
+<math display="inline" id="Ensemble_Kalman_filter:30">
+ <semantics>
+  <mover accent="true">
+   <mi>Q</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>Q</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{Q}
+  </annotation>
+ </semantics>
+</math>
+
+ given by the Kalman update formulas</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:31">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mover accent="true">
+      <mi>μ</mi>
+      <mo stretchy="false">^</mo>
+     </mover>
+     <mo>=</mo>
+     <mrow>
+      <mi>μ</mi>
+      <mo>+</mo>
+      <mrow>
+       <mi>K</mi>
+       <mrow>
+        <mo>(</mo>
+        <mrow>
+         <mi>𝐝</mi>
+         <mo>-</mo>
+         <mrow>
+          <mi>H</mi>
+          <mi>μ</mi>
+         </mrow>
+        </mrow>
+        <mo>)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo rspace="12.5pt">,</mo>
+    <mrow>
+     <mover accent="true">
+      <mi>Q</mi>
+      <mo stretchy="false">^</mo>
+     </mover>
+     <mo>=</mo>
+     <mrow>
+      <mrow>
+       <mo>(</mo>
+       <mrow>
+        <mi>I</mi>
+        <mo>-</mo>
+        <mrow>
+         <mi>K</mi>
+         <mi>H</mi>
+        </mrow>
+       </mrow>
+       <mo>)</mo>
+      </mrow>
+      <mi>Q</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <ci>normal-^</ci>
+      <ci>μ</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>μ</ci>
+      <apply>
+       <times></times>
+       <ci>K</ci>
+       <apply>
+        <minus></minus>
+        <ci>𝐝</ci>
+        <apply>
+         <times></times>
+         <ci>H</ci>
+         <ci>μ</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <apply>
+      <ci>normal-^</ci>
+      <ci>Q</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <minus></minus>
+       <ci>I</ci>
+       <apply>
+        <times></times>
+        <ci>K</ci>
+        <ci>H</ci>
+       </apply>
+      </apply>
+      <ci>Q</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\hat{\mu}}=\mathbf{\mu}+K\left(\mathbf{d}-H\mathbf{\mu}\right),\quad%
+\hat{Q}=\left(I-KH\right)Q,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:32">
+ <semantics>
+  <mrow>
+   <mi>K</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>Q</mi>
+    <msup>
+     <mi>H</mi>
+     <mi mathvariant="normal">T</mi>
+    </msup>
+    <msup>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <mrow>
+        <mi>H</mi>
+        <mi>Q</mi>
+        <msup>
+         <mi>H</mi>
+         <mi mathvariant="normal">T</mi>
+        </msup>
+       </mrow>
+       <mo>+</mo>
+       <mi>R</mi>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>K</ci>
+    <apply>
+     <times></times>
+     <ci>Q</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>H</ci>
+      <ci>normal-T</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <ci>H</ci>
+        <ci>Q</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>H</ci>
+         <ci>normal-T</ci>
+        </apply>
+       </apply>
+       <ci>R</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K=QH^{\mathrm{T}}\left(HQH^{\mathrm{T}}+R\right)^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>is the so-called <a href="Kalman_filter#Kalman_gain_derivation" title="wikilink">Kalman gain</a> matrix.</p>
+<h3 id="the-ensemble-kalman-filter">The Ensemble Kalman Filter</h3>
+
+<p>The EnKF is a Monte Carlo approximation of the Kalman filter, which avoids evolving the covariance matrix of the pdf of the state vector 
+
+<math display="inline" id="Ensemble_Kalman_filter:33">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+. Instead, the pdf is represented by an ensemble</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:34">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>X</mi>
+    <mo>=</mo>
+    <mrow>
+     <mo>[</mo>
+     <msub>
+      <mi>𝐱</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>𝐱</mi>
+      <mi>N</mi>
+     </msub>
+     <mo>]</mo>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mo>[</mo>
+     <msub>
+      <mi>𝐱</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>]</mo>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>X</ci>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐱</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐱</ci>
+       <ci>N</ci>
+      </apply>
+     </list>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐱</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X=\left[\mathbf{x}_{1},\ldots,\mathbf{x}_{N}\right]=\left[\mathbf{x}_{i}\right].
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Ensemble_Kalman_filter:35">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+ is an 
+
+<math display="inline" id="Ensemble_Kalman_filter:36">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>×</mo>
+   <mi>N</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>n</ci>
+    <ci>N</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n\times N
+  </annotation>
+ </semantics>
+</math>
+
+ matrix whose columns are the ensemble members, and it is called the <em>prior ensemble</em>. Ideally, ensemble members would form a <a href="Random_sample" title="wikilink">sample</a> from the prior distribution. However, the ensemble members are not in general <a href="Statistical_independence" title="wikilink">independent</a> except in the initial ensemble, since every EnKF step ties them together. They are deemed to be approximately independent, and all calculations proceed as if they actually were independent.</p>
+
+<p>Replicate the data 
+
+<math display="inline" id="Ensemble_Kalman_filter:37">
+ <semantics>
+  <mi>𝐝</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐝</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{d}
+  </annotation>
+ </semantics>
+</math>
+
+ into an 
+
+<math display="inline" id="Ensemble_Kalman_filter:38">
+ <semantics>
+  <mrow>
+   <mi>m</mi>
+   <mo>×</mo>
+   <mi>N</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>m</ci>
+    <ci>N</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m\times N
+  </annotation>
+ </semantics>
+</math>
+
+ matrix</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:39">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>D</mi>
+     <mo>=</mo>
+     <mrow>
+      <mo>[</mo>
+      <msub>
+       <mi>𝐝</mi>
+       <mn>1</mn>
+      </msub>
+      <mo>,</mo>
+      <mi mathvariant="normal">…</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>𝐝</mi>
+       <mi>N</mi>
+      </msub>
+      <mo>]</mo>
+     </mrow>
+     <mo>=</mo>
+     <mrow>
+      <mo>[</mo>
+      <msub>
+       <mi>𝐝</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+    <mo rspace="12.5pt">,</mo>
+    <mrow>
+     <mrow>
+      <msub>
+       <mi>𝐝</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>=</mo>
+      <mrow>
+       <mi>𝐝</mi>
+       <mo>+</mo>
+       <msub>
+        <mi>ϵ</mi>
+        <mi>𝐢</mi>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo rspace="12.5pt">,</mo>
+     <mrow>
+      <msub>
+       <mi>ϵ</mi>
+       <mi>𝐢</mi>
+      </msub>
+      <mo>=</mo>
+      <mrow>
+       <mi>N</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mn>0</mn>
+        <mo>,</mo>
+        <mi>R</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <and></and>
+     <apply>
+      <eq></eq>
+      <ci>D</ci>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐝</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-…</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐝</ci>
+        <ci>N</ci>
+       </apply>
+      </list>
+     </apply>
+     <apply>
+      <eq></eq>
+      <share href="#.cmml">
+      </share>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐝</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐝</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <plus></plus>
+       <ci>𝐝</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>ϵ</ci>
+        <ci>𝐢</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ϵ</ci>
+       <ci>𝐢</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>N</ci>
+       <interval closure="open">
+        <cn type="integer">0</cn>
+        <ci>R</ci>
+       </interval>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D=\left[\mathbf{d}_{1},\ldots,\mathbf{d}_{N}\right]=\left[\mathbf{d}_{i}\right%
+],\quad\mathbf{d}_{i}=\mathbf{d}+\mathbf{\epsilon_{i}},\quad\mathbf{\epsilon_{%
+i}}=N(0,R),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>so that each column 
+
+<math display="inline" id="Ensemble_Kalman_filter:40">
+ <semantics>
+  <msub>
+   <mi>𝐝</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐝</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{d}_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ consists of the data vector 
+
+<math display="inline" id="Ensemble_Kalman_filter:41">
+ <semantics>
+  <mi>𝐝</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐝</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{d}
+  </annotation>
+ </semantics>
+</math>
+
+ plus a random vector from the 
+
+<math display="inline" id="Ensemble_Kalman_filter:42">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+-dimensional normal distribution 
+
+<math display="inline" id="Ensemble_Kalman_filter:43">
+ <semantics>
+  <mrow>
+   <mi>N</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>0</mn>
+    <mo>,</mo>
+    <mi>R</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>N</ci>
+    <interval closure="open">
+     <cn type="integer">0</cn>
+     <ci>R</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N(0,R)
+  </annotation>
+ </semantics>
+</math>
+
+. If, in addition, the columns of 
+
+<math display="inline" id="Ensemble_Kalman_filter:44">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+ are a sample from the <a href="prior_probability" title="wikilink">prior probability</a> distribution, then the columns of</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:45">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>X</mi>
+    <mo stretchy="false">^</mo>
+   </mover>
+   <mo>=</mo>
+   <mrow>
+    <mi>X</mi>
+    <mo>+</mo>
+    <mrow>
+     <mi>K</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>D</mi>
+       <mo>-</mo>
+       <mrow>
+        <mi>H</mi>
+        <mi>X</mi>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-^</ci>
+     <ci>X</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>X</ci>
+     <apply>
+      <times></times>
+      <ci>K</ci>
+      <apply>
+       <minus></minus>
+       <ci>D</ci>
+       <apply>
+        <times></times>
+        <ci>H</ci>
+        <ci>X</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{X}=X+K(D-HX)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>form a sample from the <a href="posterior_probability" title="wikilink">posterior probability</a> distribution. [To see this in the scalar case with 
+
+<math display="inline" id="Ensemble_Kalman_filter:46">
+ <semantics>
+  <mrow>
+   <mi>H</mi>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>H</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H=1
+  </annotation>
+ </semantics>
+</math>
+
+: Let 
+
+<math display="inline" id="Ensemble_Kalman_filter:47">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>x</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <mi>μ</mi>
+     <mo>+</mo>
+     <msub>
+      <mi>ξ</mi>
+      <mi>i</mi>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo rspace="5.3pt">,</mo>
+   <mrow>
+    <msub>
+     <mi>ξ</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>∼</mo>
+    <mrow>
+     <mi>N</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mn>0</mn>
+      <mo>,</mo>
+      <msubsup>
+       <mi>σ</mi>
+       <mi>x</mi>
+       <mn>2</mn>
+      </msubsup>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>μ</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ξ</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">similar-to</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ξ</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>N</ci>
+      <interval closure="open">
+       <cn type="integer">0</cn>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>x</ci>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </interval>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{i}=\mu+\xi_{i},\;\xi_{i}\sim N(0,\sigma_{x}^{2})
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Ensemble_Kalman_filter:48">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>d</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>=</mo>
+     <mrow>
+      <mi>d</mi>
+      <mo>+</mo>
+      <msub>
+       <mi>ϵ</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+    <mo rspace="5.3pt">,</mo>
+    <mrow>
+     <msub>
+      <mi>ϵ</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>∼</mo>
+     <mrow>
+      <mi>N</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mn>0</mn>
+       <mo>,</mo>
+       <msubsup>
+        <mi>σ</mi>
+        <mi>d</mi>
+        <mn>2</mn>
+       </msubsup>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>d</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>d</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ϵ</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">similar-to</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ϵ</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>N</ci>
+      <interval closure="open">
+       <cn type="integer">0</cn>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>d</ci>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </interval>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d_{i}=d+\epsilon_{i},\;\epsilon_{i}\sim N(0,\sigma_{d}^{2}).
+  </annotation>
+ </semantics>
+</math>
+
+ Then 
+
+<math display="inline" id="Ensemble_Kalman_filter:49">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>x</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mrow>
+       <mfrac>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>x</mi>
+          <mn>2</mn>
+         </msubsup>
+        </mrow>
+        <mrow>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>x</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+         <mo>+</mo>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>d</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+        </mrow>
+       </mfrac>
+       <mi>μ</mi>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <mfrac>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>d</mi>
+          <mn>2</mn>
+         </msubsup>
+        </mrow>
+        <mrow>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>x</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+         <mo>+</mo>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>d</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+        </mrow>
+       </mfrac>
+       <mi>d</mi>
+      </mrow>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mrow>
+       <mfrac>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>x</mi>
+          <mn>2</mn>
+         </msubsup>
+        </mrow>
+        <mrow>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>x</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+         <mo>+</mo>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>d</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+        </mrow>
+       </mfrac>
+       <msub>
+        <mi>ξ</mi>
+        <mi>i</mi>
+       </msub>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <mfrac>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>d</mi>
+          <mn>2</mn>
+         </msubsup>
+        </mrow>
+        <mrow>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>x</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+         <mo>+</mo>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>d</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+        </mrow>
+       </mfrac>
+       <msub>
+        <mi>ϵ</mi>
+        <mi>i</mi>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-^</ci>
+      <ci>x</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>x</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <plus></plus>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>x</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>d</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <ci>μ</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>d</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <plus></plus>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>x</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>d</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <ci>d</ci>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>x</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <plus></plus>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>x</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>d</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>ξ</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>d</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <plus></plus>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>x</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>d</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>ϵ</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{x}_{i}=\left(\frac{1/\sigma_{x}^{2}}{1/\sigma_{x}^{2}+1/\sigma_{d}^{2}}%
+\mu+\frac{1/\sigma_{d}^{2}}{1/\sigma_{x}^{2}+1/\sigma_{d}^{2}}d\right)+\left(%
+\frac{1/\sigma_{x}^{2}}{1/\sigma_{x}^{2}+1/\sigma_{d}^{2}}\xi_{i}+\frac{1/%
+\sigma_{d}^{2}}{1/\sigma_{x}^{2}+1/\sigma_{d}^{2}}\epsilon_{i}\right)
+  </annotation>
+ </semantics>
+</math>
+
+. The first sum is the posterior mean, and the second sum, in view of the independence, has a variance 
+
+<math display="inline" id="Ensemble_Kalman_filter:50">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msup>
+      <mrow>
+       <mo>(</mo>
+       <mfrac>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>x</mi>
+          <mn>2</mn>
+         </msubsup>
+        </mrow>
+        <mrow>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>x</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+         <mo>+</mo>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>d</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+        </mrow>
+       </mfrac>
+       <mo>)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+     <msubsup>
+      <mi>σ</mi>
+      <mi>x</mi>
+      <mn>2</mn>
+     </msubsup>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mrow>
+       <mo>(</mo>
+       <mfrac>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>d</mi>
+          <mn>2</mn>
+         </msubsup>
+        </mrow>
+        <mrow>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>x</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+         <mo>+</mo>
+         <mrow>
+          <mn>1</mn>
+          <mo>/</mo>
+          <msubsup>
+           <mi>σ</mi>
+           <mi>d</mi>
+           <mn>2</mn>
+          </msubsup>
+         </mrow>
+        </mrow>
+       </mfrac>
+       <mo>)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+     <msubsup>
+      <mi>σ</mi>
+      <mi>d</mi>
+      <mn>2</mn>
+     </msubsup>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mn>1</mn>
+    <mrow>
+     <mrow>
+      <mn>1</mn>
+      <mo>/</mo>
+      <msubsup>
+       <mi>σ</mi>
+       <mi>x</mi>
+       <mn>2</mn>
+      </msubsup>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mn>1</mn>
+      <mo>/</mo>
+      <msubsup>
+       <mi>σ</mi>
+       <mi>d</mi>
+       <mn>2</mn>
+      </msubsup>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <divide></divide>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>x</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <plus></plus>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>x</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>d</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>x</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <divide></divide>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>d</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <plus></plus>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>x</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <divide></divide>
+          <cn type="integer">1</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>σ</ci>
+            <ci>d</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>d</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <apply>
+      <plus></plus>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>x</ci>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>d</ci>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left(\frac{1/\sigma_{x}^{2}}{1/\sigma_{x}^{2}+1/\sigma_{d}^{2}}\right)^{2}%
+\sigma_{x}^{2}+\left(\frac{1/\sigma_{d}^{2}}{1/\sigma_{x}^{2}+1/\sigma_{d}^{2}%
+}\right)^{2}\sigma_{d}^{2}=\frac{1}{1/\sigma_{x}^{2}+1/\sigma_{d}^{2}}
+  </annotation>
+ </semantics>
+</math>
+
+, which is the posterior variance. ]</p>
+
+<p>The EnKF is now obtained<ref name="Johns-2005-CEK">C. J. Johns and J. Mandel, <em>A two-stage ensemble Kalman filter for smooth data assimilation</em>. Environmental and Ecological Statistics, in print. Special issue, Conference on New Developments of Statistical Analysis in Wildlife, Fisheries, and Ecological Research, Oct 13-16, 2004, Columbia, MI. CCM Report 221, University of Colorado at Denver and Health Sciences Center, 2005. <a href="http://www.math.ucdenver.edu/ccm/reports/rep221.pdf">report</a></ref></p>
+
+<p> simply by replacing the state covariance 
+
+<math display="inline" id="Ensemble_Kalman_filter:51">
+ <semantics>
+  <mi>Q</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Q</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q
+  </annotation>
+ </semantics>
+</math>
+
+ in Kalman gain matrix 
+
+<math display="inline" id="Ensemble_Kalman_filter:52">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K
+  </annotation>
+ </semantics>
+</math>
+
+ by the sample covariance 
+
+<math display="inline" id="Ensemble_Kalman_filter:53">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+ computed from the ensemble members (called the <em>ensemble covariance</em>). That is
+
+<math display="block" id="Ensemble_Kalman_filter:54">
+ <semantics>
+  <mrow>
+   <mi>K</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>C</mi>
+    <msup>
+     <mi>H</mi>
+     <mi mathvariant="normal">T</mi>
+    </msup>
+    <msup>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <mrow>
+        <mi>H</mi>
+        <mi>C</mi>
+        <msup>
+         <mi>H</mi>
+         <mi mathvariant="normal">T</mi>
+        </msup>
+       </mrow>
+       <mo>+</mo>
+       <mi>R</mi>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>K</ci>
+    <apply>
+     <times></times>
+     <ci>C</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>H</ci>
+      <ci>normal-T</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <ci>H</ci>
+        <ci>C</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>H</ci>
+         <ci>normal-T</ci>
+        </apply>
+       </apply>
+       <ci>R</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K=CH^{\mathrm{T}}\left(HCH^{\mathrm{T}}+R\right)^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="implementation">Implementation</h2>
+<h3 id="basic-formulation">Basic formulation</h3>
+
+<p>Here we follow.<ref name="Burgers-1998-ASE">G. Burgers, P. J. van Leeuwen, and G. Evensen, <em>Analysis scheme in the ensemble Kalman filter</em>, Monthly Weather Review, 126 (1998), pp. 1719--1724.</ref></p>
+
+<p><ref name="Evensen-2003-EKF">G. Evensen, <em>The ensemble Kalman filter: Theoretical formulation and practical implementation</em>, Ocean Dynamics, 53 (2003), pp. 343--367.</ref></p>
+
+<p> Suppose the ensemble matrix 
+
+<math display="inline" id="Ensemble_Kalman_filter:55">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+ and the data matrix 
+
+<math display="inline" id="Ensemble_Kalman_filter:56">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ are as above. The ensemble mean and the covariance are</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:57">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mi>E</mi>
+      <mrow>
+       <mo>(</mo>
+       <mi>X</mi>
+       <mo>)</mo>
+      </mrow>
+     </mrow>
+     <mo>=</mo>
+     <mrow>
+      <mfrac>
+       <mn>1</mn>
+       <mi>N</mi>
+      </mfrac>
+      <mrow>
+       <munderover>
+        <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+        <mrow>
+         <mi>k</mi>
+         <mo>=</mo>
+         <mn>1</mn>
+        </mrow>
+        <mi>N</mi>
+       </munderover>
+       <msub>
+        <mi>𝐱</mi>
+        <mi>k</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo rspace="12.5pt">,</mo>
+    <mrow>
+     <mi>C</mi>
+     <mo>=</mo>
+     <mfrac>
+      <mrow>
+       <mi>A</mi>
+       <msup>
+        <mi>A</mi>
+        <mi>T</mi>
+       </msup>
+      </mrow>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </mfrac>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>E</ci>
+      <ci>X</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>k</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>N</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <ci>k</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <ci>C</ci>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <ci>A</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>A</ci>
+        <ci>T</ci>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <ci>N</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E\left(X\right)=\frac{1}{N}\sum_{k=1}^{N}\mathbf{x}_{k},\quad C=\frac{AA^{T}}{%
+N-1},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:58">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>A</mi>
+    <mo>=</mo>
+    <mrow>
+     <mi>X</mi>
+     <mo>-</mo>
+     <mrow>
+      <mi>E</mi>
+      <mrow>
+       <mo>(</mo>
+       <mi>X</mi>
+       <mo>)</mo>
+      </mrow>
+      <msub>
+       <mi>𝐞</mi>
+       <mrow>
+        <mn>1</mn>
+        <mo>×</mo>
+        <mi>N</mi>
+       </mrow>
+      </msub>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mi>X</mi>
+     <mo>-</mo>
+     <mrow>
+      <mfrac>
+       <mn>1</mn>
+       <mi>N</mi>
+      </mfrac>
+      <mrow>
+       <mo>(</mo>
+       <mrow>
+        <mi>X</mi>
+        <msub>
+         <mi>𝐞</mi>
+         <mrow>
+          <mi>N</mi>
+          <mo>×</mo>
+          <mn>1</mn>
+         </mrow>
+        </msub>
+       </mrow>
+       <mo>)</mo>
+      </mrow>
+      <msub>
+       <mi>𝐞</mi>
+       <mrow>
+        <mn>1</mn>
+        <mo>×</mo>
+        <mi>N</mi>
+       </mrow>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>A</ci>
+     <apply>
+      <minus></minus>
+      <ci>X</ci>
+      <apply>
+       <times></times>
+       <ci>E</ci>
+       <ci>X</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐞</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">1</cn>
+         <ci>N</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <minus></minus>
+      <ci>X</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <ci>N</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>X</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐞</ci>
+         <apply>
+          <times></times>
+          <ci>N</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐞</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">1</cn>
+         <ci>N</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A=X-E\left(X\right)\mathbf{e}_{1\times N}=X-\frac{1}{N}\left(X\mathbf{e}_{N%
+\times 1}\right)\mathbf{e}_{1\times N},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>and 
+
+<math display="inline" id="Ensemble_Kalman_filter:59">
+ <semantics>
+  <mi>𝐞</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐞</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{e}
+  </annotation>
+ </semantics>
+</math>
+
+ denotes the matrix of all ones of the indicated size.</p>
+
+<p>The posterior ensemble 
+
+<math display="inline" id="Ensemble_Kalman_filter:60">
+ <semantics>
+  <msup>
+   <mi>X</mi>
+   <mi>p</mi>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>X</ci>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X^{p}
+  </annotation>
+ </semantics>
+</math>
+
+ is then given by</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:61">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>X</mi>
+     <mi>p</mi>
+    </msup>
+    <mo>=</mo>
+    <mrow>
+     <mi>X</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi>C</mi>
+      <msup>
+       <mi>H</mi>
+       <mi>T</mi>
+      </msup>
+      <msup>
+       <mrow>
+        <mo>(</mo>
+        <mrow>
+         <mrow>
+          <mi>H</mi>
+          <mi>C</mi>
+          <msup>
+           <mi>H</mi>
+           <mi>T</mi>
+          </msup>
+         </mrow>
+         <mo>+</mo>
+         <mi>R</mi>
+        </mrow>
+        <mo>)</mo>
+       </mrow>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>D</mi>
+        <mo>-</mo>
+        <mrow>
+         <mi>H</mi>
+         <mi>X</mi>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>X</ci>
+     <ci>p</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>X</ci>
+     <apply>
+      <times></times>
+      <ci>C</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>H</ci>
+       <ci>T</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <plus></plus>
+        <apply>
+         <times></times>
+         <ci>H</ci>
+         <ci>C</ci>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>H</ci>
+          <ci>T</ci>
+         </apply>
+        </apply>
+        <ci>R</ci>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <ci>D</ci>
+       <apply>
+        <times></times>
+        <ci>H</ci>
+        <ci>X</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X^{p}=X+CH^{T}\left(HCH^{T}+R\right)^{-1}(D-HX),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where the perturbed data matrix 
+
+<math display="inline" id="Ensemble_Kalman_filter:62">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ is as above.</p>
+
+<p>Note that since 
+
+<math display="inline" id="Ensemble_Kalman_filter:63">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ is a covariance matrix, it is always <a href="positive_semidefinite_matrix" title="wikilink">positive semidefinite</a> and usually <a href="positive_semidefinite_matrix" title="wikilink">positive definite</a>, so the inverse above exists and the formula can be implemented by the <a href="Cholesky_decomposition" title="wikilink">Cholesky decomposition</a>.<ref name="Mandel-2006-EIE">J. Mandel, <em>Efficient implementation of the ensemble Kalman filter</em>. CCM Report 231, University of Colorado at Denver and Health Sciences Center. <a href="http://www.math.ucdenver.edu/ccm/reports/rep231.pdf">link</a>, June 2006.</ref></p>
+
+<p> In,<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> 
+
+<math display="inline" id="Ensemble_Kalman_filter:64">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ is replaced by the sample covariance 
+
+<math display="inline" id="Ensemble_Kalman_filter:65">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mover accent="true">
+     <mi>D</mi>
+     <mo stretchy="false">~</mo>
+    </mover>
+    <msup>
+     <mover accent="true">
+      <mi>D</mi>
+      <mo stretchy="false">~</mo>
+     </mover>
+     <mi>T</mi>
+    </msup>
+   </mrow>
+   <mo>/</mo>
+   <mrow>
+    <mo>(</mo>
+    <mrow>
+     <mi>N</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <times></times>
+     <apply>
+      <ci>normal-~</ci>
+      <ci>D</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <ci>normal-~</ci>
+       <ci>D</ci>
+      </apply>
+      <ci>T</ci>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>N</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tilde{D}\tilde{D}^{T}/\left(N-1\right)
+  </annotation>
+ </semantics>
+</math>
+
+ where 
+
+<math display="inline" id="Ensemble_Kalman_filter:66">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>D</mi>
+    <mo stretchy="false">~</mo>
+   </mover>
+   <mo>=</mo>
+   <mrow>
+    <mi>D</mi>
+    <mo>-</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <mi>N</mi>
+     </mfrac>
+     <mpadded width="+1.7pt">
+      <mi>d</mi>
+     </mpadded>
+     <msub>
+      <mi>𝐞</mi>
+      <mrow>
+       <mn>1</mn>
+       <mo>×</mo>
+       <mi>N</mi>
+      </mrow>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-~</ci>
+     <ci>D</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>D</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>N</ci>
+      </apply>
+      <ci>d</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐞</ci>
+       <apply>
+        <times></times>
+        <cn type="integer">1</cn>
+        <ci>N</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tilde{D}=D-\frac{1}{N}d\,\mathbf{e}_{1\times N}
+  </annotation>
+ </semantics>
+</math>
+
+and the inverse is replaced by a <a class="uri" href="pseudoinverse" title="wikilink">pseudoinverse</a>, computed using the <a href="Singular_Value_Decomposition" title="wikilink">Singular Value Decomposition</a> (SVD) .</p>
+
+<p>Since these formulas are matrix operations with dominant <a href="BLAS#Level_3" title="wikilink">Level 3</a> operations,<ref name="Golub-1989-MAC">G. H. Golub and C. F. V. Loan, <em>Matrix Computations</em>, Johns Hopkins Univ. Press, 1989. Second Edition.</ref></p>
+
+<p> they are suitable for efficient implementation using software packages such as <a class="uri" href="LAPACK" title="wikilink">LAPACK</a> (on serial and <a href="shared_memory" title="wikilink">shared memory</a> computers) and <a class="uri" href="ScaLAPACK" title="wikilink">ScaLAPACK</a> (on <a href="distributed_memory" title="wikilink">distributed memory</a> computers).<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> Instead of computing the <a href="inverse_matrix" title="wikilink">inverse</a> of a matrix and multiplying by it, it is much better (several times cheaper and also more accurate) to compute the <a href="Cholesky_decomposition" title="wikilink">Cholesky decomposition</a> of the matrix and treat the multiplication by the inverse as solution of a linear system with many simultaneous right-hand sides.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+<h3 id="observation-matrix-free-implementation">Observation matrix-free implementation</h3>
+
+<p>Since we have replaced the covariance matrix with ensemble covariance, this leads to a simpler formula where ensemble observations are directly used without explicitly specifying the matrix 
+
+<math display="inline" id="Ensemble_Kalman_filter:67">
+ <semantics>
+  <mi>H</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>H</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H
+  </annotation>
+ </semantics>
+</math>
+
+. More specifically, define a function 
+
+<math display="inline" id="Ensemble_Kalman_filter:68">
+ <semantics>
+  <mrow>
+   <mi>h</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>h</ci>
+    <ci>𝐱</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(\mathbf{x})
+  </annotation>
+ </semantics>
+</math>
+
+ of the form</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:69">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>h</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>𝐱</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mi>H</mi>
+     <mi>𝐱</mi>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>h</ci>
+     <ci>𝐱</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>H</ci>
+     <ci>𝐱</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(\mathbf{x})=H\mathbf{x}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The function 
+
+<math display="inline" id="Ensemble_Kalman_filter:70">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ is called the <em><a href="observation_function" title="wikilink">observation function</a></em> or, in the <a href="inverse_problem" title="wikilink">inverse problems</a> context, the <em><a href="Inverse_problem#Probabilistic_formulation_of_inverse_problems" title="wikilink">forward operator</a></em>. The value of 
+
+<math display="inline" id="Ensemble_Kalman_filter:71">
+ <semantics>
+  <mrow>
+   <mi>h</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>h</ci>
+    <ci>𝐱</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(\mathbf{x})
+  </annotation>
+ </semantics>
+</math>
+
+ is what the value of the data would be for the state 
+
+<math display="inline" id="Ensemble_Kalman_filter:72">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ assuming the measurement is exact. Then the posterior ensemble can be rewritten as</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:73">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>X</mi>
+    <mi>p</mi>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mi>X</mi>
+    <mo>+</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </mfrac>
+     <mi>A</mi>
+     <msup>
+      <mrow>
+       <mo>(</mo>
+       <mrow>
+        <mi>H</mi>
+        <mi>A</mi>
+       </mrow>
+       <mo>)</mo>
+      </mrow>
+      <mi>T</mi>
+     </msup>
+     <msup>
+      <mi>P</mi>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>D</mi>
+       <mo>-</mo>
+       <mrow>
+        <mi>H</mi>
+        <mi>X</mi>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>X</ci>
+     <ci>p</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>X</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <apply>
+        <minus></minus>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>A</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <times></times>
+        <ci>H</ci>
+        <ci>A</ci>
+       </apply>
+       <ci>T</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>P</ci>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <ci>D</ci>
+       <apply>
+        <times></times>
+        <ci>H</ci>
+        <ci>X</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X^{p}=X+\frac{1}{N-1}A\left(HA\right)^{T}P^{-1}(D-HX)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:74">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>H</mi>
+     <mi>A</mi>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mi>H</mi>
+      <mi>X</mi>
+     </mrow>
+     <mo>-</mo>
+     <mrow>
+      <mfrac>
+       <mn>1</mn>
+       <mi>N</mi>
+      </mfrac>
+      <mrow>
+       <mo>(</mo>
+       <mrow>
+        <mrow>
+         <mo>(</mo>
+         <mrow>
+          <mi>H</mi>
+          <mi>X</mi>
+         </mrow>
+         <mo>)</mo>
+        </mrow>
+        <msub>
+         <mi>𝐞</mi>
+         <mrow>
+          <mi>N</mi>
+          <mo>×</mo>
+          <mn>1</mn>
+         </mrow>
+        </msub>
+       </mrow>
+       <mo>)</mo>
+      </mrow>
+      <msub>
+       <mi>𝐞</mi>
+       <mrow>
+        <mn>1</mn>
+        <mo>×</mo>
+        <mi>N</mi>
+       </mrow>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>H</ci>
+     <ci>A</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <ci>H</ci>
+      <ci>X</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <times></times>
+        <ci>H</ci>
+        <ci>X</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐞</ci>
+        <apply>
+         <times></times>
+         <ci>N</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐞</ci>
+       <apply>
+        <times></times>
+        <cn type="integer">1</cn>
+        <ci>N</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   HA=HX-\frac{1}{N}\left(\left(HX\right)\mathbf{e}_{N\times 1}\right)\mathbf{e}_%
+{1\times N},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>and</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:75">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>P</mi>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mfrac>
+       <mn>1</mn>
+       <mrow>
+        <mi>N</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </mfrac>
+      <mi>H</mi>
+      <mi>A</mi>
+      <msup>
+       <mrow>
+        <mo>(</mo>
+        <mrow>
+         <mi>H</mi>
+         <mi>A</mi>
+        </mrow>
+        <mo>)</mo>
+       </mrow>
+       <mi>T</mi>
+      </msup>
+     </mrow>
+     <mo>+</mo>
+     <mi>R</mi>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>P</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <apply>
+        <minus></minus>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>H</ci>
+      <ci>A</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <times></times>
+        <ci>H</ci>
+        <ci>A</ci>
+       </apply>
+       <ci>T</ci>
+      </apply>
+     </apply>
+     <ci>R</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P=\frac{1}{N-1}HA\left(HA\right)^{T}+R,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>with</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:76">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <mi>H</mi>
+       <mi>A</mi>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+     <mi>i</mi>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mi>H</mi>
+      <msub>
+       <mi>𝐱</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+     <mo>-</mo>
+     <mrow>
+      <mi>H</mi>
+      <mfrac>
+       <mn>1</mn>
+       <mi>N</mi>
+      </mfrac>
+      <mrow>
+       <munderover>
+        <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+        <mrow>
+         <mi>j</mi>
+         <mo>=</mo>
+         <mn>1</mn>
+        </mrow>
+        <mi>N</mi>
+       </munderover>
+       <mpadded width="+5pt">
+        <msub>
+         <mi>𝐱</mi>
+         <mi>j</mi>
+        </msub>
+       </mpadded>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mi>h</mi>
+      <mrow>
+       <mo>(</mo>
+       <msub>
+        <mi>𝐱</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>)</mo>
+      </mrow>
+     </mrow>
+     <mo>-</mo>
+     <mrow>
+      <mfrac>
+       <mn>1</mn>
+       <mi>N</mi>
+      </mfrac>
+      <mrow>
+       <munderover>
+        <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+        <mrow>
+         <mi>j</mi>
+         <mo>=</mo>
+         <mn>1</mn>
+        </mrow>
+        <mi>N</mi>
+       </munderover>
+       <mrow>
+        <mi>h</mi>
+        <mrow>
+         <mo>(</mo>
+         <msub>
+          <mi>𝐱</mi>
+          <mi>j</mi>
+         </msub>
+         <mo>)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <times></times>
+        <ci>H</ci>
+        <ci>A</ci>
+       </apply>
+      </apply>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>H</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>H</ci>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <ci>N</ci>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <sum></sum>
+          <apply>
+           <eq></eq>
+           <ci>j</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>N</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>j</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>h</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <ci>N</ci>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <sum></sum>
+          <apply>
+           <eq></eq>
+           <ci>j</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>N</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>h</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>j</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left[HA\right]_{i}=H\mathbf{x}_{i}-H\frac{1}{N}\sum_{j=1}^{N}\mathbf{x}_{j}\ %
+=h\left(\mathbf{x}_{i}\right)-\frac{1}{N}\sum_{j=1}^{N}h\left(\mathbf{x}_{j}%
+\right).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Consequently, the ensemble update can be computed by evaluating the observation function 
+
+<math display="inline" id="Ensemble_Kalman_filter:77">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ on each ensemble member once and the matrix 
+
+<math display="inline" id="Ensemble_Kalman_filter:78">
+ <semantics>
+  <mi>H</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>H</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H
+  </annotation>
+ </semantics>
+</math>
+
+ does not need to be known explicitly. This formula holds also<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> for an observation function 
+
+<math display="inline" id="Ensemble_Kalman_filter:79">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>h</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>H</mi>
+     <mi>𝐱</mi>
+    </mrow>
+    <mo>+</mo>
+    <mi>𝐟</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>h</ci>
+     <ci>𝐱</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>H</ci>
+      <ci>𝐱</ci>
+     </apply>
+     <ci>𝐟</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(\mathbf{x})=H\mathbf{x+f}
+  </annotation>
+ </semantics>
+</math>
+
+ with a fixed offset 
+
+<math display="inline" id="Ensemble_Kalman_filter:80">
+ <semantics>
+  <mi>𝐟</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐟</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{f}
+  </annotation>
+ </semantics>
+</math>
+
+, which also does not need to be known explicitly. The above formula has been commonly used for a nonlinear observation function 
+
+<math display="inline" id="Ensemble_Kalman_filter:81">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+, such as the position of a <a class="uri" href="hurricane" title="wikilink">hurricane</a> <a class="uri" href="vortex" title="wikilink">vortex</a>.<ref name="Chen-2006-AVP">Y. Chen and C. Snyder, <em>Assimilating vortex position with an ensemble Kalman filter</em>. Monthly Weather Review, to appear, 2006. <a href="http://www.mmm.ucar.edu/people/snyder/papers/ChenSnyder2006_draft.pdf">preprint</a>.</ref></p>
+
+<p> In that case, the observation function is essentially approximated by a linear function from its values at ensemble members.</p>
+<h3 id="implementation-for-a-large-number-of-data-points">Implementation for a large number of data points</h3>
+
+<p>For a large number 
+
+<math display="inline" id="Ensemble_Kalman_filter:82">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+ of data points, the multiplication by 
+
+<math display="inline" id="Ensemble_Kalman_filter:83">
+ <semantics>
+  <msup>
+   <mi>P</mi>
+   <mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>P</ci>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+ becomes a bottleneck. The following alternative formula is advantageous when the number of data points 
+
+<math display="inline" id="Ensemble_Kalman_filter:84">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+ is large (such as when assimilating gridded or pixel data) and the data error <a href="covariance_matrix" title="wikilink">covariance matrix</a> 
+
+<math display="inline" id="Ensemble_Kalman_filter:85">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ is diagonal (which is the case when the data errors are uncorrelated), or cheap to decompose (such as banded due to limited covariance distance). Using the <a href="Sherman–Morrison–Woodbury_formula" title="wikilink">Sherman–Morrison–Woodbury formula</a><ref name="Hager-1989-UIM">W. W. Hager, <em>Updating the inverse of a matrix</em>, SIAM Rev., 31 (1989), pp. 221--239.</ref></p>
+
+<p></p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:86">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>R</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi>U</mi>
+        <msup>
+         <mi>V</mi>
+         <mi>T</mi>
+        </msup>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msup>
+    <mo>=</mo>
+    <mrow>
+     <msup>
+      <mi>R</mi>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msup>
+     <mo>-</mo>
+     <mrow>
+      <msup>
+       <mi>R</mi>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+      <mi>U</mi>
+      <msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mi>I</mi>
+         <mo>+</mo>
+         <mrow>
+          <msup>
+           <mi>V</mi>
+           <mi>T</mi>
+          </msup>
+          <msup>
+           <mi>R</mi>
+           <mrow>
+            <mo>-</mo>
+            <mn>1</mn>
+           </mrow>
+          </msup>
+          <mi>U</mi>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+      <msup>
+       <mi>V</mi>
+       <mi>T</mi>
+      </msup>
+      <msup>
+       <mi>R</mi>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <plus></plus>
+      <ci>R</ci>
+      <apply>
+       <times></times>
+       <ci>U</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>V</ci>
+        <ci>T</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>R</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>R</ci>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>U</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <plus></plus>
+        <ci>I</ci>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>V</ci>
+          <ci>T</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>R</ci>
+          <apply>
+           <minus></minus>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>U</ci>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>V</ci>
+       <ci>T</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>R</ci>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (R+UV^{T})^{-1}=R^{-1}-R^{-1}U(I+V^{T}R^{-1}U)^{-1}V^{T}R^{-1},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>with</p>
+
+<p>
+
+<math display="block" id="Ensemble_Kalman_filter:87">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>U</mi>
+     <mo>=</mo>
+     <mrow>
+      <mfrac>
+       <mn>1</mn>
+       <mrow>
+        <mi>N</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </mfrac>
+      <mi>H</mi>
+      <mi>A</mi>
+     </mrow>
+    </mrow>
+    <mo rspace="12.5pt">,</mo>
+    <mrow>
+     <mi>V</mi>
+     <mo>=</mo>
+     <mrow>
+      <mi>H</mi>
+      <mi>A</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <ci>U</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <apply>
+        <minus></minus>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>H</ci>
+      <ci>A</ci>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <ci>V</ci>
+     <apply>
+      <times></times>
+      <ci>H</ci>
+      <ci>A</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U=\frac{1}{N-1}HA,\quad V=HA,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>gives</p>
+
+<p>
+
+<math display="inline" id="Ensemble_Kalman_filter:88">
+ <semantics>
+  <msup>
+   <mi>P</mi>
+   <mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>P</ci>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle P^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>which requires only the solution of systems with the matrix 
+
+<math display="inline" id="Ensemble_Kalman_filter:89">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ (assumed to be cheap) and of a system of size 
+
+<math display="inline" id="Ensemble_Kalman_filter:90">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+ with 
+
+<math display="inline" id="Ensemble_Kalman_filter:91">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+
+ right-hand sides. See<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> for operation counts.</p>
+<h2 id="further-extensions">Further extensions</h2>
+
+<p>The EnKF version described here involves randomization of data. For filters without randomization of data, see.<ref name="Anderson-2001-EAK">J. L. Anderson, <em>An ensemble adjustment Kalman filter for data assimilation</em>, Monthly Weather Review, 129 (2001), pp. 2884--2903.</ref></p>
+
+<p><ref name="Evensen-2004-SSR">G. Evensen, <em>Sampling strategies and square root analysis schemes for the EnKF</em>, Ocean Dynamics, 54 (2004), pp. 539--560.</ref></p>
+
+<p><ref name="Tippett-2003-ESR">M. K. Tippett, J. L. Anderson, C. H. Bishop, T. M. Hamill, and J. S. Whitaker, <em>Ensemble square root filters</em>, Monthly Weather Review, 131 (2003), pp. 1485--1490.</ref></p>
+
+<p></p>
+
+<p>Since the ensemble covariance is <a href="rank_deficient" title="wikilink">rank deficient</a> (there are many more state variables, typically millions, than the ensemble members, typically less than a hundred), it has large terms for pairs of points that are spatially distant. Since in reality the values of physical fields at distant locations are not that much <a class="uri" href="correlated" title="wikilink">correlated</a>, the covariance matrix is tapered off artificially based on the distance, which gives rise to <a href="Localized_ensemble_Kalman_filters" title="wikilink">localized EnKF</a> algorithms.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a><a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> These methods modify the covariance matrix used in the computations and, consequently, the posterior ensemble is no longer made only of linear combinations of the prior ensemble.</p>
+
+<p>For nonlinear problems, EnKF can create posterior ensemble with non-physical states. This can be alleviated by <a href="Tikhonov_regularization" title="wikilink">regularization</a>, such as <a href="Penalty_method" title="wikilink">penalization</a> of states with large spatial <a href="gradient" title="wikilink">gradients</a>.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>For problems with <a href="coherent_feature" title="wikilink">coherent features</a>, such as <a href="hurricane" title="wikilink">hurricanes</a>, <a href="thunderstorm" title="wikilink">thunderstorms</a>, <a href="fireline" title="wikilink">firelines</a>, <a href="squall_line" title="wikilink">squall lines</a>, and <a href="rain_front" title="wikilink">rain fronts</a>, there is a need to adjust the numerical model state by deforming the state in space (its grid) as well as by correcting the state amplitudes additively. In Data Assimilation by Field Alignment,<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> Ravela et al. introduce the joint position-amplitude adjustment model using ensembles, and systematically derive a sequential approximation which can be applied to both EnKF and other formulations. Their method does not make the assumption that amplitudes and position errors are independent or jointly Gaussian, as others do. The morphing EnKF<ref name="Beezley-2007-MEK">J. D. Beezley and J. Mandel, <em>Morphing ensemble Kalman filters</em>. Tellus (2008) 60A, 131-140. <a href="http://www-math.ucdenver.edu/ccm/reports/rep240.pdf">report</a>.</ref></p>
+
+<p><ref name="Mandel-2006-PME">J. Mandel and J. D. Beezley, <em>Predictor-corrector and morphing ensemble filters for the assimilation of sparse data into high dimensional nonlinear systems</em>. CCM Report 239, University of Colorado at Denver and Health Sciences Center. <a href="http://www.math.ucdenver.edu/ccm/reports/rep239.pdf">report</a>, November 2006. 11th Symposium on Integrated Observing and Assimilation Systems for the Atmosphere, Oceans, and Land Surface (IOAS-AOLS), CD-ROM, Paper 4.12, 87th American Meteorological Society Annual Meeting, San Antonio, TX, January 2007, <a href="http://www.ametsoc.org">link</a>.</ref></p>
+
+<p> employs intermediate states, obtained by techniques borrowed from <a href="image_registration" title="wikilink">image registration</a> and <a class="uri" href="morphing" title="wikilink">morphing</a>, instead of linear combinations of states.</p>
+
+<p>EnKFs rely on the Gaussian assumption, though they are of course used in practice for nonlinear problems, where the Gaussian assumption may not be satisfied. Related filters attempting to relax the Gaussian assumption in EnKF while preserving its advantages include filters that fit the state pdf with multiple Gaussian kernels,<ref name="Anderson-1999-MCI">J. L. Anderson and S. L. Anderson, <em>A Monte Carlo implementation of the nonlinear filtering problem to produce ensemble assimilations and forecasts</em>, Monthly Weather Review, 127 (1999), pp. 2741--2758.</ref></p>
+
+<p> filters that approximate the state pdf by <a href="Gaussian_mixture" title="wikilink">Gaussian mixtures</a>,<ref name="Bengtsson-2003-NFE">T. Bengtsson, C. Snyder, and D. Nychka, <em>Toward a nonlinear ensemble filter for high dimensional systems</em>, Journal of Geophysical Research - Atmospheres, 108(D24) (2003), pp. STS 2--1--10. <a href="http://www.image.ucar.edu/pub/nychka/manuscripts/bengtsson.pdf">preprint</a>.</ref></p>
+
+<p> a variant of the <a href="particle_filter" title="wikilink">particle filter</a> with computation of particle weights by <a href="density_estimation" title="wikilink">density estimation</a>,<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> and a variant of the particle filter with <a href="Cauchy_distribution" title="wikilink">thick tailed</a> data pdf to alleviate <a href="Particle_filter#Sampling_Importance_Resampling_(SIR)" title="wikilink">particle filter degeneracy</a>.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Data_assimilation" title="wikilink">Data assimilation</a></li>
+<li><a href="Kalman_filter" title="wikilink">Kalman filter</a></li>
+<li><a href="Numerical_weather_prediction#Ensembles" title="wikilink">Numerical weather prediction#Ensembles</a></li>
+<li><a href="Particle_filter" title="wikilink">Particle filter</a></li>
+<li><a href="Recursive_Bayesian_estimation" title="wikilink">Recursive Bayesian estimation</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://enkf.nersc.no">EnKF webpage</a></li>
+<li><a href="http://topaz.nersc.no">TOPAZ, real-time forecasting of the North Atlantic ocean and Arctic sea-ice with the EnKF</a></li>
+<li><a href="https://code.google.com/p/enkf-c">EnKF-C, a light-weight framework for data assimilation into large-scale layered geophysical models with the EnKF</a></li>
+<li><a href="http://pdaf.awi.de">PDAF, an open-source framework for data assimilation providing different variants of the EnKF</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Linear_filters" title="wikilink">Category:Linear filters</a> <a href="Category:Nonlinear_filters" title="wikilink">Category:Nonlinear filters</a> <a href="Category:Bayesian_statistics" title="wikilink">Category:Bayesian statistics</a> <a href="Category:Estimation_theory" title="wikilink">Category:Estimation theory</a> <a href="Category:Monte_Carlo_methods" title="wikilink">Category:Monte Carlo methods</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">G. Evensen, ''Data assimilation : The ensemble Kalman filter, Springer, Berlin, 2007.<a href="#fnref1">↩</a></li>
+<li id="fn2"></li>
+<li id="fn3"></li>
+<li id="fn4"></li>
+<li id="fn5"></li>
+<li id="fn6"></li>
+<li id="fn7"></li>
+<li id="fn8">J. L. Anderson, <em>A local least squares framework for ensemble filtering</em>, Monthly Weather Review, 131 (2003), pp. 634--642.<a href="#fnref8">↩</a></li>
+<li id="fn9">E. Ott, B. R. Hunt, I. Szunyogh, A. V. Zimin, E. J. Kostelich, M. Corazza, E. Kalnay, D. Patil, and J. A. Yorke, <em>A local ensemble Kalman filter for atmospheric data assimilation</em>, Tellus A, 56 (2004), pp. 415--428.<a href="#fnref9">↩</a></li>
+<li id="fn10"></li>
+<li id="fn11">S. Ravela, K. Emanuel and D. McLaughlin, "Data Assimilation by Field Alignment". Physica(D), Volume 230, Issues 1–2, June 2007, Pages 127–145<a href="#fnref11">↩</a></li>
+<li id="fn12"></li>
+<li id="fn13">P. van Leeuwen, <em>A variance-minimizing filter for large-scale applications</em>, Monthly Weather Review, 131 (2003), pp. 2071--2084.<a href="#fnref13">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

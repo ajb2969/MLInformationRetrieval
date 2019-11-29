@@ -1,0 +1,1042 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="214">Precision Time Protocol</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Precision Time Protocol</h1>
+<hr/>
+
+<p>The <strong>Precision Time Protocol</strong> (<strong>PTP</strong>) is a <a href="Protocol_(computing)" title="wikilink">protocol</a> used to <a href="Clock_synchronization" title="wikilink">synchronize clocks</a> throughout a <a href="computer_network" title="wikilink">computer network</a>. On a <a href="local_area_network" title="wikilink">local area network</a>, it achieves clock accuracy in the sub-microsecond range, making it suitable for measurement and control systems.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p>PTP was originally defined in the <strong>IEEE 1588-2002</strong> standard, officially entitled <em>"Standard for a Precision Clock Synchronization Protocol for Networked Measurement and Control Systems"</em> and published in 2002. In 2008, <strong>IEEE 1588-2008</strong> was released as a revised standard; also known as PTP Version 2, it improves accuracy, precision and robustness but is not <a href="backward_compatible" title="wikilink">backward compatible</a> with the original 2002 version.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+
+<p>"IEEE 1588 is designed to fill a niche not well served by either of the two dominant protocols, <a href="Network_Time_Protocol" title="wikilink">NTP</a> and <a class="uri" href="GPS" title="wikilink">GPS</a>. IEEE 1588 is designed for local systems requiring accuracies beyond those attainable using NTP. It is also designed for applications that cannot bear the cost of a GPS receiver at each node, or for which GPS signals are inaccessible."<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+<h2 id="architecture">Architecture</h2>
+
+<p>The IEEE 1588 standards describe a hierarchical <a href="Master/slave_(technology)" title="wikilink">master-slave architecture</a> for clock distribution. Under this architecture, a time distribution system consists of one or more communication media (network segments), and one or more clocks. An <em>ordinary clock</em> is a device with a single network connection and is either the source of (master) or destination for (slave) a synchronization reference. A <em>boundary clock</em> has multiple network connections and can accurately synchronize one network segment to another. A synchronization <em>master</em> is selected for each of the network segments in the system. The root timing reference is called the <em>grandmaster</em>.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> The grandmaster transmits synchronization information to the clocks residing on its network segment. The boundary clocks with a presence on that segment then relay accurate time to the other segments to which they are also connected.</p>
+
+<p>A simplified PTP system frequently consists of ordinary clocks connected to a single network, and no boundary clocks are used. A grandmaster is elected and all other clocks synchronize directly to it.</p>
+
+<p>IEEE 1588-2008 introduces a clock associated with network equipment used to convey PTP messages. The <em>transparent clock</em> modifies PTP messages as they pass through the device. <a class="uri" href="Timestamps" title="wikilink">Timestamps</a> in the messages are corrected for time spent traversing the network equipment. This scheme improves distribution accuracy by compensating for <a href="Packet_delay_variation" title="wikilink">delivery variability</a> across the network.</p>
+
+<p>PTP typically uses the same <a href="Epoch_(reference_date)" title="wikilink">epoch</a> as <a href="Unix_time" title="wikilink">Unix time</a> (Midnight, 1 January 1970).<mtpl>{{#tag:ref|The profile capability under IEEE 1588-2008 allows the use of application-specific epochs.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a>|group=note}}</mtpl> While the Unix time is based on <a href="Coordinated_Universal_Time" title="wikilink">Coordinated Universal Time</a> (UTC) and is subject to <a href="leap_second" title="wikilink">leap seconds</a>, PTP is based on <a href="International_Atomic_Time" title="wikilink">International Atomic Time</a> (TAI) that moves forward <a href="Monotonic_function" title="wikilink">monotonically</a>. The PTP grandmaster communicates the current offset between UTC and TAI, so that UTC can be computed from the received PTP time.</p>
+<h2 id="protocol-details">Protocol details</h2>
+
+<p>Synchronization and management of a PTP system is achieved through the exchange of messages across the communications medium. To this end, PTP uses the following message types.</p>
+<ul>
+<li><em>Sync</em>, <em>Delay_Req</em>, <em>Follow_Up</em> and <em>Delay_Resp</em> messages are used by <em>ordinary</em> and <em>boundary</em> clocks and communicate time-related information used to synchronize clocks across the network.</li>
+<li><em>Pdelay_Req</em>, <em>Pdelay_Resp</em> and <em>Pdelay_Resp_Follow_Up</em> are used by <em>transparent</em> clocks to measure delays across the communications medium so that they can be compensated for by the system. <em>Transparent</em> clocks and these messages associated with them are not available in IEEE 1588-2002.</li>
+<li><em>Announce</em> messages are used by the <a href="#Best_master_clock_algorithm" title="wikilink">best master clock algorithm</a> in IEEE 1588-2008 to build a clock hierarchy and select the <em>grandmaster</em>.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></li>
+<li><em>Management</em> messages are used by <a href="network_management" title="wikilink">network management</a> to monitor, configure and maintain a PTP system.</li>
+<li><em>Signaling</em> messages are used for non-time-critical communications between clocks. Signaling messages were introduced in IEEE 1588-2008.</li>
+</ul>
+
+<p>Messages are categorized as <em>event</em> and <em>general</em> messages. <em>Event</em> messages are time-critical in that accuracy in transmission and receipt timestamp accuracy directly affects clock distribution accuracy. <em>Sync</em>, <em>Delay_Req</em>, <em>Pdelay_Req</em> and <em>Pdelay_resp</em> are <em>event</em> messages. <em>General</em> messages are more conventional <a href="protocol_data_units" title="wikilink">protocol data units</a> in that the data in these messages is of importance to PTP, but their transmission and receipt timestamps are not. <em>Announce</em>, <em>Follow_Up</em>, <em>Delay_Resp</em>, <em>Pdelay_Resp_Follow_Up</em>, <em>Management</em> and <em>Signaling</em> messages are members of the <em>general</em> message class.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+<h3 id="message-transport">Message transport</h3>
+
+<p>In IEEE 1588-2002, all PTP messages are sent using <a class="uri" href="multicast" title="wikilink">multicast</a> messaging, while IEEE 1588-2008 introduced an option for devices to negotiate <a class="uri" href="unicast" title="wikilink">unicast</a> transmission on a port-by-port basis.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+
+<p>PTP messages may use the <a href="User_Datagram_Protocol" title="wikilink">User Datagram Protocol</a> (UDP) over <a href="Internet_Protocol" title="wikilink">Internet Protocol</a> (IP) for transport. IEEE 1588-2002, the original specification, uses only <a class="uri" href="IPv4" title="wikilink">IPv4</a> transports,<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> but this has been extended to include <a class="uri" href="IPv6" title="wikilink">IPv6</a> in IEEE 1588-2008.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> <a href="Datagram" title="wikilink">Datagrams</a> are transmitted using <a href="IP_multicast" title="wikilink">IP multicast</a> addressing, for which multicast group addresses are defined for <a class="uri" href="IPv4" title="wikilink">IPv4</a> and <a class="uri" href="IPv6" title="wikilink">IPv6</a> (see table).<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> <em>Event</em> messages are sent to <a href="port_number" title="wikilink">port number</a> 319. <em>General</em> messages use port number 320. Replies to <em>Management</em> messages are always returned to the unicast address of the originator.</p>
+<table>
+<tbody>
+<tr class="odd">
+</tr>
+<tr class="even">
+</tr>
+<tr class="odd">
+</tr>
+<tr class="even">
+</tr>
+<tr class="odd">
+</tr>
+</tbody>
+</table>
+
+<p>In IEEE 1588-2008, encapsulation is also defined for bare IEEE 802.3 Ethernet,<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> <a class="uri" href="DeviceNet" title="wikilink">DeviceNet</a>,<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> <a class="uri" href="ControlNet" title="wikilink">ControlNet</a><a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> and <a class="uri" href="PROFINET" title="wikilink">PROFINET</a>.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> PTP over IEEE 802.3 Ethernet uses <a class="uri" href="Ethertype" title="wikilink">Ethertype</a> 0x88F7 and an Ethernet multicast destination address of 01-1B-19-00-00-00 for all but peer delay messages. Peer delay messages are sent to 01-80-C2-00-00-0E.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a><a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<h3 id="domains">Domains</h3>
+
+<p>A domain<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> is an interacting set of clocks that synchronize to one another using PTP. Clocks are assigned to a domain by virtue of the contents of the <em>Subdomain name</em> (IEEE 1588-2002) or the <em>domainNumber</em> (IEEE 1588-2008) fields in PTP messages they receive or generate. Subdomains allow multiple clock distribution systems to share the same communications medium.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p><em>Subdomain name</em> field contents ()</p></th>
+<th style="text-align: left;">
+<p>IPv4 multicast address<br/>
+()<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a></p></th>
+<th style="text-align: left;">
+<p><em>domainNumber</em><br/>
+()</p></th>
+<th style="text-align: left;">
+<p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>_DFLT</p></td>
+<td style="text-align: left;">
+<p>224.0.1.129</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>Default domain</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>_ALT1</p></td>
+<td style="text-align: left;">
+<p>224.0.1.130</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>Alternate domain 1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>_ALT2</p></td>
+<td style="text-align: left;">
+<p>224.0.1.131</p></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;">
+<p>Alternate domain 2</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>_ALT3</p></td>
+<td style="text-align: left;">
+<p>224.0.1.132</p></td>
+<td style="text-align: left;">
+<p>3</p></td>
+<td style="text-align: left;">
+<p>Alternate domain 3</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Application specific up to 15 octets<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a></p></td>
+<td style="text-align: left;">
+<p>224.0.1.130, 131 or 132 as per <a href="hash_function" title="wikilink">hash function</a> on <em>Subdomain name</em><a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a></p></td>
+<td style="text-align: left;">
+<p>4 through 127</p></td>
+<td style="text-align: left;">
+<p>User-defined domains</p></td>
+</tr>
+</tbody>
+</table>
+<h2 id="best-master-clock-algorithm">Best master clock algorithm</h2>
+
+<p>The <em>best master clock</em> (BMC) algorithm performs a distributed selection of the best candidate clock based on the following clock properties:</p>
+<dl>
+<dt>Identifier</dt>
+<dd>A universally unique numeric identifier for the clock. This is typically constructed based on a device's <a href="MAC_address" title="wikilink">MAC address</a>.
+</dd>
+<dt>Quality</dt>
+<dd>Both versions of IEEE 1588 attempt to quantify clock quality based on expected timing deviation, technology used to implement the clock or location in a <a href="Stratum_(disambiguation)" title="wikilink">stratum</a> schema, although only V1 (IEEE 1588-2002) knows a data field <em>stratum</em>. PTP V2 (IEEE 1588-2008) defines the overall quality of a clock by using the data fields clockAccuracy and clockClass.
+</dd>
+<dt>Priority</dt>
+<dd>An administratively assigned precedence hint used by the BMC to help select a <em>grandmaster</em> for the PTP domain. IEEE 1588-2002 used a single <a href="Boolean_data_type" title="wikilink">boolean variable</a> to indicate precedence. IEEE 1588-2008 features two 8-bit priority fields.
+</dd>
+<dt>Variance</dt>
+<dd>A clock's estimate of its stability based on observation of its performance against the PTP reference.
+</dd>
+</dl>
+
+<p>IEEE 1588-2008 uses a hierarchical selection algorithm based on the following properties, in the indicated order:<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a></p>
+<ol>
+<li>Priority 1: the user can assign a specific static-designed priority to each clock, preemptively defining a priority among them.</li>
+<li>Class: each clock is a member of a given class, each class getting its own priority.</li>
+<li>Accuracy: precision between clock and UTC, in nanoseconds (ns)</li>
+<li>Variance: variability of the clock</li>
+<li>Priority 2: final-defined priority, defining backup order in case the other criteria were not sufficient.</li>
+<li>Unique identifier (tie breaker): MAC address-based selection</li>
+</ol>
+
+<p>IEEE 1588-2002 uses a selection algorithm based on similar properties.</p>
+<h2 id="synchronization">Synchronization</h2>
+
+<p>Through use of the BMC algorithm, PTP selects a master source of time for an IEEE 1588 domain and for each network segment in the domain.</p>
+
+<p>Clocks determine the offset between themselves and their master.<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a> Let the variable 
+
+<math display="inline" id="Precision_Time_Protocol:0">
+ <semantics>
+  <mi>t</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>t</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t
+  </annotation>
+ </semantics>
+</math>
+
+ represent physical time. For a given slave device, the offset 
+
+<math display="inline" id="Precision_Time_Protocol:1">
+ <semantics>
+  <mrow>
+   <mi>o</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>t</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>o</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   o(t)
+  </annotation>
+ </semantics>
+</math>
+
+ at time 
+
+<math display="inline" id="Precision_Time_Protocol:2">
+ <semantics>
+  <mi>t</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>t</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t
+  </annotation>
+ </semantics>
+</math>
+
+ is defined by:</p>
+
+<p>
+
+<math display="block" id="Precision_Time_Protocol:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mpadded lspace="5pt" width="+5pt">
+     <mi>o</mi>
+    </mpadded>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>s</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mi>m</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>o</ci>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <ci>s</ci>
+      <ci>t</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>m</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ o(t)=s(t)-m(t)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Precision_Time_Protocol:4">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>t</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>s</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(t)
+  </annotation>
+ </semantics>
+</math>
+
+ represents the time measured by the slave clock at physical time 
+
+<math display="inline" id="Precision_Time_Protocol:5">
+ <semantics>
+  <mi>t</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>t</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Precision_Time_Protocol:6">
+ <semantics>
+  <mrow>
+   <mi>m</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>t</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>m</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m(t)
+  </annotation>
+ </semantics>
+</math>
+
+ represents the time measured by the master clock at physical time 
+
+<math display="inline" id="Precision_Time_Protocol:7">
+ <semantics>
+  <mi>t</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>t</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The master periodically broadcasts the current time as a message to the other clocks. Under IEEE 1588-2002 broadcasts are up to once per second. Under IEEE 1588-2008, up to 10 per second are permitted.</p>
+<figure><b>(Figure)</b>
+<figcaption>IEEE 1588 synchronisation mechanism and delay calculation</figcaption>
+</figure>
+
+<p>Each broadcast begins at time 
+
+<math display="inline" id="Precision_Time_Protocol:8">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T1
+  </annotation>
+ </semantics>
+</math>
+
+ with a <em>Sync</em> message sent by the master to all the clocks in the domain. A clock receiving this message takes note of the local time 
+
+<math display="inline" id="Precision_Time_Protocol:9">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <msup>
+    <mn>1</mn>
+    <mo>′</mo>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cn type="integer">1</cn>
+     <ci>normal-′</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T1^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+ when this message is received.</p>
+
+<p>The master may subsequently send a multicast <em>Follow_Up</em> with accurate 
+
+<math display="inline" id="Precision_Time_Protocol:10">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T1
+  </annotation>
+ </semantics>
+</math>
+
+ timestamp. Not all masters have ability to present an accurate timestamp in the <em>Sync</em> message. It is only after the transmission is complete that they are able to retrieve an accurate timestamp for the <em>Sync</em> transmission from their network hardware. Masters with this limitation use the <em>Follow_Up</em> message to convey 
+
+<math display="inline" id="Precision_Time_Protocol:11">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T1
+  </annotation>
+ </semantics>
+</math>
+
+. Masters with PTP capabilities built into their network hardware are able to present an accurate timestamp in the <em>Sync</em> message and do not need to send Follow_Up messages.</p>
+
+<p>In order to accurately synchronize to their master, clocks must individually determine the network transit time of the <em>Sync</em> messages. The transit time is determined indirectly by measuring round-trip time from each clock to its master. The clocks initiate an exchange with their master designed to measure the transit time 
+
+<math display="inline" id="Precision_Time_Protocol:12">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+. The exchange begins with a clock sending a <em>Delay_Req</em> message at time 
+
+<math display="inline" id="Precision_Time_Protocol:13">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T2
+  </annotation>
+ </semantics>
+</math>
+
+ to the master. The master receives and timestamps the <em>Delay_Req</em> at time 
+
+<math display="inline" id="Precision_Time_Protocol:14">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <msup>
+    <mn>2</mn>
+    <mo>′</mo>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cn type="integer">2</cn>
+     <ci>normal-′</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T2^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+ and responds with a <em>Delay_Resp</em> message. The master includes the timestamp 
+
+<math display="inline" id="Precision_Time_Protocol:15">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <msup>
+    <mn>2</mn>
+    <mo>′</mo>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cn type="integer">2</cn>
+     <ci>normal-′</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T2^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+ in the <em>Delay_Resp</em> message.</p>
+
+<p>Through these exchanges a clock learns 
+
+<math display="inline" id="Precision_Time_Protocol:16">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T1
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Precision_Time_Protocol:17">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <msup>
+    <mn>1</mn>
+    <mo>′</mo>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cn type="integer">1</cn>
+     <ci>normal-′</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T1^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Precision_Time_Protocol:18">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T2
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Precision_Time_Protocol:19">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <msup>
+    <mn>2</mn>
+    <mo>′</mo>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>T</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cn type="integer">2</cn>
+     <ci>normal-′</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T2^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>If 
+
+<math display="inline" id="Precision_Time_Protocol:20">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+ is the transit time for the <em>Sync</em> message, and 
+
+<math display="inline" id="Precision_Time_Protocol:21">
+ <semantics>
+  <mover accent="true">
+   <mi>o</mi>
+   <mo stretchy="false">~</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-~</ci>
+    <ci>o</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tilde{o}
+  </annotation>
+ </semantics>
+</math>
+
+ is the constant offset between master and slave clocks, then</p>
+
+<p>
+
+<math display="block" id="Precision_Time_Protocol:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mpadded lspace="5pt" width="+5pt">
+      <mi>T</mi>
+     </mpadded>
+     <msup>
+      <mn>1</mn>
+      <mo>′</mo>
+     </msup>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mi>T</mi>
+     <mn>1</mn>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mover accent="true">
+     <mi>o</mi>
+     <mo stretchy="false">~</mo>
+    </mover>
+    <mo>+</mo>
+    <mi>d</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <ci>T</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">1</cn>
+       <ci>normal-′</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>T</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <ci>normal-~</ci>
+      <ci>o</ci>
+     </apply>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ T1^{\prime}-T1=\tilde{o}+d
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Precision_Time_Protocol:23">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mpadded lspace="5pt" width="+5pt">
+      <mi>T</mi>
+     </mpadded>
+     <msup>
+      <mn>2</mn>
+      <mo>′</mo>
+     </msup>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mi>T</mi>
+     <mn>2</mn>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo>-</mo>
+     <mover accent="true">
+      <mi>o</mi>
+      <mo stretchy="false">~</mo>
+     </mover>
+    </mrow>
+    <mo>+</mo>
+    <mi>d</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <ci>T</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">2</cn>
+       <ci>normal-′</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>T</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <apply>
+       <ci>normal-~</ci>
+       <ci>o</ci>
+      </apply>
+     </apply>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ T2^{\prime}-T2=-\tilde{o}+d
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Combining the above two equations, we find that</p>
+
+<p>
+
+<math display="block" id="Precision_Time_Protocol:24">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>o</mi>
+    <mo stretchy="false">~</mo>
+   </mover>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mrow>
+       <mrow>
+        <mi>T</mi>
+        <msup>
+         <mn>1</mn>
+         <mo>′</mo>
+        </msup>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>T</mi>
+        <mn>1</mn>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>T</mi>
+        <msup>
+         <mn>2</mn>
+         <mo>′</mo>
+        </msup>
+       </mrow>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <mi>T</mi>
+       <mn>2</mn>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>/</mo>
+    <mn>2</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-~</ci>
+     <ci>o</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <plus></plus>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <ci>T</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <cn type="integer">1</cn>
+         <ci>normal-′</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>T</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>T</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <cn type="integer">2</cn>
+         <ci>normal-′</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>T</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tilde{o}=(T1^{\prime}-T1-T2^{\prime}+T2)/2
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The clock now knows the offset 
+
+<math display="inline" id="Precision_Time_Protocol:25">
+ <semantics>
+  <mover accent="true">
+   <mi>o</mi>
+   <mo stretchy="false">~</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-~</ci>
+    <ci>o</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tilde{o}
+  </annotation>
+ </semantics>
+</math>
+
+ during this transaction and can correct itself by this amount to bring it into agreement with their master.</p>
+
+<p>One assumption is that this exchange of messages happens over a period of time so small that this offset can safely be considered constant over that period. Another assumption is that the transit time of a message going from the master to a slave is equal to the transit time of a message going from the slave to the master. Finally, it is assumed that both the master and slave can accurately measure the time they send or receive a message. The degree to which these assumptions hold true determines the accuracy of the clock at the slave device.<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a></p>
+<h2 id="optional-features">Optional features</h2>
+
+<p>IEEE 1588-2008 standard lists the following set of features that implementations may choose to support:</p>
+<ul>
+<li>Alternate Time-Scale</li>
+<li>Grand Master Cluster</li>
+<li>Unicast Masters</li>
+<li>Alternate Master</li>
+<li>Path Trace</li>
+</ul>
+<h2 id="related-initiatives">Related initiatives</h2>
+<ul>
+<li>The <a href="Network_Time_Foundation" title="wikilink">Network Time Foundation</a></li>
+<li>The <em>International IEEE Symposium on Precision Clock Synchronization for Measurement, Control and Communication</em> is an IEEE organized annual event that includes a <a class="uri" href="plugfest" title="wikilink">plugfest</a> and a conference program with paper and poster presentations, tutorials and discussions covering several aspects of PTP.<a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a></li>
+<li>The Institute of Embedded Systems (InES) of the University of <a class="uri" href="Winterthur" title="wikilink">Winterthur</a> is addressing the practical implementation and application of PTP.</li>
+<li>IEEE 1588 is a key technology in the <a href="LAN_eXtensions_for_Instrumentation" title="wikilink">LXI</a> Standard for Test and Measurement communication and control.</li>
+<li>
+
+<p>IEEE 802.1AS-2011 is part of the IEEE <a href="Audio_Video_Bridging" title="wikilink">Audio Video Bridging</a> (AVB) group of standards, further extended by the IEEE 802.1 <a href="Time_Sensitive_Networking" title="wikilink">Time Sensitive Networking</a> (TSN) Task Group. It specifies a profile for use of IEEE 1588-2008 for time synchronization over a virtual bridged local area network (as defined by <a href="IEEE_802.1Q" title="wikilink">IEEE 802.1Q</a>). In particular, 802.1AS defines how <a href="IEEE_802.3" title="wikilink">IEEE 802.3</a> (<a class="uri" href="Ethernet" title="wikilink">Ethernet</a>), <a href="IEEE_802.11" title="wikilink">IEEE 802.11</a> (<a class="uri" href="Wi-Fi" title="wikilink">Wi-Fi</a>), and <a href="coordinated_shared_networks" title="wikilink">coordinated shared networks</a> like <a href="Multimedia_over_Coax_Alliance" title="wikilink">MoCA</a> can all be parts of the same PTP timing domain.</p></li>
+<li><a href="Society_of_Motion_Picture_and_Television_Engineers" title="wikilink">SMPTE</a> 2059 is a PTP profile for use in synchronization of broadcast media systems<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a></li>
+<li><a href="The_White_Rabbit_Project" title="wikilink">The White Rabbit Project</a></li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="List_of_PTP_implementations" title="wikilink">List of PTP implementations</a></li>
+<li><a href="Synchronous_Ethernet" title="wikilink">Synchronous Ethernet</a></li>
+</ul>
+<h2 id="notes">Notes</h2>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.nist.gov/el/isd/ieee/ieee1588.cfm">NIST IEEE 1588 site</a></li>
+<li><a href="http://www.zhaw.ch/en/engineering/institutes-centres/ines/downloads/documents.html">PTP documentation at InES</a></li>
+<li><a href="http://www.albedotelecom.com/src/lib/WP-Mobile-PTP.pdf">PTP and Synchronization of LTE mobile networks</a></li>
+<li><a href="http://www.belden.com/pdfs/Techpprs/Precision_Clock_Synchronization_WP.pdf">Hirschmann PTP Whitepaper</a></li>
+<li><a href="http://www.cisco.com/en/US/docs/switches/connectedgrid/cgs2520/software/release/12_2_58_ey/configuration/cgs_2520_swcg.html#wp1988925">PTP overview in Cisco CGS 2520 Switch Software Configuration Guide</a></li>
+<li><a href="http://www.bcit.ca/files/appliedresearch/pdf/ruggedcom_industry.pdf">Perspectives and priorities on RuggedCom Smart Grid Research IEC 61850 Technologies</a></li>
+<li><a href="http://xn--61850-txen0l.xn--p1ai/wp-content/plugins/downloads-manager/upload/Introduction%20of%20Smart%20Subsltation%20Projects.pdf">Projects with Smart Substation Solution</a></li>
+<li>[<a href="http://ieeexplore.ieee.org/Xplore/login.jsp?url=http%3A%2F%2Fieeexplore.ieee.org%2Fiel5%2F5619950%2F5621989%2F05622092.pdf%3Farnumber%3D5622092&amp;authDecision">http://ieeexplore.ieee.org/Xplore/login.jsp?url=http%3A%2F%2Fieeexplore.ieee.org%2Fiel5%2F5619950%2F5621989%2F05622092.pdf%3Farnumber%3D5622092&amp;authDecision;</a>;=-203 Smart High Voltage Substation Based on IEC 61850 Process Bus and IEEE 1588 Time Synchronization]</li>
+<li><a href="http://qut.academia.edu/DaveIngram/Papers/1066499/Test_and_evaluation_system_for_multi-protocol_sampled_value_protection_schemes">Test and evaluation system for multi-protocol sampled value protection schemesby Dave Ingram</a></li>
+<li><a href="http://www.albedotelecom.com/src/lib/WP-PTP.pdf">PTP explained under the installation / maintenance point of view</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a class="uri" href="Category:Synchronization" title="wikilink">Category:Synchronization</a> <a href="Category:IEEE_standards" title="wikilink">Category:IEEE standards</a> <a href="Category:Network_time-related_software" title="wikilink">Category:Network time-related software</a> <a href="Category:Network_protocols" title="wikilink">Category:Network protocols</a> <a href="Category:Application_layer_protocols" title="wikilink">Category:Application layer protocols</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6">In IEEE 1588-2002, information carried by <em>Announce</em> messages is carried in the <em>Sync</em> messages. In IEEE 1588-2008, the <em>Sync</em> message has been optimized and this information is no longer carried here.<a href="#fnref6">↩</a></li>
+<li id="fn7"></li>
+<li id="fn8"></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"></li>
+<li id="fn11"></li>
+<li id="fn12"></li>
+<li id="fn13"></li>
+<li id="fn14"></li>
+<li id="fn15"></li>
+<li id="fn16"></li>
+<li id="fn17">In some PTP applications it is permissible to send all PTP messages to 01-1B-19-00-00-00<a href="#fnref17">↩</a></li>
+<li id="fn18">IEEE 1588-2002 defined a <em>domain</em> as any interconnected set of clocks (regardless of whether they synchronized to one another) and used <em>subdomain</em> to refer to what is known as a <em>domain</em> in IEEE 1588-2008.<a href="#fnref18">↩</a></li>
+<li id="fn19">IEEE 1588-2008 uses 224.0.1.129 as the address for all multicast messages.<a href="#fnref19">↩</a></li>
+<li id="fn20"></li>
+<li id="fn21"></li>
+<li id="fn22"></li>
+<li id="fn23"><a href="International_standard" title="wikilink">International standard</a> <a href="International_Electrotechnical_Commission" title="wikilink">IEC</a> 61588: Precision clock synchronization protocol for networked measurement and control systems. 2004.<a href="#fnref23">↩</a></li>
+<li id="fn24"></li>
+<li id="fn25"><a href="http://www.ispcs.org">ISPCS website</a><a href="#fnref25">↩</a></li>
+<li id="fn26"><a href="#fnref26">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

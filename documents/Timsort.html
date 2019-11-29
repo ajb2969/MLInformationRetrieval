@@ -1,0 +1,1208 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="880">Timsort</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Timsort</h1>
+<hr/>
+
+<p><strong>Timsort</strong> is a <a href="hybrid_algorithm" title="wikilink">hybrid</a> <a href="sorting_algorithm" title="wikilink">sorting algorithm</a>, derived from <a href="merge_sort" title="wikilink">merge sort</a> and <a href="insertion_sort" title="wikilink">insertion sort</a>, designed to perform well on many kinds of real-world data. It was invented by <a href="Tim_Peters_software_engineer" title="wikilink">Tim Peters</a> in 2002 for use in the <a href="Python_(programming_language)" title="wikilink">Python programming language</a>. The <a class="uri" href="algorithm" title="wikilink">algorithm</a> finds subsets of the data that are already ordered, and uses that knowledge to sort the remainder more efficiently. This is done by merging an identified subset, called a run, with existing runs until certain criteria are fulfilled. Timsort has been Python's standard sorting algorithm since version 2.3. It is also used to sort arrays of non-primitive type in <a href="Java_7" title="wikilink">Java SE 7</a>,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> on the <a href="Android_(operating_system)" title="wikilink">Android platform</a>,<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> and in <a href="GNU_Octave" title="wikilink">GNU Octave</a>.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+<h2 id="operation">Operation</h2>
+
+<p>Timsort was designed to take advantage of partial orderings that already exist in most real-world data. Timsort operates by finding runs, subsets of at least two elements, in the data. Runs are either non-descending (each element is equal to or greater than its predecessor) or strictly descending (each element is lower than its predecessor). If it is descending, it must be strictly descending, since descending runs are later reversed by a simple swap of elements from both ends converging in the middle. After obtaining such a run in the given array, Timsort processes it, and then searches for the next run.</p>
+<h3 id="minrun">Minrun</h3>
+
+<p> A natural run is a sub-array that is already ordered. Natural runs in real-world data may be of varied lengths. Timsort chooses a sorting technique depending on the length of the run. For example, if the run length is smaller than a certain value, insertion sort is used. Thus Timsort is an adaptive sort.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>The size of the run is checked against the minimum run size. The minimum run size (minrun) depends on the size of the <a href="array_data_type" title="wikilink">array</a>. For an array of fewer than 64 elements, minrun is the size of the array, reducing Timsort to an insertion sort. For larger arrays, minrun is chosen from the range 32 to 64 inclusive, such that the size of the array, divided by minrun, is equal to, or slightly smaller than, a power of two. The final algorithm takes the six most significant bits of the size of the array, adds one if any of the remaining bits are set, and uses that result as the minrun. This algorithm works for all arrays, including those smaller than 64.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+<h3 id="insertion-sort">Insertion sort</h3>
+
+<p>When an array is random, natural runs most likely contain fewer than minrun elements. In this case, an appropriate number of succeeding elements is selected, and an insertion sort increases the size of the run to minrun size. Thus, most runs in a random array are, or become, minrun in length. This results in efficient, balanced merges. It also results in a reasonable number of function calls in the implementation of the sort.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+<h3 id="merge-memory">Merge memory</h3>
+
+<p>Once run lengths are optimized, the runs are merged. When a run is found, the algorithm pushes its base address and length on a stack. A function determines whether the run should be merged with previous runs. Timsort does not merge non-consecutive runs, because doing this would cause the element common to all three runs to become out of order with respect to the middle run.</p>
+
+<p>Thus, merging is always done on consecutive runs. For this, the three top-most runs in the stack which are unsorted are considered. If, say, X, Y, Z represent the lengths of the three uppermost runs in the stack, the algorithm merges the runs so that ultimately the following two rules are satisfied:</p>
+<ol>
+<li>X &gt; Y + Z</li>
+<li>Y &gt; Z<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></li>
+</ol>
+
+<p>For example, if the first of the two rules is not satisfied by the current run status, that is, if X </p>
+
+<p>The rules above aim at maintaining run lengths as close to each other as possible to balance the merges. Only a small number of runs are remembered, as the stack is of a specific size. The algorithm exploits the fresh occurrence of the runs to be merged, in <a href="CPU_cache" title="wikilink">cache memory</a>. Thus a compromise is attained between delaying merging, and exploiting fresh occurrence in cache.</p>
+<h3 id="merging-procedure">Merging procedure</h3>
+<figure><b>(Figure)</b>
+<figcaption>Algorithm creates a temporary memory equal to size of smaller array. Then, it shifts elements in (say if X is smaller) X to the temporary memory and then sorts and fills elements in final order into combined space of X and Y</figcaption>
+</figure>
+
+<p>Merging adjacent runs is done with the help of temporary memory. The temporary memory is of the size of the lesser of the two runs. The algorithm copies the smaller of the two runs into this temporary memory and then uses the original memory (of the smaller run) and the memory of the other run to store sorted output.</p>
+
+<p>A simple merge algorithm runs left to right or right to left depending on which run is smaller, on the temporary memory and original memory of the larger run. The final sorted run is stored in the original memory of the two initial runs. Timsort searches for appropriate positions for the starting element of one array in the other using an adaptation of <a href="binary_search" title="wikilink">binary search</a>.</p>
+
+<p>Say, for example, two runs A and B are to be merged, with A as the smaller run. In this case a binary search examines A to find the first position larger than the first element of B (a'). Note that A and B are already sorted individually. When a' is found, the algorithm can ignore elements before that position while inserting B. Similarly, the algorithm also looks for the smallest element in B (b') greater than the largest element in A (a"). The elements after b' can also be ignored for the merging. This preliminary searching is not efficient for highly random data, but is efficient in other situations and is hence included.</p>
+<h3 id="galloping-mode">Galloping mode</h3>
+<figure><b>(Figure)</b>
+<figcaption>Elements (pointed to by blue arrow) are compared and the smaller element is moved to its final position (pointed to by red arrow).</figcaption>
+</figure>
+
+<p>Most of the merge occurs in what is called "one pair at a time" mode, where respective elements of both runs are compared. When the algorithm merges left-to-right, the smaller of the two is brought to a merge area. A count of the number of times the final element appears in a given run is recorded. When this value reaches a certain threshold, MIN_GALLOP, the merge switches to "galloping mode". In this mode we use the previously mentioned adaptation of binary search to identify where the first element of the smaller array must be placed in the larger array (and vice versa). All elements in the larger array that occur before this location can be moved to the merge area as a group (and vice versa). The functions <em>merge-lo</em> and <em>merge-hi</em> increment the value of min-gallop (initialized to MIN_GALLOP), if galloping is not efficient, and decrement it if it is. If too many consecutive elements come from different runs, galloping mode is exited.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+
+<p>In galloping mode, the algorithm searches for the first element of one array in the other. This is done by comparing that first element (initial element) with the zeroth element of the other array, then the first, the third and so on, that is (2<sup>k</sup> - 1)th element, so as to get a range of elements between which the initial element will lie. This shortens the range for binary searching, thus increasing efficiency. Galloping proves to be more efficient except in cases with especially long runs, but random data usually has shorter runs. Also, in cases where galloping is found to be less efficient than <a href="Binary_search_algorithm" title="wikilink">binary search</a>, galloping mode is exited.</p>
+<figure><b>(Figure)</b>
+<figcaption>All red elements are smaller than blue (here, 21). Thus they can be moved in a chunk to the final array.</figcaption>
+</figure>
+
+<p>Galloping is not always efficient. One reason is due to excessive function calls. Function calls are expensive and thus when frequent, they affect program efficiency. In some cases galloping mode requires more comparisons than a simple <a href="linear_search" title="wikilink">linear search</a> (one at a time search). While for the first few cases both modes may require the same number of comparisons, over time galloping mode requires 33% more comparisons than linear search to arrive at the same results. Moreover all comparisons in galloping mode are done by <a href="function_call" title="wikilink">function calls</a>.</p>
+
+<p>Galloping is beneficial only when the initial element of one run is not one of the first seven elements of the other run. This implies a MIN_GALLOP of 7. To avoid the drawbacks of galloping mode, the merging functions adjust the value of min-gallop. If the element is from the array currently that has been returning elements, min-gallop is reduced by one. Otherwise, the value is incremented by one, thus discouraging a return to galloping mode. When this is done, in the case of random data, the value of min-gallop becomes so large that galloping mode never recurs.</p>
+
+<p>In the case where merge-hi is used (that is, merging is done right-to-left), galloping starts from the right end of the data, that is, the last element. Galloping from the beginning also gives the required results, but makes more comparisons. Thus, the galloping algorithm uses a variable that gives the index at which galloping should begin. Timsort can enter galloping mode at any index and continue checking at the next index which is offset by 1, 3, 7,...., (2<sup>k</sup> - 1).. and so on from the current index. In the case of merge-hi, the offsets to the index will be -1, -3, -7,....<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+<h2 id="performance">Performance</h2>
+
+<p>According to <a href="information_theory" title="wikilink">information theory</a>, no <a href="comparison_sort" title="wikilink">comparison sort</a> can perform better than 
+
+<math display="inline" id="Timsort:0">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+ comparisons in the worst case. On real-world data, Timsort often requires far fewer than 
+
+<math display="inline" id="Timsort:1">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+ comparisons, because it takes advantage of the fact that sublists of the data may already be ordered.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>The following table compares the time complexity of Timsort with other comparison sorts.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: left;">
+<p>Timsort</p></th>
+<th style="text-align: left;">
+<p><a class="uri" href="Introsort" title="wikilink">Introsort</a></p></th>
+<th style="text-align: left;">
+<p><a href="Merge_sort" title="wikilink">Merge sort</a></p></th>
+<th style="text-align: left;">
+<p><a class="uri" href="Quicksort" title="wikilink">Quicksort</a></p></th>
+<th style="text-align: left;">
+<p><a href="Insertion_sort" title="wikilink">Insertion sort</a></p></th>
+<th style="text-align: left;">
+<p><a href="Selection_sort" title="wikilink">Selection sort</a></p></th>
+<th style="text-align: left;">
+<p><a class="uri" href="Smoothsort" title="wikilink">Smoothsort</a></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Best case</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:2">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:3">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:4">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:5">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:6">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>2</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n^{2})
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:7">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Average case</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:8">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:9">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:10">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:11">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:12">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>2</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n^{2})
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:13">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>2</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n^{2})
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:14">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Worst case</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:15">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:16">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:17">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:18">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>2</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n^{2})
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:19">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>2</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n^{2})
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:20">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>2</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n^{2})
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:21">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Θ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mrow>
+      <mi>log</mi>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Θ</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <apply>
+      <log></log>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Theta(n\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>The following table provides a comparison of the space complexities of the various sorting techniques. Note that for merge sort, the <em>worst case</em> space complexity is usually 
+
+<math display="inline" id="Timsort:22">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(n)
+  </annotation>
+ </semantics>
+</math>
+
+, depending on the merge algorithm used. Merge algorithms with 
+
+<math display="inline" id="Timsort:23">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+ space complexity exist.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: left;">
+<p>Timsort</p></th>
+<th style="text-align: left;">
+<p><a href="Merge_sort" title="wikilink">Merge sort</a></p></th>
+<th style="text-align: left;">
+<p><a class="uri" href="Quicksort" title="wikilink">Quicksort</a></p></th>
+<th style="text-align: left;">
+<p><a href="Insertion_sort" title="wikilink">Insertion sort</a></p></th>
+<th style="text-align: left;">
+<p><a href="Selection_sort" title="wikilink">Selection sort</a></p></th>
+<th style="text-align: left;">
+<p><a class="uri" href="Smoothsort" title="wikilink">Smoothsort</a></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Space complexity</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:24">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:25">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:26">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>log</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:27">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:28">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Timsort:29">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>Note, however, that the space complexity of both Timsort and merge sort can be reduced to 
+
+<math display="inline" id="Timsort:30">
+ <semantics>
+  <mrow>
+   <mi>log</mi>
+   <mi>n</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <log></log>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log n
+  </annotation>
+ </semantics>
+</math>
+
+ at the cost of speed (see <a href="in-place_merge_sort" title="wikilink">in-place merge sort</a>).</p>
+<h2 id="debugging-with-formal-methods">Debugging with formal methods</h2>
+
+<p>Researchers discovered using <a href="formal_verification" title="wikilink">formal verification</a> (<a class="uri" href="KeY" title="wikilink">KeY</a>) that the three runs mentioned above are not sufficient to hold the invariant for any arbitrary array.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> The bug was not deemed critical because no current machine could hold a sufficient number of elements, approximately 2<sup>49</sup> or 562 trillion, to trigger the error. The bug was patched in Python a day later.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://bugs.python.org/file4451/timsort.txt">timsort.txt</a> - original explanation by Tim Peters.</li>
+<li><a href="http://corte.si/posts/code/timsort/index.html">Visualising Timsort</a> - the source for the image on this page.</li>
+<li><a href="http://hg.python.org/cpython/file/default/Objects/listobject.c">Python's listobject.c</a> - the <a href="C_(programming_language)" title="wikilink">C</a> implementation of timsort for <a class="uri" href="CPython" title="wikilink">CPython</a>.</li>
+<li><a href="http://cr.openjdk.java.net/~martin/webrevs/openjdk7/timsort/raw_files/new/src/share/classes/java/util/TimSort.java">OpenJDK's TimSort.java</a> - the Java implementation of timsort.</li>
+<li><a href="http://hg.savannah.gnu.org/hgweb/octave/file/0486a29d780f/liboctave/util/oct-sort.cc">GNU Octave's oct-sort.cc</a> - the <a class="uri" href="C++" title="wikilink">C++</a> implementation of timsort for <a href="GNU_Octave" title="wikilink">GNU Octave</a>.</li>
+<li><a href="http://stromberg.dnsalias.org/~strombrg/sort-comparison/">Sort Comparison</a> - a Pure Python and Cython implementation of Timsort, among other sorts.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Sorting_algorithms" title="wikilink">Category:Sorting algorithms</a> <a href="Category:Comparison_sorts" title="wikilink">Category:Comparison sorts</a> <a href="Category:Stable_sorts" title="wikilink">Category:Stable sorts</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">{{ cite web | title = [#JDK-6804124] (coll) Replace "modified mergesort" in java.util.Arrays.sort with timsort | url = <a class="uri" href="https://bugs.openjdk.java.net/browse/JDK-6804124">https://bugs.openjdk.java.net/browse/JDK-6804124</a> | work = JDK Bug System | accessdate = 11 Jun 2014 }}<a href="#fnref1">↩</a></li>
+<li id="fn2">{{ cite web | title = Class: java.util.TimSort<t> | url = <a class="uri" href="https://android.googlesource.com/platform/libcore/+/gingerbread/luni/src/main/java/java/util/TimSort.java">https://android.googlesource.com/platform/libcore/+/gingerbread/luni/src/main/java/java/util/TimSort.java</a> | work = Android Gingerbread Documentation | accessdate = 24 Feb 2011 }}</t><a href="#fnref2">↩</a></li>
+<li id="fn3">{{ cite web | title = liboctave/util/oct-sort.cc | url = <a class="uri" href="http://hg.savannah.gnu.org/hgweb/octave/file/0486a29d780f/liboctave/util/oct-sort.cc">http://hg.savannah.gnu.org/hgweb/octave/file/0486a29d780f/liboctave/util/oct-sort.cc</a> | work = Mercurial repository of Octave source code | accessdate = 18 Feb 2013 | quote = Code stolen in large part from Python's, listobject.c, which itself had no license header. However, thanks to Tim Peters for the parts of the code I ripped-off. | at = Lines 23-25 of the initial comment block. }}<a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"></li>
+<li id="fn8"></li>
+<li id="fn9"></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="http://envisage-project.eu/proving-android-java-and-python-sorting-algorithm-is-broken-and-how-to-fix-it/">Proving that Android’s, Java’s and Python’s sorting algorithm is broken (and showing how to fix it)</a><a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="http://bugs.python.org/issue23515">Python Issue Tracker - Issue 23515: Bad logic in timsort's merge_collapse</a><a href="#fnref12">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

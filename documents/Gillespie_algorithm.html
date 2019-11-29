@@ -1,0 +1,915 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1449">Gillespie algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Gillespie algorithm</h1>
+<hr/>
+
+<p>In <a href="probability_theory" title="wikilink">probability theory</a>, the <strong>Gillespie algorithm</strong> (or occasionally the <strong>Doob-Gillespie algorithm</strong>) generates a statistically correct trajectory (possible solution) of a <a class="uri" href="stochastic" title="wikilink">stochastic</a> equation. It was created by <a href="Joseph_L._Doob" title="wikilink">Joseph L. Doob</a> and others (circa 1945), presented by <a href="Dan_Gillespie" title="wikilink">Dan Gillespie</a> in 1976, and popularized in 1977 in a paper where he uses it to simulate chemical or biochemical systems of reactions efficiently and accurately using limited computational power (see <a href="stochastic_simulation" title="wikilink">stochastic simulation</a>). As computers have become faster, the algorithm has been used to simulate increasingly complex systems. The algorithm is particularly useful for simulating reactions within cells where the number of <a href="reagent" title="wikilink">reagents</a> typically number in the tens of molecules (or less). Mathematically, it is a variety of a <a href="dynamic_Monte_Carlo_method" title="wikilink">dynamic Monte Carlo method</a> and similar to the <a href="kinetic_Monte_Carlo" title="wikilink">kinetic Monte Carlo</a> methods. It is used heavily in <a href="computational_systems_biology" title="wikilink">computational systems biology</a> .</p>
+<h2 id="history">History</h2>
+
+<p>The process that lead to the algorithm recognizes several important steps. In 1931, <a href="Andrei_Kolmogorov" title="wikilink">Andrei Kolmogorov</a> introduced the differential equations corresponding to the time-evolution of stochastic processes that proceed by jumps, today known as <a href="Kolmogorov_equations_(Markov_jump_process)" title="wikilink">Kolmogorov equations (Markov jump process)</a> (a simplified version is known as <a href="master_equation" title="wikilink">master equation</a> in the natural sciences). It was <a href="William_Feller" title="wikilink">William Feller</a>, in 1940, who found the conditions under which the Kolmogorov equations admitted (proper) probabilities as solutions. In his Theorem I (1940 work) he establishes that the time-to-the-next-jump was exponentially distributed and the probability of the next event is proportional to the rate. As such, he established the relation of Kolmogorov's equations with <a href="stochastic_process" title="wikilink">stochastic processes</a>. Later, Doob (1942, 1945) extended Feller's solutions beyond the case of pure-jump processes. The method was implemented in computers by <a href="David_George_Kendall" title="wikilink">David George Kendall</a> (1950) using the <a href="Manchester_Mark_1" title="wikilink">Manchester Mark 1</a> computer and later used by <a href="Maurice_S._Bartlett" title="wikilink">Maurice S. Bartlett</a> (1953) in his studies of epidemics outbreaks. Gillespie (1977) obtains the algorithm in a different manner by making use of a physical argument.</p>
+<h2 id="idea-behind-the-algorithm">Idea behind the algorithm</h2>
+
+<p>Traditional continuous and deterministic biochemical rate equations do not accurately predict cellular reactions since they rely on bulk reactions that require the interactions of millions of molecules. They are typically modeled as a set of coupled ordinary differential equations. In contrast, the Gillespie algorithm allows a discrete and stochastic simulation of a system with few reactants because every reaction is explicitly simulated. A trajectory corresponding to a single Gillespie simulation represents an exact sample from the probability mass function that is the solution of the <a href="master_equation" title="wikilink">master equation</a>.</p>
+
+<p>The physical basis of the algorithm is the collision of molecules within a reaction vessel. It is assumed that collisions are frequent, but collisions with the proper orientation and energy are infrequent. Therefore, all reactions within the Gillespie framework must involve at most two molecules. Reactions involving three molecules are assumed to be extremely rare and are modeled as a sequence of binary reactions. It is also assumed that the reaction environment is well mixed.</p>
+<h2 id="algorithm">Algorithm</h2>
+
+<p>Gillespie developed two different, but equivalent formulations; the direct method and the first reaction method. Below is a summary of the steps to run the algorithm (math omitted):</p>
+<ol>
+<li><strong>Initialization</strong>: Initialize the number of molecules in the system, reaction constants, and random number generators.</li>
+<li><strong>Monte Carlo step</strong>: Generate random numbers to determine the next reaction to occur as well as the time interval. The probability of a given reaction to be chosen is proportional to the number of substrate molecules.</li>
+<li><strong>Update</strong>: Increase the time step by the randomly generated time in Step 2. Update the molecule count based on the reaction that occurred.</li>
+<li><strong>Iterate</strong>: Go back to Step 2 unless the number of reactants is zero or the simulation time has been exceeded.</li>
+</ol>
+
+<p>The algorithm is computationally expensive and thus many modifications and adaptations exist, including the next reaction method (Gibson &amp; Bruck), <a class="uri" href="tau-leaping" title="wikilink">tau-leaping</a>, as well as hybrid techniques where abundant reactants are modeled with deterministic behavior. Adapted techniques generally compromise the exactitude of the theory behind the algorithm as it connects to the Master equation, but offer reasonable realizations for greatly improved timescales. The computational cost of exact versions of the algorithm is determined by the coupling class of the reaction network. In weakly coupled networks, the number of reactions that is influenced by any other reaction is bounded by a small constant. In strongly coupled networks, a single reaction firing can in principle affect all other reactions. An exact version of the algorithm with constant-time scaling for weakly coupled networks has been developed, enabling efficient simulation of systems with very large numbers of reaction channels (Slepoy Thompson Plimpton 2008). The generalized Gillespie algorithm that accounts for the non-Markovian properties of random biochemical events with delay has been developed by Bratsun et al. 2005 and independently Barrio et al. 2006, as well as (Cai 2007). See the articles cited below for details.</p>
+
+<p>Partial-propensity formulations, as developed independently by both Ramaswamy et al. (2009, 2010) and Indurkhya and Beal (2010), are available to construct a family of exact versions of the algorithm whose computational cost is proportional to the number of chemical species in the network, rather than the (larger) number of reactions. These formulations can reduce the computational cost to constant-time scaling for weakly coupled networks and to scale at most linearly with the number of species for strongly coupled networks. A partial-propensity variant of the generalized Gillespie algorithm for reactions with delays has also been proposed (Ramaswamy Sbalzarini 2011). The use of partial-propensity methods is limited to elementary chemical reactions, i.e., reactions with at most two different reactants. Every non-elementary chemical reaction can be equivalently decomposed into a set of elementary ones, at the expense of a linear (in the order of the reaction) increase in network size.</p>
+<h3 id="simple-example-reversible-binding-of-a-and-b-to-form-ab-dimers">Simple example: Reversible binding of A and B to form AB dimers</h3>
+
+<p>A simple example may help to explain how the Gillespie algorithm works. Consider a system of molecules of two types: <em>A</em> and <em>B</em>. In the system <em>A</em> and <em>B</em> reversibly bind together to form <em>AB</em> dimers. So there are two reactions. The first is where one molecule of <em>A</em> reacts reversibly with one B molecule to form an <em>AB</em> dimer, and the second is where an <em>AB</em> dimer dissociates into an <em>A</em> and a <em>B</em> molecule. The reaction rate constant for a given single A molecule reacting with a given single <em>B</em> molecule is 
+
+<math display="inline" id="Gillespie_algorithm:0">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mi>D</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{D}
+  </annotation>
+ </semantics>
+</math>
+
+, and the reaction rate for an <em>AB</em> dimer breaking up is 
+
+<math display="inline" id="Gillespie_algorithm:1">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mi>B</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{B}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>So, for example if at time <em>t</em> there is one molecule of each type then the rate of dimer formation is 
+
+<math display="inline" id="Gillespie_algorithm:2">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mi>D</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{D}
+  </annotation>
+ </semantics>
+</math>
+
+, while if there are 
+
+<math display="inline" id="Gillespie_algorithm:3">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>A</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>A</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{A}
+  </annotation>
+ </semantics>
+</math>
+
+
+ molecules of type <em>A</em> and 
+
+<math display="inline" id="Gillespie_algorithm:4">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>B</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{B}
+  </annotation>
+ </semantics>
+</math>
+
+ molecules of type <em>B</em>, the rate of dimer formation is 
+
+<math display="inline" id="Gillespie_algorithm:5">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>k</mi>
+    <mi>D</mi>
+   </msub>
+   <msub>
+    <mi>n</mi>
+    <mi>A</mi>
+   </msub>
+   <msub>
+    <mi>n</mi>
+    <mi>B</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>k</ci>
+     <ci>D</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <ci>A</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{D}n_{A}n_{B}
+  </annotation>
+ </semantics>
+</math>
+
+. If there are 
+
+<math display="inline" id="Gillespie_algorithm:6">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mrow>
+    <mi>A</mi>
+    <mi>B</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{AB}
+  </annotation>
+ </semantics>
+</math>
+
+ dimers then the rate of dimer dissociation is 
+
+<math display="inline" id="Gillespie_algorithm:7">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>k</mi>
+    <mi>B</mi>
+   </msub>
+   <msub>
+    <mi>n</mi>
+    <mrow>
+     <mi>A</mi>
+     <mi>B</mi>
+    </mrow>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>k</ci>
+     <ci>B</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <apply>
+      <times></times>
+      <ci>A</ci>
+      <ci>B</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{B}n_{AB}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The total reaction rate, 
+
+<math display="inline" id="Gillespie_algorithm:8">
+ <semantics>
+  <msub>
+   <mi>R</mi>
+   <mrow>
+    <mi>T</mi>
+    <mi>O</mi>
+    <mi>T</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>R</ci>
+    <apply>
+     <times></times>
+     <ci>T</ci>
+     <ci>O</ci>
+     <ci>T</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R_{TOT}
+  </annotation>
+ </semantics>
+</math>
+
+
+, at time <em>t</em> is then given by</p>
+
+<p>
+
+<math display="inline" id="Gillespie_algorithm:9">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>R</mi>
+    <mrow>
+     <mi>T</mi>
+     <mi>O</mi>
+     <mi>T</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>k</mi>
+      <mi>D</mi>
+     </msub>
+     <msub>
+      <mi>n</mi>
+      <mi>A</mi>
+     </msub>
+     <msub>
+      <mi>n</mi>
+      <mi>B</mi>
+     </msub>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mi>k</mi>
+      <mi>B</mi>
+     </msub>
+     <msub>
+      <mi>n</mi>
+      <mrow>
+       <mi>A</mi>
+       <mi>B</mi>
+      </mrow>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>R</ci>
+     <apply>
+      <times></times>
+      <ci>T</ci>
+      <ci>O</ci>
+      <ci>T</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <ci>D</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <ci>A</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <ci>B</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <ci>B</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <apply>
+        <times></times>
+        <ci>A</ci>
+        <ci>B</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R_{TOT}=k_{D}n_{A}n_{B}+k_{B}n_{AB}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>So, we have now described a simple model with two reactions. This definition is independent of the Gillespie algorithm. We will now describe how to apply the Gillespie algorithm to this system.</p>
+
+<p>In the algorithm, we advance forward in time in two steps: calculating the time to the next reaction, and determining which of the possible reactions, the next reaction is. Reactions are assumed to be completely random, so if the reaction rate at a time <em>t</em> is 
+
+<math display="inline" id="Gillespie_algorithm:10">
+ <semantics>
+  <msub>
+   <mi>R</mi>
+   <mrow>
+    <mi>T</mi>
+    <mi>O</mi>
+    <mi>T</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>R</ci>
+    <apply>
+     <times></times>
+     <ci>T</ci>
+     <ci>O</ci>
+     <ci>T</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R_{TOT}
+  </annotation>
+ </semantics>
+</math>
+
+, then the time, δ<em>t</em>, until the next reaction occurs is a random number drawn from exponential distribution function with mean 
+
+<math display="inline" id="Gillespie_algorithm:11">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>/</mo>
+   <msub>
+    <mi>R</mi>
+    <mrow>
+     <mi>T</mi>
+     <mi>O</mi>
+     <mi>T</mi>
+    </mrow>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <cn type="integer">1</cn>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>R</ci>
+     <apply>
+      <times></times>
+      <ci>T</ci>
+      <ci>O</ci>
+      <ci>T</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1/R_{TOT}
+  </annotation>
+ </semantics>
+</math>
+
+. Thus, we advance time from <em>t</em> to <em>t</em> + δ<em>t</em>.</p>
+<figure><b>(Figure)</b>
+<figcaption>Plot of the number <em>A</em> molecules (black curve) and <em>AB</em> dimers as a function of time. As we started with 10 <em>A</em> and <em>B</em> molecules at time <em>t</em>=0, the number of <em>B</em> molecules is always equal to the number of <em>A</em> molecules and so it is not shown.</figcaption>
+</figure>
+
+<p>The probability that this reaction is an <em>A</em> molecule binding to a <em>B</em> molecule is simply the fraction of total rate due to this type of reaction, i.e.,</p>
+
+<p>the probability that reaction is <em>A</em> + <em>B</em> → <em>AB</em> 
+
+<math display="inline" id="Gillespie_algorithm:12">
+ <semantics>
+  <mrow>
+   <mi></mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>k</mi>
+      <mi>D</mi>
+     </msub>
+     <msub>
+      <mi>n</mi>
+      <mi>A</mi>
+     </msub>
+     <msub>
+      <mi>n</mi>
+      <mi>B</mi>
+     </msub>
+    </mrow>
+    <mo>/</mo>
+    <msub>
+     <mi>R</mi>
+     <mrow>
+      <mi>T</mi>
+      <mi>O</mi>
+      <mi>T</mi>
+     </mrow>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <csymbol cd="latexml">absent</csymbol>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <ci>D</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <ci>A</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <ci>B</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>R</ci>
+      <apply>
+       <times></times>
+       <ci>T</ci>
+       <ci>O</ci>
+       <ci>T</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   =k_{D}n_{A}n_{B}/R_{TOT}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The probability that the next reaction is an <em>AB</em> dimer dissociating is just 1 minus that. So with these two probabilities we either form a dimer by reducing 
+
+<math display="inline" id="Gillespie_algorithm:13">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>A</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>A</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{A}
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="Gillespie_algorithm:14">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>B</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{B}
+  </annotation>
+ </semantics>
+</math>
+
+ by one, and increase 
+
+<math display="inline" id="Gillespie_algorithm:15">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mrow>
+    <mi>A</mi>
+    <mi>B</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{AB}
+  </annotation>
+ </semantics>
+</math>
+
+ by one, or we dissociate a dimer and increase 
+
+<math display="inline" id="Gillespie_algorithm:16">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>A</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>A</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{A}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Gillespie_algorithm:17">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>B</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{B}
+  </annotation>
+ </semantics>
+</math>
+
+ by one and decrease 
+
+<math display="inline" id="Gillespie_algorithm:18">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mrow>
+    <mi>A</mi>
+    <mi>B</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{AB}
+  </annotation>
+ </semantics>
+</math>
+
+
+ by one.</p>
+
+<p>Now we have both advanced time to <em>t</em> + δ<em>t</em>, and performed a single reaction. The Gillespie algorithm just repeats these two steps as many times as needed to simulate the system for however long we want (i.e., for as many reactions). The result of a Gillespie simulation that starts with 
+
+<math display="inline" id="Gillespie_algorithm:19">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>n</mi>
+    <mi>A</mi>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>n</mi>
+    <mi>B</mi>
+   </msub>
+   <mo>=</mo>
+   <mn>10</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>n</ci>
+      <ci>A</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>n</ci>
+      <ci>B</ci>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <cn type="integer">10</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{A}=n_{B}=10
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Gillespie_algorithm:20">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>n</mi>
+    <mrow>
+     <mi>A</mi>
+     <mi>B</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <apply>
+      <times></times>
+      <ci>A</ci>
+      <ci>B</ci>
+     </apply>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{AB}=0
+  </annotation>
+ </semantics>
+</math>
+
+ at <em>t</em>=0, and where 
+
+<math display="inline" id="Gillespie_algorithm:21">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>k</mi>
+    <mi>D</mi>
+   </msub>
+   <mo>=</mo>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>k</ci>
+     <ci>D</ci>
+    </apply>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{D}=2
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Gillespie_algorithm:22">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>k</mi>
+    <mi>U</mi>
+   </msub>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>k</ci>
+     <ci>U</ci>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{U}=1
+  </annotation>
+ </semantics>
+</math>
+
+, is shown at the right. For these parameter values, on average there are 8 
+
+<math display="inline" id="Gillespie_algorithm:23">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mrow>
+    <mi>A</mi>
+    <mi>B</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{AB}
+  </annotation>
+ </semantics>
+</math>
+
+
+ dimers and 2 of <em>A</em> and <em>B</em> but due to the small numbers of molecules fluctuations around these values are large. The Gillespie algorithm is often used to study systems where these fluctuations are important.</p>
+
+<p>That was just a simple example, with two reactions. More complex systems with more reactions are handled in the same way. All reaction rates must be calculated at each time step, and one chosen with probability equal to its fractional contribution to the rate. Time is then advanced as in this example.</p>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li>(Slepoy Thompson Plimpton 2008): </li>
+<li>(Bratsun et al. 2005): </li>
+<li>(Barrio et al. 2006): </li>
+<li>(Cai 2007): </li>
+<li>(Barnes Chu 2010): </li>
+<li>(Ramaswamy González-Segredo Sbalzarini 2009): </li>
+<li>(Ramaswamy Sbalzarini 2010): </li>
+<li>(Indurkhya Beal 2010): </li>
+<li>(Ramaswamy Sbalzarini 2011): </li>
+</ul>
+<h2 id="external-links">External links</h2>
+<dl>
+<dt>Software</dt>
+</dl>
+<ul>
+<li><a href="http://www.stochss.org/">StochSS</a> - A cloud computing framework for modeling and simulation of stochastic biochemical systems</li>
+<li><a href="http://www.engineering.ucsb.edu/~cse/StochKit/">StochKit2</a> - Stochastic simulation kit</li>
+<li><a href="http://cain.sourceforge.net/">Cain</a> - Stochastic simulation of chemical kinetics. Direct, next reaction, tau-leaping, hybrid, etc.</li>
+<li><a href="http://stochpy.sourceforge.net/">StochPy</a> - Stochastic modelling in Python</li>
+<li><a href="http://synbioss.sourceforge.net/">SynBioSS</a> - Stochastic simulation of chemical kinetics using the exact SSA as well as an SSA/Langevin hybrid. Both MPI-parallel (supercomputer) and GUI (desktop) versions are provided.</li>
+<li><a href="http://cran.r-project.org/web/packages/GillespieSSA/index.html">GillespieSSA</a> - R package for Gillespie algorithm</li>
+<li><a href="http://demonstrations.wolfram.com/DeterministicVersusStochasticChemicalKinetics/">1</a> - Mathematica code and applet for stochastic simulation of chemical kinetics.</li>
+<li><a href="http://mosaic.mpi-cbg.de/?q=downloads/stochastic_chemical_net">pSSAlib</a> - C++ implementations of all partial-propensity methods.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Chemical_kinetics" title="wikilink">Category:Chemical kinetics</a> <a href="Category:Computational_chemistry" title="wikilink">Category:Computational chemistry</a> <a href="Category:Monte_Carlo_methods" title="wikilink">Category:Monte Carlo methods</a> <a href="Category:Stochastic_simulation" title="wikilink">Category:Stochastic simulation</a></p>
+</body>
+</html>

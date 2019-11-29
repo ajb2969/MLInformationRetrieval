@@ -1,0 +1,2295 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="79">Sliding window based part-of-speech tagging</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Sliding window based part-of-speech tagging</h1>
+<hr/>
+
+<p><strong>Sliding window based part-of-speech tagging</strong> is used to <a href="part-of-speech_tagging" title="wikilink">part-of-speech tag</a> a text.</p>
+
+<p>A high percentage of words in a <a href="natural_language" title="wikilink">natural language</a> are words which out of context can be assigned more than one part of speech. The percentage of these ambiguous words is typically around 30%, although it depends greatly on the language. Solving this problem is very important in many areas of <a href="natural_language_processing" title="wikilink">natural language processing</a>. For example in <a href="machine_translation" title="wikilink">machine translation</a> changing the part-of-speech of a word can dramatically change its translation.</p>
+
+<p>Sliding window based part-of-speech taggers are programs which assign a single part-of-speech to a given lexical form of a word, by looking at a fixed sized "window" of words around the word to be disambiguated.</p>
+
+<p>The two main advantages of this approach are:</p>
+<ul>
+<li>It is possible to automatically train the tagger, getting rid of the need of manually tagging a corpus.</li>
+<li>The tagger can be implemented as a <a href="finite-state_machine" title="wikilink">finite state automaton</a> (<a href="Mealy_machine" title="wikilink">Mealy machine</a>)</li>
+</ul>
+<h2 id="formal-definition">Formal definition</h2>
+
+<p>Let</p>
+
+<p>
+
+<math display="block" id="Sliding_window_based_part-of-speech_tagging:0">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Γ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <msub>
+     <mi>γ</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>γ</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>γ</mi>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <mi mathvariant="normal">Γ</mi>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </msub>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>normal-Γ</ci>
+    <set>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>γ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>γ</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>γ</ci>
+      <apply>
+       <abs></abs>
+       <ci>normal-Γ</ci>
+      </apply>
+     </apply>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Gamma=\{\gamma_{1},\gamma_{2},\ldots,\gamma_{|\Gamma|}\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>be the set of grammatical tags of the application, that is, the set of all possible tags which may be assigned to a word, and let</p>
+
+<p>
+
+<math display="block" id="Sliding_window_based_part-of-speech_tagging:1">
+ <semantics>
+  <mrow>
+   <mi>W</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mrow>
+     <mi>w</mi>
+     <mn>1</mn>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi>w</mi>
+     <mn>2</mn>
+    </mrow>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>W</ci>
+    <set>
+     <apply>
+      <times></times>
+      <ci>w</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>w</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W=\{w1,w2,\ldots\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>be the vocabulary of the application. Let</p>
+
+<p>
+
+<math display="block" id="Sliding_window_based_part-of-speech_tagging:2">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <mo>:</mo>
+   <mrow>
+    <mi>W</mi>
+    <mo>→</mo>
+    <mrow>
+     <mi>P</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi mathvariant="normal">Γ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <ci>T</ci>
+    <apply>
+     <ci>normal-→</ci>
+     <ci>W</ci>
+     <apply>
+      <times></times>
+      <ci>P</ci>
+      <ci>normal-Γ</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T:W\rightarrow P(\Gamma)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>be a function for morphological analysis which assigns each 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:3">
+ <semantics>
+  <mi>w</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>w</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w
+  </annotation>
+ </semantics>
+</math>
+
+
+ its set of possible tags, 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:4">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>T</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>w</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>⊆</mo>
+   <mi mathvariant="normal">Γ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <subset></subset>
+    <apply>
+     <times></times>
+     <ci>T</ci>
+     <ci>w</ci>
+    </apply>
+    <ci>normal-Γ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T(w)\subseteq\Gamma
+  </annotation>
+ </semantics>
+</math>
+
+, that can be implemented by a full-form lexicon, or a morphological analyser. Let</p>
+
+<p>
+
+<math display="block" id="Sliding_window_based_part-of-speech_tagging:5">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Σ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <msub>
+     <mi>σ</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>σ</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>σ</mi>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <mi mathvariant="normal">Σ</mi>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </msub>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>normal-Σ</ci>
+    <set>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <apply>
+       <abs></abs>
+       <ci>normal-Σ</ci>
+      </apply>
+     </apply>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma=\{\sigma_{1},\sigma_{2},\ldots,\sigma_{|\Sigma|}\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>be the set of word classes, that in general will be a <a href="Partition_of_a_set" title="wikilink">partition</a> of 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:6">
+ <semantics>
+  <mi>W</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>W</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W
+  </annotation>
+ </semantics>
+</math>
+
+ with the restriction that for each 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:7">
+ <semantics>
+  <mrow>
+   <mi>σ</mi>
+   <mo>∈</mo>
+   <mi mathvariant="normal">Σ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>σ</ci>
+    <ci>normal-Σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma\in\Sigma
+  </annotation>
+ </semantics>
+</math>
+
+ all of the words 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:8">
+ <semantics>
+  <mrow>
+   <mpadded width="+1.7pt">
+    <mi>w</mi>
+   </mpadded>
+   <mpadded width="+1.7pt">
+    <mi mathvariant="normal">Σ</mi>
+   </mpadded>
+   <mi>σ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>w</ci>
+    <ci>normal-Σ</ci>
+    <ci>σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w\,\Sigma\,\sigma
+  </annotation>
+ </semantics>
+</math>
+
+
+ will receive the same set of tags, that is, all of the words in each word class (
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:9">
+ <semantics>
+  <mi>σ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>σ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma
+  </annotation>
+ </semantics>
+</math>
+
+) belong to the same ambiguity class.</p>
+
+<p>Normally, 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:10">
+ <semantics>
+  <mi mathvariant="normal">Σ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-Σ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma
+  </annotation>
+ </semantics>
+</math>
+
+ is constructed in a way that for high frequency words, each word class contains a single word, while for low frequency words, each word class corresponds to a single ambiguity class. This allows good performance for high frequency ambiguous words, and doesn't require too many parameters for the tagger.</p>
+
+<p>With these definitions it is possible to state problem in the following way: Given a text 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:11">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>w</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi>w</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>2</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi mathvariant="normal">…</mi>
+    <mi>w</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>L</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>∈</mo>
+   <msup>
+    <mi>W</mi>
+    <mo>*</mo>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <apply>
+     <times></times>
+     <ci>w</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>w</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <ci>w</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>L</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>W</ci>
+     <times></times>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w[1]w[2]\ldots w[L]\in W^{*}
+  </annotation>
+ </semantics>
+</math>
+
+ each word 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:12">
+ <semantics>
+  <mrow>
+   <mi>w</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>t</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>w</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <ci>t</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w[t]
+  </annotation>
+ </semantics>
+</math>
+
+ is assigned a word class 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:13">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>T</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>w</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>t</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>∈</mo>
+   <mi mathvariant="normal">Σ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <apply>
+     <times></times>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <ci>w</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+    <ci>normal-Σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T(w[t])\in\Sigma
+  </annotation>
+ </semantics>
+</math>
+
+
+ (either by using the lexicon or morphological analyser) in order to get an ambiguously tagged text 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:14">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>σ</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi>σ</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>2</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi mathvariant="normal">…</mi>
+    <mi>σ</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>L</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>∈</mo>
+   <msup>
+    <mi>W</mi>
+    <mo>*</mo>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <apply>
+     <times></times>
+     <ci>σ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>σ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <ci>σ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>L</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>W</ci>
+     <times></times>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma[1]\sigma[2]\ldots\sigma[L]\in W^{*}
+  </annotation>
+ </semantics>
+</math>
+
+. The job of the tagger is to get a tagged text 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:15">
+ <semantics>
+  <mrow>
+   <mi>γ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>1</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mi>γ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>2</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mi mathvariant="normal">…</mi>
+   <mi>γ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>L</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>γ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>γ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <cn type="integer">2</cn>
+    </apply>
+    <ci>normal-…</ci>
+    <ci>γ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <ci>L</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma[1]\gamma[2]\ldots\gamma[L]
+  </annotation>
+ </semantics>
+</math>
+
+ (with 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:16">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>γ</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>t</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>∈</mo>
+   <mrow>
+    <mi>T</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>t</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <apply>
+     <times></times>
+     <ci>γ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>t</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma[t]\in T(\sigma[t])
+  </annotation>
+ </semantics>
+</math>
+
+) as correct as possible.</p>
+
+<p>A statistical tagger looks for the most probable tag for an ambiguously tagged text 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:17">
+ <semantics>
+  <mrow>
+   <mi>σ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>1</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mi>σ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>2</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mi mathvariant="normal">…</mi>
+   <mi>σ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>L</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>σ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>σ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <cn type="integer">2</cn>
+    </apply>
+    <ci>normal-…</ci>
+    <ci>σ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <ci>L</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma[1]\sigma[2]\ldots\sigma[L]
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="block" id="Sliding_window_based_part-of-speech_tagging:18">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>γ</mi>
+     <mo>*</mo>
+    </msup>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi mathvariant="normal">…</mi>
+    <msup>
+     <mi>γ</mi>
+     <mo>*</mo>
+    </msup>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>L</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <munder>
+      <mrow>
+       <mpadded width="+1.7pt">
+        <mi>arg</mi>
+       </mpadded>
+       <mi>max</mi>
+      </mrow>
+      <mrow>
+       <mrow>
+        <mi>γ</mi>
+        <mrow>
+         <mo stretchy="false">[</mo>
+         <mi>t</mi>
+         <mo stretchy="false">]</mo>
+        </mrow>
+       </mrow>
+       <mo>∈</mo>
+       <mrow>
+        <mi>T</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>σ</mi>
+          <mrow>
+           <mo stretchy="false">[</mo>
+           <mi>t</mi>
+           <mo stretchy="false">]</mo>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+     </munder>
+     <mi>p</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>γ</ci>
+      <times></times>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>γ</ci>
+      <times></times>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>L</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <times></times>
+        <ci>arg</ci>
+        <ci>max</ci>
+       </apply>
+       <apply>
+        <in></in>
+        <apply>
+         <times></times>
+         <ci>γ</ci>
+         <apply>
+          <csymbol cd="latexml">delimited-[]</csymbol>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>T</ci>
+         <apply>
+          <times></times>
+          <ci>σ</ci>
+          <apply>
+           <csymbol cd="latexml">delimited-[]</csymbol>
+           <ci>t</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <ci>p</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma^{*}[1]\ldots\gamma^{*}[L]=\operatorname*{arg\,max}\limits_{\gamma[t]\in
+T%
+(\sigma[t])}p(\gamma[1]\ldots\gamma[L]\sigma[1]\ldots\sigma[L])
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Using <a href="Bayes_formula" title="wikilink">Bayes formula</a>, this is converted into:</p>
+
+<p>
+
+<math display="block" id="Sliding_window_based_part-of-speech_tagging:19">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>γ</mi>
+     <mo>*</mo>
+    </msup>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi mathvariant="normal">…</mi>
+    <msup>
+     <mi>γ</mi>
+     <mo>*</mo>
+    </msup>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>L</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <munder>
+      <mrow>
+       <mpadded width="+1.7pt">
+        <mi>arg</mi>
+       </mpadded>
+       <mi>max</mi>
+      </mrow>
+      <mrow>
+       <mrow>
+        <mi>γ</mi>
+        <mrow>
+         <mo stretchy="false">[</mo>
+         <mi>t</mi>
+         <mo stretchy="false">]</mo>
+        </mrow>
+       </mrow>
+       <mo>∈</mo>
+       <mrow>
+        <mi>T</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>σ</mi>
+          <mrow>
+           <mo stretchy="false">[</mo>
+           <mi>t</mi>
+           <mo stretchy="false">]</mo>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+     </munder>
+     <mi>p</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>γ</ci>
+      <times></times>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>γ</ci>
+      <times></times>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>L</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <times></times>
+        <ci>arg</ci>
+        <ci>max</ci>
+       </apply>
+       <apply>
+        <in></in>
+        <apply>
+         <times></times>
+         <ci>γ</ci>
+         <apply>
+          <csymbol cd="latexml">delimited-[]</csymbol>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>T</ci>
+         <apply>
+          <times></times>
+          <ci>σ</ci>
+          <apply>
+           <csymbol cd="latexml">delimited-[]</csymbol>
+           <ci>t</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <ci>p</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+     </apply>
+     <ci>p</ci>
+     <apply>
+      <times></times>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma^{*}[1]\ldots\gamma^{*}[L]=\operatorname*{arg\,max}\limits_{\gamma[t]\in
+T%
+(\sigma[t])}p(\gamma[1]\ldots\gamma[L])p(\sigma[1]\ldots\sigma[L]\gamma[1]%
+\ldots\gamma[L])
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:20">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>γ</mi>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mn>1</mn>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <mi>γ</mi>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mn>2</mn>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <mi mathvariant="normal">…</mi>
+     <mi>γ</mi>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mi>L</mi>
+      <mo stretchy="false">]</mo>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <apply>
+     <times></times>
+     <ci>γ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>γ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <ci>γ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>L</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\gamma[1]\gamma[2]\ldots\gamma[L])
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability that a particular tag (syntactic probability) and 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:21">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>σ</mi>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mn>1</mn>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <mi mathvariant="normal">…</mi>
+     <mi>σ</mi>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mi>L</mi>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <mi>γ</mi>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mn>1</mn>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <mi mathvariant="normal">…</mi>
+     <mi>γ</mi>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mi>L</mi>
+      <mo stretchy="false">]</mo>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <apply>
+     <times></times>
+     <ci>σ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <ci>σ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>L</ci>
+     </apply>
+     <ci>γ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <ci>γ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>L</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\sigma[1]\dots\sigma[L]\gamma[1]\ldots\gamma[L])
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability that this tag corresponds to the text 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:22">
+ <semantics>
+  <mrow>
+   <mi>σ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>1</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mi mathvariant="normal">…</mi>
+   <mi>σ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>L</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>σ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>normal-…</ci>
+    <ci>σ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <ci>L</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma[1]\ldots\sigma[L]
+  </annotation>
+ </semantics>
+</math>
+
+ (lexical probability).</p>
+
+<p>In a <a href="Markov_model" title="wikilink">Markov model</a>, these probabilities are approximated as products. The syntactic probabilities are modelled by a first order Markov process:</p>
+
+<p>
+
+<math display="block" id="Sliding_window_based_part-of-speech_tagging:23">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>2</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mrow>
+      <mi>t</mi>
+      <mo>=</mo>
+      <mi>L</mi>
+     </mrow>
+    </munderover>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>γ</mi>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mrow>
+         <mi>t</mi>
+         <mo>+</mo>
+         <mn>1</mn>
+        </mrow>
+        <mo stretchy="false">]</mo>
+       </mrow>
+       <mi>γ</mi>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>t</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <apply>
+      <times></times>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>t</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <ci>L</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>p</ci>
+      <apply>
+       <times></times>
+       <ci>γ</ci>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <apply>
+         <plus></plus>
+         <ci>t</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>γ</ci>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>t</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\gamma[1]\gamma[2]\ldots\gamma[L])=\prod_{t=1}^{t=L}p(\gamma[t+1]\gamma[t])
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:24">
+ <semantics>
+  <mrow>
+   <mi>γ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>0</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>γ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <cn type="integer">0</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma[0]
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:25">
+ <semantics>
+  <mrow>
+   <mi>γ</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mrow>
+     <mi>L</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>γ</ci>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <apply>
+      <plus></plus>
+      <ci>L</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma[L+1]
+  </annotation>
+ </semantics>
+</math>
+
+ are delimiter symbols.</p>
+
+<p>Lexical probabilities are independent of context:</p>
+
+<p>
+
+<math display="block" id="Sliding_window_based_part-of-speech_tagging:26">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>2</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>2</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mrow>
+      <mi>t</mi>
+      <mo>=</mo>
+      <mi>L</mi>
+     </mrow>
+    </munderover>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>σ</mi>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>t</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+       <mi>γ</mi>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>t</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <apply>
+      <times></times>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>t</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <ci>L</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>p</ci>
+      <apply>
+       <times></times>
+       <ci>σ</ci>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>t</ci>
+       </apply>
+       <ci>γ</ci>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>t</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\sigma[1]\sigma[2]\ldots\sigma[L]\gamma[1]\gamma[2]\ldots\gamma[L])=\prod_{t%
+=1}^{t=L}p(\sigma[t]\gamma[t])
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>One form of tagging is to approximate the first probability formula:</p>
+
+<p>
+
+<math display="block" id="Sliding_window_based_part-of-speech_tagging:27">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>2</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>σ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>1</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mn>2</mn>
+       <mo stretchy="false">]</mo>
+      </mrow>
+      <mi mathvariant="normal">…</mi>
+      <mi>γ</mi>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>L</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mrow>
+      <mi>t</mi>
+      <mo>=</mo>
+      <mi>L</mi>
+     </mrow>
+    </munderover>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>γ</mi>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>t</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+       <msub>
+        <mi>C</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mo>-</mo>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msub>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>t</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+       <mi>σ</mi>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>t</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+       <msub>
+        <mi>C</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mo>+</mo>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msub>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>t</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <apply>
+      <times></times>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>σ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <ci>γ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>L</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>t</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <ci>L</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>p</ci>
+      <apply>
+       <times></times>
+       <ci>γ</ci>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>t</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>C</ci>
+        <minus></minus>
+       </apply>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>t</ci>
+       </apply>
+       <ci>σ</ci>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>t</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>C</ci>
+        <plus></plus>
+       </apply>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>t</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\sigma[1]\sigma[2]\ldots\sigma[L]\gamma[1]\gamma[2]\ldots\gamma[L])=\prod_{t%
+=1}^{t=L}p(\gamma[t]C_{(-)}[t]\sigma[t]C_{(+)}[t])
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:28">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>C</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mo>-</mo>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>t</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>σ</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>-</mo>
+      <msub>
+       <mi>N</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mo>-</mo>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msub>
+     </mrow>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi>σ</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>-</mo>
+      <msub>
+       <mi>N</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mo>-</mo>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msub>
+     </mrow>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mi mathvariant="normal">…</mi>
+    <mi>σ</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>C</ci>
+      <minus></minus>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>t</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>σ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <minus></minus>
+       <ci>t</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <minus></minus>
+       </apply>
+      </apply>
+     </apply>
+     <ci>σ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <minus></minus>
+       <ci>t</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <minus></minus>
+       </apply>
+      </apply>
+     </apply>
+     <ci>normal-…</ci>
+     <ci>σ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <minus></minus>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C_{(-)}[t]=\sigma[t-N_{(-)}]\sigma[t-N_{(-)}]\ldots\sigma[t-1]
+  </annotation>
+ </semantics>
+</math>
+
+
+ is the right context of the size 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:29">
+ <semantics>
+  <msub>
+   <mi>N</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>+</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>N</ci>
+    <plus></plus>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N_{(+)}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>In this way the sliding window algorithm only has to take into account a context of size 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:30">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>N</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mo>-</mo>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msub>
+   <mo>+</mo>
+   <msub>
+    <mi>N</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mo>+</mo>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msub>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>N</ci>
+     <minus></minus>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>N</ci>
+     <plus></plus>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N_{(-)}+N_{(+)}+1
+  </annotation>
+ </semantics>
+</math>
+
+. For most applications 
+
+<math display="inline" id="Sliding_window_based_part-of-speech_tagging:31">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>N</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mo>-</mo>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>N</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mo>+</mo>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>N</ci>
+      <minus></minus>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>N</ci>
+      <plus></plus>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N_{(-)}=N_{(+)}=1
+  </annotation>
+ </semantics>
+</math>
+
+. For example to tag the ambiguous word "run" in the sentence "He runs from danger", only the tags of the words "He" and "from" are needed to be taken into account.</p>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li>Sanchez-Villamil, E., Forcada, M. L., and Carrasco, R. C. (2005). "<a href="http://www.dlsi.ua.es/~mlf/docum/sanchezvillamil04p.pdf">Unsupervised training of a finite-state sliding-window part-of-speech tagger</a>". <em>Lecture Notes in Computer Science / Lecture Notes in Artificial Intelligence</em>, vol. 3230, p. 454-463</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Computational_linguistics" title="wikilink">Category:Computational linguistics</a></p>
+</body>
+</html>

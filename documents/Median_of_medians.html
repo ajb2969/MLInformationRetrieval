@@ -1,0 +1,690 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="442">Median of medians</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Median of medians</h1>
+<hr/>
+
+<p>In <a href="computer_science" title="wikilink">computer science</a>, the <strong>median of medians</strong> algorithm is a <a href="selection_algorithm" title="wikilink">selection algorithm</a> based on the <a class="uri" href="quickselect" title="wikilink">quickselect</a> algorithm, and is optimal, having worst-case linear time complexity for selecting the <em>k</em>th largest element. The algorithm finds an approximate median in linear time – this is the key step – which is then used as a pivot in quickselect. In other words, it uses an (asymptotically) optimal approximate median-selection algorithm to build an (asymptotically) optimal general selection algorithm.</p>
+
+<p>The approximate median-selection algorithm can also be used as a pivot strategy in <a class="uri" href="quicksort" title="wikilink">quicksort</a>, yielding an optimal algorithm, with worst-case complexity O(<em>n</em> log <em>n</em>). Although this approach optimizes quite well, it is typically outperformed in practice by instead choosing random pivots, which has average linear time for selection and average log-linear time for sorting, and avoids the overhead of computing the pivot. Median of medians is used in the hybrid <a class="uri" href="introselect" title="wikilink">introselect</a> algorithm as a fallback, to ensure worst-case linear performance: introselect starts with quickselect, to obtain good average performance, and then falls back to median of medians if progress is too slow.</p>
+
+<p>The algorithm was published in , and thus is sometimes called <strong>BFPRT</strong> after the last names of the authors. In the original paper the algorithm was referred to as <strong>PICK</strong>, referring to quickselect as "FIND".</p>
+<h2 id="outline">Outline</h2>
+
+<p>Quickselect is linear-time on average, but it can require quadratic time with poor pivot choices. This is because quickselect is a <a href="decrease_and_conquer" title="wikilink">decrease and conquer</a> algorithm, with each step taking O(<em>n</em>) time in the size of the remaining search set. If the search set decreases exponentially quickly in size (by a fixed proportion), this yields a <a href="geometric_series" title="wikilink">geometric series</a> times the O(<em>n</em>) factor of a single step, and thus linear overall time. However, if the search set decreases slowly in size, such as linearly (by a fixed number of elements, in the worst case only reducing by one element each time), then a linear sum of linear steps yields quadratic overall time (formally, <a href="triangular_number" title="wikilink">triangular numbers</a> grow quadratically). For example, the worst case occurs when pivoting on the smallest element at each step, such as applying quickselect for the maximum element to already sorted data and taking the first element as pivot each time.</p>
+
+<p>If one instead consistently chooses "good" pivots, this is avoided and one always gets linear performance even in the worst case. A "good" pivot is one for which we can establish that a constant proportion of elements fall both below and above it, as then the search set decreases at least by a constant proportion at each step, hence exponentially quickly, and the overall time remains linear. The median is a good pivot – the best for sorting, and the best overall choice for selection – decreasing the search set by half at each step. Thus if one can compute the median in linear time, this only adds linear time to each step, and thus the overall complexity of the algorithm remains linear.</p>
+
+<p>The median-of-medians algorithm does not actually compute the exact median, but computes an approximate median, namely a point that is guaranteed to be between the 30th and 70th <a href="percentile" title="wikilink">percentiles</a> (in the middle 4 <a href="decile" title="wikilink">deciles</a>). Thus the search set decreases by a fixed proportion at each step, namely at least 30% (so at most 70% left). Lastly, the overhead of computing the pivot consists of recursing in a set of size 20% the size of the original search set, plus a linear factor, so at linear cost at each step, the problem is reduced to 90% (20% and 70%) the original size, which is a fixed proportion smaller, and thus by induction the overall complexity is linear in size.</p>
+<h2 id="algorithm">Algorithm</h2>
+
+<p>As stated before, median-of-medians is used as a pivot selection strategy in the quickselect algorithm, which in <a class="uri" href="pseudocode" title="wikilink">pseudocode</a> looks as follows:</p>
+
+<p><strong><code>function</code></strong><code> select(list, left, right, n)</code><br/>
+<code>    </code><strong><code>if</code></strong><code> left = right</code><br/>
+<code>        </code><strong><code>return</code></strong><code> list[left]</code><br/>
+<code>    </code><strong><code>loop</code></strong><br/>
+<code>        pivotIndex := pivot(list, left, right)</code><br/>
+<code>        pivotIndex := partition(list, left, right, pivotIndex)</code><br/>
+<code>        </code><strong><code>if</code></strong><code> n = pivotIndex</code><br/>
+<code>            </code><strong><code>return</code></strong><code> list[n]</code><br/>
+<code>        </code><strong><code>else</code> <code>if</code></strong><code> n </code><code>$n$</code><code>) into groups of at most five elements, computes the median of each of those groups using some subroutine, then </code><a href="Recursion_(computer_science)" title="wikilink"><code>recursively</code></a><code> computes the true median of the </code>
+
+<math display="inline" id="Median_of_medians:0">
+ <semantics>
+  <mfrac>
+   <mi>n</mi>
+   <mn>5</mn>
+  </mfrac>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>n</ci>
+    <cn type="integer">5</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{n}{5}
+  </annotation>
+ </semantics>
+</math>
+
+<code> medians found in the previous step:</code><a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p><code>  </code><strong><code>function</code></strong><code> pivot(list, left, right)</code><br/>
+<code>     </code><em><code>//</code> <code>move</code> <code>the</code> <code>medians</code> <code>of</code> <code>five-element</code> <code>subgroups</code> <code>to</code> <code>the</code> <code>first</code> <code>n/5</code> <code>positions</code></em><br/>
+<code>     </code><strong><code>for</code></strong><code> i </code><strong><code>from</code></strong><code> left </code><strong><code>to</code></strong><code> right </code><strong><code>in</code> <code>steps</code> <code>of</code></strong><code> 5</code><br/>
+<code>         </code><em><code>//</code> <code>get</code> <code>the</code> <code>median</code> <code>of</code> <code>the</code> <code>i'th</code> <code>five-element</code> <code>subgroup</code></em><br/>
+<code>         subRight := i + 4</code><br/>
+<code>         if subRight &gt; right:</code><br/>
+<code>             subRight := right</code><br/>
+<br/>
+<code>         median5 := partition5(list, i, subRight)</code><br/>
+<code>         swap list[median5] and list[floor(i/5)]</code><br/>
+<br/>
+<code>     </code><em><code>//</code> <code>compute</code> <code>the</code> <code>median</code> <code>of</code> <code>the</code> <code>n/5</code> <code>medians-of-five</code></em><br/>
+<code>     </code><strong><code>return</code></strong><code> select(list, left, left + ceil((right - left) / 5) - 1, (right - left)/10)</code></p>
+
+<p>The  subroutine selects the median of a group of at most five elements; an easy way to implement this is <a href="insertion_sort" title="wikilink">insertion sort</a>. Note that  calls ; this is an instance of <a href="mutual_recursion" title="wikilink">mutual recursion</a>.</p>
+<h2 id="properties-of-pivot">Properties of pivot</h2>
+
+<p>Of the <em>n</em>/5 groups, half the number of groups have their median less than the pivot(Median of Medians). Also, another half the number of groups(½×<em>n</em>/5=<em>n</em>/10) have their median greater than the pivot. In each of these <em>n</em>/10 groups, there are two elements that are smaller than their respective medians, which are smaller than the pivot. Thus, each of the <em>n</em>/10 groups have at least 3 elements that are smaller than the pivot. Similarly, in each of the <em>n</em>/10 groups with median greater than the pivot, there are two elements that are greater than their respective medians, which are greater than the pivot. Thus, each of the <em>n</em>/10 groups have at least 3 elements that are greater than the pivot. Hence, the pivot is less than 3(<em>n</em>/10) elements and greater than another 3(<em>n</em>/10) elements. Thus the chosen median splits the elements somewhere between 30%/70% and 70%/30%, which assures worst-case linear behavior of the algorithm. To visualize:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>One iteration on a randomized set of 100 elements from 0 to 99</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>12</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>15</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>11</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>2</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>9</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>5</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>7</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>3</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>21</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>44</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>40</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>18</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>20</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>32</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>19</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>35</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>37</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>39</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>13</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>16</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>14</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>8</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>10</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>26</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>6</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>33</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>4</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>27</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>49</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>46</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>52</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>25</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>51</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>34</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>43</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>56</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>72</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>79</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Medians</p></td>
+<td style="text-align: left;">
+<p>17</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>23</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>24</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>28</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>29</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>30</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>31</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>36</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>42</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>47</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>50</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>55</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>58</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>60</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>63</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>65</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>66</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>67</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>81</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>83</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>22</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>45</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>38</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>53</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>61</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>41</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>62</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>82</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>54</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>48</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>59</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>57</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>71</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>78</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>64</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>80</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>70</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>76</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>85</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>87</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>96</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>95</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>94</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>86</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>89</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>69</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>68</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>97</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>73</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>92</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>74</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>88</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>99</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>84</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>75</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>90</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>77</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>93</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>98</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>91</p></td>
+</tr>
+<tr class="even">
+</tr>
+</tbody>
+</table>
+
+<p>(red = "(one of the two possible) median of medians", gray = "number  red")</p>
+
+<p>5-tuples are shown here sorted by median, for clarity. Sorting the tuples is not necessary because we only need the median for use as pivot element.</p>
+
+<p>Note that all elements above/left of the red (30% of the 100 elements) are less, and all elements below/right of the red (another 30% of the 100 elements) are greater.</p>
+<h2 id="proof-of-on-running-time">Proof of O(<em>n</em>) running time</h2>
+
+<p>The median-calculating recursive call does not exceed worst-case linear behavior because the list of medians is 20% of the size of the list, while the other recursive call recurses on at most 70% of the list. Let <em>T(n)</em> be the time it takes to run a median-of-medians Quickselect algorithm on an array of size <em>n</em>. Then we know this time is:</p>
+
+<p>
+
+<math display="block" id="Median_of_medians:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>T</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>≤</mo>
+    <mrow>
+     <mrow>
+      <mi>T</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mrow>
+         <mi>n</mi>
+         <mo>⋅</mo>
+         <mn>2</mn>
+        </mrow>
+        <mo>/</mo>
+        <mn>10</mn>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mi>T</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mrow>
+         <mi>n</mi>
+         <mo>⋅</mo>
+         <mn>7</mn>
+        </mrow>
+        <mo>/</mo>
+        <mn>10</mn>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mi>c</mi>
+      <mo>⋅</mo>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <ci>T</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>T</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <ci>normal-⋅</ci>
+        <ci>n</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <cn type="integer">10</cn>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>T</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <ci>normal-⋅</ci>
+        <ci>n</ci>
+        <cn type="integer">7</cn>
+       </apply>
+       <cn type="integer">10</cn>
+      </apply>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <ci>c</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T(n)\leq T(n\cdot 2/10)+T(n\cdot 7/10)+c\cdot n.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where</p>
+<ul>
+<li>the <em>T(n·2/10)</em> part is for finding the <em>true</em> median of the <em>n/5</em> medians, by running an (independent) Quickselect on them (since finding the median is just a special case of selecting a <em>k</em>-largest element)</li>
+<li>the O(<em>n</em>) term <em>c·n</em> is for the partitioning work to create the two sides, one of which our Quickselect will recurse (we visited each element a constant number of times, in order to form them into n/5 groups and take each median in O(1) time).</li>
+<li>the <em>T(n·7/10)</em> part is for the actual Quickselect recursion (for the worst case, in which the <em>k</em>-th element is in the bigger partition that can be of size n·7/10 maximally)</li>
+</ul>
+
+<p>From this, using induction one can easily show that</p>
+
+<p>
+
+<math display="block" id="Median_of_medians:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>T</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>≤</mo>
+    <mrow>
+     <mn>10</mn>
+     <mo>⋅</mo>
+     <mi>c</mi>
+     <mo>⋅</mo>
+     <mi>n</mi>
+    </mrow>
+    <mo>∈</mo>
+    <mrow>
+     <mi>O</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <leq></leq>
+     <apply>
+      <times></times>
+      <ci>T</ci>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <cn type="integer">10</cn>
+      <ci>c</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <in></in>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <ci>O</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T(n)\leq 10\cdot c\cdot n\in O(n).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="analysis">Analysis</h2>
+
+<p>The key step is reducing the problem to selecting in two lists whose total length is shorter than the original list, plus a linear factor for the reduction step. This allows a simple induction to show that the overall running time is linear.</p>
+
+<p>The specific choice of groups of five elements is explained as follows. Firstly, computing median of an odd list is faster and simpler; while one could use an even list, this requires taking the average of the two middle elements, which is slower than simply selecting the single exact middle element. Secondly, five is the smallest odd number such that median of medians works. With groups of only three elements, the resulting list of medians to search in is length <em>n</em>/3, and reduces the list to recurse into to length 
+
+<math display="inline" id="Median_of_medians:3">
+ <semantics>
+  <mrow>
+   <mfrac>
+    <mn>2</mn>
+    <mn>3</mn>
+   </mfrac>
+   <mi>n</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <divide></divide>
+     <cn type="integer">2</cn>
+     <cn type="integer">3</cn>
+    </apply>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{2}{3}n
+  </annotation>
+ </semantics>
+</math>
+
+, since it is greater than 1/2 × 2/3 = 1/3 of the elements and less than 1/2 × 2/3 = 1/3 of the elements. Thus this still leaves <em>n</em> elements to search in, not reducing the problem sufficiently. The individual lists are shorter, however, and one can bound the resulting complexity by the <a href="Akra–Bazzi_method" title="wikilink">Akra–Bazzi method</a>, but it does not prove linearity.</p>
+
+<p>Conversely, one may instead group by <em>g</em> = seven, nine, or more elements, and this does work. This reduces the size of the list of medians to <em>n</em>/<em>g,</em> and the size of the list to recurse into asymptotes at 3<em>n</em>/4 (75%), as the quadrants in the above table approximate 25%, as the size of the overlapping lines decreases proportionally. This reduces the scaling factor from 10 asymptotically to 4, but accordingly raises the <em>c</em> term for the partitioning work. Finding the median of a larger group takes longer, but is a constant factor (depending only on <em>g</em>), and thus does not change the overall performance as <em>n</em> grows.</p>
+
+<p>If one instead groups the other way, say dividing the <em>n</em> element list into 5 lists, computing the median of each, and then computing the median of these – i.e., grouping by a constant fraction, not a constant number – one does not as clearly reduce the problem, since it requires computing 5 medians, each in a list of <em>n</em>/5 elements, and then recursing on a list of length at most 7<em>n</em>/10. As with grouping by 3, the individual lists are shorter, but the overall length is no shorter – in fact longer – and thus one can only prove superlinear bounds. Grouping into a square of 
+
+<math display="inline" id="Median_of_medians:4">
+ <semantics>
+  <msqrt>
+   <mi>n</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{n}
+  </annotation>
+ </semantics>
+</math>
+
+ lists of length 
+
+<math display="inline" id="Median_of_medians:5">
+ <semantics>
+  <msqrt>
+   <mi>n</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{n}
+  </annotation>
+ </semantics>
+</math>
+
+ is similarly complicated.</p>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li>"<a href="http://www.ics.uci.edu/~eppstein/161/960130.html">Lecture notes for January 30, 1996: Deterministic selection</a>", <em>ICS 161: Design and Analysis of Algorithms,</em> David Eppstein</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Selection_algorithms" title="wikilink">Category:Selection algorithms</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

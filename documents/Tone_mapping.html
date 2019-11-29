@@ -1,0 +1,641 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="246">Tone mapping</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Tone mapping</h1>
+<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</body></html>
+<body>
+<hr/>
+
+<p><strong>Tone mapping</strong> is a technique used in <a href="image_processing" title="wikilink">image processing</a> and <a href="computer_graphics" title="wikilink">computer graphics</a> to map one set of colors to another to approximate the appearance of <a href="high_dynamic_range_image" title="wikilink">high dynamic range images</a> in a medium that has a more limited <a href="dynamic_range" title="wikilink">dynamic range</a>. <a href="Print-out" title="wikilink">Print-outs</a>, <a href="Cathode_ray_tube" title="wikilink">CRT</a> or <a class="uri" href="LCD" title="wikilink">LCD</a> monitors, and projectors all have a limited dynamic range that is inadequate to reproduce the full range of light intensities present in natural scenes. Tone mapping addresses the problem of strong contrast reduction from the scene <a class="uri" href="radiance" title="wikilink">radiance</a> to the displayable range while preserving the image details and color appearance important to appreciate the original scene content.</p>
+<h2 id="historical-relevance-of-tone-mapping">Historical relevance of Tone Mapping</h2>
+
+<p>Solutions to the tone reproduction issue have been attempted since the days of early painters. These painters only had access to the limited contrast range of available <a href="pigment" title="wikilink">pigments</a>. <a href="Leonardo_Da_Vinci" title="wikilink">Leonardo Da Vinci</a> resorted to using midrange colors for all objects in order to attempt to achieve the desired contrast in the image, despite this distorting the actual brightness levels . The introduction of film-based photography created further issues since capturing the enormous dynamic range of lighting from the real world on a chemically limited negative was very difficult. Early film developers attempted to remedy this issue by designing the film stocks and the print development systems that gave a desired S-shaped tone curve with slightly enhanced contrast (about 15%) in the middle range and gradually compressed highlights and shadows . Photographers have also used <a href="Dodging_and_burning" title="wikilink">Dodging and burning</a> to overcome the limitations of the print process .</p>
+
+<p>The advent of digital photography gave hope for better solutions to this problem. One of the earliest algorithms employed by Land and McCann in 1971 was Retinex, inspired by theories of lightness perception .This method is inspired by the eye’s biological mechanisms of adaptation when lighting conditions are an issue. Gamut mapping algorithms were also extensively studied in the context of color printing. Computational models such as CIECAM02 or iCAM were used to predict color appearance. Despite this, if algorithms could not sufficiently map tones and colors, a skilled artist was still needed, as is the case with cinematographic movie post-processing.</p>
+
+<p>Computer graphic techniques capable of rendering high-contrast scenes shifted the focus from color to luminance as the main limiting factor of display devices. Several tone mapping operators were developed to map high dynamic range (HDR) images to standard displays. More recently, this work has branched away from utilizing luminance to extend image contrast and towards other methods such as user-assisted image reproduction. Currently, image reproduction has shifted towards display-driven solutions since displays now possess advanced image processing algorithms that help adapt rendering of the image to viewing conditions, save power, up-scale color gamut and dynamic range.</p>
+<h2 id="purpose-and-methods">Purpose and methods</h2>
+
+<p>The goals of tone mapping can be differently stated depending on the particular application. In some cases producing just aesthetically pleasing images is the main goal, while other applications might emphasize reproducing as many image details as possible, or maximizing the image contrast. The goal in realistic rendering applications might be to obtain a perceptual match between a real scene and a displayed image even though the display device is not able to reproduce the full range of luminance values.</p>
+
+<p>Various tone mapping operators have been developed in the recent years. They all can be divided in two main types:</p>
+<ul>
+<li><em>global</em> (or <em>spatially uniform</em>) operators: they are non-linear functions based on the luminance and other global variables of the image. Once the optimal function has been estimated according to the particular image, every pixel in the image is mapped in the same way, independent of the value of surrounding pixels in the image. Those techniques are simple and fast<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> (since they can be implemented using <a href="look-up_table" title="wikilink">look-up tables</a>), but they can cause a loss of contrast. Examples of common global tone mapping methods are contrast reduction and <a href="Negative_(photography)" title="wikilink">color inversion</a>.</li>
+</ul>
+<ul>
+<li><em>local</em> (or <em>spatially varying</em>) operators: the parameters of the non-linear function change in each pixel, according to features extracted from the surrounding parameters. In other words, the effect of the algorithm changes in each pixel according to the local features of the image. Those algorithms are more complicated than the global ones; they can show artifacts (e.g. halo effect and ringing); and the output can look unrealistic, but they can (if used correctly) provide the best performance, since human vision is mainly sensitive to local contrast.</li>
+</ul>
+
+<p>A simple example of global tone mapping filter is 
+
+<math display="inline" id="Tone_mapping:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>V</mi>
+     <mtext>out</mtext>
+    </msub>
+    <mo>=</mo>
+    <mfrac>
+     <msub>
+      <mi>V</mi>
+      <mtext>in</mtext>
+     </msub>
+     <mrow>
+      <msub>
+       <mi>V</mi>
+       <mtext>in</mtext>
+      </msub>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>V</ci>
+     <mtext>out</mtext>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>V</ci>
+      <mtext>in</mtext>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>V</ci>
+       <mtext>in</mtext>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   V_{\text{out}}=\frac{V_{\text{in}}}{V_{\text{in}}+1},
+  </annotation>
+ </semantics>
+</math>
+
+ where <em>V</em><sub>in</sub> is the <a href="luminance_(relative)" title="wikilink">luminance</a> of the original pixel and <em>V</em><sub>out</sub> is the luminance of the filtered pixel.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> This function will map the luminance <em>V</em><sub>in</sub> in the domain 
+
+<math display="inline" id="Tone_mapping:1">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">[</mo>
+   <mn>0</mn>
+   <mo>,</mo>
+   <mi mathvariant="normal">∞</mi>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="closed-open">
+    <cn type="integer">0</cn>
+    <infinity></infinity>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [0,\infty)
+  </annotation>
+ </semantics>
+</math>
+
+ to a displayable output range of 
+
+<math display="inline" id="Tone_mapping:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>0</mn>
+    <mo>,</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="closed-open">
+    <cn type="integer">0</cn>
+    <cn type="integer">1</cn>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [0,1).
+  </annotation>
+ </semantics>
+</math>
+
+ While this filter provides a decent <a href="contrast_(vision)" title="wikilink">contrast</a> for parts of the image with low luminance (particularly when 
+
+<math display="inline" id="Tone_mapping:3">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>V</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>n</mi>
+    </mrow>
+   </msub>
+   <mo stretchy="false">)</mo>
+   <mo>,</mo>
+   <mi>p</mi>
+   <mi>a</mi>
+   <mi>r</mi>
+   <mi>t</mi>
+   <mi>s</mi>
+   <mi>o</mi>
+   <mi>f</mi>
+   <mi>t</mi>
+   <mi>h</mi>
+   <mi>e</mi>
+   <mi>i</mi>
+   <mi>m</mi>
+   <mi>a</mi>
+   <mi>g</mi>
+   <mi>e</mi>
+   <mi>w</mi>
+   <mi>i</mi>
+   <mi>t</mi>
+   <mi>h</mi>
+   <mi>h</mi>
+   <mi>i</mi>
+   <mi>g</mi>
+   <mi>h</mi>
+   <mi>e</mi>
+   <mi>r</mi>
+   <mi>l</mi>
+   <mi>u</mi>
+   <mi>m</mi>
+   <mi>i</mi>
+   <mi>n</mi>
+   <mi>a</mi>
+   <mi>n</mi>
+   <mi>c</mi>
+   <mi>e</mi>
+   <mi>w</mi>
+   <mi>i</mi>
+   <mi>l</mi>
+   <mi>l</mi>
+   <mi>g</mi>
+   <mi>e</mi>
+   <mi>t</mi>
+   <mi>i</mi>
+   <mi>n</mi>
+   <mi>c</mi>
+   <mi>r</mi>
+   <mi>e</mi>
+   <mi>a</mi>
+   <mi>s</mi>
+   <mi>i</mi>
+   <mi>n</mi>
+   <mi>g</mi>
+   <mi>l</mi>
+   <mi>y</mi>
+   <mi>l</mi>
+   <mi>o</mi>
+   <mi>w</mi>
+   <mi>e</mi>
+   <mi>r</mi>
+   <mi>c</mi>
+   <mi>o</mi>
+   <mi>n</mi>
+   <mi>t</mi>
+   <mi>r</mi>
+   <mi>a</mi>
+   <mi>s</mi>
+   <mi>t</mi>
+   <mi>a</mi>
+   <mi>s</mi>
+   <mi>t</mi>
+   <mi>h</mi>
+   <mi>e</mi>
+   <mi>l</mi>
+   <mi>u</mi>
+   <mi>m</mi>
+   <mi>i</mi>
+   <mi>n</mi>
+   <mi>a</mi>
+   <mi>n</mi>
+   <mi>c</mi>
+   <mi>e</mi>
+   <mi>o</mi>
+   <mi>f</mi>
+   <mi>t</mi>
+   <mi>h</mi>
+   <mi>e</mi>
+   <mi>f</mi>
+   <mi>i</mi>
+   <mi>l</mi>
+   <mi>t</mi>
+   <mi>e</mi>
+   <mi>r</mi>
+   <mi>e</mi>
+   <mi>d</mi>
+   <mi>i</mi>
+   <mi>m</mi>
+   <mi>a</mi>
+   <mi>g</mi>
+   <mi>e</mi>
+   <mi>g</mi>
+   <mi>o</mi>
+   <mi>e</mi>
+   <mi>s</mi>
+   <mi>t</mi>
+   <mi>o</mi>
+   <mn>1.</mn>
+   <mtext>4.54</mtext>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>V</ci>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <ci>normal-)</ci>
+    <ci>normal-,</ci>
+    <csymbol cd="unknown">p</csymbol>
+    <csymbol cd="unknown">a</csymbol>
+    <csymbol cd="unknown">r</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">s</csymbol>
+    <csymbol cd="unknown">o</csymbol>
+    <csymbol cd="unknown">f</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">h</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">m</csymbol>
+    <csymbol cd="unknown">a</csymbol>
+    <csymbol cd="unknown">g</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">w</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">h</csymbol>
+    <csymbol cd="unknown">h</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">g</csymbol>
+    <csymbol cd="unknown">h</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">r</csymbol>
+    <csymbol cd="unknown">l</csymbol>
+    <csymbol cd="unknown">u</csymbol>
+    <csymbol cd="unknown">m</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">n</csymbol>
+    <csymbol cd="unknown">a</csymbol>
+    <csymbol cd="unknown">n</csymbol>
+    <csymbol cd="unknown">c</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">w</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">l</csymbol>
+    <csymbol cd="unknown">l</csymbol>
+    <csymbol cd="unknown">g</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">n</csymbol>
+    <csymbol cd="unknown">c</csymbol>
+    <csymbol cd="unknown">r</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">a</csymbol>
+    <csymbol cd="unknown">s</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">n</csymbol>
+    <csymbol cd="unknown">g</csymbol>
+    <csymbol cd="unknown">l</csymbol>
+    <csymbol cd="unknown">y</csymbol>
+    <csymbol cd="unknown">l</csymbol>
+    <csymbol cd="unknown">o</csymbol>
+    <csymbol cd="unknown">w</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">r</csymbol>
+    <csymbol cd="unknown">c</csymbol>
+    <csymbol cd="unknown">o</csymbol>
+    <csymbol cd="unknown">n</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">r</csymbol>
+    <csymbol cd="unknown">a</csymbol>
+    <csymbol cd="unknown">s</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">a</csymbol>
+    <csymbol cd="unknown">s</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">h</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">l</csymbol>
+    <csymbol cd="unknown">u</csymbol>
+    <csymbol cd="unknown">m</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">n</csymbol>
+    <csymbol cd="unknown">a</csymbol>
+    <csymbol cd="unknown">n</csymbol>
+    <csymbol cd="unknown">c</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">o</csymbol>
+    <csymbol cd="unknown">f</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">h</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">f</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">l</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">r</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">d</csymbol>
+    <csymbol cd="unknown">i</csymbol>
+    <csymbol cd="unknown">m</csymbol>
+    <csymbol cd="unknown">a</csymbol>
+    <csymbol cd="unknown">g</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">g</csymbol>
+    <csymbol cd="unknown">o</csymbol>
+    <csymbol cd="unknown">e</csymbol>
+    <csymbol cd="unknown">s</csymbol>
+    <csymbol cd="unknown">t</csymbol>
+    <csymbol cd="unknown">o</csymbol>
+    <cn type="float">1.</cn>
+    <mtext>4.54</mtext>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   V_{in}),%
+partsoftheimagewithhigherluminancewillgetincreasinglylowercontrastastheluminanceofthefilteredimagegoesto%
+1.\par
+\par
+\@@section{subsection}{S4.SS5}{4.5}{4.5}{{\@tag[][]{4.5}4}}{{\@tag%
+[][]{4.5}4}}\par
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>A perhaps more useful global tone mapping method is <a href="gamma_compression" title="wikilink">gamma compression</a>, which has the filter <span class="LaTeX">$V_{\text{out}}=A\,V_{\text{in}}^{\gamma},$</span> where <span class="LaTeX">$A &gt; 0$</span> and <span class="LaTeX">$0 . This function will map the luminance <em>V</em><span class="LaTeX">$_{ in }$</span> in the domain <span class="LaTeX">$[0,1/A^{1/\gamma}]$</span> to the output range <span class="LaTeX">$[0,1].$</span> <em>γ</em> regulates the contrast of the image; a lower value for lower contrast. While a lower constant <em>γ</em> gives a lower contrast and perhaps also a duller image, it increases the exposure of underexposed parts of the image while at the same time, if <span class="LaTeX">$A , it can decrease the exposure of overexposed parts of the image enough to prevent them from being overexposed.</span></span></p>
+
+<p>An even more sophisticated group of tone mapping algorithms is based on contrast or <a href="Gradient_Domain_Image_Processing" title="wikilink">gradient domain</a> methods, which are 'local'. Such operators concentrate on preserving contrast between neighboring regions rather than absolute value, an approach motivated by the fact that the human perception is most sensitive to contrast in images rather than absolute intensities. Those tone mapping methods usually produce very sharp images, which preserve very well small contrast details; however, this is often done at the cost of flattening an overall image contrast, and may as a side effect produce <a href="Halo_(religious_iconography)" title="wikilink">halo</a>-like glows around dark objects. Examples of such tone mapping methods include: <a href="gradient_domain_high_dynamic_range_compression" title="wikilink">gradient domain high dynamic range compression</a> and A Perceptual Framework for Contrast Processing of High Dynamic Range Images (a tone mapping is one of the applications of this framework).</p>
+
+<p>Another approach to tone mapping of HDR images is inspired by the <a href="anchoring_theory_of_lightness_perception" title="wikilink">anchoring theory of lightness perception</a>. This theory explains many characteristics of the human visual system such as lightness constancy and its failures (as in the <a href="checker_shadow_illusion" title="wikilink">checker shadow illusion</a>), which are important in the perception of images. The key concept of this tone mapping method (Lightness Perception in Tone Reproduction) is a decomposition of an HDR image into areas (frameworks) of consistent illumination and the local calculation of the lightness values. The net lightness of an image is calculated by merging of the frameworks proportionally to their strength. Particularly important is the anchoring—relating of the luminance to a known luminance, namely estimating which luminance value is perceived as white in the scene. This approach to tone mapping does not affect the local contrast and preserves the natural colors of an HDR image due to the linear handling of luminance.</p>
+
+<p>One simple form of tone mapping takes a standard image (not HDR – the dynamic range already compressed) and applies <a href="unsharp_masking" title="wikilink">unsharp masking</a> with a large radius, which increases local contrast rather than sharpening. See <a href="Unsharp_masking#Local_contrast_enhancement" title="wikilink">unsharp masking: local contrast enhancement</a> for details.</p>
+
+<p>One of the commonly used tone mapping algorithms is the iCAM06 which is based on both the <a href="color_appearance_model" title="wikilink">color appearance model</a> and hierarchical mapping. After bilateral filtering, the image is broken into a base layer and a detail later. White point adaptation and chrominance adaptation are applied to the base layer, while detail enhancement is applied to the detail layer. Eventually the two layers are merged together and converted to the IPT color space. In general, this method is good but has some shortcomings, specifically in how computationally heavy the filtering method is. A proposed solution to this involves performance optimization of the filter. The base layer of the image is also converted to the RGB space for tone compression. This method also allows for more output adjustment and saturation enhancement, making it be less computationally intensive and better at reducing the overall halo effect.</p>
+<h2 id="tone-mapping-in-digital-photography">Tone mapping in digital photography</h2>
+
+<p> Forms of tone mapping long precede digital photography. The manipulation of film and development process to render high contrast scenes, especially those shot in bright sunlight, on printing paper with a relatively low dynamic range, is effectively a form of tone mapping, although it is not usually called that. Local adjustment of tonality in film processing is primarily done via <a href="dodging_and_burning" title="wikilink">dodging and burning</a>, and is particularly advocated by and associated with <a href="Ansel_Adams" title="wikilink">Ansel Adams</a>, as described in his book <em>The Print;</em> see also his <a href="Zone_System" title="wikilink">Zone System</a>.</p>
+
+<p>The normal process of <a href="exposure_compensation" title="wikilink">exposure compensation</a>, brightening shadows and altering contrast applied globally to digital images as part of a professional or serious amateur workflow is also a form of tone mapping.</p>
+
+<p>However, HDR tone mapping, usually using <em>local operators,</em> has become increasingly popular amongst digital photographers as a post-processing technique, where several exposures at different shutter speeds are combined to produce an HDR image and a tone mapping operator is then applied to the result. There are now many examples of locally tone mapped digital images, inaccurately known as "HDR photographs", on the internet, and these are of varying quality. This popularity is partly driven by the distinctive appearance of locally tone mapped images, which many people find attractive, and partly by a desire to capture high-contrast scenes that are hard or impossible to photograph in a single exposure, and may not render attractively even when they can be captured. Although digital sensors actually capture a higher dynamic range than film, they completely lose detail in extreme highlights, clipping them to pure white, producing an unattractive result when compared with negative film, which tends to retain colour and some detail in highlights.</p>
+
+<p>In some cases local tone mapping is used even though the dynamic range of the source image could be captured on the target media, either to produce the distinctive appearance of a locally tone mapped image, or to produce an image closer to the photographer's artistic vision of the scene by removing sharp contrasts, which often look unattractive. In some cases, tone mapped images are produced from a single exposure which is then manipulated with conventional processing tools to produce the inputs to the HDR image generation process. This avoids the artifacts that can appear when different exposures are combined, due to moving objects in the scene or camera shake. However, when tone mapping is applied to a single exposure in this way, the intermediate image has only normal dynamic range, and the amount of shadow or highlight detail that can be rendered is only that which was captured in the original exposure.</p>
+<h2 id="tone-mapping-in-relation-to-display-devices">Tone mapping in relation to display devices</h2>
+
+<p>One of the original goals of tone mapping was to be able to reproduce a given scene or image onto a display device such that the brightness sensation of the image to a human viewer closely matches the real-world brightness sensation. However, a perfect match for this problem is never possible and thus the output image on a display is often built from a tradeoff between different image features. Choosing between features is often based on the necessary application, and given appropriate metrics for the application, one possible solution is to treat the issue as an optimization problem.</p>
+
+<p>For this method, models for the Human Visual System (HVS) and the display are first generated, along with a simple tone mapping operator. The contrast distortions are weighted according to their individual visibilities approximated by the HVS. With these models, an objective function that defines the tone curve can be created and solved using a fast quadratic solver.</p>
+
+<p>With the addition of filters, this method can also be extended to videos. The filters ensure that the rapid changing of the tone-curve between frames are not salient in the final output image.</p>
+<h2 id="example-of-the-imaging-process">Example of the imaging process</h2>
+<figure><b>(Figure)</b>
+<figcaption>Tone mapped <a href="high_dynamic_range_imaging" title="wikilink">High dynamic range image</a> example showing stained glass windows in south alcove of <a href="Old_Saint_Paul's" title="wikilink">Old Saint Paul's</a>, <a class="uri" href="Wellington" title="wikilink">Wellington</a>, <a href="New_Zealand" title="wikilink">New Zealand</a>.</figcaption>
+</figure>
+<figure><b>(Figure)</b>
+<figcaption>The six individual exposures used to create the previous image. In the low exposure images, the room is dark and unclear, but the details of the windows are visible. In the high exposure images, the windows are bright and unclear, but the details of the room are revealed.</figcaption>
+</figure>
+
+<p>The images on the right show the interior of a church, a scene which has a variation in radiance much larger than that which can be displayed on a monitor or recorded by a conventional camera. The six individual exposures from the camera show the radiance of the scene in some range transformed to the range of brightnesses that can be displayed on a monitor. The range of radiances recorded in each photo is limited, so not all details can be displayed at once: for example, details of the dark church interior cannot be displayed at the same time as those of the bright stained-glass window. An algorithm is applied to the six images to recreate the high dynamic range radiance map of the original scene (a <a href="high_dynamic_range_image" title="wikilink">high dynamic range image</a>). Alternatively, some higher-end consumer and specialist scientific digital cameras are able to record a high dynamic range image directly, for example with <a href="Raw_image_format" title="wikilink">RAW</a> images.</p>
+
+<p>In the ideal case, a camera might measure <a class="uri" href="luminance" title="wikilink">luminance</a> directly and store this in the HDR image; however, most high dynamic range images produced by cameras today are not calibrated or even proportional to luminance, due to practical reasons such as cost and time required to measure accurate luminance values — it is often sufficient for artists to use multiple exposures to gain an "HDR image" which grossly approximates the true luminance signal.</p>
+
+<p>The high dynamic range image is passed to a tone mapping operator, in this case a local operator, which transforms the image into a low dynamic range image suitable for viewing on a monitor. Relative to the church interior, the stained-glass window is displayed at a much lower brightness than a linear mapping between scene radiance and pixel intensity would produce. However, this inaccuracy is perceptually less important than the image detail, which can now be shown in both the window and the church interior simultaneously.</p>
+<h2 id="visual-effect">Visual effect</h2>
+
+<p>Local tone mapping produces a number of characteristic effects in images. These include halos around dark objects, a "painting-like" or "cartoon-like" appearance due to a lack of large global contrasts, and highly saturated colours. Many people find the resulting images attractive and these effects to add an interesting new set of choices for post-processing in digital photography. Some people believe that the results stray too far from realism, or find them unattractive, but these are aesthetic judgements, and often concern the choices made by the photographer during the tone mapping process, rather than being a necessary consequence of using tone mapping.</p>
+
+<p>Not all tone mapped images are visually distinctive. Reducing dynamic range with tone mapping is often useful in bright sunlit scenes, where the difference in intensity between direct illumination and shadow is great. In these cases the global contrast of the scene is reduced, but the local contrast maintained, while the image as a whole continues to look natural. Use of tone mapping in this context may not be apparent from the final image:</p>
+
+<p>Image:Grand Canyon HDR imaging.jpg|Regions of direct illumination and shadow on the Grand Canyon Image:Bucket_of_fresh-picked_cherries.jpg <a class="uri" href="File:Lamp">File:Lamp</a> base at N.Y. Public Library - Schwarzman Bldg. - exterior.jpg|Cartoon-like appearance</p>
+
+<p>Tone mapping can also produce distinctive visual effects in the final image, such as the visible halo around the tower in the Cornell Law School image below. It can be used to produce these effects even when the dynamic range of the original image is not particularly high. Halos in images come about because the local tone mapping operator will brighten areas around dark objects, to maintain the local contrast in the original image, which fools the human visual system into perceiving the dark objects as being dark, even if their actual luminance is the same as that of areas of the image perceived as being bright. Usually this effect is subtle, but if the contrasts in the original image are extreme, or the photographer deliberately sets the luminance gradient to be very steep, the halos become visible.</p>
+<h2 id="opencv-code-for-tone-mapping">OpenCV code for Tone Mapping</h2>
+
+<p>OpenCV has several resources for implementing simple tone mapping algorithms. An example of this implementation can be seen below :</p>
+<div class="sourceCode"><pre class="sourceCode cpp"><code class="sourceCode cpp">
+<span class="ot">#include <cstdlib></cstdlib></span>
+<span class="ot">#include <fstream></fstream></span>
+<span class="ot">#include <string></string></span>
+<span class="ot">#include <vector></vector></span>
+
+<span class="ot">#include <opencv2 photo.hpp=""></opencv2></span>
+<span class="ot">#include <opencv2 imgcodecs.hpp=""></opencv2></span>
+<span class="ot">#include <opencv2 highgui.hpp=""></opencv2></span>
+
+<span class="kw">using</span> <span class="kw">namespace</span> cv;
+
+<span class="dt">void</span> loadExposureSeq(std::string, std::vector<mat>&amp;, std::vector&lt;<span class="dt">float</span>&gt;&amp;);
+
+<span class="dt">int</span> main(<span class="dt">int</span> argc, <span class="dt">char</span>** argv)
+{
+    <span class="kw">if</span> (argc != <span class="dv">2</span>) { std::abort(); }
+
+    std::vector<mat> images;
+    std::vector&lt;<span class="dt">float</span>&gt; times;
+    loadExposureSeq(argv[<span class="dv">1</span>], images, times);
+
+    Mat response;
+    Ptr<calibratedebevec> calibrate = createCalibrateDebevec();
+    calibrate-&gt;process(images, response, times);
+
+    Mat hdr;
+    Ptr<mergedebevec> merge_debevec = createMergeDebevec();
+    merge_debevec-&gt;process(images, hdr, times, response);
+
+    Mat ldr;
+    Ptr<tonemapdurand> tonemap = createTonemapDurand(<span class="fl">2.</span><span class="er">2f</span>);
+    tonemap-&gt;process(hdr, ldr);
+
+    Mat fusion;
+    Ptr<mergemertens> merge_mertens = createMergeMertens();
+    merge_mertens-&gt;process(images, fusion);
+
+    imwrite(<span class="st">"fusion.png"</span>, fusion * <span class="dv">255</span>);
+    imwrite(<span class="st">"ldr.png"</span>, ldr * <span class="dv">255</span>);
+    imwrite(<span class="st">"hdr.hdr"</span>, hdr);
+}
+
+<span class="dt">void</span> loadExposureSeq(std::string path, std::vector<mat>&amp; images, std::vector&lt;<span class="dt">float</span>&gt;&amp; times)
+{
+    std::ifstream list_file((path + <span class="st">"/list.txt"</span>));
+    std::string name;
+    <span class="dt">float</span> val;
+    <span class="kw">while</span> (list_file &gt;&gt; name &gt;&gt; val)
+    {
+        images.push_back(imread(path + name));
+        times.push_back(<span class="fl">1.</span><span class="dv">0</span> / val);
+    }
+}
+<!--<span class="dt"-->float</mat></mergemertens></tonemapdurand></mergedebevec></calibratedebevec></mat></mat></code></pre></div></body>&gt;<!--<span class="dt"-->float&gt;<!--<span class="dt"-->float&gt;
+
+<p>This content is © opencv dev team and is published under the openBSD license By downloading, copying, installing or using the software you agree to this license. If you do not agree to this license, do not download, install, copy or use the software.</p>
+
+<p>This code takes in an input of several exposure images and constructs the HDR image. The code then uses a simple tone mapping algorithm based on the work of Durand and Dorsey which employs a bilateral filter for correction. It then runs an exposure fusion merge the exposures and writes out the results into one image.</p>
+
+<p>Image:CornellLawTower.jpg|Tone mapped composite image of the <a href="Cornell_Law_School" title="wikilink">Cornell Law School</a> tower in <a href="Ithaca,_New_York" title="wikilink">Ithaca, New York</a>. Note the 'ringing' or 'halos' around the tower. Image:Old saint pauls 2.jpg|Nave in <a href="Old_Saint_Paul's" title="wikilink">Old Saint Paul's</a>, <a class="uri" href="Wellington" title="wikilink">Wellington</a>, <a href="New_Zealand" title="wikilink">New Zealand</a>, using eight exposures bracketed one stop apart.</p>
+<h2 id="gallery">Gallery</h2>
+
+<p>Image:HDRToneMap.jpg|HDR Tone Mapping Example Image:IsolaTiberinaHDR.jpg|5 exposure tone mapping of the <a href="Isola_Tiberina" title="wikilink">Isola Tiberina</a> in <a class="uri" href="Rome" title="wikilink">Rome</a>. Image:Machinery.jpg|3 exposure (-2,0,+2) tone mapped image of a scene at <a href="Nippori_Station" title="wikilink">Nippori Station</a>. Image:GeiselHDR.jpg|<a href="Geisel_Library" title="wikilink">Geisel Library</a> in HDR. Image:View_from_tower_bridge_tonemapped.jpg|HDR view from <a href="Tower_Bridge" title="wikilink">Tower Bridge</a> in <a class="uri" href="London" title="wikilink">London</a> tone-mapped from 5 exposures. Image:StPauls_cathedral_tonemapped.jpg|HDR view from <a href="St_Paul's_Cathedral" title="wikilink">St Paul's Cathedral</a> in <a class="uri" href="London" title="wikilink">London</a> tone-mapped from 9 exposures.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Color_translation" title="wikilink">Color translation</a></li>
+<li><a href="Gamma_correction" title="wikilink">Gamma correction</a></li>
+<li><a href="Tone_reproduction" title="wikilink">Tone reproduction</a></li>
+</ul>
+<h2 id="references">References</h2>
+<ol>
+<li>
+
+<p>Livingstone, M. 2002. "Vision and Art: The Biology of Seeing." Harry N Abrams</p></li>
+<li>
+
+<p>Hunt, R. 2004. "The Reproduction of Colour in Photography, Printing and Television: 6th Edition." John Wiley &amp; Sons.</p></li>
+<li>
+
+<p>Adams, A. 1981. "The Print, The Ansel Adams Photography Series 3." New York Graphic Society</p></li>
+<li>
+
+<p>Land, E. H., and McCann, J. J. 1971. "Lightness and the retinex theory." Journal of the Optical Society of America 61, 1, 1–11.</p></li>
+<li>
+
+<p>Kate Devlin, Alan Chalmers, Alexander Wilkie, Werner Purgathofer. "STAR Report on Tone Reproduction and Physically Based Spectral Rendering" in <a class="uri" href="Eurographics" title="wikilink">Eurographics</a> 2002. <a href="Digital_object_identifier" title="wikilink">DOI</a>: <a href="http://doi.acm.org/10.1145/1073204.1073242">10.1145/1073204.1073242</a></p></li>
+<li>
+
+<p>Raanan Fattal, Dani Lischinski, Michael Werman. <a href="http://www.cs.huji.ac.il/~danix/hdr/">"Gradient Domain High Dynamic Range Compression"</a></p></li>
+<li>
+
+<p>Rafal Mantiuk, Karol Myszkowski, Hans-Peter Seidel. <a href="http://www.mpi-sb.mpg.de/~mantiuk/contrast_domain/">"A Perceptual Framework for Contrast Processing of High Dynamic Range Images"</a></p></li>
+<li>
+
+<p>Alan Gilchrist. <a href="http://psychology.rutgers.edu/~alan/theory3/">"An Anchoring Theory of Lightness Perception"</a>.</p></li>
+<li>
+
+<p>Grzegorz Krawczyk, Karol Myszkowski, Hans-Peter Seidel. <a href="http://www.mpi-inf.mpg.de/resources/hdr/lightness/">"Lightness Perception in Tone Reproduction for High Dynamic Range Images"</a></p></li>
+<li>
+
+<p>Fairchild, M. D., Johnson, G.M.: ‘The iCAM framework for image appearance, differences and quality’. J Electron. Imaging, 2004</p></li>
+<li>
+
+<p>Xiao, J., Li, W., Liu, G., Shaw, S., &amp; Zhang, Y. (n.d.). Hierarchical tone mapping based on image color appearance model. <a href="http://www.academia.edu/6007986/Hierarchical_tone_mapping_based_on_image_colour_appearance_model">1</a></p></li>
+<li>
+
+<p>Mantiuk, R., Daly, S., &amp; Kerofsky, L. (n.d.). Display Adaptive Tone Mapping. <a class="uri" href="http://resources.mpi-inf.mpg.de/hdr/datmo/mantiuk08datm.pdf">http://resources.mpi-inf.mpg.de/hdr/datmo/mantiuk08datm.pdf</a></p></li>
+<li>
+
+<p><a class="uri" href="http://docs.opencv.org/trunk/doc/tutorials/photo/hdr_imaging/hdr_imaging.html">http://docs.opencv.org/trunk/doc/tutorials/photo/hdr_imaging/hdr_imaging.html</a></p></li>
+<li>
+
+<p>Durand and Julie Dorsey, “Fast Bilateral Filtering for the Display of High-Dynamic-Range Images”. ACM Transactions on Graphics, 2002, 21, 3, 257 - 266</p></li>
+</ol>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://cvtool.sourceforge.net/cvltonemap.html">CVLTonemap: GPU accelerated tone mapping</a></li>
+<li><a href="http://www.everimaging.com/">HDR Darkroom</a></li>
+<li><a href="http://www.mpii.mpg.de/resources/tmo/">pfstmo: implementation of tone mapping operators</a></li>
+<li><a href="http://scanline.ca/exrtools/">exrtools: a collection of utilities for manipulating OpenEXR images</a> (includes some tone mapping operators)</li>
+<li><a href="http://www.mpi-inf.mpg.de/resources/pfstools/">pfstools</a> is an open-source set of command line programs for reading, writing and manipulating high-dynamic range (HDR) images and video frames</li>
+<li><a href="http://qtpfsgui.sourceforge.net/">Luminance HDR/QtPfsGui</a> is a free (open-source) HDR-workflow software for Linux, Windows and Mac OS X based around the pfstools package</li>
+<li><a href="http://zynaddsubfx.sourceforge.net/other/tonemapping/">LDR tonemapping</a> is a free (open-source) tonemapper for low dynamic range images (a.k.a. "pseudo-HDR")</li>
+<li><a href="http://www.3dcg.net/software/atlas">Atlas</a> is a free (open-source) port of the pfstmo tone mapping operators to <a href="Adobe_After_Effects" title="wikilink">Adobe After Effects</a></li>
+<li><a href="http://www.flickr.com/groups/hdr">Flickr HDR pool</a>, a collection of surreal tone mappings</li>
+<li><a href="http://graphics.berkeley.edu/papers/Kirk-PBT-2011-08/">UC Berkeley paper with raw data for Purkinje effect</a></li>
+<li><a href="http://www.stuckincustoms.com/hdr-tutorial">Stuck in Customs</a>, an extensive tutorial to make HDR images</li>
+</ul>
+<h3 id="tone-mapping-algorithms">Tone mapping algorithms</h3>
+<ul>
+<li><a href="http://graphics.berkeley.edu/papers/Kirk-PBT-2011-08/">Perceptually Based Tone Mapping for Low-Light Conditions</a></li>
+<li><a href="http://www.cs.utah.edu/~reinhard/cdrom/">Photographic Tone Reproduction for Digital Images</a></li>
+<li><a href="http://www.mpi-inf.mpg.de/resources/hdr/lightness/">Lightness Perception in Tone Reproduction for High Dynamic Range Images</a></li>
+<li><a href="http://www.mpi-inf.mpg.de/~mantiuk/contrast_domain/">Contrast Processing of High Dynamic Range Images</a></li>
+<li><a href="http://people.csail.mit.edu/fredo/PUBLI/Siggraph2002/">Fast Bilateral Filtering for the Display of High-Dynamic-Range Images</a></li>
+<li><a href="http://people.csail.mit.edu/sparis/bf/">A Fast Approximation of the Bilateral Filter using a Signal Processing Approach</a></li>
+<li><a href="http://www.cs.huji.ac.il/~danix/hdr/">Gradient Domain High Dynamic Range Compression</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Computer_graphics" title="wikilink">Category:Computer graphics</a> <a href="Category:Articles_with_example_C++_code" title="wikilink">Category:Articles with example C++ code</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">G. Qiu et al, <a href="http://www.cs.nott.ac.uk/~qiu/webpages/Papers/icpr2006-hdri-camera.pdf">"Tone Mapping for HDR Image using Optimization-A New Closed Form Solution"</a>, Proc. ICPR 2006, 18th International Conference on Pattern Recognition, vol.1, pp.996-999<a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+</ol>
+</section>
+
+

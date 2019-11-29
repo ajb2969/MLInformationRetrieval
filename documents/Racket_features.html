@@ -1,0 +1,485 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1334">Racket features</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Racket features</h1>
+<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</body></html>
+<body>
+<hr/>
+
+<p>Racket has been under active development as a vehicle for <a href="programming_language_research" title="wikilink">programming language research</a> since the mid-1990s, and has accumulated many features over the years. This article describes and demonstrates some of these features. Note that one of Racket's main design goals is to accommodate creating new languages, both <a href="domain-specific_language" title="wikilink">domain-specific languages</a> and completely new languages.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Therefore, some of the following examples are in different languages, but they are all implemented in Racket. Please refer to <a href="Racket_(programming_language)" title="wikilink">the main article</a> for more information.</p>
+
+<p>The core Racket implementation is highly flexible. Even without using dialects, it can function as a full-featured scripting language, capable of running both with and without windows-native GUI, and capable of tasks from web server creation to graphics.</p>
+<h2 id="runtime-support">Runtime Support</h2>
+<h3 id="garbage-collection-tail-calls-and-space-safety">Garbage Collection, Tail Calls, and Space Safety</h3>
+
+<p>Racket can use three different <a href="Garbage_collection_(computer_science)" title="wikilink">garbage collectors</a>:</p>
+<ul>
+<li>Originally, the conservative <a href="Boehm_garbage_collector" title="wikilink">Boehm garbage collector</a> was used. However, conservative collection is impractical for long-running processes such as a web server—such processes tend to slowly leak memory. In addition, there are pathological cases where a conservative collector leaks memory fast enough to make certain programs impossible to run. For example, when traversing an infinite list, a single conservative mistake of retaining a pointer leads to keeping the complete list in memory, quickly overflowing available memory. This collector is often referred to as "CGC" in the Racket community.</li>
+</ul>
+<ul>
+<li>SenoraGC is an alternative conservative garbage collector that is intended mainly for debugging and memory tracing.</li>
+</ul>
+<ul>
+<li>The moving memory manager (aka "3m") is a precise garbage collector, and it has been Racket's default collector since 2007. This collector is a generational one, and it supports memory accounting via custodians (see below). The collector is implemented as a C source transformer that is itself written in Racket. Therefore, the build process uses the conservative collector for <a href="Bootstrapping_(compilers)" title="wikilink">bootstrapping</a>.</li>
+</ul>
+
+<p>Like all implementations in the <a href="Scheme_(programming_language)" title="wikilink">Scheme</a> family, Racket implements full <a href="Tail_call" title="wikilink">tail call elimination</a>. Racket takes this further: the language is made fully safe-for-space, via <a href="live_variable_analysis" title="wikilink">live variable analysis</a>. This complements the precise garbage collector and in some cases, like in the implementation of Lazy Racket, the two features are crucial for proper execution. This is in addition to additional compiler optimizations such as <a href="lambda_lifting" title="wikilink">lambda lifting</a> and <a href="just-in-time_compilation" title="wikilink">just-in-time compilation</a>.</p>
+<h3 id="system-interface-and-scripting">System Interface and Scripting</h3>
+
+<p>Racket's system interface includes asynchronous <a href="non-blocking_I/O" title="wikilink">non-blocking I/O</a>, <a href="green_thread" title="wikilink">green threads</a>, synchronization channels, semaphores, <a href="Process_(computing)" title="wikilink">sub-processes</a>, and <a href="Transmission_Control_Protocol" title="wikilink">TCP</a> sockets.</p>
+
+<p>The following program starts an "echo server" on port 12345.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+
+(<span class="kw">define</span><span class="fu"> listener </span>(tcp-listen <span class="dv">12345</span>))
+
+(<span class="kw">let</span> echo-server ()
+  <span class="co">;; create a TCP server</span>
+  (define-values (in out) (tcp-accept listener))
+  <span class="co">;; handle an incoming connection in a (green) thread</span>
+  (thread (λ () (copy-port in out) (<span class="kw">close-output-port</span> out)))
+  <span class="co">;; and immediately loop back to accept additional clients</span>
+  (echo-server))</code></pre></div>
+
+<p>The combination of dynamic compilation and a rich system interface makes Racket a capable scripting language, similar to <a class="uri" href="Perl" title="wikilink">Perl</a> or <a href="Python_(Programming_Language)" title="wikilink">Python</a>.</p>
+
+<p>The following example demonstrates walking a directory tree, starting at the current directory. It uses the <code>in-directory</code> function to construct a sequence that walks the tree. The <code>for</code> form binds <code>path</code> to each path in the sequence, and <code>regexp-match?</code> tests these paths against the given <a class="uri" href="regexp" title="wikilink">regexp</a> pattern.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+<span class="co">;; Finds Racket sources in all subdirs</span>
+
+(for ([path (in-directory)]) <span class="co">; iterate over the current tree</span>
+  (when (regexp-match? #rx<span class="st">"[.]rkt$"</span> path)
+    (printf <span class="st">"source file: ~a\n"</span> path)))</code></pre></div>
+
+<p>The next example uses a hash table to record previously seen lines and print only unique ones.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+<span class="co">;; Report each unique line from stdin</span>
+
+(<span class="kw">let</span> ([saw (make-hash)])
+  (for ([line (in-lines)])
+    (unless (hash-ref saw line <span class="dv">#f</span>)
+      (displayln line))
+    (hash-set! saw line <span class="dv">#t</span>)))</code></pre></div>
+
+<p>Both of these programs can be run in <a class="uri" href="DrRacket" title="wikilink">DrRacket</a>, or on the command line, via the <code>racket</code> executable. Racket ignores an initial <a href="Shebang_(Unix)" title="wikilink">shebang</a> line, making it possible to turn such programs to executable scripts. The following script demonstrates this, in addition to using Racket's library for <a href="command-line_argument_parsing" title="wikilink">command-line argument parsing</a>:</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme"><span class="co">#!/usr/bin/env racket</span>
+<span class="co">#lang racket</span>
+
+<span class="co">(command-line</span>
+<span class="co"> #:args (base-dir ext re)</span>
+<span class="co"> (for ([p (in-directory)]</span>
+<span class="co">       #:when (regexp-match? (string-append "[.]" ext "$") p)</span>
+<span class="co">       [(line num) (in-indexed (file-&gt;lines p))])</span>
+<span class="co">   (when (regexp-match? (pregexp re) line)</span>
+<span class="co">     (printf "~a:~a: ~a~n" p num line))))</span></code></pre></div>
+
+<p>The script is a grep-like utility, expecting three command-line arguments: a base directory, a <a href="filename_extension" title="wikilink">filename extension</a>, and a (perl-compatible) regular expression. It scans the base directory for files with the given suffix, and print lines matching the regexp pattern.</p>
+<h3 id="resource-management-and-sandboxing">Resource Management and Sandboxing</h3>
+
+<p>Racket features the concept of a "custodian": a kind of value that acts as a resource manager. This is often used in network servers, where each connection is dealt with in a new custodian, making it easy to "clean-up" all resources that might have been left open by the handler (e.g., open ports). The following extends the "echo server" example with such a custodian use:</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+
+(<span class="kw">define</span><span class="fu"> listener </span>(tcp-listen <span class="dv">12345</span>))
+
+<span class="co">;; per-connection handler</span>
+(<span class="kw">define</span><span class="fu"> </span>(handler in out)
+  (copy-port in out)
+  (<span class="kw">close-output-port</span> out))
+
+(<span class="kw">let</span> echo-server ()
+  (define-values (in out) (tcp-accept listener))
+  (thread (λ () (<span class="kw">let</span> ([c (make-custodian)])
+                  (parameterize ([current-custodian c])
+                    (handler in out)
+                    (custodian-shutdown-all c)))))
+  (echo-server))</code></pre></div>
+
+<p>Custodians, combined with the memory accounting feature of the 3m garbage collector, and a number of additional runtime parameters that control additional aspects of the runtime, make it possible to create completely safe sandboxed execution contexts. The <code>racket/sandbox</code> library provides this kind of functionality in a simple way. The following example creates a "REPL server" on the specified port; connecting to this port will look like a plain Racket REPL, except that the evaluation is subject to the various protection aspects of the sandbox. For example, it is not possible to access the filesystem from this REPL, create network connection, run subprocesses, or use too much time or memory. (In fact, this REPL is safe enough to be given out publicly.)</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+(require racket/sandbox)
+(<span class="kw">define</span><span class="fu"> e </span>(make-evaluator 'racket/base))
+(let-values ([(i o) (tcp-accept (tcp-listen <span class="dv">9999</span>))])
+  (parameterize ([<span class="kw">current-input-port</span>  i]
+                 [<span class="kw">current-output-port</span> o]
+                 [current-error-port  o]
+                 [current-eval e]
+                 [current-read-interaction (λ (x in) (<span class="kw">read</span> in))])
+    (read-eval-print-loop)
+    (fprintf o <span class="st">"\nBye...\n"</span>)
+    (<span class="kw">close-output-port</span> o)))</code></pre></div>
+<h2 id="web-and-network-programming">Web and Network Programming</h2>
+
+<p>The next example implements a <a href="web_server" title="wikilink">web server</a> using the <code>web-server/insta</code> language. Each time a connection is made to the server, the <code>start</code> function is called to get the <a class="uri" href="HTML" title="wikilink">HTML</a> to send back to the client.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang web-server/insta
+<span class="co">;; A tiny "hello world" web server</span>
+
+(<span class="kw">define</span><span class="fu"> </span>(start request)
+  (response/xexpr '(html (body <span class="st">"Hello World"</span>))))</code></pre></div>
+
+<p>Racket also includes the functions you would need to write scrapers and robots. As an example, the following function would list the Google results for a search string.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+<span class="co">;; Simple web scraper</span>
+
+(require net/url net/uri-codec)
+
+(<span class="kw">define</span><span class="fu"> </span>(let-me-google-that-for-you str)
+  (<span class="kw">let*</span> ([g <span class="st">"http://www.google.com/search?q="</span>]
+         [u (<span class="kw">string-append</span> g (uri-encode str))]
+         [rx #rx<span class="st">"(?&lt;=<h3 class='&lt;/span&gt;&lt;span class="ch"&gt;\"&lt;/span&gt;&lt;span class="st"&gt;r&lt;/span&gt;&lt;span class="ch"&gt;\"&lt;/span&gt;&lt;span class="st"&gt;'>).*?(?=</h3>)"</span>])
+    (regexp-match* rx (get-pure-port (string-&gt;url u)))))</code></pre></div>
+
+<p>The library also includes support for protocols other than http:</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+<span class="co">;; Sending a timed email alert from racket</span>
+
+(require net/sendmail)
+
+(sleep (* (<span class="kw">-</span> (* <span class="dv">60</span> <span class="dv">4</span>) <span class="dv">15</span>) <span class="dv">60</span>)) <span class="co">; wait 3h 45m</span>
+
+(send-mail-message
+ (getenv <span class="st">"EMAIL"</span>) <span class="st">"Parking meter alert!"</span>
+ (<span class="kw">list</span> (getenv <span class="st">"EMAIL"</span>)) null null
+ '(<span class="st">"Time to go out and move your car."</span>))</code></pre></div>
+<h2 id="graphics">Graphics</h2>
+
+<p>Graphic capabilities come in several different flavors that are intended for different audiences. The <code>2htdp/image</code> library provides convenient functions for constructing images. This library is mainly used by students in <a href="HTDP" title="wikilink">HtDP</a>-based courses. In the following example, a <code>sierpinski</code> function is defined and called (at the same time) to generate a <a href="Sierpinski_triangle" title="wikilink">Sierpinski triangle</a> of depth 8.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+<span class="co">;; A picture</span>
+
+(require 2htdp/image)
+
+(<span class="kw">let</span> sierpinski ([n <span class="dv">8</span>])
+  (<span class="kw">if</span> (<span class="kw">zero?</span> n)
+    (triangle <span class="dv">2</span> 'solid 'red)
+    (<span class="kw">let</span> ([t (sierpinski (<span class="kw">-</span> n <span class="dv">1</span>))])
+      (freeze (above t (beside t t))))))</code></pre></div>
+
+<p>DrRacket editors can contain images, and DrRacket displays image values just like any other type of value (such as integers or lists). Running the above program, for example, actually displays a Sierpinski triangle, which can be cut and pasted into another program.</p>
+
+<p>The <code>plot</code> library constructs image values for more mature audiences and needs. For example, the following program plots the sum of two 
+
+<math display="inline" id="Racket_features:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>ℝ</mi>
+    <mo>×</mo>
+    <mi>ℝ</mi>
+    <mo>×</mo>
+    <mi>ℝ</mi>
+   </mrow>
+   <mo>→</mo>
+   <mi>ℝ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <apply>
+     <times></times>
+     <ci>ℝ</ci>
+     <ci>ℝ</ci>
+     <ci>ℝ</ci>
+    </apply>
+    <ci>ℝ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{R}\times\mathbb{R}\times\mathbb{R}\rightarrow\mathbb{R}
+  </annotation>
+ </semantics>
+</math>
+
+ (three-dimensional) Gaussians, as concentric, partially transparent surfaces:</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+<span class="co">;; Visualize a sum of two 3D Gaussians as concentric isosurfaces</span>
+<span class="co">;; Note: this example requires Racket 5.2 or later</span>
+
+(require plot)
+
+<span class="co">;; Returns an R x R x R -&gt; R Gaussian function centered at (cx,cy,cz)</span>
+(<span class="kw">define</span><span class="fu"> </span>((gaussian cx cy cz) x y z)
+  (<span class="kw">exp</span> (<span class="kw">-</span> (<span class="kw">+</span> (sqr (<span class="kw">-</span> x cx)) (sqr (<span class="kw">-</span> y cy)) (sqr (<span class="kw">-</span> z cz))))))
+
+<span class="co">;; Lifts + to operate on three-argument functions</span>
+(<span class="kw">define</span><span class="fu"> </span>((f3+ g h) x y z) (<span class="kw">+</span> (g x y z) (h x y z)))
+
+<span class="co">;; Constructs an image value representing the sum of two Gaussians</span>
+(plot3d (isosurfaces3d (f3+ (gaussian <span class="dv">0</span> <span class="dv">0</span> <span class="dv">0</span>) (gaussian <span class="fl">1.5</span> -<span class="fl">1.5</span> <span class="dv">0</span>))
+                       -<span class="dv">1</span> <span class="fl">2.5</span> -<span class="fl">2.5</span> <span class="dv">1</span> -<span class="dv">1</span> <span class="dv">1</span>
+                       #:label <span class="st">"g"</span>))  <span class="co">; labeling adds a legend</span></code></pre></div>
+
+<p>Here, the <code>isosurfaces3d</code> function requires a three-argument function for its first argument, which the curried <code>f3+</code> supplies. Besides constructing image values, <code>plot</code> can also write files in <a href="Portable_Network_Graphics" title="wikilink">PNG</a>, <a href="Portable_Document_Format" title="wikilink">PDF</a>, <a class="uri" href="PostScript" title="wikilink">PostScript</a> and <a href="Scalable_Vector_Graphics" title="wikilink">SVG</a> formats.</p>
+<h3 id="gui-programming">GUI Programming</h3>
+
+<p>Racket implements a portable <a class="uri" href="GUI" title="wikilink">GUI</a> layer which the libraries mentioned above build on. It is implemented via the native <a class="uri" href="Windows" title="wikilink">Windows</a> API, via <a href="Cocoa_(API)" title="wikilink">Cocoa</a> on <a href="Mac_OS_X" title="wikilink">Mac OS X</a>, and via <a class="uri" href="Gtk" title="wikilink">Gtk</a> on Linux and others. The Racket API is a class-based toolkit, somewhat related to <a class="uri" href="WxWidgets" title="wikilink">WxWidgets</a> which was used originally.</p>
+
+<p>The following simple guessing game demonstrates coding with the GUI toolkit. The <code>frame%</code> class implements a top-level window, and <code>button%</code> implements a button. The <code>check</code> function defined here produces a function that is used for the button's callback action.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket/gui
+<span class="co">;; A GUI guessing game</span>
+
+(<span class="kw">define</span><span class="fu"> secret </span>(random <span class="dv">5</span>))
+
+(<span class="kw">define</span><span class="fu"> f </span>(new frame% [label <span class="st">"Guessing game"</span>])) <span class="co">; toplevel window</span>
+(<span class="kw">define</span><span class="fu"> t </span>(new message% [parent f]
+               [label <span class="st">"Can you guess the number I'm thinking about?"</span>]))
+(<span class="kw">define</span><span class="fu"> p </span>(new horizontal-pane% [parent f]))    <span class="co">; horizontal container</span>
+
+(<span class="kw">define</span><span class="fu"> </span>((make-check i) btn evt)
+  (message-box <span class="st">"."</span> (<span class="kw">cond</span> [(<span class="kw">&lt;</span> i secret) <span class="st">"Too small"</span>]
+                         [(<span class="kw">&gt;</span> i secret) <span class="st">"Too big"</span>]
+                         [<span class="kw">else</span>         <span class="st">"Exactly!"</span>]))
+  (when (<span class="kw">=</span> i secret) (send f show <span class="dv">#f</span>)))         <span class="co">; success =&gt; close window</span>
+
+(for ([i (in-range <span class="dv">10</span>)])                        <span class="co">; create all buttons</span>
+  (make-object button% (format <span class="st">"~a"</span> i) p (make-check i)))
+
+(send f show <span class="dv">#t</span>) <span class="co">; show the window to start the application</span></code></pre></div>
+
+<p>The GUI can be hand-coded in this way or with the help of a GUI designer program available on PLaneT.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+<h3 id="slideshow">Slideshow</h3>
+
+<p><a href="Presentation_slide" title="wikilink">Slide</a>-based <a href="presentation" title="wikilink">presentations</a> can also be developed in Racket using the <code>slideshow</code> language, much like <a href="Beamer_(LaTeX)" title="wikilink">Beamer</a>, but with Racket's programmatic facilities. Elements of the slides are pictures that can be combined.</p>
+
+<p>For example, the following program displays in full-screen a title slide, followed by a slide with some pictures. The <code>vc-append</code> and <code>hc-append</code> functions combine pictures vertically and horizontally, respectively, and centered on the other axis.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang slideshow
+
+(slide
+ (text <span class="st">"Slideshow"</span> 'roman <span class="dv">56</span>)
+ (text <span class="st">"Making presentations in Racket"</span>
+       'roman <span class="dv">40</span>))
+
+(slide
+ #:title <span class="st">"Some pictures"</span>
+ (apply vc-append
+        (for/list ([i <span class="dv">5</span>])
+          (<span class="kw">define</span><span class="fu"> </span>(scale+color p c) 
+            (colorize (scale p (<span class="kw">/</span> (add1 i) <span class="dv">5</span>)) c))
+          (hc-append 
+           (scale+color (filled-rectangle <span class="dv">100</span> <span class="dv">50</span>)  <span class="st">"darkblue"</span>)
+           (scale+color (disk <span class="dv">100</span>)                 <span class="st">"darkgreen"</span>)
+           (scale+color (arrow <span class="dv">100</span> (<span class="kw">/</span> pi <span class="dv">6</span>))       <span class="st">"darkred"</span>)
+           ))))</code></pre></div>
+
+<p>Extension packages also exist on PLaneT,<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> for example to include <a class="uri" href="LaTeX" title="wikilink">LaTeX</a> elements.</p>
+<h2 id="foreign-function-interface">Foreign Function Interface</h2>
+
+<p>Racket features a <a href="foreign_function_interface" title="wikilink">foreign function interface</a> that is based on <a class="uri" href="libffi" title="wikilink">libffi</a>. The interface allows writing unsafe low-level <a href="C_(Programming_Language)" title="wikilink">C</a>-like code, that can allocate memory, dereference pointers, call out to functions in <a href="shared_library" title="wikilink">shared libraries</a>, and send out callbacks to Racket functions (using libffi closures). The core implementation is a thin layer atop libffi (written in C), and the full interface is then implemented via Racket code. The interface uses macros extensively, resulting in an expressive Racket-based <a href="interface_description_language" title="wikilink">interface description language</a>. This language has a number of useful features, such as uniform representation for higher-order functions (avoiding the pitfalls when callbacks and callouts are different), struct definitions that are similar to plain Racket structs, and custom function types that can represent input and output pointers, implicit arguments (e.g., an argument that provides the number of elements in a vector that is passed as another argument). By using this interface to access underlying GUI toolkits, Racket implements its own GUI layer completely in Racket.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>The FFI can be used in a number of different ways: from writing a complete glue layer for a library (as done for Racket's <a class="uri" href="OpenGL" title="wikilink">OpenGL</a> binding), to quickly pulling out a single foreign function. An example of the latter approach:</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang scheme/base
+<span class="co">;; Simple use of the FFI</span>
+
+(require ffi/unsafe)
+
+(<span class="kw">define</span><span class="fu"> mci-send-string</span>
+  (get-ffi-obj <span class="st">"mciSendStringA"</span> <span class="st">"Winmm"</span>
+    (_fun _string [_pointer <span class="kw">=</span> <span class="dv">#f</span>] [_int <span class="kw">=</span> <span class="dv">0</span>] [_pointer <span class="kw">=</span> <span class="dv">#f</span>]
+          -&gt; [ret : _int])))
+(mci-send-string <span class="st">"play sound.wav wait"</span>)</code></pre></div>
+<h2 id="language-extensions">Language Extensions</h2>
+
+<p>Racket's most notable feature is its ability to build new <a href="Domain-specific_languages" title="wikilink">domain-specific</a> and <a href="General-purpose_programming_language" title="wikilink">general-purpose</a> languages. This is the result of combining a number of important features:</p>
+<ul>
+<li>a flexible module system that is used for linking code and for namespace management,</li>
+<li>an extensive macro system—functioning as a compiler-API—that can create new syntactic forms,</li>
+<li>a rich runtime system, providing features that language implementors can use, like (composable, delimited) continuations, resource management, etc.,</li>
+<li>a way to specify (and implement) parsers for new language syntaxes.</li>
+</ul>
+
+<p>The module system plays an important role in combining these features, and making it possible to write code that spans across a number of modules, where each can be written in a different language.</p>
+
+<p>Such languages are used extensively in the Racket distribution and in user libraries. In fact, creating a new language is so straightforward, that there are some languages that have less than a handful of uses.</p>
+
+<p>Racket comes with a number of useful languages, some are very different from Racket's default language.</p>
+<h3 id="scribble">Scribble</h3>
+
+<p>Scribble, Racket's documentation system, comes in the form of a number of languages that are used to write prose. It is used for Racket's documentation, as well as writing books and articles. Actually, rather than a single "scribble" language, it is a family of (very similar) dialects, each for a different purpose.</p>
+
+<p>To run the following example, copy it into DrRacket and click one of the two scribble rendering buttons that will appear (PDF rendering requires <a class="uri" href="pdfTeX" title="wikilink">pdfTeX</a>). Alternatively, use the <code>scribble</code> executable on the file.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang scribble/base
+@<span class="co">; Generate a PDF or an HTML document using `scribble'</span>
+
+@(require (planet neil/numspell))
+
+@title{<span class="dv">99</span> Bottles of Beer}
+
+In <span class="kw">case</span> you need some @emph{blah blah} in your life.
+
+@(apply itemlist
+  (for/list ([n (in-range <span class="dv">99</span> <span class="dv">0</span> -<span class="dv">1</span>)])
+    (<span class="kw">define</span><span class="fu"> N   </span>(number-&gt;english n))
+    (<span class="kw">define</span><span class="fu"> N-- </span>(number-&gt;english (sub1 n)))
+    @item{@string-titlecase[N] bottles of beer on the wall,
+          @N bottles of beer.
+          Take one down, pass it around,
+          @N-- bottles of beer on the wall.}))</code></pre></div>
+
+<p>The most striking feature of the Scribble languages is their use of a new syntax, which is designed specifically for textually rich code.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> The syntax allows free-form text, string interpolation, customizable quotations, and is useful in other applications such as <a href="Preprocessor" title="wikilink">preprocessing text</a>, generating text, and HTML template systems. Note that the syntax extends plain S-expressions, and is implemented as an alternative input for such expressions.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang scribble/text
+Hi,
+I'm a text file -- run me.
+@(<span class="kw">define</span><span class="fu"> </span>(thrice . text) @list{@text, @text, @text})
+@thrice{SPAM}!
+@thrice{HAM}!</code></pre></div>
+<h3 id="typed-racket">Typed Racket</h3>
+
+<p>Typed Racket is a <a href="Statically_typed#Static_typing" title="wikilink">statically typed</a> variant of Racket. The <a href="type_system" title="wikilink">type system</a> that it implements is unique in that the motivation in developing it was accommodating as much idiomatic Racket code as possible—as a result, it includes subtypes, unions, and much more.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Another goal of Typed Racket is to allow migration of parts of a program into the typed language, so it accommodates calling typed code from untyped code and vice versa, generating dynamic <a href="Design_by_contract" title="wikilink">contracts</a> to enforce type invariants.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> This is considered a desirable feature of an application's lifetime stages, as it matures from "a script" to "an application", where static typing helps in maintenance of a large body of code.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang typed/racket
+
+<span class="co">;; Using higher-order occurrence typing</span>
+(define-type Str-or-Num (U String Number))
+
+(: tog ((Listof Str-or-Num) -&gt; String))
+(<span class="kw">define</span><span class="fu"> </span>(tog l)
+  (apply <span class="kw">string-append</span> (filter <span class="kw">string?</span> l)))
+
+(tog (<span class="kw">list</span> <span class="dv">5</span> <span class="st">"hello "</span> <span class="dv">1</span>/<span class="dv">2</span> <span class="st">"world"</span> (<span class="kw">sqrt</span> -<span class="dv">1</span>)))</code></pre></div>
+<h3 id="lazy-racket">Lazy Racket</h3>
+
+<p>The <code>lazy</code> language is a language with <a href="lazy_evaluation" title="wikilink">lazy evaluation</a> semantics, similar to <a href="Haskell_(programming_language)" title="wikilink">Haskell</a>. In the following example, <code>fibs</code> is an infinite list whose 1000th element will not be computed until its value is needed for the printout.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang lazy
+<span class="co">;; An infinite list:</span>
+(<span class="kw">define</span><span class="fu"> fibs</span>
+  (list* <span class="dv">1</span> <span class="dv">1</span> (map <span class="kw">+</span> fibs (<span class="kw">cdr</span> fibs))))
+
+<span class="co">;; Print the 1000th Fibonacci number:</span>
+(print (<span class="kw">list-ref</span> fibs <span class="dv">1000</span>))</code></pre></div>
+<h3 id="logic-programming">Logic Programming</h3>
+
+<p>Racket comes with three <a href="logic_programming" title="wikilink">logic programming</a> languages: Racklog, a <a class="uri" href="Prolog" title="wikilink">Prolog</a>-like language, a <a class="uri" href="Datalog" title="wikilink">Datalog</a> implementation, and a <a class="uri" href="miniKanren" title="wikilink">miniKanren</a> port. Unlike the Scribble syntax, the first two of these languages use a completely new syntax rather than an extension of S-expressions. If you use it in DrRacket, you'll see that it provides proper highlighting, the usual host of tools check syntax, and a Prolog/Datalog REPL.</p>
+<div class="sourceCode"><pre class="sourceCode Prolog"><code class="sourceCode prolog">#lang datalog
+
+ancestor(<span class="dt">A</span><span class="kw">,</span> <span class="dt">B</span>) <span class="kw">:-</span> parent(<span class="dt">A</span><span class="kw">,</span> <span class="dt">B</span>)<span class="kw">.</span>
+ancestor(<span class="dt">A</span><span class="kw">,</span> <span class="dt">B</span>) <span class="kw">:-</span>
+  parent(<span class="dt">A</span><span class="kw">,</span> <span class="dt">C</span>)<span class="kw">,</span> <span class="dt">D</span> <span class="kw">=</span> <span class="dt">C</span><span class="kw">,</span> ancestor(<span class="dt">D</span><span class="kw">,</span> <span class="dt">B</span>)<span class="kw">.</span>
+parent(john<span class="kw">,</span> douglas)<span class="kw">.</span>
+parent(bob<span class="kw">,</span> john)<span class="kw">.</span>
+
+ancestor(<span class="dt">A</span><span class="kw">,</span> <span class="dt">B</span>)?</code></pre></div>
+<h3 id="educational-tools">Educational Tools</h3>
+
+<p>The PLT group which develops Racket has traditionally been involved in education at all levels. One of the earliest research ideas that the group promoted is the use of language levels, which restrict new students while providing them with helpful error messages that fit the student's level of knowledge. This approach is heavily used in <a href="How_to_Design_Programs" title="wikilink">How to Design Programs</a>, the textbook that several PLT developers have authored, as well as in the <a class="uri" href="ProgramByDesign" title="wikilink">ProgramByDesign</a> project. The following program uses the <code>htdp/bsl</code>—the "beginning student language". It uses the <code>2htdp/image</code> library for creating pictures in the teaching languages, and the <code>2htdp/universe</code> library for interactive animations.</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang htdp/bsl
+<span class="co">;; Any key inflates the balloon</span>
+
+(require 2htdp/image)
+(require 2htdp/universe)
+
+(<span class="kw">define</span><span class="fu"> </span>(balloon b) (circle b <span class="st">"solid"</span> <span class="st">"red"</span>))
+
+(<span class="kw">define</span><span class="fu"> </span>(blow-up b k) (<span class="kw">+</span> b <span class="dv">5</span>))
+
+(<span class="kw">define</span><span class="fu"> </span>(deflate b) (<span class="kw">max</span> (<span class="kw">-</span> b <span class="dv">1</span>) <span class="dv">1</span>))
+
+(big-bang <span class="dv">50</span> (on-key blow-up) (on-tick deflate)
+          (to-draw balloon <span class="dv">200</span> <span class="dv">200</span>))</code></pre></div>
+<h3 id="algol">Algol</h3>
+
+<p>Racket comes with a complete implementation of the <a href="ALGOL_60" title="wikilink">ALGOL 60</a> language.</p>
+<div class="sourceCode"><pre class="sourceCode pascal"><code class="sourceCode pascal"><span class="st">#l</span>ang algol60
+<span class="kw">begin</span>
+  <span class="dt">integer</span> <span class="kw">procedure</span> SIGMA(x, i, n);
+    value n;
+    <span class="dt">integer</span> x, i, n;
+  <span class="kw">begin</span>
+    <span class="dt">integer</span> sum;
+    sum := <span class="dv">0</span>;
+    <span class="kw">for</span> i := <span class="dv">1</span> step <span class="dv">1</span> <span class="kw">until</span> n <span class="kw">do</span>
+      sum := sum + x;
+    SIGMA := sum;
+  <span class="kw">end</span>;
+  <span class="dt">integer</span> q;
+  printnln(SIGMA(q*<span class="dv">2-1</span>, q, <span class="dv">7</span>));
+<span class="kw">end</span></code></pre></div>
+<h3 id="additional-languages">Additional Languages</h3>
+
+<p>Finally, the following example is an <strong>implementation</strong> of a new language:</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang racket
+(provide (except-out (all-from-out racket)
+                     #%top #%app)
+         (rename-out [top #%top] [app #%app]))
+(define-syntax-rule (top . x) 'x)
+(define-syntax-rule (app f . xs)
+  (<span class="kw">if</span> (hash? f) (hash-ref f . xs) (f . xs)))</code></pre></div>
+
+<p>This language:</p>
+<ul>
+<li>provides everything from the <code>racket</code> language, so it is a somewhat similar variant,</li>
+<li>except for two special "hook macros" that implement unbound variable lookup and function calls, instead of these, new forms are provided to
+<ul>
+<li>implicitly quote all unknown variables</li>
+<li>allow hash tables to be used as functions, where the arguments are used for hash-table lookup.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></li>
+</ul></li>
+</ul>
+
+<p>If this code is stored in a <code>mylang.rkt</code> file, you can use it as follows:</p>
+<div class="sourceCode"><pre class="sourceCode Scheme"><code class="sourceCode scheme">#lang s-exp <span class="st">"mylang.rkt"</span> <span class="co">; sexpr syntax, using mylang semantics</span>
+(<span class="kw">define</span><span class="fu"> h </span>(make-hasheq))
+(hash-set! h A B)        <span class="co">; A and B are self-evaluating here</span>
+(h A)                    <span class="co">; the hash table is used as a function</span></code></pre></div>
+<h2 id="references-and-footnotes">References and footnotes</h2>
+<ul>
+<li>''As of [<a class="uri" href="http://en.wikipedia.org/w/index.php?title=Racket_features&amp;oldid">http://en.wikipedia.org/w/index.php?title=Racket_features&amp;oldid;</a>;=445553008 Aug 18, 2011] some of the content of this article (contained in examples and descriptive passages) consisted of text from <a href="http://racket-lang.org/">the Racket home page</a>, published with a <a href="http://racket-lang.org/web-copyright.html">"copyleft"</a> notice.</li>
+<li><a href="http://docs.racket-lang.org/">docs.racket</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Articles_with_example_Racket_code" title="wikilink">Category:Articles with example Racket code</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="http://planet.racket-lang.org/">PLaneT</a>: Racket's centralized package distribution system<a href="#fnref2">↩</a></li>
+<li id="fn3"></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8">Note that <code>#%app</code> is a macro that is used in all function calls, making this language not too efficient, as every function call incurs an additional condition. In addition, the macro evaluates the function expression twice, so it should not be taken as an example of good macro-programming.<a href="#fnref8">↩</a></li>
+</ol>
+</section>
+</body>
+

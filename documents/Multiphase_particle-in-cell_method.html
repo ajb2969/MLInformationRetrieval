@@ -1,0 +1,1837 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1110">Multiphase particle-in-cell method</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Multiphase particle-in-cell method</h1>
+<hr>The '''multiphase particle-in-cell method (MP-PIC)''' is a numerical method
+<p><code>for modeling particle-fluid and particle-particle interactions in a </code><a href="computational_fluid_dynamics" title="wikilink"><code>computational</code> <code>fluid</code> <code>dynamics</code></a><code> (CFD) calculation.  The MP-PIC method achieves greater stability than its </code><a href="particle-in-cell" title="wikilink"><code>particle-in-cell</code></a><code> predecessor by simultaneously treating the solid particles as computational particles and as a continuum.  In the MP-PIC approach, the particle properties are mapped from the </code><a href="Lagrangian_coordinates" title="wikilink"><code>Lagrangian</code> <code>coordinates</code></a><code> to an </code><a href="Continuum_mechanics" title="wikilink"><code>Eulerian</code></a><code> grid through the use of </code><a href="#Interpolation_operators" title="wikilink"><code>interpolation</code> <code>functions</code></a><code>.  After evaluation of the continuum derivative terms, the particle properties are mapped back to the individual particles.</code><a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><code>  This method has proven to be stable in dense particle flows (&gt;5% by volume), computationally efficient,</code><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><code> and physically accurate.</code><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a><code>  This has  allowed the MP-PIC method to be used as particle-flow solver for the simulation of </code><a href="#Applications" title="wikilink"><code>industrial-scale</code> <code>chemical</code> <code>processes</code></a><code> involving particle-fluid flows.</code></p>
+<h2 id="history">History</h2>
+
+<p>The multiphase particle-in-cell (MP-PIC) method was originally developed for a one-dimensional case in the mid-1990s by P.J. O'Rourke (<a href="Los_Alamos_National_Laboratory" title="wikilink">Los Alamos National Laboratory</a>),<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> who also coined the term MP-PIC. Subsequent extension of the method to two-dimensions was performed by D.M. Snider and O'Rourke.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> By 2001, D.M. Snider had extended the MP-PIC method to full three-dimensions.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Currently, the MP-PIC method is used in <a href="#Software" title="wikilink">commercial software</a> for the simulation of particle-fluid systems.</p>
+<h2 id="method">Method</h2>
+
+<p>The MP-PIC method is described by the <a href="#Governing_equations" title="wikilink">governing equations</a>, <a href="#Interpolation_operators" title="wikilink">interpolation operators</a>, and the <a href="#Particle_stress_model" title="wikilink">particle stress model</a>.</p>
+<h3 id="governing-equations">Governing equations</h3>
+<h4 id="fluid-phase">Fluid phase</h4>
+
+<p>The multiphase particle-in-cell method assumes an incompressible fluid phase with the corresponding continuity equation,</p>
+
+<p>
+
+<math display="block" id="Multiphase_particle-in-cell_method:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <mo>∂</mo>
+       <msub>
+        <mi>θ</mi>
+        <mi>f</mi>
+       </msub>
+      </mrow>
+      <mrow>
+       <mo>∂</mo>
+       <mi>t</mi>
+      </mrow>
+     </mfrac>
+     <mo>+</mo>
+     <mrow>
+      <mo>∇</mo>
+      <mo>⋅</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msub>
+         <mi>θ</mi>
+         <mi>f</mi>
+        </msub>
+        <msub>
+         <mi>𝕦</mi>
+         <mi>f</mi>
+        </msub>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mn>0</mn>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <apply>
+      <divide></divide>
+      <apply>
+       <partialdiff></partialdiff>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <ci>f</ci>
+       </apply>
+      </apply>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <ci>normal-∇</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <ci>f</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝕦</ci>
+        <ci>f</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\partial\theta_{f}}{\partial t}+\nabla\cdot(\theta_{f}\mathbb{u}_{f})=0,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where the 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:1">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <msub>
+    <mi>θ</mi>
+    <mi>f</mi>
+   </msub>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <ci>f</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{f}\;
+  </annotation>
+ </semantics>
+</math>
+
+ is the fluid volume fraction and 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:2">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <msub>
+    <mi>𝕦</mi>
+    <mi>f</mi>
+   </msub>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝕦</ci>
+    <ci>f</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{u}_{f}\;
+  </annotation>
+ </semantics>
+</math>
+
+ is the fluid velocity. Momentum transport is given by a variation of the <a href="Navier–Stokes_equations" title="wikilink">Navier-Stokes equations</a> where 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:3">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <msub>
+    <mi>ρ</mi>
+    <mi>f</mi>
+   </msub>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>ρ</ci>
+    <ci>f</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \rho_{f}\;
+  </annotation>
+ </semantics>
+</math>
+
+
+ is the fluid density, 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:4">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>p</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>p</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p\;
+  </annotation>
+ </semantics>
+</math>
+
+ is the fluid pressure, and 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:5">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>𝕘</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝕘</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{g}\;
+  </annotation>
+ </semantics>
+</math>
+
+ is the body force vector (gravity).</p>
+
+<p>
+
+<math display="block" id="Multiphase_particle-in-cell_method:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <mrow>
+       <msub>
+        <mi>θ</mi>
+        <mi>f</mi>
+       </msub>
+       <msub>
+        <mi>𝕦</mi>
+        <mi>f</mi>
+       </msub>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <mi>t</mi>
+     </mrow>
+    </mfrac>
+    <mo>+</mo>
+    <mrow>
+     <mo>∇</mo>
+     <mo>⋅</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <msub>
+        <mi>θ</mi>
+        <mi>f</mi>
+       </msub>
+       <msub>
+        <mi>𝕦</mi>
+        <mi>f</mi>
+       </msub>
+       <msub>
+        <mi>𝕦</mi>
+        <mi>f</mi>
+       </msub>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mo>-</mo>
+      <mfrac>
+       <mrow>
+        <mo>∇</mo>
+        <mi>p</mi>
+       </mrow>
+       <msub>
+        <mi>ρ</mi>
+        <mi>f</mi>
+       </msub>
+      </mfrac>
+     </mrow>
+     <mo>-</mo>
+     <mfrac>
+      <mi>𝔽</mi>
+      <msub>
+       <mi>ρ</mi>
+       <mi>f</mi>
+      </msub>
+     </mfrac>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mi>θ</mi>
+      <mi>f</mi>
+     </msub>
+     <mi>𝕘</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <apply>
+      <divide></divide>
+      <apply>
+       <partialdiff></partialdiff>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <ci>f</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝕦</ci>
+         <ci>f</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <ci>normal-∇</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <ci>f</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝕦</ci>
+        <ci>f</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝕦</ci>
+        <ci>f</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <apply>
+       <minus></minus>
+       <apply>
+        <divide></divide>
+        <apply>
+         <ci>normal-∇</ci>
+         <ci>p</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>ρ</ci>
+         <ci>f</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <ci>𝔽</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>ρ</ci>
+        <ci>f</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>θ</ci>
+       <ci>f</ci>
+      </apply>
+      <ci>𝕘</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\partial\theta_{f}\mathbb{u}_{f}}{\partial t}+\nabla\cdot(\theta_{f}%
+\mathbb{u}_{f}\mathbb{u}_{f})=-\frac{\nabla p}{\rho_{f}}-\frac{\mathbb{F}}{%
+\rho_{f}}+\theta_{f}\mathbb{g}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The laminar fluid viscosity terms, not included in the fluid momentum equation, can be included if necessary but will have a negligible effect on dense particle flow. In the MP-PIC method, the fluid motion is coupled with the particle motion through 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:7">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>𝔽</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝔽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{F}\;
+  </annotation>
+ </semantics>
+</math>
+
+, the rate of momentum exchange per volume between the fluid and particle phases. The fluid phase equations are solved using a finite volume approach.</p>
+<h4 id="particle-phase">Particle phase</h4>
+
+<p>The particle phase is described by a probability distribution function (PDF), 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>ϕ</mi>
+    <mrow>
+     <mo>(</mo>
+     <mi>𝕩</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>𝕦</mi>
+      <mi>f</mi>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>ρ</mi>
+      <mi>p</mi>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Ω</mi>
+      <mi>p</mi>
+     </msub>
+     <mo>,</mo>
+     <mi>t</mi>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>;</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>ϕ</ci>
+    <vector>
+     <ci>𝕩</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝕦</ci>
+      <ci>f</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ρ</ci>
+      <ci>p</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Ω</ci>
+      <ci>p</ci>
+     </apply>
+     <ci>t</ci>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \phi\left(\mathbb{x},\mathbb{u}_{f},\rho_{p},\Omega_{p},t\right);
+  </annotation>
+ </semantics>
+</math>
+
+
+ which indicates the likelihood of finding a particle with a velocity 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:9">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <msub>
+    <mi>𝕦</mi>
+    <mi>f</mi>
+   </msub>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝕦</ci>
+    <ci>f</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{u}_{f}\;
+  </annotation>
+ </semantics>
+</math>
+
+, particle density 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:10">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <msub>
+    <mi>ρ</mi>
+    <mi>p</mi>
+   </msub>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>ρ</ci>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \rho_{p}\;
+  </annotation>
+ </semantics>
+</math>
+
+, particle volume 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:11">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <msub>
+    <mi mathvariant="normal">Ω</mi>
+    <mi>p</mi>
+   </msub>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Ω</ci>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Omega_{p}\;
+  </annotation>
+ </semantics>
+</math>
+
+ at location 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:12">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>𝕩</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝕩</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{x}\;
+  </annotation>
+ </semantics>
+</math>
+
+ and time 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:13">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>t</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>t</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t\;
+  </annotation>
+ </semantics>
+</math>
+
+
+. The particle PDF changes in time as described by</p>
+
+<p>
+
+<math display="block" id="Multiphase_particle-in-cell_method:14">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <mi>ϕ</mi>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <mi>t</mi>
+     </mrow>
+    </mfrac>
+    <mo>+</mo>
+    <mrow>
+     <mo>∇</mo>
+     <mo>⋅</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>ϕ</mi>
+       <msub>
+        <mi>𝕦</mi>
+        <mi>p</mi>
+       </msub>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mo>∇</mo>
+      <msub>
+       <mi>𝕦</mi>
+       <mi>p</mi>
+      </msub>
+     </msub>
+     <mo>⋅</mo>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <mi>ϕ</mi>
+       <mi>𝔸</mi>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <apply>
+      <divide></divide>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>ϕ</ci>
+      </apply>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <ci>normal-∇</ci>
+      <apply>
+       <times></times>
+       <ci>ϕ</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝕦</ci>
+        <ci>p</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-∇</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝕦</ci>
+        <ci>p</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>ϕ</ci>
+       <ci>𝔸</ci>
+      </apply>
+     </apply>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\partial\phi}{\partial t}+\nabla\cdot(\phi\mathbb{u}_{p})+\nabla_{%
+\mathbb{u}_{p}}\cdot\left(\phi\mathbb{A}\right)=0
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:15">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>𝔸</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝔸</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{A}\;
+  </annotation>
+ </semantics>
+</math>
+
+ is the particle acceleration.</p>
+
+<p>A numerical solution of the particle phase is obtained by dividing the distribution into a finite number of "computational particles" that each represent a number of real particles with identical mass density, volume, velocity and location. At each time step, the velocity and location of each computational particle are updated using a discretized form of the above equations. The use of computational particles allows for a significant reduction in computational requirements with a negligible impact on accuracy under many conditions. The use of the computational particle in the Multiphase Particle-in-Cell method allows a full particle size distribution (PSD) to be modeled within the system as well as the modeling of polydisperse solids.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+<h4 id="identities-of-the-particle-probability-distribution-function">Identities of the particle probability distribution function</h4>
+
+<p>The following local particle properties are determined from integrating the particle probability distribution function:</p>
+<ul>
+<li>Particle volume fraction
+
+<math display="block" id="Multiphase_particle-in-cell_method:16">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>θ</mi>
+    <mi>p</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mo largeop="true" rspace="0pt" symmetric="true">∫</mo>
+    <mrow>
+     <mo largeop="true" rspace="0pt" symmetric="true">∫</mo>
+     <mrow>
+      <mo largeop="true" symmetric="true">∫</mo>
+      <mrow>
+       <mi>ϕ</mi>
+       <mpadded width="+2.8pt">
+        <msub>
+         <mi mathvariant="normal">Ω</mi>
+         <mi>p</mi>
+        </msub>
+       </mpadded>
+       <mi>d</mi>
+       <msub>
+        <mi mathvariant="normal">Ω</mi>
+        <mi>p</mi>
+       </msub>
+       <mi>d</mi>
+       <msub>
+        <mi>ρ</mi>
+        <mi>p</mi>
+       </msub>
+       <mi>d</mi>
+       <msub>
+        <mi>𝕦</mi>
+        <mi>p</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>θ</ci>
+     <ci>p</ci>
+    </apply>
+    <apply>
+     <int></int>
+     <apply>
+      <int></int>
+      <apply>
+       <int></int>
+       <apply>
+        <times></times>
+        <ci>ϕ</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Ω</ci>
+         <ci>p</ci>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Ω</ci>
+         <ci>p</ci>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>ρ</ci>
+         <ci>p</ci>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝕦</ci>
+         <ci>p</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{p}=\int\!\!\!\int\!\!\!\int\phi\Omega_{p}\;d\Omega_{p}d\rho_{p}d%
+\mathbb{u}_{p}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>Average particle density
+
+<math display="block" id="Multiphase_particle-in-cell_method:17">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mrow>
+     <msub>
+      <mi>θ</mi>
+      <mi>p</mi>
+     </msub>
+     <msub>
+      <mi>ρ</mi>
+      <mi>p</mi>
+     </msub>
+    </mrow>
+    <mo>¯</mo>
+   </mover>
+   <mo>=</mo>
+   <mrow>
+    <mo largeop="true" rspace="0pt" symmetric="true">∫</mo>
+    <mrow>
+     <mo largeop="true" rspace="0pt" symmetric="true">∫</mo>
+     <mrow>
+      <mo largeop="true" symmetric="true">∫</mo>
+      <mrow>
+       <mi>ϕ</mi>
+       <msub>
+        <mi mathvariant="normal">Ω</mi>
+        <mi>p</mi>
+       </msub>
+       <mpadded width="+2.8pt">
+        <msub>
+         <mi>ρ</mi>
+         <mi>p</mi>
+        </msub>
+       </mpadded>
+       <mi>d</mi>
+       <msub>
+        <mi mathvariant="normal">Ω</mi>
+        <mi>p</mi>
+       </msub>
+       <mi>d</mi>
+       <msub>
+        <mi>ρ</mi>
+        <mi>p</mi>
+       </msub>
+       <mi>d</mi>
+       <msub>
+        <mi>𝕦</mi>
+        <mi>p</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-¯</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>θ</ci>
+       <ci>p</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ρ</ci>
+       <ci>p</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <int></int>
+     <apply>
+      <int></int>
+      <apply>
+       <int></int>
+       <apply>
+        <times></times>
+        <ci>ϕ</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Ω</ci>
+         <ci>p</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>ρ</ci>
+         <ci>p</ci>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Ω</ci>
+         <ci>p</ci>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>ρ</ci>
+         <ci>p</ci>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝕦</ci>
+         <ci>p</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \overline{\theta_{p}\rho_{p}}=\int\!\!\!\int\!\!\!\int\phi\Omega_{p}\rho_{p}\;%
+d\Omega_{p}d\rho_{p}d\mathbb{u}_{p}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>Mean particle velocity
+
+<math display="block" id="Multiphase_particle-in-cell_method:18">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>𝕦</mi>
+     <mo>¯</mo>
+    </mover>
+    <mi>p</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mover accent="true">
+      <mrow>
+       <msub>
+        <mi>θ</mi>
+        <mi>p</mi>
+       </msub>
+       <msub>
+        <mi>ρ</mi>
+        <mi>p</mi>
+       </msub>
+      </mrow>
+      <mo>¯</mo>
+     </mover>
+    </mfrac>
+    <mrow>
+     <mo largeop="true" rspace="0pt" symmetric="true">∫</mo>
+     <mrow>
+      <mo largeop="true" rspace="0pt" symmetric="true">∫</mo>
+      <mrow>
+       <mo largeop="true" symmetric="true">∫</mo>
+       <mrow>
+        <mi>ϕ</mi>
+        <msub>
+         <mi mathvariant="normal">Ω</mi>
+         <mi>p</mi>
+        </msub>
+        <msub>
+         <mi>ρ</mi>
+         <mi>p</mi>
+        </msub>
+        <mpadded width="+2.8pt">
+         <msub>
+          <mi>𝕦</mi>
+          <mi>p</mi>
+         </msub>
+        </mpadded>
+        <mi>d</mi>
+        <msub>
+         <mi mathvariant="normal">Ω</mi>
+         <mi>p</mi>
+        </msub>
+        <mi>d</mi>
+        <msub>
+         <mi>ρ</mi>
+         <mi>p</mi>
+        </msub>
+        <mi>d</mi>
+        <msub>
+         <mi>𝕦</mi>
+         <mi>p</mi>
+        </msub>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>𝕦</ci>
+     </apply>
+     <ci>p</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <apply>
+       <ci>normal-¯</ci>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <ci>p</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>ρ</ci>
+         <ci>p</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <int></int>
+      <apply>
+       <int></int>
+       <apply>
+        <int></int>
+        <apply>
+         <times></times>
+         <ci>ϕ</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>normal-Ω</ci>
+          <ci>p</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>ρ</ci>
+          <ci>p</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝕦</ci>
+          <ci>p</ci>
+         </apply>
+         <ci>d</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>normal-Ω</ci>
+          <ci>p</ci>
+         </apply>
+         <ci>d</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>ρ</ci>
+          <ci>p</ci>
+         </apply>
+         <ci>d</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝕦</ci>
+          <ci>p</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \overline{\mathbb{u}}_{p}=\frac{1}{\overline{\theta_{p}\rho_{p}}}\int\!\!\!%
+\int\!\!\!\int\phi\Omega_{p}\rho_{p}\mathbb{u}_{p}\;d\Omega_{p}d\rho_{p}d%
+\mathbb{u}_{p}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+</ul>
+<h4 id="interphase-coupling">Interphase coupling</h4>
+
+<p>The particle phase is coupled to the fluid phase through the particle acceleration term, 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:19">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>𝔸</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝔸</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{A}\;
+  </annotation>
+ </semantics>
+</math>
+
+, defined as</p>
+
+<p>
+
+<math display="block" id="Multiphase_particle-in-cell_method:20">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝔸</mi>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>D</mi>
+         <mi>p</mi>
+        </msub>
+        <mrow>
+         <mo>(</mo>
+         <mrow>
+          <msub>
+           <mi>𝕦</mi>
+           <mi>f</mi>
+          </msub>
+          <mo>-</mo>
+          <msub>
+           <mi>𝕦</mi>
+           <mi>p</mi>
+          </msub>
+         </mrow>
+         <mo>)</mo>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mfrac>
+        <mrow>
+         <mo>∇</mo>
+         <mi>p</mi>
+        </mrow>
+        <msub>
+         <mi>ρ</mi>
+         <mi>p</mi>
+        </msub>
+       </mfrac>
+      </mrow>
+      <mo>+</mo>
+      <mi>𝕘</mi>
+     </mrow>
+     <mo>-</mo>
+     <mfrac>
+      <mrow>
+       <mo>∇</mo>
+       <mi>τ</mi>
+      </mrow>
+      <mrow>
+       <msub>
+        <mi>θ</mi>
+        <mi>p</mi>
+       </msub>
+       <msub>
+        <mi>ρ</mi>
+        <mi>p</mi>
+       </msub>
+      </mrow>
+     </mfrac>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝔸</ci>
+    <apply>
+     <minus></minus>
+     <apply>
+      <plus></plus>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>D</ci>
+         <ci>p</ci>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝕦</ci>
+          <ci>f</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝕦</ci>
+          <ci>p</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <divide></divide>
+        <apply>
+         <ci>normal-∇</ci>
+         <ci>p</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>ρ</ci>
+         <ci>p</ci>
+        </apply>
+       </apply>
+      </apply>
+      <ci>𝕘</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <ci>normal-∇</ci>
+       <ci>τ</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <ci>p</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>ρ</ci>
+        <ci>p</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{A}=D_{p}\left(\mathbb{u}_{f}-\mathbb{u}_{p}\right)-\frac{\nabla p}{%
+\rho_{p}}+\mathbb{g}-\frac{\nabla\tau}{\theta_{p}\rho_{p}}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>In the acceleration term, 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:21">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <msub>
+    <mi>D</mi>
+    <mi>p</mi>
+   </msub>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>D</ci>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D_{p}\;
+  </annotation>
+ </semantics>
+</math>
+
+ is determined from the particle drag model and 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:22">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>τ</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>τ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tau\;
+  </annotation>
+ </semantics>
+</math>
+
+ is determined from the interparticle stress model.</p>
+
+<p>The momentum of the fluid phase is coupled to the particle phase through the rate of momentum exchange, 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:23">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>𝔽</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝔽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{F}\;
+  </annotation>
+ </semantics>
+</math>
+
+
+. This is defined from the particle population distribution as</p>
+
+<p>
+
+<math display="block" id="Multiphase_particle-in-cell_method:24">
+ <semantics>
+  <mrow>
+   <mi>𝔽</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo largeop="true" rspace="0pt" symmetric="true">∫</mo>
+    <mrow>
+     <mo largeop="true" rspace="0pt" symmetric="true">∫</mo>
+     <mrow>
+      <mo largeop="true" symmetric="true">∫</mo>
+      <mrow>
+       <mi>ϕ</mi>
+       <msub>
+        <mi mathvariant="normal">Ω</mi>
+        <mi>p</mi>
+       </msub>
+       <msub>
+        <mi>ρ</mi>
+        <mi>p</mi>
+       </msub>
+       <mrow>
+        <mo>[</mo>
+        <mrow>
+         <mrow>
+          <msub>
+           <mi>D</mi>
+           <mi>p</mi>
+          </msub>
+          <mrow>
+           <mo>(</mo>
+           <mrow>
+            <msub>
+             <mi>𝕦</mi>
+             <mi>f</mi>
+            </msub>
+            <mo>-</mo>
+            <msub>
+             <mi>𝕦</mi>
+             <mi>p</mi>
+            </msub>
+           </mrow>
+           <mo>)</mo>
+          </mrow>
+         </mrow>
+         <mo>-</mo>
+         <mfrac>
+          <mrow>
+           <mo>∇</mo>
+           <mi>p</mi>
+          </mrow>
+          <msub>
+           <mi>ρ</mi>
+           <mi>p</mi>
+          </msub>
+         </mfrac>
+        </mrow>
+        <mo rspace="5.3pt">]</mo>
+       </mrow>
+       <mi>d</mi>
+       <msub>
+        <mi mathvariant="normal">Ω</mi>
+        <mi>p</mi>
+       </msub>
+       <mi>d</mi>
+       <msub>
+        <mi>ρ</mi>
+        <mi>p</mi>
+       </msub>
+       <mi>d</mi>
+       <msub>
+        <mi>𝕦</mi>
+        <mi>p</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝔽</ci>
+    <apply>
+     <int></int>
+     <apply>
+      <int></int>
+      <apply>
+       <int></int>
+       <apply>
+        <times></times>
+        <ci>ϕ</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Ω</ci>
+         <ci>p</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>ρ</ci>
+         <ci>p</ci>
+        </apply>
+        <apply>
+         <csymbol cd="latexml">delimited-[]</csymbol>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>D</ci>
+            <ci>p</ci>
+           </apply>
+           <apply>
+            <minus></minus>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>𝕦</ci>
+             <ci>f</ci>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>𝕦</ci>
+             <ci>p</ci>
+            </apply>
+           </apply>
+          </apply>
+          <apply>
+           <divide></divide>
+           <apply>
+            <ci>normal-∇</ci>
+            <ci>p</ci>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>ρ</ci>
+            <ci>p</ci>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Ω</ci>
+         <ci>p</ci>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>ρ</ci>
+         <ci>p</ci>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝕦</ci>
+         <ci>p</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{F}=\int\!\!\!\int\!\!\!\int\phi\Omega_{p}\rho_{p}\left[D_{p}\left(%
+\mathbb{u}_{f}-\mathbb{u}_{p}\right)-\frac{\nabla p}{\rho_{p}}\right]\;d\Omega%
+_{p}d\rho_{p}d\mathbb{u}_{p}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h3 id="interpolation-operators">Interpolation operators</h3>
+
+<p>The transfer of particle properties between the Lagrangian particle space and the Eulerian grid is performed using linear interpolation functions. Assuming a <a href="rectilinear_grid" title="wikilink">rectilinear grid</a> consisting of rectangular <a href="Cuboids" title="wikilink">cuboid</a> cells, the scalar particle properties are interpolated to the cell centers while the vector properties are interpolated to cell faces. In three dimensions, tri-linear interpolation functions and definitions for the products and gradients of interpolated properties are provided by Snider for three-dimensional models.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+<h3 id="particle-stress-model">Particle stress model</h3>
+
+<p>The effects of particle packing are modeled in the MP-PIC method with the use of a function of particle stress. Snider (2001) has suggested calculating the particle stress 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:25">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>τ</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>τ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tau\;
+  </annotation>
+ </semantics>
+</math>
+
+, as</p>
+
+<p>
+
+<math display="block" id="Multiphase_particle-in-cell_method:26">
+ <semantics>
+  <mrow>
+   <mi>τ</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msub>
+      <mi>P</mi>
+      <mi>s</mi>
+     </msub>
+     <mmultiscripts>
+      <mi>θ</mi>
+      <mi>P</mi>
+      <none></none>
+      <none></none>
+      <mi>β</mi>
+     </mmultiscripts>
+    </mrow>
+    <mrow>
+     <mi>max</mi>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <msub>
+        <mi>θ</mi>
+        <mrow>
+         <mi>c</mi>
+         <mi>p</mi>
+        </mrow>
+       </msub>
+       <mo>-</mo>
+       <msub>
+        <mi>θ</mi>
+        <mi>p</mi>
+       </msub>
+      </mrow>
+      <mo>,</mo>
+      <mrow>
+       <mi>ϵ</mi>
+       <mrow>
+        <mo>(</mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>-</mo>
+         <msub>
+          <mi>θ</mi>
+          <mi>p</mi>
+         </msub>
+        </mrow>
+        <mo>)</mo>
+       </mrow>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>τ</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>P</ci>
+       <ci>s</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <ci>P</ci>
+       </apply>
+       <ci>β</ci>
+      </apply>
+     </apply>
+     <apply>
+      <max></max>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <apply>
+         <times></times>
+         <ci>c</ci>
+         <ci>p</ci>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <ci>p</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>ϵ</ci>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <ci>p</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tau=\frac{P_{s}{\theta_{P}}^{\beta}}{\max\left[\theta_{cp}-\theta_{p},%
+\epsilon\left(1-\theta_{p}\right)\right]}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:27">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <msub>
+    <mi>θ</mi>
+    <mrow>
+     <mi>c</mi>
+     <mi>p</mi>
+    </mrow>
+   </msub>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <apply>
+     <times></times>
+     <ci>c</ci>
+     <ci>p</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{cp}\;
+  </annotation>
+ </semantics>
+</math>
+
+ is the close-pack volume fraction and 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:28">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>β</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>β</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta\;
+  </annotation>
+ </semantics>
+</math>
+
+
+, 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:29">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <msub>
+    <mi>P</mi>
+    <mi>s</mi>
+   </msub>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{s}\;
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Multiphase_particle-in-cell_method:30">
+ <semantics>
+  <mpadded width="+2.8pt">
+   <mi>ϵ</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon\;
+  </annotation>
+ </semantics>
+</math>
+
+ are constants.</p>
+<h2 id="limitations-of-the-multiphase-particle-in-cell-method">Limitations of the multiphase particle-in-cell method</h2>
+<ul>
+<li><strong>Particle shape</strong> - In the MP-PIC method, all particles are assumed to be spherical. Corrections for non-spherical particles can be included in particle drag model but for highly non-spherical particles, the true interactions may not be well represented.</li>
+</ul>
+<ul>
+<li><strong>Particle size with respect to grid size</strong> - The size of particles must be small compared to the Eulerian grid in the MP-PIC approach for accurate interpolation.</li>
+</ul>
+<h2 id="extensions">Extensions</h2>
+<ul>
+<li><strong>Chemical reactions</strong> – Coupling the local Eulerian values for fluid velocity in the MP-PIC method with equations for <a href="Fick's_laws_of_diffusion" title="wikilink">diffusional mass transfer</a> allows the transport of a chemical species within the fluid-particle system to be modeled. Reaction kinetics dependent on particle density, surface area, or volume can be included as well for applications in <a class="uri" href="catalysis" title="wikilink">catalysis</a>,<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> <a class="uri" href="gasification" title="wikilink">gasification</a>,<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> or <a href="Chemical_vapor_deposition" title="wikilink">solid deposition</a>.</li>
+<li><strong>Liquid Injection</strong> - MP-PIC method was extended by Zhao, O'Rourke, and Snider to model the coating of particle with a liquid.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></li>
+<li><strong>Thermal Modeling</strong> - Conductive and convective heat transfer can be included by coupling MP-PIC variables with equations for heat transfer. Commercial implementations of MP-PIC method include radiative heat transfer as well.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></li>
+</ul>
+<h2 id="applications">Applications</h2>
+<ul>
+<li>Biomass gasifiers <a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></li>
+<li><a href="Chemical_looping_combustion" title="wikilink">Chemical looping combustion</a> (CLC)<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a><a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a><a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a><a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a><a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a></li>
+<li><a href="Fluidized_bed_combustion#Types" title="wikilink">Circulating fluidized bed combustion</a> <a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a></li>
+<li><a href="Coal_gasification" title="wikilink">Coal gasifiers</a><a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a><a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a></li>
+<li><a href="Cyclonic_separation" title="wikilink">Cyclones</a><a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a></li>
+<li><a href="Fluid_catalytic_cracking" title="wikilink">Fluid catalytic cracking reactors and regenerators</a></li>
+<li>Fluidized bed dryers<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a><a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a></li>
+<li><a href="Fluidized_bed_reactor" title="wikilink">Fluidized bed reactors</a><a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a></li>
+<li>Liquid-solid settlers<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a></li>
+<li><a href="Metal_casting" title="wikilink">Metal casting</a> <a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a><a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a><a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a></li>
+<li>Particle jets<a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a></li>
+<li>Polysilicon deposition <a class="footnoteRef" href="#fn31" id="fnref31"><sup>31</sup></a></li>
+<li>Spray coating<a class="footnoteRef" href="#fn32" id="fnref32"><sup>32</sup></a></li>
+</ul>
+<h2 id="software">Software</h2>
+<ul>
+<li><em>Barracuda</em> by <a href="http://www.cpfd-software.com">CPFD Software</a></li>
+</ul>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Computational_physics" title="wikilink">Category:Computational physics</a> <a href="Category:Numerical_differential_equations" title="wikilink">Category:Numerical differential equations</a> <a href="Category:Computational_fluid_dynamics" title="wikilink">Category:Computational fluid dynamics</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"></li>
+<li id="fn2"></li>
+<li id="fn3"></li>
+<li id="fn4"></li>
+<li id="fn5"></li>
+<li id="fn6"></li>
+<li id="fn7"></li>
+<li id="fn8"></li>
+<li id="fn9"></li>
+<li id="fn10"></li>
+<li id="fn11"></li>
+<li id="fn12"></li>
+<li id="fn13"></li>
+<li id="fn14"></li>
+<li id="fn15"></li>
+<li id="fn16"></li>
+<li id="fn17"></li>
+<li id="fn18"></li>
+<li id="fn19"></li>
+<li id="fn20"></li>
+<li id="fn21"></li>
+<li id="fn22"></li>
+<li id="fn23"></li>
+<li id="fn24"></li>
+<li id="fn25"></li>
+<li id="fn26"></li>
+<li id="fn27"></li>
+<li id="fn28"></li>
+<li id="fn29"></li>
+<li id="fn30"></li>
+<li id="fn31"></li>
+<li id="fn32"></li>
+</ol>
+</section>
+</hr></body>
+</html>

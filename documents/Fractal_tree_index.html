@@ -1,0 +1,1324 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="643">Fractal tree index</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Fractal tree index</h1>
+<hr/>
+
+<p>In <a href="computer_science" title="wikilink">computer science</a>, a <strong>Fractal Tree index</strong> is a <a href="tree_data_structure" title="wikilink">tree data structure</a> that keeps data sorted and allows searches and sequential access in the same time as a <a class="uri" href="B-tree" title="wikilink">B-tree</a> but with insertions and deletions that are asymptotically faster than a B-tree. Like a B-tree, a Fractal Tree index is a generalization of a <a href="binary_search_tree" title="wikilink">binary search tree</a> in that a node can have more than two children. Furthermore, unlike a B-tree, a Fractal Tree index has buffers at each node, which allow insertions, deletions and other changes to be stored in intermediate locations. The goal of the buffers is to schedule disk writes so that each write performs a large amount of useful work, thereby avoiding the worst-case performance of B-trees, in which each disk write may change a small amount of data on disk. Like a B-tree, Fractal Tree indexes are optimized for systems that read and write large blocks of data. The Fractal Tree index has been commercialized in <a href="database" title="wikilink">databases</a> by <a class="uri" href="Tokutek" title="wikilink">Tokutek</a>. Originally, it was implemented as a cache-oblivious lookahead array,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> but the current implementation is an extension of the B<sup><em>ε</em></sup> tree.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> The B<sup><em>ε</em></sup> is related to the Buffered Repository Tree.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> The Buffered Repository Tree has degree 2, whereas the B<sup><em>ε</em></sup> tree has degree B<sup><em>ε</em></sup>. The Fractal Tree index has also been used in a prototype <a class="uri" href="filesystem" title="wikilink">filesystem</a>.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> An <a href="open_source" title="wikilink">open source</a> implementation of the Fractal Tree index is available,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> which demonstrates the implementation details outlined below.</p>
+<h2 id="overview">Overview</h2>
+
+<p>In Fractal Tree indexes, internal (<a href="Leaf_node" title="wikilink">non-leaf</a>) nodes can have a variable number of child nodes within some pre-defined range. When data is inserted or removed from a node, its number of child nodes changes. In order to maintain the pre-defined range, internal nodes may be joined or split. Each internal node of a B-tree will contain a number of keys that is one less than its <a href="branching_factor" title="wikilink">branching factor</a>. The keys act as separation values which divide its <a href="subtree" title="wikilink">subtrees</a>. Keys in subtrees are stored in <a href="search_tree" title="wikilink">search tree</a> order, that is, all keys in a subtree are between the two bracketing values. In this regard, they are just like B-trees.</p>
+
+<p>Fractal Tree indexes and B-trees both exploit the fact that when a node is fetched from storage, a block of memory, whose size is denoted by 
+
+<math display="inline" id="Fractal_tree_index:0">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+, is fetched. Thus, nodes are tuned to be of size approximately 
+
+<math display="inline" id="Fractal_tree_index:1">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+. Since access to storage can dominate the running time of a data structure, the time-complexity of <a href="external_memory_algorithm" title="wikilink">external memory algorithms</a> is dominated by the number of read/writes a data structure induces. (See, e.g.,<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> for the following analyses.)</p>
+
+<p>In a B-tree, this means that the number of keys in a node is targeted to be enough to fill the node, with some variability for node splits and merges. For the purposes of theoretical analysis, if 
+
+<math display="inline" id="Fractal_tree_index:2">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>B</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(B)
+  </annotation>
+ </semantics>
+</math>
+
+ keys fit in a node, then the tree has depth 
+
+<math display="inline" id="Fractal_tree_index:3">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mi>B</mi>
+     </msub>
+     <mi>N</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <ci>B</ci>
+     </apply>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log_{B}N)
+  </annotation>
+ </semantics>
+</math>
+
+, and this is the I/O complexity of both searches and insertions.</p>
+
+<p>Fractal Trees nodes use a smaller branching factor, say, of 
+
+<math display="inline" id="Fractal_tree_index:4">
+ <semantics>
+  <msqrt>
+   <mi>B</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{B}
+  </annotation>
+ </semantics>
+</math>
+
+. The depth of the tree is then 
+
+<math display="inline" id="Fractal_tree_index:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>O</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msub>
+       <mi>log</mi>
+       <msqrt>
+        <mi>B</mi>
+       </msqrt>
+      </msub>
+      <mi>N</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>O</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msub>
+       <mi>log</mi>
+       <mi>B</mi>
+      </msub>
+      <mi>N</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>O</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <log></log>
+       <apply>
+        <root></root>
+        <ci>B</ci>
+       </apply>
+      </apply>
+      <ci>N</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>O</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <log></log>
+       <ci>B</ci>
+      </apply>
+      <ci>N</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log_{\sqrt{B}}N)=O(\log_{B}N)
+  </annotation>
+ </semantics>
+</math>
+
+, thereby matching the B-tree asymptotically. The remaining space in each node is used to buffer insertions, deletion and updates, which we refer to in aggregate as messages. When a buffer is full, it is flushed to the children in bulk. There are several choices for how the buffers are flushed, all leading to similar I/O complexity. Each message in a node buffer will be flushed to a particular child, as determined by its key. Suppose, for concreteness, that messages are flushed that are heading to the same child, and that among the 
+
+<math display="inline" id="Fractal_tree_index:6">
+ <semantics>
+  <mrow>
+   <msqrt>
+    <mi>B</mi>
+   </msqrt>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <root></root>
+     <ci>B</ci>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{B}+1
+  </annotation>
+ </semantics>
+</math>
+
+ children, we pick the one with the most messages. Then there are at least 
+
+<math display="inline" id="Fractal_tree_index:7">
+ <semantics>
+  <mrow>
+   <mfrac>
+    <mi>B</mi>
+    <mrow>
+     <msqrt>
+      <mi>B</mi>
+     </msqrt>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+   <mo>≈</mo>
+   <msqrt>
+    <mi>B</mi>
+   </msqrt>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <apply>
+     <divide></divide>
+     <ci>B</ci>
+     <apply>
+      <plus></plus>
+      <apply>
+       <root></root>
+       <ci>B</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <root></root>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{B}{\sqrt{B}+1}\approx\sqrt{B}
+  </annotation>
+ </semantics>
+</math>
+
+ messages that can be flushed to the child. Each flush requires 
+
+<math display="inline" id="Fractal_tree_index:8">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+ flushes, and therefore the per-message cost of a flush is 
+
+<math display="inline" id="Fractal_tree_index:9">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <msqrt>
+       <mi></mi>
+      </msqrt>
+     </mfrac>
+     <mi>B</mi>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <apply>
+       <root></root>
+       <csymbol cd="latexml">absent</csymbol>
+      </apply>
+     </apply>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{1}{\sqrt{}}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Consider the cost of an insertion. Each message gets flushed 
+
+<math display="inline" id="Fractal_tree_index:10">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mi>B</mi>
+     </msub>
+     <mi>N</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <ci>B</ci>
+     </apply>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log_{B}N)
+  </annotation>
+ </semantics>
+</math>
+
+ times, and the cost of a flush is 
+
+<math display="inline" id="Fractal_tree_index:11">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <msqrt>
+       <mi></mi>
+      </msqrt>
+     </mfrac>
+     <mi>B</mi>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <apply>
+       <root></root>
+       <csymbol cd="latexml">absent</csymbol>
+      </apply>
+     </apply>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{1}{\sqrt{}}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+. Therefore, the cost of an insertion is 
+
+<math display="inline" id="Fractal_tree_index:12">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <msub>
+        <mi>log</mi>
+        <mi>B</mi>
+       </msub>
+       <mi>N</mi>
+      </mrow>
+      <msqrt>
+       <mi></mi>
+      </msqrt>
+     </mfrac>
+     <mi>B</mi>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <log></log>
+        <ci>B</ci>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <root></root>
+       <csymbol cd="latexml">absent</csymbol>
+      </apply>
+     </apply>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{\log_{B}N}{\sqrt{}}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+. Finally, note that the branching factor can vary, but for any branching factor 
+
+<math display="inline" id="Fractal_tree_index:13">
+ <semantics>
+  <msup>
+   <mi>B</mi>
+   <mi>ε</mi>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>B</ci>
+    <ci>ε</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B^{\varepsilon}
+  </annotation>
+ </semantics>
+</math>
+
+, the cost of a flush is 
+
+<math display="inline" id="Fractal_tree_index:14">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mfrac>
+     <mn>1</mn>
+     <msup>
+      <mi>B</mi>
+      <mrow>
+       <mn>1</mn>
+       <mo>-</mo>
+       <mi>ε</mi>
+      </mrow>
+     </msup>
+    </mfrac>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>B</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <ci>ε</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{1}{B^{1-\varepsilon}}\right)
+  </annotation>
+ </semantics>
+</math>
+
+, thereby providing a smooth tradeoff between search cost, which depends on the depth of the search tree, and therefore the branching factor, versus the insertion time, which depends on the depth of the tree but more sensitively on the size of the buffer flushes.</p>
+<h2 id="comparisons-with-other-external-memory-indexes">Comparisons with other External-Memory Indexes</h2>
+
+<p>This section compares Fractal Tree indexes with other external memory indexing data structures. The theoretical literature on this topic is very large, so this discussion is limited to a comparison with popular data structures that are in use in databases and file systems.</p>
+<h3 id="b-trees">B-trees</h3>
+
+<p>The search time of a B-tree is asymptotically the same as that of a Fractal Tree index. However, a Fractal Tree index has deeper trees than a B-tree, and if each node were to require an I/O, say if the cache is cold, then a Fractal Tree index would induce more IO. However, for many workloads most or all internal nodes of both B-trees and Fractal Tree indexes are already cached in RAM. In this case, the cost of a search is dominated by the cost of fetching the leaf, which is the same in both cases. Thus, for many workloads, Fractal Tree indexes can match B-trees in terms of search time.</p>
+
+<p>Where they differ is on insertions, deletions and updates. An insertion in a Fractal Tree index takes 
+
+<math display="inline" id="Fractal_tree_index:15">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <msub>
+        <mi>log</mi>
+        <mi>B</mi>
+       </msub>
+       <mi>N</mi>
+      </mrow>
+      <msqrt>
+       <mi></mi>
+      </msqrt>
+     </mfrac>
+     <mi>B</mi>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <log></log>
+        <ci>B</ci>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <root></root>
+       <csymbol cd="latexml">absent</csymbol>
+      </apply>
+     </apply>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{\log_{B}N}{\sqrt{}}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ whereas B-trees require 
+
+<math display="inline" id="Fractal_tree_index:16">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mi>B</mi>
+     </msub>
+     <mi>N</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <ci>B</ci>
+     </apply>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log_{B}N)
+  </annotation>
+ </semantics>
+</math>
+
+. Thus, Fractal Tree indexes are faster than B-trees by a factor of 
+
+<math display="inline" id="Fractal_tree_index:17">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msqrt>
+     <mi>B</mi>
+    </msqrt>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <root></root>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\sqrt{B})
+  </annotation>
+ </semantics>
+</math>
+
+. Since 
+
+<math display="inline" id="Fractal_tree_index:18">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+ can be quite large, this yields a potential two-order-of-magnitude improvement in worst-case insertion times, which is observed in practice. Both B-trees and Fractal Tree indexes can perform insertions faster in the best case. For example, if keys are inserted in sequential order, both data structures achieve a 
+
+<math display="inline" id="Fractal_tree_index:19">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mfrac>
+     <mn>1</mn>
+     <mi>B</mi>
+    </mfrac>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{1}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ I/Os per insertion. Thus, because the best and worst cases of B-trees differ so widely, whereas Fractal Tree indexes are always near their best case, the actual speedup that Fractal Tree indexes achieve over B-trees depends on the details of the workload.</p>
+<h3 id="log-structured-merge-trees">Log-structured Merge-trees</h3>
+
+<p><a href="Log-structured_merge-tree" title="wikilink">Log-structured merge-trees</a> (LSMs) refer to a class of data structures which consists of two or more index structures of exponentially growing capacities. When a tree at some level reaches its capacity, it is merged into the next bigger level. The IO-complexity of an LSM depends on parameters such as the growth factor between levels and the data structure chosen at each level, so in order to analyze the complexity of LSMs, we need to pick a specific version. For comparison purposes, we select the version of LSMs that match Fractal Tree indexes on insertion performance.</p>
+
+<p>Suppose an LSM is implemented via 
+
+<math display="inline" id="Fractal_tree_index:20">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mi>B</mi>
+     </msub>
+     <mi>N</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <ci>B</ci>
+     </apply>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log_{B}N)
+  </annotation>
+ </semantics>
+</math>
+
+ B-trees, each of which has a capacity that is 
+
+<math display="inline" id="Fractal_tree_index:21">
+ <semantics>
+  <msqrt>
+   <mi>B</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{B}
+  </annotation>
+ </semantics>
+</math>
+
+ larger than its predecessor. The merge time depends on three facts: The sorted order of keys in an 
+
+<math display="inline" id="Fractal_tree_index:22">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+-item B-tree can be produced in 
+
+<math display="inline" id="Fractal_tree_index:23">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mfrac>
+     <mi>N</mi>
+     <mi>B</mi>
+    </mfrac>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <divide></divide>
+     <ci>N</ci>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{N}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ IOs; Two sorted lists of 
+
+<math display="inline" id="Fractal_tree_index:24">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Fractal_tree_index:25">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ items can be merged into a sorted list in 
+
+<math display="inline" id="Fractal_tree_index:26">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mfrac>
+     <mrow>
+      <mi>N</mi>
+      <mo>+</mo>
+      <mi>M</mi>
+     </mrow>
+     <mi>B</mi>
+    </mfrac>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <plus></plus>
+      <ci>N</ci>
+      <ci>M</ci>
+     </apply>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{N+M}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ IOs; and a B-tree of a sorted list of 
+
+<math display="inline" id="Fractal_tree_index:27">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+ items can be built in 
+
+<math display="inline" id="Fractal_tree_index:28">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mfrac>
+     <mi>N</mi>
+     <mi>B</mi>
+    </mfrac>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <divide></divide>
+     <ci>N</ci>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{N}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ IOs. When a tree overflows, it is merged into a tree whose size is 
+
+<math display="inline" id="Fractal_tree_index:29">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msqrt>
+     <mi>B</mi>
+    </msqrt>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <root></root>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\sqrt{B})
+  </annotation>
+ </semantics>
+</math>
+
+ larger, therefore a level that holds 
+
+<math display="inline" id="Fractal_tree_index:30">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ items requires 
+
+<math display="inline" id="Fractal_tree_index:31">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mrow>
+     <mfrac>
+      <mi>k</mi>
+      <msqrt>
+       <mi></mi>
+      </msqrt>
+     </mfrac>
+     <mi>B</mi>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <ci>k</ci>
+      <apply>
+       <root></root>
+       <csymbol cd="latexml">absent</csymbol>
+      </apply>
+     </apply>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{k}{\sqrt{}}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ IOs to merge. An item may be merged once per level, giving a total time of 
+
+<math display="inline" id="Fractal_tree_index:32">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo>(</mo>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <msub>
+        <mi>log</mi>
+        <mi>B</mi>
+       </msub>
+       <mi>N</mi>
+      </mrow>
+      <msqrt>
+       <mi></mi>
+      </msqrt>
+     </mfrac>
+     <mi>B</mi>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <log></log>
+        <ci>B</ci>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <root></root>
+       <csymbol cd="latexml">absent</csymbol>
+      </apply>
+     </apply>
+     <ci>B</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O\left(\frac{\log_{B}N}{\sqrt{}}{B}\right)
+  </annotation>
+ </semantics>
+</math>
+
+, which matches the Fractal Tree index.</p>
+
+<p>The query time is simply the B-tree query time at each level. The query time into the 
+
+<math display="inline" id="Fractal_tree_index:33">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+<sup>th</sup> level is 
+
+<math display="inline" id="Fractal_tree_index:34">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>O</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msub>
+       <mi>log</mi>
+       <mi>B</mi>
+      </msub>
+      <msup>
+       <mi>B</mi>
+       <mfrac>
+        <mi>i</mi>
+        <mn>2</mn>
+       </mfrac>
+      </msup>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>O</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>i</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>O</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <log></log>
+       <ci>B</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>B</ci>
+       <apply>
+        <divide></divide>
+        <ci>i</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>O</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log_{B}B^{\frac{i}{2}})=O(i)
+  </annotation>
+ </semantics>
+</math>
+
+, since the 
+
+<math display="inline" id="Fractal_tree_index:35">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+<sup>th</sup> level has capacity 
+
+<math display="inline" id="Fractal_tree_index:36">
+ <semantics>
+  <msup>
+   <mi>B</mi>
+   <mfrac>
+    <mi>i</mi>
+    <mn>2</mn>
+   </mfrac>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>B</ci>
+    <apply>
+     <divide></divide>
+     <ci>i</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B^{\frac{i}{2}}
+  </annotation>
+ </semantics>
+</math>
+
+. The total time is therefore 
+
+<math display="inline" id="Fractal_tree_index:37">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msubsup>
+      <mi>log</mi>
+      <mi>B</mi>
+      <mn>2</mn>
+     </msubsup>
+     <mi>N</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <log></log>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>B</ci>
+     </apply>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log^{2}_{B}N)
+  </annotation>
+ </semantics>
+</math>
+
+. This is larger than both the B-tree and Fractal Tree indexes by a logarithmic factor. In fact, although B-trees and Fractal Tree indexes are both on the optimal tradeoff curve between insertions and queries, LSMs are not. They are incomparable with B-trees and are dominated by Fractal Tree indexes.</p>
+
+<p>A few notes about LSMs: there are ways to make the queries faster. For example, if only membership queries are required and no successor/predecessor/range queries are, then <a href="Bloom_filters" title="wikilink">Bloom filters</a> can be used to speed up queries. Also, the growth factor between levels can be set to some other value, giving a range of insertion/query tradeoffs. However, for every choice of insertion rate, the corresponding Fractal Tree index has faster queries.</p>
+<h3 id="bε-trees">B<sup>ε</sup> Trees</h3>
+
+<p>The Fractal Tree index is a refinement of the B<sup>ε</sup> tree. Like a B<sup>ε</sup> tree, it consists of nodes with keys and buffers and realizes the optimal insertion/query tradeoff. The Fractal Tree index differs in including performance optimization and in extending the functionality. Examples of improved functionality include <a class="uri" href="ACID" title="wikilink">ACID</a> semantics. B-tree implementations of ACID semantics typically involve locking rows that are involved in an active transactions. Such a scheme works well in a B-tree because both insertions and queries involve fetching the same leaf into memory. Thus, locking an inserted row does not incur an IO penalty. However, in Fractal Tree indexes, insertions are messages, and a row may reside in more than one node at the same time. Fractal Tree indexes therefore require a separate locking structure that is IO-efficient or resides in memory in order to implement the locking involved in implementing ACID semantics.</p>
+
+<p>Fractal Tree indexes also have several performance optimizations. First, buffers are themselves indexed in order to speed up searches. Second, leaves are much larger than in B-trees, which allows for greater compression. In fact, the leaves are chosen to be large enough that their access time is dominated by the bandwidth time, and therefore amortizes away the seek and rotational latency. Large leaves are an advantage with large range queries but slow down point queries, which require accessing a small portion of the leaf. The solution implemented in Fractal Tree indexes is to have large leaves that can be fetched as a whole for fast range queries but are broken into smaller pieces call basement nodes which can be fetched individually. Accessing a basement node is faster than accessing a leaf, because of the reduced bandwidth time. Thus the substructure of leaves in Fractal Tree indexes, as compared to B<sup>ε</sup> trees allows both range and point queries to be fast.</p>
+<h2 id="messaging-and-fractal-tree-indexes">Messaging and Fractal Tree Indexes</h2>
+
+<p>Insertions, deletions and updates are inserted as message into buffers that make their way towards the leaves. The messaging infrastructure can be exploited to implement a variety of other operations, some of which are discussed below.</p>
+<h3 id="upserts">Upserts</h3>
+
+<p>An <a class="uri" href="upsert" title="wikilink">upsert</a> is a statement that inserts a row if it does not exist and updates it if it does. In a B-tree, an upsert is implemented by first searching for the row and then implementing an insertion or an update, depending on the result of the search. This requires fetching the row into memory if it is not already cached. A Fractal Tree index can implement an upsert by inserting a special upsert message. Such a message can, in theory, implement arbitrary pieces of code during the update. In practice, four update operations are supported:</p>
+<ol>
+<li>x = constant</li>
+<li>x = x + constant (a generalized increment)</li>
+<li>x = x - constant (a generalized decrement)</li>
+<li>x = if(x=0,0,x-1) (a decrement with a floor at 0)</li>
+</ol>
+
+<p>These correspond to the update operations used in LinkBench,<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> a benchmark proposed by Facebook. By avoiding the initial search, upsert messages can improve the speed of upserts by orders of magnitude.</p>
+<h3 id="schema-changes">Schema Changes</h3>
+
+<p>So far, all message types have modified single rows. However, broadcast messages, which are copied to all outgoing buffers, can modify all rows in a database. For example, broadcast messages can be used to change the format of all rows in a database. Although the total work required to change all rows is unchanged over the brute-force method of traversing the table, the latency is improved, since, once the message is injected into the root buffer, all subsequent queries will be able to apply the schema modification to any rows they encounter. The schema change is immediate and the work is deferred to such a time when buffers overflow and leaves would have gotten updated anyway.</p>
+<h2 id="implementations">Implementations</h2>
+
+<p>The Fractal Tree index has been implemented and commercialized by <a class="uri" href="Tokutek" title="wikilink">Tokutek</a>. It is available as <a class="uri" href="TokuDB" title="wikilink">TokuDB</a> as a storage engine for <a class="uri" href="MySQL" title="wikilink">MySQL</a> and <a class="uri" href="MariaDB" title="wikilink">MariaDB</a>, and as <a class="uri" href="TokuMX" title="wikilink">TokuMX</a>, a more complete integration with <a class="uri" href="MongoDB" title="wikilink">MongoDB</a>. Fractal Tree indexes have also been used in a prototype file system, TokuFS.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Trees_(data_structures)" title="wikilink">Category:Trees (data structures)</a> <a href="Category:Database_index_techniques" title="wikilink">Category:Database index techniques</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="https://github.com/Tokutek">Github Repository</a><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"></li>
+</ol>
+</section>
+</body>
+</html>

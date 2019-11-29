@@ -1,0 +1,461 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1568">Fractional cascading</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Fractional cascading</h1>
+<hr/>
+
+<p>In <a href="computer_science" title="wikilink">computer science</a>, <strong>fractional cascading</strong> is a technique to speed up a sequence of <a href="binary_search" title="wikilink">binary searches</a> for the same value in a sequence of related data structures. The first binary search in the sequence takes a logarithmic amount of time, as is standard for binary searches, but successive searches in the sequence are faster. The original version of fractional cascading, introduced in two papers by <a href="Bernard_Chazelle" title="wikilink">Chazelle</a> and <a href="Leonidas_J._Guibas" title="wikilink">Guibas</a> in 1986 (; ), combined the idea of cascading, originating in <a href="range_searching" title="wikilink">range searching</a> data structures of  and , with the idea of fractional sampling, which originated in . Later authors introduced more complex forms of fractional cascading that allow the data structure to be maintained as the data changes by a sequence of discrete insertion and deletion events.</p>
+<h2 id="example">Example</h2>
+
+<p>As a simple example of fractional cascading, consider the following problem. We are given as input a collection of <em>k</em> ordered lists <em>L</em><sub><em>i</em></sub> of <a href="real_number" title="wikilink">real numbers</a>, such that the total length Σ|<em>L</em><sub><em>i</em></sub>| of all lists is <em>n</em>, and must process them so that we can perform binary searches for a query value <em>q</em> in each of the <em>k</em> lists. For instance, with <em>k</em> = 4 and <em>n</em> = 17,</p>
+<dl>
+<dd><em>L</em><sub>1</sub> = 2.4, 6.4, 6.5, 8.0, 9.3
+</dd>
+<dd><em>L</em><sub>2</sub> = 2.3, 2.5, 2.6
+</dd>
+<dd><em>L</em><sub>3</sub> = 1.3, 4.4, 6.2, 6.6
+</dd>
+<dd><em>L</em><sub>4</sub> = 1.1, 3.5, 4.6, 7.9, 8.1
+</dd>
+</dl>
+
+<p>The simplest solution to this searching problem is just to store each list separately. If we do so, the space requirement is O(<em>n</em>), but the time to perform a query is O(<em>k</em> log(<em>n</em>/<em>k</em>)), as we must perform a separate binary search in each of <em>k</em> lists. The worst case for querying this structure occurs when each of the <em>k</em> lists has equal size <em>n</em>/<em>k</em>, so each of the <em>k</em> binary searches involved in a query takes time O(log(<em>n</em>/<em>k</em>)).</p>
+
+<p>A second solution allows faster queries at the expense of more space: we may merge all the <em>k</em> lists into a single big list <em>L</em>, and associate with each item <em>x</em> of <em>L</em> a list of the results of searching for <em>x</em> in each of the smaller lists <em>L</em><sub><em>i</em></sub>. If we describe an element of this merged list as <em>x</em>[<em>a</em>,<em>b</em>,<em>c</em>,<em>d</em>] where <em>x</em> is the numerical value and <em>a</em>, <em>b</em>, <em>c</em>, and <em>d</em> are the positions (the first number has position 0) of the next element at least as large as <em>x</em> in each of the original input lists (or the position after the end of the list if no such element exists), then we would have</p>
+<dl>
+<dd><em>L</em> = <strong>1.1</strong>[0,0,0,0], <strong>1.3</strong>[0,0,0,1], <strong>2.3</strong>[0,0,1,1], <strong>2.4</strong>[0,1,1,1], <strong>2.5</strong>[1,1,1,1], <strong>2.6</strong>[1,2,1,1],
+<dl>
+<dd><strong>3.5</strong>[1,3,1,1], <strong>4.4</strong>[1,3,1,2], <strong>4.6</strong>[1,3,2,2], <strong>6.2</strong>[1,3,2,3], <strong>6.4</strong>[1,3,3,3], <strong>6.5</strong>[2,3,3,3],
+</dd>
+<dd><strong>6.6</strong>[3,3,3,3], <strong>7.9</strong>[3,3,4,3], <strong>8.0</strong>[3,3,4,4], <strong>8.1</strong>[4,3,4,4], <strong>9.3</strong>[4,3,4,5]
+</dd>
+</dl>
+</dd>
+</dl>
+
+<p>This merged solution allows a query in time O(log <em>n</em> + <em>k</em>): simply search for <em>q</em> in <em>L</em> and then report the results stored at the item <em>x</em> found by this search. For instance, if <em>q</em> = 5.0, searching for <em>q</em> in <em>L</em> finds the item 6.2[1,3,2,3], from which we return the results <em>L</em><sub>1</sub>[1] = 6.4, <em>L</em><sub>2</sub>[3] (a flag value indicating that <em>q</em> is past the end of <em>L</em><sub>2</sub>), <em>L</em><sub>3</sub>[2] = 6.2, and <em>L</em><sub>4</sub>[3] = 7.9. However, this solution pays a high penalty in space complexity: it uses space O(<em>kn</em>) as each of the <em>n</em> items in <em>L</em> must store a list of <em>k</em> search results.</p>
+
+<p>Fractional cascading allows this same searching problem to be solved with time and space bounds meeting the best of both worlds: query time O(log <em>n</em> + <em>k</em>), and space O(<em>n</em>). The fractional cascading solution is to store a new sequence of lists <em>M</em><sub><em>i</em></sub>. The final list in this sequence, <em>M</em><sub><em>k</em></sub>, is equal to <em>L</em><sub><em>k</em></sub>; each earlier list <em>M</em><sub><em>i</em></sub> is formed by merging <em>L</em><sub><em>i</em></sub> with every second item from <em>M</em><sub><em>i</em> + 1</sub>. With each item <em>x</em> in this merged list, we store two numbers: the position resulting from searching for <em>x</em> in <em>L</em><sub><em>i</em></sub> and the position resulting from searching for <em>x</em> in <em>M</em><sub><em>i</em> + 1</sub>. For the data above, this would give us the following lists:</p>
+<dl>
+<dd><em>M</em><sub>1</sub> = <strong>2.4</strong>[0, 1], <strong>2.5</strong>[1, 1], <strong>3.5</strong>[1, 3], <strong>6.4</strong>[1, 5], <strong>6.5</strong>[2, 5], <strong>7.9</strong>[3, 5], <strong>8.0</strong>[3, 6], <strong>9.3</strong>[4, 6]
+</dd>
+<dd><em>M</em><sub>2</sub> = <strong>2.3</strong>[0, 1], <strong>2.5</strong>[1, 1], <strong>2.6</strong>[2, 1], <strong>3.5</strong>[3, 1], <strong>6.2</strong>[3, 3], <strong>7.9</strong>[3, 5]
+</dd>
+<dd><em>M</em><sub>3</sub> = <strong>1.3</strong>[0, 1], <strong>3.5</strong>[1, 1], <strong>4.4</strong>[1, 2], <strong>6.2</strong>[2, 3], <strong>6.6</strong>[3, 3], <strong>7.9</strong>[4, 3]
+</dd>
+<dd><em>M</em><sub>4</sub> = <strong>1.1</strong>[0, 0], <strong>3.5</strong>[1, 0], <strong>4.6</strong>[2, 0], <strong>7.9</strong>[3, 0], <strong>8.1</strong>[4, 0]
+</dd>
+</dl>
+
+<p>Suppose we wish to perform a query in this structure, for <em>q</em> = 5. We first do a standard binary search for <em>q</em> in <em>M</em><sub>1</sub>, finding the value <strong>6.4</strong>[1,5]. The "1" in 6.4[1,5], tells us that the search for <em>q</em> in <em>L</em><sub>1</sub> should return <em>L</em><sub>1</sub>[1] = 6.4. The "5" in <strong>6.4</strong>[1,5] tells us that the approximate location of <em>q</em> in <em>M</em><sub>2</sub> is position 5. More precisely, binary searching for <em>q</em> in <em>M</em><sub>2</sub> would return either the value 7.9[3, 5] at position 5, or the value 6.2[3, 3] one place earlier. By comparing <em>q</em> to 6.2, and observing that it is smaller, we determine that the correct search result in <em>M</em><sub>2</sub> is 6.2[3, 3]. The first "3" in 6.2[3, 3] tells us that the search for <em>q</em> in <em>L</em><sub>2</sub> should return <em>L</em><sub>2</sub>[3], a flag value meaning that <em>q</em> is past the end of list <em>L</em><sub>2</sub>. The second "3" in 6.2[3, 3] tells us that the approximate location of <em>q</em> in <em>M</em><sub>3</sub> is position 3. More precisely, binary searching for <em>q</em> in <em>M</em><sub>3</sub> would return either the value 6.2[2, 3] at position 3, or the value 4.4[1, 2] one place earlier. A comparison of <em>q</em> with the smaller value 4.4 shows us that the correct search result in <em>M</em><sub>3</sub> is 6.2[2,3]. The "2" in 6.2[2,3] tells us that the search for <em>q</em> in <em>L</em><sub>3</sub> should return <em>L</em><sub>3</sub>[2] = 6.2, and the "3" in 6.2[2,3] tells us that the result of searching for <em>q</em> in <em>M</em><sub>4</sub> is either <em>M</em><sub>4</sub>[3] = 7.9[3,0] or <em>M</em><sub>4</sub>[2] = 4.6[2,0]; comparing <em>q</em> with 4.6 shows that the correct result is 7.9[3,0] and that the result of searching for <em>q</em> in <em>L</em><sub>4</sub> is <em>L</em><sub>4</sub>[3] = 7.9. Thus, we have found <em>q</em> in each of our four lists, by doing a binary search in the single list <em>M</em><sub>1</sub> followed by a single comparison in each of the successive lists.</p>
+
+<p>More generally, for any data structure of this type, we perform a query by doing a binary search for <em>q</em> in <em>M</em><sub>1</sub>, and determining from the resulting value the position of <em>q</em> in <em>L</em><sub>1</sub>. Then, for each <em>i</em> &gt; 1, we use the known position of <em>q</em> in <em>M</em><sub><em>i</em></sub> to find its position in <em>M</em><sub><em>i</em> + 1</sub>. The value associated with the position of <em>q</em> in <em>M</em><sub><em>i</em></sub> points to a position in <em>M</em><sub><em>i</em> + 1</sub> that is either the correct result of the binary search for <em>q</em> in <em>M</em><sub><em>i</em> + 1</sub> or is a single step away from that correct result, so stepping from <em>i</em> to <em>i</em> + 1 requires only a single comparison. Thus, the total time for a query is O(log <em>n</em> + <em>k</em>).</p>
+
+<p>In our example, the fractionally cascaded lists have a total of 25 elements, less than twice that of the original input. In general, the size of <em>M</em><sub><em>i</em></sub> in this data structure is at most</p>
+
+<p>
+
+<math display="block" id="Fractional_cascading:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">|</mo>
+     <msub>
+      <mi>L</mi>
+      <mi>i</mi>
+     </msub>
+     <mo stretchy="false">|</mo>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <mn>2</mn>
+     </mfrac>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>L</mi>
+       <mrow>
+        <mi>i</mi>
+        <mo>+</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <mn>4</mn>
+     </mfrac>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>L</mi>
+       <mrow>
+        <mi>i</mi>
+        <mo>+</mo>
+        <mn>2</mn>
+       </mrow>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mi mathvariant="normal">⋯</mi>
+    <mo>+</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <msup>
+       <mn>2</mn>
+       <mi>j</mi>
+      </msup>
+     </mfrac>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>L</mi>
+       <mrow>
+        <mi>i</mi>
+        <mo>+</mo>
+        <mi>j</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mi mathvariant="normal">⋯</mi>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <abs></abs>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>L</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <abs></abs>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>L</ci>
+       <apply>
+        <plus></plus>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <cn type="integer">4</cn>
+     </apply>
+     <apply>
+      <abs></abs>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>L</ci>
+       <apply>
+        <plus></plus>
+        <ci>i</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <ci>normal-⋯</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">2</cn>
+       <ci>j</ci>
+      </apply>
+     </apply>
+     <apply>
+      <abs></abs>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>L</ci>
+       <apply>
+        <plus></plus>
+        <ci>i</ci>
+        <ci>j</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <ci>normal-⋯</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |L_{i}|+\frac{1}{2}|L_{i+1}|+\frac{1}{4}|L_{i+2}|+\cdots+\frac{1}{2^{j}}|L_{i+%
+j}|+\cdots,
+  </annotation>
+ </semantics>
+</math>
+
+ as may easily be proven by induction. Therefore, the total size of the data structure is at most</p>
+
+<p>
+
+<math display="block" id="Fractional_cascading:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>M</mi>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mrow>
+       <mo stretchy="false">|</mo>
+       <msub>
+        <mi>L</mi>
+        <mi>i</mi>
+       </msub>
+       <mo stretchy="false">|</mo>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mn>1</mn>
+        <mo>+</mo>
+        <mfrac>
+         <mn>1</mn>
+         <mn>2</mn>
+        </mfrac>
+        <mo>+</mo>
+        <mfrac>
+         <mn>1</mn>
+         <mn>4</mn>
+        </mfrac>
+        <mo>+</mo>
+        <mi mathvariant="normal">⋯</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>≤</mo>
+    <mrow>
+     <mn>2</mn>
+     <mi>n</mi>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mi>O</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <sum></sum>
+      <apply>
+       <abs></abs>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>M</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <sum></sum>
+      <apply>
+       <times></times>
+       <apply>
+        <abs></abs>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>L</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+       <apply>
+        <plus></plus>
+        <cn type="integer">1</cn>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <cn type="integer">4</cn>
+        </apply>
+        <ci>normal-⋯</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <leq></leq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <ci>O</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sum|M_{i}|=\sum|L_{i}|(1+\frac{1}{2}+\frac{1}{4}+\cdots)\leq 2n=O(n),
+  </annotation>
+ </semantics>
+</math>
+
+ as may be seen by regrouping the contributions to the total size coming from the same input list <em>L<sub>i</sub></em> together with each other.</p>
+<h2 id="the-general-problem">The general problem</h2>
+
+<p>In general, fractional cascading begins with a <em>catalog graph</em>, a <a href="directed_graph" title="wikilink">directed graph</a> in which each <a href="vertex_(graph_theory)" title="wikilink">vertex</a> is labeled with an ordered list. A query in this data structure consists of a <a href="path_(graph_theory)" title="wikilink">path</a> in the graph and a query value <em>q</em>; the data structure must determine the position of <em>q</em> in each of the ordered lists associated with the vertices of the path. For the simple example above, the catalog graph is itself a path, with just four nodes. It is possible for later vertices in the path to be determined dynamically as part of a query, in response to the results found by the searches in earlier parts of the path.</p>
+
+<p>To handle queries of this type, for a graph in which each vertex has at most <em>d</em> incoming and at most <em>d</em> outgoing edges for some constant <em>d</em>, the lists associated with each vertex are augmented by a fraction of the items from each outgoing neighbor of the vertex; the fraction must be chosen to be smaller than 1/<em>d</em>, so that the total amount by which all lists are augmented remains linear in the input size. Each item in each augmented list stores with it the position of that item in the unaugmented list stored at the same vertex, and in each of the outgoing neighboring lists. In the simple example above, <em>d</em> = 1, and we augmented each list with a 1/2 fraction of the neighboring items.</p>
+
+<p>A query in this data structure consists of a standard binary search in the augmented list associated with the first vertex of the query path, together with simpler searches at each successive vertex of the path. If a 1/<em>r</em> fraction of items are used to augment the lists from each neighboring item, then each successive query result may be found within at most <em>r</em> steps of the position stored at the query result from the previous path vertex, and therefore may be found in constant time without having to perform a full binary search.</p>
+<h2 id="dynamic-fractional-cascading">Dynamic fractional cascading</h2>
+
+<p>In <em>dynamic fractional cascading</em>, the list stored at each node of the catalog graph may change dynamically, by a sequence of updates in which list items are inserted and deleted. This causes several difficulties for the data structure.</p>
+
+<p>First, when an item is inserted or deleted at a node of the catalog graph, it must be placed within the augmented list associated with that node, and may cause changes to propagate to other nodes of the catalog graph. Instead of storing the augmented lists in arrays, they should be stored as binary search trees, so that these changes can be handled efficiently while still allowing binary searches of the augmented lists.</p>
+
+<p>Second, an insertion or deletion may cause a change to the subset of the list associated with a node that is passed on to neighboring nodes of the catalog graph. It is no longer feasible, in the dynamic setting, for this subset to be chosen as the items at every <em>d</em>th position of the list, for some <em>d</em>, as this subset would change too drastically after every update. Rather, a technique closely related to <a href="B-tree" title="wikilink">B-trees</a> allows the selection of a fraction of data that is guaranteed to be smaller than 1/<em>d</em>, with the selected items guaranteed to be spaced a constant number of positions apart in the full list, and such that an insertion or deletion into the augmented list associated with a node causes changes to propagate to other nodes for a fraction of the operations that is less than 1/<em>d</em>. In this way, the distribution of the data among the nodes satisfies the properties needed for the query algorithm to be fast, while guaranteeing that the average number of binary search tree operations per data insertion or deletion is constant.</p>
+
+<p>Third, and most critically, the static fractional cascading data structure maintains, for each element <em>x</em> of the augmented list at each node of the catalog graph, the index of the result that would be obtained when searching for <em>x</em> among the input items from that node and among the augmented lists stored at neighboring nodes. However, this information would be too expensive to maintain in the dynamic setting. Inserting or deleting a single value <em>x</em> could cause the indexes stored at an unbounded number of other values to change. Instead, dynamic versions of fractional cascading maintain several data structures for each node:</p>
+<ul>
+<li>A mapping of the items in the augmented list of the node to small integers, such that the ordering of the positions in the augmented list is equivalent to the comparison ordering of the integers, and a reverse map from these integers back to the list items. A technique of  allows this numbering to be maintained efficiently.</li>
+<li>An integer searching data structure such as a <a href="van_Emde_Boas_tree" title="wikilink">van Emde Boas tree</a> for the numbers associated with the input list of the node. With this structure, and the mapping from items to integers, one can efficiently find for each element <em>x</em> of the augmented list, the item that would be found on searching for <em>x</em> in the input list.</li>
+<li>For each neighboring node in the catalog graph, a similar integer searching data structure for the numbers associated with the subset of the data propagated from the neighboring node. With this structure, and the mapping from items to integers, one can efficiently find for each element <em>x</em> of the augmented list, a position within a constant number of steps of the location of <em>x</em> in the augmented list associated with the neighboring node.</li>
+</ul>
+
+<p>These data structures allow dynamic fractional cascading to be performed at a time of O(log <em>n</em>) per insertion or deletion, and a sequence of <em>k</em> binary searches following a path of length <em>k</em> in the catalog graph to be performed in time O(log <em>n</em> + <em>k</em> log log <em>n</em>).</p>
+<h2 id="applications">Applications</h2>
+
+<p> Typical applications of fractional cascading involve <a href="range_search" title="wikilink">range search</a> data structures in <a href="computational_geometry" title="wikilink">computational geometry</a>. For example, consider the problem of <em>half-plane range reporting</em>: that is, intersecting a fixed set of <em>n</em> points with a query <a class="uri" href="half-plane" title="wikilink">half-plane</a> and listing all the points in the intersection. The problem is to structure the points in such a way that a query of this type may be answered efficiently in terms of the intersection size <em>h</em>. One structure that can be used for this purpose is the <em>convex layers</em> of the input point set, a family of nested <a href="convex_polygon" title="wikilink">convex polygons</a> consisting of the <a href="convex_hull" title="wikilink">convex hull</a> of the point set and the recursively-constructed convex layers of the remaining points. Within a single layer, the points inside the query half-plane may be found by performing a binary search for the half-plane boundary line's slope among the sorted sequence of convex polygon edge slopes, leading to the polygon vertex that is inside the query half-plane and farthest from its boundary, and then <a href="sequential_search" title="wikilink">sequentially searching</a> along the polygon edges to find all other vertices inside the query half-plane. The whole half-plane range reporting problem may be solved by repeating this search procedure starting from the outermost layer and continuing inwards until reaching a layer that is disjoint from the query halfspace. Fractional cascading speeds up the successive binary searches among the sequences of polygon edge slopes in each layer, leading to a data structure for this problem with space O(<em>n</em>) and query time O(log <em>n</em> + <em>h</em>). The data structure may be constructed in time O(<em>n</em> log <em>n</em>) by an algorithm of . As in our example, this application involves binary searches in a linear sequence of lists (the nested sequence of the convex layers), so the catalog graph is just a path.</p>
+
+<p>Another application of fractional cascading in geometric data structures concerns <a href="point_location" title="wikilink">point location</a> in a monotone subdivision, that is, a partition of the plane into polygons such that any vertical line intersects any polygon in at most two points. As  showed, this problem can be solved by finding a sequence of polygonal paths that stretch from left to right across the subdivision, and binary searching for the lowest of these paths that is above the query point. Testing whether the query point is above or below one of the paths can itself be solved as a binary search problem, searching for the x coordinate of the points among the x coordinates of the path vertices to determine which path edge might be above or below the query point. Thus, each point location query can be solved as an outer layer of binary search among the paths, each step of which itself performs a binary search among x coordinates of vertices. Fractional cascading can be used to speed up the time for the inner binary searches, reducing the total time per query to O(log <em>n</em>) using a data structure with space O(<em>n</em>). In this application the catalog graph is a tree representing the possible search sequences of the outer binary search.</p>
+
+<p>Beyond computational geometry,  and  apply fractional cascading in the design of data structures for fast <a href="packet_filter" title="wikilink">packet filtering</a> in <a href="internet_router" title="wikilink">internet routers</a>.  use fractional cascading as a model for data distribution and retrieval in <a href="sensor_network" title="wikilink">sensor networks</a>.</p>
+<h2 id="references">References</h2>
+<ul>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+<li>
+
+<p>.</p></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Graph_data_structures" title="wikilink">Category:Graph data structures</a> <a href="Category:Geometric_data_structures" title="wikilink">Category:Geometric data structures</a> <a href="Category:Search_algorithms" title="wikilink">Category:Search algorithms</a></p>
+</body>
+</html>

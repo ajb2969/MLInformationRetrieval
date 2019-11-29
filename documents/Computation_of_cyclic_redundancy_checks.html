@@ -1,0 +1,2316 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1865">Computation of cyclic redundancy checks</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Computation of cyclic redundancy checks</h1>
+<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</body></html>
+<body>
+<hr/>
+
+<p>Computation of a <a href="cyclic_redundancy_check" title="wikilink">cyclic redundancy check</a> is derived from the mathematics of <a href="Mathematics_of_CRC" title="wikilink">polynomial division, modulo two</a>. In practice, it resembles <a href="long_division" title="wikilink">long division</a> of the <a href="Binary_code" title="wikilink">binary</a> message string, with a fixed number of zeroes appended, by the "generator polynomial" string except that <a href="exclusive_OR" title="wikilink">exclusive OR</a> operations replace subtractions. Division of this type is efficiently realised in hardware by a modified <a href="shift_register" title="wikilink">shift register</a>,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> and in software by a series of equivalent <a href="algorithm" title="wikilink">algorithms</a>, starting with simple code close to the mathematics and becoming faster (and arguably more <a href="obfuscated_code" title="wikilink">obfuscated</a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a>) through <a class="uri" href="byte" title="wikilink">byte</a>-wise parallelism and <a href="space-time_tradeoff" title="wikilink">space-time tradeoffs</a>.</p>
+
+<p> </p>
+
+<p>Various CRC standards extend the polynomial division algorithm by specifying an initial shift register value, a final exclusive OR step and, most critically, a bit ordering (<a class="uri" href="endianness" title="wikilink">endianness</a>). As a result, the code seen in practice deviates confusingly from "pure" division,<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> and the register may shift left or right.</p>
+<h2 id="example">Example</h2>
+
+<p>As an example of implementing polynomial division in hardware, suppose that we are trying to compute an 8-bit CRC of an 8-bit message made of the <a class="uri" href="ASCII" title="wikilink">ASCII</a> character "W", which is binary 01010111<sub>2</sub>, decimal 87<sub>10</sub>, or <a class="uri" href="hexadecimal" title="wikilink">hexadecimal</a> 57<sub>16</sub>. For illustration, we will use the CRC-8-ATM (<a href="CRC-based_framing" title="wikilink">HEC</a>) polynomial 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:0">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>8</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>2</mn>
+   </msup>
+   <mo>+</mo>
+   <mi>x</mi>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">8</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <ci>x</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{8}+x^{2}+x+1
+  </annotation>
+ </semantics>
+</math>
+
+. Writing the first bit transmitted (the coefficient of the highest power of 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:1">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+) on the left, this corresponds to the 9-bit string "100000111".</p>
+
+<p>The byte value 57<sub>16</sub> can be transmitted in two different orders, depending on the bit ordering convention used. Each one generates a different message polynomial 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:2">
+ <semantics>
+  <mrow>
+   <mi>M</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>M</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M(x)
+  </annotation>
+ </semantics>
+</math>
+
+. Msbit-first, this is 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:3">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>6</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>4</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>2</mn>
+   </msup>
+   <mo>+</mo>
+   <mi>x</mi>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">6</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">4</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <ci>x</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{6}+x^{4}+x^{2}+x+1
+  </annotation>
+ </semantics>
+</math>
+
+
+ = 01010111, while lsbit-first, it is 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:4">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>7</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>6</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>5</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>3</mn>
+   </msup>
+   <mo>+</mo>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">7</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">6</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">5</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">3</cn>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{7}+x^{6}+x^{5}+x^{3}+x
+  </annotation>
+ </semantics>
+</math>
+
+ = 11101010. These can then be multiplied by 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:5">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mn>8</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">8</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{8}
+  </annotation>
+ </semantics>
+</math>
+
+ to produce two 16-bit message polynomials 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:6">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>8</mn>
+   </msup>
+   <mi>M</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">8</cn>
+    </apply>
+    <ci>M</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{8}M(x)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Computing the remainder then consists of subtracting multiples of the generator polynomial 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:7">
+ <semantics>
+  <mrow>
+   <mi>G</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>G</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G(x)
+  </annotation>
+ </semantics>
+</math>
+
+. This is just like decimal long division, but even simpler because the only possible multiples at each step are 0 and 1, and the subtractions <a href="Carry_(arithmetic)" title="wikilink">borrow</a> "from infinity" instead of reducing the upper digits. Because we do not care about the quotient, there is no need to record it.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Most-significant bit first</p></th>
+<th style="text-align: left;">
+<p>Least-significant bit first</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+</tbody>
+</table></td>
+<td style="text-align: left;">
+<p>|</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>−</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>=</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>1</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+<td style="text-align: left;">
+<p>0</p></td>
+</tr>
+</tbody>
+</table></td>
+</tr>
+</tbody>
+</table>
+
+<p>Observe that after each subtraction, the bits are divided into three groups: at the beginning, a group which is all zero; at the end, a group which is unchanged from the original; and a blue shaded group in the middle which is "interesting". The "interesting" group is 8 bits long, matching the degree of the polynomial. Every step, the appropriate multiple of the polynomial is subtracted to make the zero group becomes one bit longer, and the unchanged group becomes one bit shorter, until only the final remainder is left.</p>
+
+<p>In the msbit-first example, the remainder polynomial is 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:8">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>7</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>5</mn>
+   </msup>
+   <mo>+</mo>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">7</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">5</cn>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{7}+x^{5}+x
+  </annotation>
+ </semantics>
+</math>
+
+
+. Converting to a hexadecimal number using the convention that the highest power of <em>x</em> is the msbit; this is A2<sub>16</sub>. In the lsbit-first, the remainder is 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:9">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>7</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>4</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>3</mn>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">7</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">4</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{7}+x^{4}+x^{3}
+  </annotation>
+ </semantics>
+</math>
+
+. Converting to hexadecimal using the convention that the highest power of <em>x</em> is the lsbit, this is 19<sub>16</sub>.</p>
+<h2 id="implementation">Implementation</h2>
+
+<p>Writing out the full message at each step, as done in the example above, is very tedious. Efficient implementations use an 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:10">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+-bit <a href="shift_register" title="wikilink">shift register</a> to hold only the interesting bits. Multiplying the polynomial by 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:11">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ is equivalent to shifting the register by one place, as the coefficients do not change in value but only move up to the next term of the polynomial.</p>
+
+<p>Here is a first draft of some <a class="uri" href="pseudocode" title="wikilink">pseudocode</a> for computing an <em>n</em>-bit CRC. It uses a contrived <a href="Object_composition" title="wikilink">composite data type</a> for polynomials, where <code>''x''</code> is not an integer variable, but a <a href="constructor_(computer_science)" title="wikilink">constructor</a> generating a <em>Polynomial</em> <a href="Object_(computer_science)" title="wikilink">object</a> that can be added, multiplied and exponentiated. To <code>'''xor'''</code> two polynomials is to add them, modulo two; that is, to <a href="exclusive_OR" title="wikilink">exclusive OR</a> the coefficients of each matching term from both polynomials.</p>
+
+<p><strong><code>function</code></strong><code> crc(</code><em><code>bit</code> <code>array</code></em><code> bitString[1..len], </code><em><code>int</code></em><code> len) {</code><br/>
+<code>     remainderPolynomial  := </code><strong><code>polynomialForm</code></strong><code>(bitString[1..n])   </code><em><code>//</code> <code>First</code> <code>n</code> <code>bits</code> <code>of</code> <code>the</code> <code>message</code></em><br/>
+<code>      </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>remainderPolynomial</code> <code>here</code></em><br/>
+<code>      </code><strong><code>for</code></strong><code> i </code><strong><code>from</code></strong><code> 1 </code><strong><code>to</code></strong><code> len {</code><br/>
+<code>         remainderPolynomial  := remainderPolynomial * </code><em><code>x</code></em><code> + bitString[i+n] * </code><em><code>x</code></em><sup><code>0</code></sup><code>   </code><em><code>//</code> <code>Define</code> <code>bitString[k]=0</code> <code>for</code> <code>k&gt;len</code></em><br/>
+<code>          </code><strong><code>if</code></strong><code> coefficient of </code><em><code>x</code></em><sup><code>n</code></sup><code> of remainderPolynomial = 1 {</code><br/>
+<code>             remainderPolynomial  := remainderPolynomial </code><strong><code>xor</code></strong><code> generatorPolynomial</code><br/>
+<code>         }</code><br/>
+<code>     }</code><br/>
+<code>     </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>remainderPolynomial</code> <code>here</code></em><br/>
+<code>      </code><strong><code>return</code></strong><code> remainderPolynomial</code><br/>
+<code> }</code></p>
+<dl>
+<dd><strong>Code fragment 1: Simple polynomial division</strong>
+</dd>
+</dl>
+
+<p>Note that this example code avoids the need to specify a bit-ordering convention by not using bytes; the input <code>bitString</code> is already in the form of a bit array, and the <code>remainderPolynomial</code> is manipulated in terms of polynomial operations; the multiplication by 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:12">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ could be a left or right shift, and the addition of <code>bitString[i+n]</code> is done to the 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:13">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mn>0</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{0}
+  </annotation>
+ </semantics>
+</math>
+
+
+ coefficient, which could be the right or left end of the register.</p>
+
+<p>This code has two disadvantages. First, it actually requires an <em>n</em>+1-bit register to hold the <code>remainderPolynomial</code> so that the 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:14">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mi>n</mi>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{n}
+  </annotation>
+ </semantics>
+</math>
+
+ coefficient can be tested. More significantly, it requires the <code>bitString</code> to be padded with <em>n</em> zero bits.</p>
+
+<p>The first problem can be solved by testing the 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:15">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mrow>
+    <mi>n</mi>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <apply>
+     <minus></minus>
+     <ci>n</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{n-1}
+  </annotation>
+ </semantics>
+</math>
+
+ coefficient of the <code>remainderPolynomial</code> before it is multiplied by 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:16">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The second problem could be solved by doing the last <em>n</em> iterations differently, but there is a more subtle optimization which is used universally, in both hardware and software implementations.</p>
+
+<p>Because the XOR operation used to subtract the generator polynomial from the message is <a class="uri" href="commutative" title="wikilink">commutative</a> and <a class="uri" href="associative" title="wikilink">associative</a>, it does not matter in what order the various inputs are combined into the <code>remainderPolynomial</code>. And specifically, a given bit of the <code>bitString</code> does not need to be added to the <code>remainderPolynomial</code> until the very last instant when it is tested to determine whether to <code>xor</code> with the <code>generatorPolynomial</code>.</p>
+
+<p>This eliminates the need to preload the <code>remainderPolynomial</code> with the first <em>n</em> bits of the message, as well:</p>
+
+<p><strong><code>function</code></strong><code> crc(</code><em><code>bit</code> <code>array</code></em><code> bitString[1..len], </code><em><code>int</code></em><code> len) {</code><br/>
+<code>     remainderPolynomial  := 0</code><br/>
+<code>     </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>remainderPolynomial</code> <code>here</code></em><br/>
+<code>      </code><strong><code>for</code></strong><code> i </code><strong><code>from</code></strong><code> 1 </code><strong><code>to</code></strong><code> len {</code><br/>
+<code>         remainderPolynomial  := remainderPolynomial </code><strong><code>xor</code></strong><code> (bitstring[i] * </code><em><code>x</code></em><sup><code>n-1</code></sup><code>)</code><br/>
+<code>         </code><strong><code>if</code></strong><code> (coefficient of </code><em><code>x</code></em><sup><code>n-1</code></sup><code> of remainderPolynomial) = 1 {</code><br/>
+<code>             remainderPolynomial  := (remainderPolynomial * </code><em><code>x</code></em><code>) </code><strong><code>xor</code></strong><code> generatorPolynomial</code><br/>
+<code>         } </code><strong><code>else</code></strong><code> {</code><br/>
+<code>             remainderPolynomial  := (remainderPolynomial * </code><em><code>x</code></em><code>)</code><br/>
+<code>         }</code><br/>
+<code>     }</code><br/>
+<code>     </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>remainderPolynomial</code> <code>here</code></em><br/>
+<code>      </code><strong><code>return</code></strong><code> remainderPolynomial</code><br/>
+<code> }</code></p>
+<dl>
+<dd><strong>Code fragment 2: Polynomial division with deferred message XORing</strong>
+</dd>
+</dl>
+
+<p>This is the standard bit-at-a-time hardware CRC implementation, and is well worthy of study; once you understand why this computes exactly the same result as the first version, the remaining optimizations are quite straightforward. If <code>remainderPolynomial</code> is only <em>n</em> bits long, then the 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:17">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mi>n</mi>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{n}
+  </annotation>
+ </semantics>
+</math>
+
+ coefficients of it and of <code>generatorPolynomial</code> are simply discarded. This is the reason that you will usually see CRC polynomials written in binary with the leading coefficient omitted.</p>
+
+<p>In software, it is convenient to note that while one may delay the <code>xor</code> of each bit until the very last moment, it is also possible to do it earlier. It is usually convenient to perform the <code>xor</code> a <a class="uri" href="byte" title="wikilink">byte</a> at a time, even in a bit-at-a-time implementation like this:</p>
+
+<p><strong><code>function</code></strong><code> crc(</code><em><code>byte</code> <code>array</code></em><code> string[1..len], </code><em><code>int</code></em><code> len) {</code><br/>
+<code>     remainderPolynomial  := 0</code><br/>
+<code>     </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>remainderPolynomial</code> <code>here</code></em><br/>
+<code>      </code><strong><code>for</code></strong><code> i </code><strong><code>from</code></strong><code> 1 </code><strong><code>to</code></strong><code> len {</code><br/>
+<code>         remainderPolynomial  := remainderPolynomial </code><strong><code>xor</code></strong><code> </code><strong><code>polynomialForm</code></strong><code>(string[i]) * x</code><sup><code>n-8</code></sup><br/>
+<code>          </code><strong><code>for</code></strong><code> j </code><strong><code>from</code></strong><code> 1 </code><strong><code>to</code></strong><code> 8 {    </code><em><code>//</code> <code>Assuming</code> <code>8</code> <code>bits</code> <code>per</code> <code>byte</code></em><br/>
+<code>              </code><strong><code>if</code></strong><code> coefficient of </code><em><code>x</code></em><sup><code>n-1</code></sup><code> of remainderPolynomial = 1 {</code><br/>
+<code>                 remainderPolynomial  := (remainderPolynomial * </code><em><code>x</code></em><code>) </code><strong><code>xor</code></strong><code> generatorPolynomial</code><br/>
+<code>             } </code><strong><code>else</code></strong><code> {</code><br/>
+<code>                 remainderPolynomial  := (remainderPolynomial * </code><em><code>x</code></em><code>)</code><br/>
+<code>             }</code><br/>
+<code>         }</code><br/>
+<code>     }</code><br/>
+<code>     </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>remainderPolynomial</code> <code>here</code></em><br/>
+<code>      </code><strong><code>return</code></strong><code> remainderPolynomial</code><br/>
+<code> }</code></p>
+<dl>
+<dd><strong>Code fragment 3: Polynomial division with bytewise message XORing</strong>
+</dd>
+</dl>
+
+<p>This is usually the most compact software implementation, used in <a class="uri" href="microcontrollers" title="wikilink">microcontrollers</a> when space is at a premium over speed.</p>
+<h2 id="bit-ordering-endianness">Bit ordering (Endianness)</h2>
+
+<p>When implemented in <a href="bit-serial_architecture" title="wikilink">bit serial</a> <a href="hardware_(computer)" title="wikilink">hardware</a>, the generator polynomial uniquely describes the bit assignment; the first bit transmitted is always the coefficient of the highest power of 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:18">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+
+, and the last 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:19">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ bits transmitted are the CRC remainder 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:20">
+ <semantics>
+  <mrow>
+   <mi>R</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>R</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R(x)
+  </annotation>
+ </semantics>
+</math>
+
+, starting with the coefficient of 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:21">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mrow>
+    <mi>n</mi>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <apply>
+     <minus></minus>
+     <ci>n</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{n-1}
+  </annotation>
+ </semantics>
+</math>
+
+ and ending with the coefficient of 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:22">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mn>0</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{0}
+  </annotation>
+ </semantics>
+</math>
+
+, a.k.a. the coefficient of 1.</p>
+
+<p>However, when bits are processed a <a class="uri" href="byte" title="wikilink">byte</a> at a time, such as when using <a href="parallel_transmission" title="wikilink">parallel transmission</a>, byte framing as in <a href="8B/10B_encoding" title="wikilink">8B/10B encoding</a> or <a class="uri" href="RS-232" title="wikilink">RS-232</a>-style <a href="asynchronous_serial_communication" title="wikilink">asynchronous serial communication</a>, or when implementing a CRC in <a class="uri" href="software" title="wikilink">software</a>, it is necessary to specify the bit ordering (endianness) of the data; which bit in each byte is considered "first" and will be the coefficient of the higher power of 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:23">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+
+.</p>
+
+<p>If the data is destined for <a href="serial_communication" title="wikilink">serial communication</a>, it is best to use the bit ordering the data will ultimately be sent in. This is because a CRC's ability to detect <a href="burst_error" title="wikilink">burst errors</a> is based on proximity in the message polynomial 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:24">
+ <semantics>
+  <mrow>
+   <mi>M</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>M</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M(x)
+  </annotation>
+ </semantics>
+</math>
+
+; if adjacent polynomial terms are not transmitted sequentially, a physical error burst of one length may be seen as a longer burst due to the rearrangement of bits.</p>
+
+<p>For example, both <a href="IEEE_802" title="wikilink">IEEE 802</a> (<a class="uri" href="ethernet" title="wikilink">ethernet</a>) and <a class="uri" href="RS-232" title="wikilink">RS-232</a> (<a href="serial_port" title="wikilink">serial port</a>) standards specify least-significant bit first (little-endian) transmission, so a software CRC implementation to protect data sent across such a link should map the least significant bits in each byte to coefficients of the highest powers of 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:25">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+. On the other hand, <a href="floppy_disk" title="wikilink">floppy disks</a> and most <a href="hard_drive" title="wikilink">hard drives</a> write the most significant bit of each byte first.</p>
+
+<p>The lsbit-first CRC is slightly simpler to implement in software, so is somewhat more commonly seen, but many programmers find the msbit-first bit ordering easier to follow. Thus, for example, the <a class="uri" href="XMODEM" title="wikilink">XMODEM</a>-CRC extension, an early use of CRCs in software, uses an msbit-first CRC.</p>
+
+<p>So far, the pseudocode has avoided specifying the ordering of bits within bytes by describing shifts in the pseudocode as multiplications by 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:26">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ and writing explicit conversions from binary to polynomial form. In practice, the CRC is held in a standard binary register using a particular bit-ordering convention. In msbit-first form, the most significant binary bits will be sent first and so contain the higher-order polynomial coefficients, while in lsbit-first form, the least-significant binary bits contain the higher-order coefficients. The above pseudocode can be written in both forms. For concreteness, this uses the 16-bit CRC-16-<a class="uri" href="CCITT" title="wikilink">CCITT</a> polynomial 
+
+<math display="inline" id="Computation_of_cyclic_redundancy_checks:27">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mn>16</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>12</mn>
+   </msup>
+   <mo>+</mo>
+   <msup>
+    <mi>x</mi>
+    <mn>5</mn>
+   </msup>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">16</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">12</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">5</cn>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{16}+x^{12}+x^{5}+1
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p><em><code>//</code> <code>Most</code> <code>significant</code> <code>bit</code> <code>first</code> <code>(big-endian)</code></em><br/>
+<code>  </code><em><code>//</code> <code>x^16+x^12+x^5+1</code> <code>=</code> <code>(1)</code> <code>0001</code> <code>0000</code> <code>0010</code> <code>0001</code> <code>=</code> <code>0x1021</code></em><br/>
+<code>  </code><strong><code>function</code></strong><code> crc(</code><em><code>byte</code> <code>array</code></em><code> string[1..len], </code><em><code>int</code></em><code> len) {</code><br/>
+<code>     rem  := 0</code><br/>
+<code>     </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>rem</code> <code>here</code></em><br/>
+<code>      </code><strong><code>for</code></strong><code> i </code><strong><code>from</code></strong><code> 1 </code><strong><code>to</code></strong><code> len {</code><br/>
+<code>         rem  := rem </code><strong><code>xor</code></strong><code> (string[i] </code><strong><code>leftShift</code></strong><code> (n-8))   </code><em><code>//</code> <code>n</code> <code>=</code> <code>16</code> <code>in</code> <code>this</code> <code>example</code></em><br/>
+<code>          </code><strong><code>for</code></strong><code> j </code><strong><code>from</code></strong><code> 1 </code><strong><code>to</code></strong><code> 8 {   </code><em><code>//</code> <code>Assuming</code> <code>8</code> <code>bits</code> <code>per</code> <code>byte</code></em><br/>
+<code>              </code><strong><code>if</code></strong><code> rem </code><strong><code>and</code></strong><code> 0x8000 {   </code><em><code>//</code> <code>if</code> <code>leftmost</code> <code>(most</code> <code>significant)</code> <code>bit</code> <code>is</code> <code>set</code></em><br/>
+<code>                 rem  := (rem </code><strong><code>leftShift</code></strong><code> 1) </code><strong><code>xor</code></strong><code> 0x1021</code><br/>
+<code>             } </code><strong><code>else</code></strong><code> {</code><br/>
+<code>                 rem  := rem </code><strong><code>leftShift</code></strong><code> 1</code><br/>
+<code>             }</code><br/>
+<code>             rem  := rem </code><strong><code>and</code></strong><code> 0xffff      // Trim remainder to 16 bits</code><br/>
+<code>         }</code><br/>
+<code>     }</code><br/>
+<code>     </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>rem</code> <code>here</code></em><br/>
+<code>      </code><strong><code>return</code></strong><code> rem</code><br/>
+<code> }</code></p>
+<dl>
+<dd><strong>Code fragment 4: Shift register based division, MSB first</strong>
+</dd>
+</dl>
+
+<p><em><code>//</code> <code>Least</code> <code>significant</code> <code>bit</code> <code>first</code> <code>(little-endian)</code></em><br/>
+<code>  </code><em><code>//</code> <code>x^16+x^12+x^5+1</code> <code>=</code> <code>1000</code> <code>0100</code> <code>0000</code> <code>1000</code> <code>(1)</code> <code>=</code> <code>0x8408</code></em><br/>
+<code>  </code><strong><code>function</code></strong><code> crc(</code><em><code>byte</code> <code>array</code></em><code> string[1..len], </code><em><code>int</code></em><code> len) {</code><br/>
+<code>     rem  := 0</code><br/>
+<code>     </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>rem</code> <code>here</code></em><br/>
+<code>      </code><strong><code>for</code></strong><code> i </code><strong><code>from</code></strong><code> 1 </code><strong><code>to</code></strong><code> len {</code><br/>
+<code>         rem  := rem </code><strong><code>xor</code></strong><code> string[i]</code><br/>
+<code>         </code><strong><code>for</code></strong><code> j </code><strong><code>from</code></strong><code> 1 </code><strong><code>to</code></strong><code> 8 {   </code><em><code>//</code> <code>Assuming</code> <code>8</code> <code>bits</code> <code>per</code> <code>byte</code></em><br/>
+<code>              </code><strong><code>if</code></strong><code> rem </code><strong><code>and</code></strong><code> 0x0001 {   </code><em><code>//</code> <code>if</code> <code>rightmost</code> <code>(most</code> <code>significant)</code> <code>bit</code> <code>is</code> <code>set</code></em><br/>
+<code>                 rem  := (rem </code><strong><code>rightShift</code></strong><code> 1) </code><strong><code>xor</code></strong><code> 0x8408</code><br/>
+<code>             } </code><strong><code>else</code></strong><code> {</code><br/>
+<code>                 rem  := rem </code><strong><code>rightShift</code></strong><code> 1</code><br/>
+<code>             }</code><br/>
+<code>         }</code><br/>
+<code>     }</code><br/>
+<code>     </code><em><code>//</code> <code>A</code> <code>popular</code> <code>variant</code> <code>complements</code> <code>rem</code> <code>here</code></em><br/>
+<code>      </code><strong><code>return</code></strong><code> rem</code><br/>
+<code> }</code></p>
+<dl>
+<dd><strong>Code fragment 5: Shift register based division, LSB first</strong>
+</dd>
+</dl>
+
+<p>Note that the lsbit-first form avoids the need to shift <code>string[i]</code> before the <code>xor</code>. In either case, be sure to transmit the bytes of the CRC in the order that matches your chosen bit-ordering convention.</p>
+<h2 id="parallel-computation">Parallel computation</h2>
+
+<p>Another common optimization uses a <a href="lookup_table" title="wikilink">lookup table</a> indexed by highest order coefficients of <code>rem</code> to perform the inner loop over 8 bits in fewer steps. A 256-entry lookup table is a particularly common choice, although using a 16-entry table twice per byte is very compact and still faster than the bit at a time version. This replaces the inner loop over <code>j</code> with</p>
+
+<p><code>// Msbit-first</code><br/>
+<code>rem = (rem </code><strong><code>leftShift</code></strong><code> 8) </code><strong><code>xor</code></strong><code> big_endian_table[string[i] </code><strong><code>xor</code></strong><code> ((leftmost 8 bits of rem) </code><strong><code>rightShift</code></strong><code> (n-8))]</code><br/>
+<code>// Lsbit-first</code><br/>
+<code>rem = (rem </code><strong><code>rightShift</code></strong><code> 8) </code><strong><code>xor</code></strong><code> little_endian_table[string[i] </code><strong><code>xor</code></strong><code> (rightmost 8 bits of rem)]</code></p>
+<dl>
+<dd><strong>Code fragment 6: Cores of table based division</strong>
+</dd>
+</dl>
+
+<p>One of the most commonly encountered CRC algorithms is known as <strong>CRC-32</strong>, used by (among others) <a class="uri" href="Ethernet" title="wikilink">Ethernet</a>, <a class="uri" href="FDDI" title="wikilink">FDDI</a>, <a href="ZIP_(file_format)" title="wikilink">ZIP</a> and other <a href="archive_formats" title="wikilink">archive formats</a>, and <a href="Portable_Network_Graphics" title="wikilink">PNG</a> <a href="image_format" title="wikilink">image format</a>. Its polynomial can be written msbit-first as 0x04C11DB7, or lsbit-first as 0xEDB88320. The W3C webpage on <a href="Portable_Network_Graphics" title="wikilink">PNG</a> includes an appendix with <a href="http://www.w3.org/TR/PNG/#D-CRCAppendix">a short and simple table-driven implementation</a> in C of CRC-32. You will note that the code corresponds to the lsbit-first byte-at-a-time pseudocode presented here, and the table is generated using the bit-at-a-time code.</p>
+<h3 id="parallel-computation-without-table">Parallel computation without table</h3>
+
+<p>Parallel update for a byte or a word at a time can also be done explicitly, without a table.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> For each bit an equation is solved after 8 bits have been shifted in. The following tables list the equations for some commonly used polynomials, using following symbols:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>c<sub>i</sub></p></td>
+<td style="text-align: left;">
+<p>CRC bit 7…0 (or 15…0) before update</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>r<sub>i</sub></p></td>
+<td style="text-align: left;">
+<p>CRC bit 7…0 (or 15…0) after update</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>d<sub>i</sub></p></td>
+<td style="text-align: left;">
+<p>input data bit 7…0</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>e<sub>i</sub> = d<sub>i</sub> + c<sub>i</sub></p></td>
+<td style="text-align: left;">
+<p>e<sub>p</sub> = e<sub>7</sub> + e<sub>6</sub> + … + e<sub>1</sub> + e<sub>0</sub> <em>(parity bit)</em></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>s<sub>i</sub> = d<sub>i</sub> + c<sub>i+8</sub></p></td>
+<td style="text-align: left;">
+<p>s<sub>p</sub> = s<sub>7</sub> + s<sub>6</sub> + … + s<sub>1</sub> + s<sub>0</sub> <em>(parity bit)</em></p></td>
+</tr>
+</tbody>
+</table>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Bit-wise update equations for some CRC-8 polynomials after 8 bits have been shifted in</p></td>
+<td style="text-align: left;">
+<p>Polynomial:</p></td>
+<td style="text-align: left;">
+<p>(<em>x</em><sup>7</sup> + <em>x</em><sup>3</sup> + 1) × <em>x</em> <em>(left-shifted CRC-7-CCITT)</em></p></td>
+<td style="text-align: left;">
+<p><em>x</em><sup>8</sup> + <em>x</em><sup>5</sup> + <em>x</em><sup>4</sup> + 1 <em>(CRC-8-Dallas/Maxim)</em></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Coefficients:</p></td>
+<td style="text-align: left;">
+<p>0x12 = (0x09 &lt;&lt; 1) <em>(MSBF/normal)</em></p></td>
+<td style="text-align: left;">
+<p>0x8c <em>(LSBF/reverse)</em></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><code>r</code><sub><code>0</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>1</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>2</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>3</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>4</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>5</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>6</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>7</code></sub><code> ←</code></p></td>
+<td style="text-align: left;">
+<p><code>0</code><br/>
+<code>e</code><sub><code>0</code></sub><code> + e</code><sub><code>4</code></sub><code> + e</code><sub><code>7</code></sub><br/>
+<code>e</code><sub><code>1</code></sub><code> + e</code><sub><code>5</code></sub><br/>
+<code>e</code><sub><code>2</code></sub><code> + e</code><sub><code>6</code></sub><br/>
+<code>e</code><sub><code>3</code></sub><code> + e</code><sub><code>7</code></sub><code> </code><sub></sub><code> + e</code><sub><code>0</code></sub><code> + e</code><sub><code>4</code></sub><code> + e</code><sub><code>7</code></sub><br/>
+<code>e</code><sub><code>4</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + e</code><sub><code>1</code></sub><code> + e</code><sub><code>5</code></sub><br/>
+<code>e</code><sub><code>5</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + e</code><sub><code>2</code></sub><code> + e</code><sub><code>6</code></sub><br/>
+<code>e</code><sub><code>6</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + e</code><sub><code>3</code></sub><code> + e</code><sub><code>7</code></sub></p></td>
+<td style="text-align: left;">
+<p><code>e</code><sub><code>0</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + e</code><sub><code>4</code></sub><code> + e</code><sub><code>1</code></sub><code> + e</code><sub><code>0</code></sub><code> </code><sub></sub><code>   + e</code><sub><code>5</code></sub><code> + e</code><sub><code>2</code></sub><code> + e</code><sub><code>1</code></sub><br/>
+<code>e</code><sub><code>1</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + e</code><sub><code>5</code></sub><code> + e</code><sub><code>2</code></sub><code> + e</code><sub><code>1</code></sub><code> </code><sub></sub><code>   + e</code><sub><code>6</code></sub><code> + e</code><sub><code>3</code></sub><code> + e</code><sub><code>2</code></sub><code> + e</code><sub><code>0</code></sub><br/>
+<code>e</code><sub><code>2</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + e</code><sub><code>6</code></sub><code> + e</code><sub><code>3</code></sub><code> + e</code><sub><code>2</code></sub><code> + e</code><sub><code>0</code></sub><code>   + e</code><sub><code>7</code></sub><code> + e</code><sub><code>4</code></sub><code> + e</code><sub><code>3</code></sub><code> + e</code><sub><code>1</code></sub><br/>
+<code>e</code><sub><code>3</code></sub><code> + e</code><sub><code>0</code></sub><code> </code><sub></sub><code> + e</code><sub><code>7</code></sub><code> + e</code><sub><code>4</code></sub><code> + e</code><sub><code>3</code></sub><code> + e</code><sub><code>1</code></sub><br/>
+<code>e</code><sub><code>4</code></sub><code> + e</code><sub><code>1</code></sub><code> + e</code><sub><code>0</code></sub><br/>
+<code>e</code><sub><code>5</code></sub><code> + e</code><sub><code>2</code></sub><code> + e</code><sub><code>1</code></sub><br/>
+<code>e</code><sub><code>6</code></sub><code> + e</code><sub><code>3</code></sub><code> + e</code><sub><code>2</code></sub><code> + e</code><sub><code>0</code></sub><br/>
+<code>e</code><sub><code>7</code></sub><code> + e</code><sub><code>4</code></sub><code> + e</code><sub><code>3</code></sub><code> + e</code><sub><code>1</code></sub></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>C code<br/>
+fragments:</p></td>
+<td style="text-align: left;"><div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c"> <span class="dt">uint8_t</span> c, d, e, f, r;
+ …
+ e = c ^ d;
+ f = e ^ (e &gt;&gt; <span class="dv">4</span>) ^ (e &gt;&gt; <span class="dv">7</span>);
+ r =     (f &lt;&lt; <span class="dv">1</span>) ^ (f &lt;&lt; <span class="dv">4</span>);</code></pre></div></td>
+<td style="text-align: left;"><div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c"> <span class="dt">uint8_t</span> c, d, e, f, r;
+ …
+ e = c ^ d;
+ f = e ^ (e &lt;&lt; <span class="dv">3</span>) ^ (e &lt;&lt; <span class="dv">4</span>) ^ (e &lt;&lt; <span class="dv">6</span>);
+ r = f ^ (f &gt;&gt; <span class="dv">4</span>) ^ (f &gt;&gt; <span class="dv">5</span>);</code></pre></div></td>
+</tr>
+</tbody>
+</table>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Bit-wise update equations for some CRC-16 polynomials after 8 bits have been shifted in</p></td>
+<td style="text-align: left;">
+<p>Polynomial:</p></td>
+<td style="text-align: left;">
+<p><em>x</em><sup>16</sup> + <em>x</em><sup>12</sup> + <em>x</em><sup>5</sup> + 1 <em>(CRC-16-CCITT)</em></p></td>
+<td style="text-align: left;">
+<p><em>x</em><sup>16</sup> + <em>x</em><sup>15</sup> + <em>x</em><sup>2</sup> + 1 <em>(CRC-16-ANSI)</em></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Coefficients:</p></td>
+<td style="text-align: left;">
+<p>0x1021 <em>(MSBF/normal)</em></p></td>
+<td style="text-align: left;">
+<p>0x8408 <em>(LSBF/reverse)</em></p></td>
+<td style="text-align: left;">
+<p>0x8005 <em>(MSBF/normal)</em></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><code>r</code><sub><code>0</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>1</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>2</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>3</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>4</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>5</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>6</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>7</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>8</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>9</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>10</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>11</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>12</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>13</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>14</code></sub><code> ←</code><br/>
+<code>r</code><sub><code>15</code></sub><code> ←</code></p></td>
+<td style="text-align: left;">
+<p><code>s</code><sub><code>4</code></sub><code> + s</code><sub><code>0</code></sub><br/>
+<code>s</code><sub><code>5</code></sub><code> + s</code><sub><code>1</code></sub><br/>
+<code>s</code><sub><code>6</code></sub><code> + s</code><sub><code>2</code></sub><br/>
+<code>s</code><sub><code>7</code></sub><code> + s</code><sub><code>3</code></sub></p>
+
+<p><sub></sub> s<sub>4</sub> <sub></sub> s<sub>5</sub> + s<sub>4</sub> + s<sub>0</sub> <sub></sub> s<sub>6</sub> + s<sub>5</sub> + s<sub>1</sub> <sub></sub> s<sub>7</sub> + s<sub>6</sub> + s<sub>2</sub></p>
+
+<p><code>c</code><sub><code>0</code></sub><code> </code><sub></sub><code>  + s</code><sub><code>7</code></sub><code> + s</code><sub><code>3</code></sub><br/>
+<code>c</code><sub><code>1</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + s</code><sub><code>4</code></sub><br/>
+<code>c</code><sub><code>2</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + s</code><sub><code>5</code></sub><br/>
+<code>c</code><sub><code>3</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + s</code><sub><code>6</code></sub><br/>
+<code>c</code><sub><code>4</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + s</code><sub><code>7</code></sub><code>  + s</code><sub><code>4</code></sub><code> + s</code><sub><code>0</code></sub><br/>
+<code>c</code><sub><code>5</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> </code><sub></sub><code>  + s</code><sub><code>5</code></sub><code> + s</code><sub><code>1</code></sub><br/>
+<code>c</code><sub><code>6</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> </code><sub></sub><code>  + s</code><sub><code>6</code></sub><code> + s</code><sub><code>2</code></sub><br/>
+<code>c</code><sub><code>7</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> </code><sub></sub><code>  + s</code><sub><code>7</code></sub><code> + s</code><sub><code>3</code></sub></p></td>
+<td style="text-align: left;">
+<p><code>c</code><sub><code>8</code></sub><code> </code><sub></sub><code> </code><sub></sub><code>  + e</code><sub><code>4</code></sub><code> + e</code><sub><code>0</code></sub><br/>
+<code>c</code><sub><code>9</code></sub><code> </code><sub></sub><code> </code><sub></sub><code>  + e</code><sub><code>5</code></sub><code> + e</code><sub><code>1</code></sub><br/>
+<code>c</code><sub><code>10</code></sub><code> </code><sub></sub><code> </code><sub></sub><code>  + e</code><sub><code>6</code></sub><code> + e</code><sub><code>2</code></sub><br/>
+<code>c</code><sub><code>11</code></sub><code> </code><sub></sub><code>  + e</code><sub><code>0</code></sub><code>  + e</code><sub><code>7</code></sub><code> + e</code><sub><code>3</code></sub><br/>
+<code>c</code><sub><code>12</code></sub><code> </code><sub></sub><code>  + e</code><sub><code>1</code></sub><br/>
+<code>c</code><sub><code>13</code></sub><code> </code><sub></sub><code>  + e</code><sub><code>2</code></sub><br/>
+<code>c</code><sub><code>14</code></sub><code> </code><sub></sub><code>  + e</code><sub><code>3</code></sub><br/>
+<code>c</code><sub><code>15</code></sub><code> </code><sub></sub><code>  + e</code><sub><code>4</code></sub><code> + e</code><sub><code>0</code></sub></p>
+
+<p><sub></sub> e<sub>0</sub> + e<sub>5</sub> + e<sub>1</sub> <sub></sub> e<sub>1</sub> + e<sub>6</sub> + e<sub>2</sub> <sub></sub> e<sub>2</sub> + e<sub>7</sub> + e<sub>3</sub> <sub></sub> e<sub>3</sub> <sub></sub> e<sub>4</sub> + e<sub>0</sub> <sub></sub> e<sub>5</sub> + e<sub>1</sub> <sub></sub> e<sub>6</sub> + e<sub>2</sub> <sub></sub> e<sub>7</sub> + e<sub>3</sub></p></td>
+<td style="text-align: left;">
+<p><code> </code><sub></sub><code> </code><sub></sub><code>   s</code><sub><code>p</code></sub></p>
+
+<p><sub></sub> <sub></sub> s<sub>0</sub> + s<sub>p</sub> <sub></sub> <sub></sub> s<sub>1</sub> + s<sub>0</sub> <sub></sub> <sub></sub> s<sub>2</sub> + s<sub>1</sub> <sub></sub> <sub></sub> s<sub>3</sub> + s<sub>2</sub> <sub></sub> <sub></sub> s<sub>4</sub> + s<sub>3</sub> <sub></sub> <sub></sub> s<sub>5</sub> + s<sub>4</sub> <sub></sub> <sub></sub> s<sub>6</sub> + s<sub>5</sub></p>
+
+<p><code>c</code><sub><code>0</code></sub><code> </code><sub></sub><code> + s</code><sub><code>7</code></sub><code> + s</code><sub><code>6</code></sub><br/>
+<code>c</code><sub><code>1</code></sub><code> </code><sub></sub><code> </code><sub></sub><code> + s</code><sub><code>7</code></sub><br/>
+<code>c</code><sub><code>2</code></sub><br/>
+<code>c</code><sub><code>3</code></sub><br/>
+<code>c</code><sub><code>4</code></sub><br/>
+<code>c</code><sub><code>5</code></sub><br/>
+<code>c</code><sub><code>6</code></sub><br/>
+<code>c</code><sub><code>7</code></sub><code> + s</code><sub><code>p</code></sub></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>C code<br/>
+fragments:</p></td>
+<td style="text-align: left;"><div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c"> <span class="dt">uint8_t</span>  d, s, t;
+ <span class="dt">uint16_t</span> c, r;
+ …
+ s = d ^ (c &gt;&gt; <span class="dv">8</span>);
+ t = s ^ (s &gt;&gt; <span class="dv">4</span>);
+ r = (c &lt;&lt; <span class="dv">8</span>) ^
+      t       ^
+     (t &lt;&lt; <span class="dv">5</span>) ^
+     (t &lt;&lt; <span class="dv">12</span>);</code></pre></div></td>
+<td style="text-align: left;"><div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c"> <span class="dt">uint8_t</span>  d, e, f;
+ <span class="dt">uint16_t</span> c, r;
+ …
+ e = c ^ d;
+ f = e ^ (e &lt;&lt; <span class="dv">4</span>);
+ r = (c &gt;&gt; <span class="dv">8</span>) ^
+     (f &lt;&lt; <span class="dv">8</span>) ^
+     (f &lt;&lt; <span class="dv">3</span>) ^
+     (f &gt;&gt; <span class="dv">4</span>);</code></pre></div></td>
+<td style="text-align: left;"><div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c"> <span class="dt">uint8_t</span>  d, s, p;
+ <span class="dt">uint16_t</span> c, r, t;
+ …
+ s = d ^ (c &gt;&gt; <span class="dv">8</span>);
+ p = s ^ (s &gt;&gt; <span class="dv">4</span>);
+ p = p ^ (p &gt;&gt; <span class="dv">2</span>);
+ p = p ^ (p &gt;&gt; <span class="dv">1</span>);
+ p = p &amp; <span class="dv">1</span>;
+ t = p | (s &lt;&lt; <span class="dv">1</span>);
+ r = (c &lt;&lt; <span class="dv">8</span>)  ^
+     (t &lt;&lt; <span class="dv">15</span>) ^
+      t        ^
+     (t &lt;&lt; <span class="dv">1</span>);</code></pre></div></td>
+</tr>
+</tbody>
+</table>
+<h2 id="two-step-computation">Two-step computation</h2>
+
+<p>As the CRC-32 polynomial has a large number of terms, when computing the remainder a byte at a time each bit depends on several bits of the previous iteration. In byte-parallel hardware implementations this calls for either multiple-input or cascaded XOR gates which increases <a href="propagation_delay" title="wikilink">propagation delay</a>.</p>
+
+<p>To maximise computation speed, an <em>intermediate remainder</em> can be calculated by passing the message through a 123-bit shift register. The polynomial is a carefully selected multiple of the standard polynomial such that the terms (feedback taps) are widely spaced, and no bit of the remainder is XORed more than once per byte iteration. Thus only two-input XOR gates, the fastest possible, are needed. Finally the intermediate remainder is divided by the standard polynomial in a second shift register to yield the CRC-32 remainder.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+<h2 id="one-pass-checking">One-pass checking</h2>
+
+<p>When appending a CRC to a message, it is possible to detach the transmitted CRC, recompute it, and verify the recomputed value against the transmitted one. However, a simpler technique is commonly used in hardware.</p>
+
+<p>When the CRC is transmitted with the correct byte order (matching the chosen bit-ordering convention), a receiver can compute an overall CRC, over the message <em>and</em> the CRC, and if they are correct, the result will be zero. This possibility is the reason that most network protocols that include a CRC do so <em>before</em> the ending delimiter; it is not necessary to know whether the end of the packet is imminent to check the CRC.</p>
+<h2 id="crc-variants">CRC variants</h2>
+
+<p>In practice, most standards specify presetting the register to all-ones and inverting the CRC before transmission. This has no effect on the ability of a CRC to detect changed bits, but gives it the ability to notice bits that are added to the message.</p>
+<h3 id="preset-to-1">Preset to −1</h3>
+
+<p>The basic mathematics of a CRC accepts (considers as correctly transmitted) messages which, when interpreted as a polynomial, are a multiple of the CRC polynomial. If some leading 0 bits are prepended to such a message, they will not change its interpretation as a polynomial. This is equivalent to the fact that 0001 and 1 are the same number.</p>
+
+<p>But if the message being transmitted does care about leading 0 bits, the inability of the basic CRC algorithm to detect such a change is undesirable. If it is possible that a transmission error could add such bits, a simple solution is to start with the <code>rem</code> shift register set to some non-zero value; for convenience, the all-ones value is typically used. This is mathematically equivalent to complementing (binary NOT) the first <em>n</em> bits of the message, where <em>n</em> are the number of bits in the CRC register.</p>
+
+<p>This does not affect CRC generation and checking in any way, as long as both generator and checker use the same initial value. Any non-zero initial value will do, and a few standards specify unusual values,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> but the all-ones value (−1 in twos complement binary) is by far the most common. Note that a one-pass CRC generate/check will still produce a result of zero when the message is correct, regardless of the preset value.</p>
+<h3 id="post-invert">Post-invert</h3>
+
+<p>The same sort of error can occur at the end of a message. Appending 0 bits to a message is equivalent to multiplying its polynomial by <em>x</em>, and if it was previously a multiple of the CRC polynomial, the result of that multiplication will be, as well. This is equivalent to the fact that, since 726 is a multiple of 11, so is 7260.</p>
+
+<p>A similar solution can be applied at the end of the message, inverting the CRC register before it is appended to the message. Again, any non-zero change will do; inverting all the bits (XORing with an all-ones pattern) is simply the most common.</p>
+
+<p>This has an effect on one-pass CRC checking: instead of producing a result of zero when the message is correct, it produces a constant non-zero result. (To be precise, the result is the CRC (without non-zero preset, but with post-invert) of the inversion pattern.) Once this constant has been obtained (most easily by performing a one-pass CRC generate/check on an arbitrary message), it can be used directly to verify the correctness of any other message checked using the same CRC algorithm.</p>
+<h2 id="see-also">See also</h2>
+
+<p>General category</p>
+<ul>
+<li><a href="Error_correcting_code" title="wikilink">Error correcting code</a></li>
+<li><a href="List_of_hash_functions" title="wikilink">List of hash functions</a></li>
+<li><a href="Parity_(telecommunication)" title="wikilink">Parity</a></li>
+</ul>
+
+<p>Non-CRC checksums</p>
+<ul>
+<li><a class="uri" href="Adler-32" title="wikilink">Adler-32</a></li>
+<li><a href="Fletcher's_checksum" title="wikilink">Fletcher's checksum</a></li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.pathcom.com/~vadco/crc.html">64-Bit CRC - Bitwise XOR Long-Division To Bytewise Table-Lookup</a>: Comprehensive documentation of CRC-Math, Procedure, and C-Code.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Cyclic_redundancy_checks" title="wikilink">Category:Cyclic redundancy checks</a> <a href="Category:Finite_fields" title="wikilink">Category:Finite fields</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6">E.g. low-frequency RFID <a href="#fnref6">↩</a></li>
+</ol>
+</section>
+</body>
+

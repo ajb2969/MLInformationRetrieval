@@ -1,0 +1,94 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title offset="1467">Alias analysis</title>
+   <script type="text/javascript"
+      src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js">
+    </script>
+</head>
+<body>
+<h1>Alias analysis</h1>
+<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</head>
+<body>
+<hr/>
+<p><strong>Alias analysis</strong> is a technique in <a href="compiler_theory" title="wikilink">compiler theory</a>, used to determine if a storage location may be accessed in more than one way. Two pointers are said to be <a href="Aliasing_(computing)" title="wikilink">aliased</a> if they point to the same location.</p>
+<p>Alias analysis techniques are usually classified by flow-sensitivity and context-sensitivity. They may determine may-alias or must-alias information. The term <strong>alias analysis</strong> is often used interchangeably with term <a href="Pointer_analysis" title="wikilink">points-to analysis</a>, a specific case.</p>
+<p><a href="Aliasing_analysers" title="wikilink"> Alias analysers</a> intend to make and compute useful information for understanding <a href="aliasing_(computing)" title="wikilink"> aliasing</a> in programs.</p>
+<h2 id="overview">Overview</h2>
+<p>In general, alias analysis determines whether or not separate memory references point to the same area of memory. This allows the compiler to determine what variables in the program will be affected by a statement. For example, consider the following section of code that accesses members of structures:</p>
+<div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c">
+p.foo = <span class="dv">1</span>;
+q.foo = <span class="dv">2</span>;
+i = p.foo + <span class="dv">3</span>;</code></pre></div>
+<p>There are three possible alias cases here:</p>
+<ol>
+<li>The variables p and q cannot alias.</li>
+<li>The variables p and q must alias.</li>
+<li>It cannot be conclusively determined at compile time if p and q alias or not.</li>
+</ol>
+<p>If p and q cannot alias, then <code>i = p.foo + 3;</code> can be changed to <code>i = 4</code>. If p and q must alias, then <code>i = p.foo + 3;</code> can be changed to <code>i = 5</code>. In both cases, we are able to perform optimizations from the alias knowledge. On the other hand, if it is not known if p and q alias or not, then no optimizations can be performed and the whole of the code must be executed to get the result. Two memory references are said to have a <em>may-alias</em> relation if their aliasing is unknown.</p>
+<h2 id="performing-alias-analysis">Performing alias analysis</h2>
+<p>In alias analysis, we divide the program's memory into <em>alias classes</em>. Alias classes are disjoint sets of locations that cannot alias to one another. For the discussion here, it is assumed that the optimizations done here occur on a low-level <a href="Intermediate_language" title="wikilink">intermediate representation</a> of the program. This is to say that the program has been compiled into binary operations, jumps, moves between registers, moves from registers to memory, moves from memory to registers, branches, and function calls/returns.</p>
+<h3 id="type-based-alias-analysis">Type-based alias analysis</h3>
+<p>If the language being compiled is <a href="type_safe" title="wikilink">type safe</a>, the compiler's type checker is correct, and the language lacks the ability to create pointers referencing local variables, (such as <a href="ML_(programming_language)" title="wikilink">ML</a>, <a href="Haskell_(programming_language)" title="wikilink">Haskell</a>, or <a href="Java_(programming_language)" title="wikilink">Java</a>) then some useful optimizations can be made. There are many cases where we know that two memory locations must be in different alias classes:</p>
+<ol>
+<li>Two variables of different types cannot be in the same alias class since it is a property of strongly typed, memory reference-free (i.e. references to memory locations cannot be changed directly) languages that two variables of different types cannot share the same memory location simultaneously.</li>
+<li>Allocations local to the current stack frame cannot be in the same alias class as any previous allocation from another stack frame. This is the case because new memory allocations must be disjoint from all other memory allocations.</li>
+<li>Each record field of each record type has its own alias class, in general, because the typing discipline usually only allows for records of the same type to alias. Since all records of a type will be stored in an identical format in memory, a field can only alias to itself.</li>
+<li>Similarly, each array of a given type has its own alias class.</li>
+</ol>
+<p>When performing alias analysis for code, every load and store to memory needs to be labeled with its class. We then have the useful property, given memory locations <span class="LaTeX">$A_i$</span> and <span class="LaTeX">$B_j$</span> with <span class="LaTeX">$i,j$</span> alias classes, that if <span class="LaTeX">$i=j$</span> then <span class="LaTeX">$A_i$</span> may-alias <span class="LaTeX">$B_j$</span>, and if <span class="LaTeX">$i \neq j$</span> then the memory locations will not alias.</p>
+<h3 id="flow-based-alias-analysis">Flow-based alias analysis</h3>
+<p>Analysis based on flow, unlike type based analysis, can be applied to programs in a language with references or type-casting. Flow based analysis can be used in lieu of or to supplement type based analysis. In flow based analysis, new alias classes are created for each memory allocation, and for every global and local variable whose address has been used. References may point to more than one value over time and thus may be in more than one alias class. This means that each memory location has a set of alias classes instead of a single alias class.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Escape_analysis" title="wikilink">Escape analysis</a></li>
+<li><a href="Pointer_analysis" title="wikilink">Pointer analysis</a></li>
+<li><a href="Shape_analysis_(software)" title="wikilink">Shape analysis</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://lenherr.name/~thomas/ma/">Alias Analysis Library</a> - A simple C library for implementing alias analysis and a Master's Thesis giving an introduction to the field.</li>
+</ul>
+<p>"</p>
+<p><a href="Category:Static_program_analysis" title="wikilink">Category:Static program analysis</a></p>
+</body>
+</html>

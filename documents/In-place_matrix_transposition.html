@@ -1,0 +1,1405 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1385">In-place matrix transposition</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>In-place matrix transposition</h1>
+<hr/>
+
+<p><strong>In-place matrix transposition</strong>, also called <strong>in-situ matrix transposition</strong>, is the problem of <a href="transpose" title="wikilink">transposing</a> an <em>N</em>×<em>M</em> <a href="matrix_(mathematics)" title="wikilink">matrix</a> <a class="uri" href="in-place" title="wikilink">in-place</a> in <a href="computer_memory" title="wikilink">computer memory</a>, ideally with <a href="Big_O_notation" title="wikilink"><em>O</em>(1)</a> (bounded) additional storage, or at most with additional storage much less than <em>NM</em>. Typically, the matrix is assumed to be stored in <a href="row-major_order" title="wikilink">row-major order</a> or <a href="column-major_order" title="wikilink">column-major order</a> (i.e., contiguous rows or columns, respectively, arranged consecutively).</p>
+
+<p>Performing an in-place transpose (in-situ transpose) is most difficult when <em>N</em> ≠ <em>M</em>, i.e. for a non-square (rectangular) matrix, where it involves a complicated <a class="uri" href="permutation" title="wikilink">permutation</a> of the data elements, with many <a href="cyclic_permutation" title="wikilink">cycles</a> of length greater than 2. In contrast, for a square matrix (<em>N</em> = <em>M</em>), all of the cycles are of length 1 or 2, and the transpose can be achieved by a simple loop to swap the upper triangle of the matrix with the lower triangle. Further complications arise if one wishes to maximize <a href="memory_locality" title="wikilink">memory locality</a> in order to improve <a href="cache_line" title="wikilink">cache line</a> utilization or to operate <a class="uri" href="out-of-core" title="wikilink">out-of-core</a> (where the matrix does not fit into main memory), since transposes inherently involve non-consecutive memory accesses.</p>
+
+<p>The problem of non-square in-place transposition has been studied since at least the late 1950s, and several algorithms are known, including several which attempt to optimize locality for cache, out-of-core, or similar memory-related contexts.</p>
+<h2 id="background">Background</h2>
+
+<p>On a <a class="uri" href="computer" title="wikilink">computer</a>, one can often avoid explicitly transposing a matrix in <a href="Random_access_memory" title="wikilink">memory</a> by simply accessing the same data in a different order. For example, <a href="software_libraries" title="wikilink">software libraries</a> for <a href="linear_algebra" title="wikilink">linear algebra</a>, such as <a class="uri" href="BLAS" title="wikilink">BLAS</a>, typically provide options to specify that certain matrices are to be interpreted in transposed order to avoid data movement.</p>
+
+<p>However, there remain a number of circumstances in which it is necessary or desirable to physically reorder a matrix in memory to its transposed ordering. For example, with a matrix stored in <a href="row-major_order" title="wikilink">row-major order</a>, the rows of the matrix are contiguous in memory and the columns are discontiguous. If repeated operations need to be performed on the columns, for example in a <a href="fast_Fourier_transform" title="wikilink">fast Fourier transform</a> algorithm (e.g. Frigo &amp; Johnson, 2005), transposing the matrix in memory (to make the columns contiguous) may improve performance by increasing <a href="memory_locality" title="wikilink">memory locality</a>. Since these situations normally coincide with the case of very large matrices (which exceed the cache size), performing the transposition in-place with minimal additional storage becomes desirable.</p>
+
+<p>Also, as a purely mathematical problem, in-place transposition involves a number of interesting <a href="number_theory" title="wikilink">number theory</a> puzzles that have been worked out over the course of several decades.</p>
+<h2 id="example">Example</h2>
+
+<p>For example, consider the 2×4 matrix:</p>
+
+<p>
+
+<math display="block" id="In-place_matrix_transposition:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>[</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="center">
+       <mn>10</mn>
+      </mtd>
+      <mtd columnalign="center">
+       <mn>11</mn>
+      </mtd>
+      <mtd columnalign="center">
+       <mn>12</mn>
+      </mtd>
+      <mtd columnalign="center">
+       <mn>13</mn>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="center">
+       <mn>14</mn>
+      </mtd>
+      <mtd columnalign="center">
+       <mn>15</mn>
+      </mtd>
+      <mtd columnalign="center">
+       <mn>16</mn>
+      </mtd>
+      <mtd columnalign="center">
+       <mn>17</mn>
+      </mtd>
+     </mtr>
+    </mtable>
+    <mo>]</mo>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <cn type="integer">10</cn>
+     <cn type="integer">11</cn>
+     <cn type="integer">12</cn>
+     <cn type="integer">13</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">14</cn>
+     <cn type="integer">15</cn>
+     <cn type="integer">16</cn>
+     <cn type="integer">17</cn>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{bmatrix}10&11&12&13\\
+14&15&16&17\end{bmatrix}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>In row-major format, this would be stored in computer memory as the sequence (10, 11, 12, 13, 14, 15, 16, 17), i.e. the two rows stored consecutively. If we transpose this, we obtain the 4×2 matrix:</p>
+
+<p>
+
+<math display="block" id="In-place_matrix_transposition:1">
+ <semantics>
+  <mrow>
+   <mo>[</mo>
+   <mtable displaystyle="true">
+    <mtr>
+     <mtd columnalign="center">
+      <mn>10</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>14</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>11</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>15</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>12</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>16</mn>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="center">
+      <mn>13</mn>
+     </mtd>
+     <mtd columnalign="center">
+      <mn>17</mn>
+     </mtd>
+    </mtr>
+   </mtable>
+   <mo>]</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <cn type="integer">10</cn>
+     <cn type="integer">14</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">11</cn>
+     <cn type="integer">15</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">12</cn>
+     <cn type="integer">16</cn>
+    </matrixrow>
+    <matrixrow>
+     <cn type="integer">13</cn>
+     <cn type="integer">17</cn>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{bmatrix}10&14\\
+11&15\\
+12&16\\
+13&17\end{bmatrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>which is stored in computer memory as the sequence (10, 14, 11, 15, 12, 16, 13, 17).</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Position</p></th>
+<th style="text-align: left;">
+<p>0</p></th>
+<th style="text-align: left;">
+<p>1</p></th>
+<th style="text-align: left;">
+<p>2</p></th>
+<th style="text-align: left;">
+<p>3</p></th>
+<th style="text-align: left;">
+<p>4</p></th>
+<th style="text-align: left;">
+<p>5</p></th>
+<th style="text-align: left;">
+<p>6</p></th>
+<th style="text-align: left;">
+<p>7</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Original storage</p></td>
+<td style="text-align: left;">
+<p>10</p></td>
+<td style="text-align: left;">
+<p>11</p></td>
+<td style="text-align: left;">
+<p>12</p></td>
+<td style="text-align: left;">
+<p>13</p></td>
+<td style="text-align: left;">
+<p>14</p></td>
+<td style="text-align: left;">
+<p>15</p></td>
+<td style="text-align: left;">
+<p>16</p></td>
+<td style="text-align: left;">
+<p>17</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Transposed storage</p></td>
+<td style="text-align: left;">
+<p>10</p></td>
+<td style="text-align: left;">
+<p>14</p></td>
+<td style="text-align: left;">
+<p>11</p></td>
+<td style="text-align: left;">
+<p>15</p></td>
+<td style="text-align: left;">
+<p>12</p></td>
+<td style="text-align: left;">
+<p>16</p></td>
+<td style="text-align: left;">
+<p>13</p></td>
+<td style="text-align: left;">
+<p>17</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>If we number the storage locations 0 to 7, from left to right, then this permutation consists of four cycles:</p>
+<dl>
+<dd>(0), (1 2 4), (3 6 5), (7)
+</dd>
+</dl>
+
+<p>That is, the value in position 0 goes to position 0 (a cycle of length 1, no data motion). And the value in position 1 (in the original storage: 10, <strong>11</strong>, 12, 13, 14, 15, 16, 17) goes to position 2 (in the transposed storage 10, 14, <strong>11</strong>, 15, 12, 16, 13, 17), while the value in position 2 (10, 11, <strong>12</strong>, 13, 14, 15, 16, 17) goes to position 4 (10, 14, 11, 15, <strong>12</strong>, 16, 13, 17), while position 4 (10, 11, 12, 13, <strong>14</strong>, 15, 16, 17) goes back to position 1 (10, <strong>14</strong>, 11, 15, 12, 16, 13, 17). Similarly for the values in position 7 and positions (3 6 5).</p>
+<h2 id="properties-of-the-permutation">Properties of the permutation</h2>
+
+<p>In the following, we assume that the <em>N</em>×<em>M</em> matrix is stored in row-major order with zero-based indices. This means that the (<em>n</em>,<em>m</em>) element, for <em>n</em> = 0,…,<em>N</em>−1 and <em>m</em> = 0,…,<em>M</em>−1, is stored at an address <em>a</em> = <em>Mn</em> + <em>m</em> (plus some offset in memory, which we ignore). In the transposed <em>M</em>×<em>N</em> matrix, the corresponding (<em>m</em>,<em>n</em>) element is stored at the address ''a' '' = <em>Nm</em> + <em>n</em>, again in row-major order. We define the <em>transposition permutation</em> to be the function ''a' '' = <em>P</em>(<em>a</em>) such that:</p>
+
+<p>
+
+<math display="block" id="In-place_matrix_transposition:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>N</mi>
+     <mi>m</mi>
+    </mrow>
+    <mo>+</mo>
+    <mi>n</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>P</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mrow>
+       <mi>M</mi>
+       <mi>n</mi>
+      </mrow>
+      <mo>+</mo>
+      <mi>m</mi>
+     </mrow>
+     <mo rspace="4.2pt" stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>N</ci>
+      <ci>m</ci>
+     </apply>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>P</ci>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <ci>M</ci>
+       <ci>n</ci>
+      </apply>
+      <ci>m</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Nm+n=P(Mn+m)\,
+  </annotation>
+ </semantics>
+</math>
+
+ for all 
+
+<math display="inline" id="In-place_matrix_transposition:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>n</mi>
+     <mo>,</mo>
+     <mi>m</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>∈</mo>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mn>0</mn>
+      <mo>,</mo>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <mo>×</mo>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mn>0</mn>
+      <mo>,</mo>
+      <mrow>
+       <mi>M</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo rspace="4.2pt" stretchy="false">]</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <interval closure="open">
+     <ci>n</ci>
+     <ci>m</ci>
+    </interval>
+    <apply>
+     <times></times>
+     <interval closure="closed">
+      <cn type="integer">0</cn>
+      <apply>
+       <minus></minus>
+       <ci>N</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </interval>
+     <interval closure="closed">
+      <cn type="integer">0</cn>
+      <apply>
+       <minus></minus>
+       <ci>M</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (n,m)\in[0,N-1]\times[0,M-1]\,.
+  </annotation>
+ </semantics>
+</math>
+
+ This defines a permutation on the numbers 
+
+<math display="inline" id="In-place_matrix_transposition:4">
+ <semantics>
+  <mrow>
+   <mi>a</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>0</mn>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mrow>
+     <mrow>
+      <mi>M</mi>
+      <mi>N</mi>
+     </mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>a</ci>
+    <list>
+     <cn type="integer">0</cn>
+     <ci>normal-…</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>M</ci>
+       <ci>N</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a=0,\ldots,MN-1
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>It turns out that one can define simple formulas for <em>P</em> and its inverse (Cate &amp; Twigg, 1977). First:</p>
+
+<p>
+
+<math display="block" id="In-place_matrix_transposition:5">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>{</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="center">
+       <mrow>
+        <mrow>
+         <mi>M</mi>
+         <mi>N</mi>
+        </mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </mtd>
+      <mtd columnalign="center">
+       <mrow>
+        <mrow>
+         <mrow>
+          <mtext>if</mtext>
+          <mi>a</mi>
+         </mrow>
+         <mo>=</mo>
+         <mrow>
+          <mrow>
+           <mi>M</mi>
+           <mi>N</mi>
+          </mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </mrow>
+        <mo>,</mo>
+       </mrow>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="center">
+       <mrow>
+        <mrow>
+         <mi>N</mi>
+         <mi>a</mi>
+        </mrow>
+        <mo lspace="2.5pt" rspace="2.5pt">mod</mo>
+        <mrow>
+         <mrow>
+          <mi>M</mi>
+          <mi>N</mi>
+         </mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </mrow>
+      </mtd>
+      <mtd columnalign="center">
+       <mrow>
+        <mtext>otherwise</mtext>
+        <mo>,</mo>
+       </mrow>
+      </mtd>
+     </mtr>
+    </mtable>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">a</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <matrix>
+      <matrixrow>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>M</ci>
+         <ci>N</ci>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <eq></eq>
+        <apply>
+         <times></times>
+         <mtext>if</mtext>
+         <ci>a</ci>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <ci>M</ci>
+          <ci>N</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </matrixrow>
+      <matrixrow>
+       <apply>
+        <csymbol cd="latexml">modulo</csymbol>
+        <apply>
+         <times></times>
+         <ci>N</ci>
+         <ci>a</ci>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <ci>M</ci>
+          <ci>N</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <mtext>otherwise</mtext>
+      </matrixrow>
+     </matrix>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(a)=\left\{\begin{matrix}MN-1&\mbox{if }a=MN-1,\\
+Na\mod MN-1&\mbox{otherwise},\end{matrix}\right.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where "mod" is the <a href="modulo_operation" title="wikilink">modulo operation</a>. Proof: if 0 ≤ <em>a</em> = <em>Mn</em> + <em>m</em> [Note that <em>MN</em> <em>x</em> mod (<em>MN</em>−1) = (<em>MN</em> − 1) <em>x</em> + <em>x</em> mod (<em>MN</em>−1) = <em>x</em> for 0 ≤ <em>x</em> ] Note that the first (<em>a</em> = 0) and last (<em>a</em> = <em>MN</em>−1) elements are always left invariant under transposition. Second, the inverse permutation is given by:</p>
+
+<p>
+
+<math display="block" id="In-place_matrix_transposition:6">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>P</mi>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msup>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>a</mi>
+     <mo>′</mo>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>{</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="center">
+       <mrow>
+        <mrow>
+         <mi>M</mi>
+         <mi>N</mi>
+        </mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </mtd>
+      <mtd columnalign="center">
+       <mrow>
+        <mrow>
+         <mrow>
+          <mtext>if</mtext>
+          <msup>
+           <mi>a</mi>
+           <mo>′</mo>
+          </msup>
+         </mrow>
+         <mo>=</mo>
+         <mrow>
+          <mrow>
+           <mi>M</mi>
+           <mi>N</mi>
+          </mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </mrow>
+        <mo>,</mo>
+       </mrow>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="center">
+       <mrow>
+        <mrow>
+         <mi>M</mi>
+         <msup>
+          <mi>a</mi>
+          <mo>′</mo>
+         </msup>
+        </mrow>
+        <mo lspace="2.5pt" rspace="2.5pt">mod</mo>
+        <mrow>
+         <mrow>
+          <mi>M</mi>
+          <mi>N</mi>
+         </mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </mrow>
+      </mtd>
+      <mtd columnalign="center">
+       <mrow>
+        <mtext>otherwise</mtext>
+        <mo>.</mo>
+       </mrow>
+      </mtd>
+     </mtr>
+    </mtable>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>P</ci>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>a</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <matrix>
+      <matrixrow>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>M</ci>
+         <ci>N</ci>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <eq></eq>
+        <apply>
+         <times></times>
+         <mtext>if</mtext>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>a</ci>
+          <ci>normal-′</ci>
+         </apply>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <ci>M</ci>
+          <ci>N</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </matrixrow>
+      <matrixrow>
+       <apply>
+        <csymbol cd="latexml">modulo</csymbol>
+        <apply>
+         <times></times>
+         <ci>M</ci>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>a</ci>
+          <ci>normal-′</ci>
+         </apply>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <ci>M</ci>
+          <ci>N</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <mtext>otherwise</mtext>
+      </matrixrow>
+     </matrix>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P^{-1}(a^{\prime})=\left\{\begin{matrix}MN-1&\mbox{if }a^{\prime}=MN-1,\\
+Ma^{\prime}\mod MN-1&\mbox{otherwise}.\end{matrix}\right.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>(This is just a consequence of the fact that the inverse of an <em>N</em>×<em>M</em> transpose is an <em>M</em>×<em>N</em> transpose, although it is also easy to show explicitly that <em>P</em><sup>−1</sup> composed with <em>P</em> gives the identity.)</p>
+
+<p>As proved by Cate &amp; Twigg (1977), the number of <a href="fixed_point_(mathematics)" title="wikilink">fixed points</a> (cycles of length 1) of the permutation is precisely 1 + gcd(<em>N</em>−1,<em>M</em>−1), where gcd is the <a href="greatest_common_divisor" title="wikilink">greatest common divisor</a>. For example, with <em>N</em> = <em>M</em> the number of fixed points is simply <em>N</em> (the diagonal of the matrix). If <em>N</em> − 1 and <em>M</em> − 1 are <a class="uri" href="coprime" title="wikilink">coprime</a>, on the other hand, the only two fixed points are the upper-left and lower-right corners of the matrix.</p>
+
+<p>The number of cycles of any length <em>k</em>&gt;1 is given by (Cate &amp; Twigg, 1977):</p>
+
+<p>
+
+<math display="block" id="In-place_matrix_transposition:7">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>k</mi>
+    </mfrac>
+    <mrow>
+     <munder>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>d</mi>
+       <mo stretchy="false">|</mo>
+       <mi>k</mi>
+      </mrow>
+     </munder>
+     <mrow>
+      <mi>μ</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>k</mi>
+        <mo>/</mo>
+        <mi>d</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mrow>
+       <mi>gcd</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <msup>
+          <mi>N</mi>
+          <mi>d</mi>
+         </msup>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+        <mo>,</mo>
+        <mrow>
+         <mrow>
+          <mi>M</mi>
+          <mi>N</mi>
+         </mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">d</csymbol>
+       <ci>normal-|</ci>
+       <csymbol cd="unknown">k</csymbol>
+      </cerror>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>μ</ci>
+      <apply>
+       <divide></divide>
+       <ci>k</ci>
+       <ci>d</ci>
+      </apply>
+      <apply>
+       <gcd></gcd>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>N</ci>
+         <ci>d</ci>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>M</ci>
+         <ci>N</ci>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{1}{k}\sum_{d|k}\mu(k/d)\gcd(N^{d}-1,MN-1),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where μ is the <a href="Möbius_function" title="wikilink">Möbius function</a> and the sum is over the <a href="divisor" title="wikilink">divisors</a> <em>d</em> of <em>k</em>.</p>
+
+<p>Furthermore, the cycle containing <em>a</em>=1 (i.e. the second element of the first row of the matrix) is always a cycle of maximum length <em>L</em>, and the lengths <em>k</em> of all other cycles must be divisors of <em>L</em> (Cate &amp; Twigg, 1977).</p>
+
+<p>For a given cycle <em>C</em>, every element 
+
+<math display="inline" id="In-place_matrix_transposition:8">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mo>∈</mo>
+   <mi>C</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>x</ci>
+    <ci>C</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x\in C
+  </annotation>
+ </semantics>
+</math>
+
+ has the same greatest common divisor 
+
+<math display="inline" id="In-place_matrix_transposition:9">
+ <semantics>
+  <mrow>
+   <mi>d</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>gcd</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mrow>
+      <mrow>
+       <mi>M</mi>
+       <mi>N</mi>
+      </mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>d</ci>
+    <apply>
+     <gcd></gcd>
+     <ci>x</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>M</ci>
+       <ci>N</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d=\gcd(x,MN-1)
+  </annotation>
+ </semantics>
+</math>
+
+. Proof (Brenner, 1973): Let <em>s</em> be the smallest element of the cycle, and 
+
+<math display="inline" id="In-place_matrix_transposition:10">
+ <semantics>
+  <mrow>
+   <mi>d</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>gcd</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>s</mi>
+     <mo>,</mo>
+     <mrow>
+      <mrow>
+       <mi>M</mi>
+       <mi>N</mi>
+      </mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>d</ci>
+    <apply>
+     <gcd></gcd>
+     <ci>s</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>M</ci>
+       <ci>N</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d=\gcd(s,MN-1)
+  </annotation>
+ </semantics>
+</math>
+
+. From the definition of the permutation <em>P</em> above, every other element <em>x</em> of the cycle is obtained by repeatedly multiplying <em>s</em> by <em>N</em> modulo <em>MN</em>−1, and therefore every other element is divisible by <em>d</em>. But, since <em>N</em> and <em>MN</em> − 1 are coprime, <em>x</em> cannot be divisible by any factor of <em>MN</em> − 1 larger than <em>d</em>, and hence 
+
+<math display="inline" id="In-place_matrix_transposition:11">
+ <semantics>
+  <mrow>
+   <mi>d</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>gcd</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mrow>
+      <mrow>
+       <mi>M</mi>
+       <mi>N</mi>
+      </mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>d</ci>
+    <apply>
+     <gcd></gcd>
+     <ci>x</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>M</ci>
+       <ci>N</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d=\gcd(x,MN-1)
+  </annotation>
+ </semantics>
+</math>
+
+. This theorem is useful in searching for cycles of the permutation, since an efficient search can look only at multiples of divisors of <em>MN</em>−1 (Brenner, 1973).</p>
+
+<p>Laflin &amp; Brebner (1970) pointed out that the cycles often come in pairs, which is exploited by several algorithms that permute pairs of cycles at a time. In particular, let <em>s</em> be the smallest element of some cycle <em>C</em> of length <em>k</em>. It follows that <em>MN</em>−1−<em>s</em> is also an element of a cycle of length <em>k</em> (possibly the same cycle). Proof: by the definition of <em>P</em> above, the length <em>k</em> of the cycle containing <em>s</em> is the smallest <em>k</em> &gt; 0 such that 
+
+<math display="inline" id="In-place_matrix_transposition:12">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>s</mi>
+    <msup>
+     <mi>N</mi>
+     <mi>k</mi>
+    </msup>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>s</mi>
+    <mo lspace="2.5pt" rspace="2.5pt">mod</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mrow>
+       <mi>M</mi>
+       <mi>N</mi>
+      </mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>N</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <ci>s</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>M</ci>
+       <ci>N</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   sN^{k}=s\mod(MN-1)
+  </annotation>
+ </semantics>
+</math>
+
+. Clearly, this is the same as the smallest <em>k</em>&gt;0 such that 
+
+<math display="inline" id="In-place_matrix_transposition:13">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mo>-</mo>
+      <mi>s</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <msup>
+     <mi>N</mi>
+     <mi>k</mi>
+    </msup>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo>-</mo>
+     <mi>s</mi>
+    </mrow>
+    <mo lspace="2.5pt" rspace="2.5pt">mod</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mrow>
+       <mi>M</mi>
+       <mi>N</mi>
+      </mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <minus></minus>
+      <ci>s</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>N</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <minus></minus>
+      <ci>s</ci>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>M</ci>
+       <ci>N</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (-s)N^{k}=-s\mod(MN-1)
+  </annotation>
+ </semantics>
+</math>
+
+, since we are just multiplying both sides by −1, and 
+
+<math display="inline" id="In-place_matrix_transposition:14">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>M</mi>
+     <mi>N</mi>
+    </mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+    <mo>-</mo>
+    <mi>s</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo>-</mo>
+     <mi>s</mi>
+    </mrow>
+    <mo lspace="2.5pt" rspace="2.5pt">mod</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mrow>
+       <mi>M</mi>
+       <mi>N</mi>
+      </mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <ci>M</ci>
+      <ci>N</ci>
+     </apply>
+     <cn type="integer">1</cn>
+     <ci>s</ci>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <minus></minus>
+      <ci>s</ci>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>M</ci>
+       <ci>N</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   MN-1-s=-s\mod(MN-1)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h2 id="algorithms">Algorithms</h2>
+
+<p>The following briefly summarizes the published algorithms to perform in-place matrix transposition. <a href="Source_code" title="wikilink">Source code</a> implementing some of these algorithms can be found in the references, below.</p>
+<h3 id="square-matrices">Square matrices</h3>
+
+<p>For a square <em>N</em>×<em>N</em> matrix <em>A</em><sub><em>n</em>,<em>m</em></sub> = <em>A</em>(<em>n</em>,<em>m</em>), in-place transposition is easy because all of the cycles have length 1 (the diagonals <em>A</em><sub><em>n</em>,<em>n</em></sub>) or length 2 (the upper triangle is swapped with the lower triangle). <a class="uri" href="Pseudocode" title="wikilink">Pseudocode</a> to accomplish this (assuming zero-based <a href="array_data_structure" title="wikilink">array</a> indices) is:</p>
+
+<p><strong><code>for</code></strong><code> n = 0 to N - 2</code><br/>
+<code>    </code><strong><code>for</code></strong><code> m = n + 1 to N - 1</code><br/>
+<code>        swap A(n,m) with A(m,n)</code></p>
+
+<p>This type of implementation, while simple, can exhibit poor performance due to poor cache-line utilization, especially when <em>N</em> is a <a href="power_of_two" title="wikilink">power of two</a> (due to cache-line conflicts in a <a href="CPU_cache" title="wikilink">CPU cache</a> with limited associativity). The reason for this is that, as <em>m</em> is incremented in the inner loop, the memory address corresponding to <em>A</em>(<em>n</em>,<em>m</em>) or <em>A</em>(<em>m</em>,<em>n</em>) jumps discontiguously by <em>N</em> in memory (depending on whether the array is in column-major or row-major format, respectively). That is, the algorithm does not exploit the possibility of <a href="spatial_locality" title="wikilink">spatial locality</a>.</p>
+
+<p>One solution to improve the cache utilization is to "block" the algorithm to operate on several numbers at once, in blocks given by the cache-line size; unfortunately, this means that the algorithm depends on the size of the cache line (it is "cache-aware"), and on a modern computer with multiple levels of cache it requires multiple levels of machine-dependent blocking. Instead, it has been suggested (Frigo <em>et al.</em>, 1999) that better performance can be obtained by a <a href="recursion" title="wikilink">recursive</a> algorithm: divide the matrix into four submatrices of roughly equal size, transposing the two submatrices along the diagonal recursively and transposing and swapping the two submatrices above and below the diagonal. (When <em>N</em> is sufficiently small, the simple algorithm above is used as a base case, as naively recurring all the way down to <em>N</em>=1 would have excessive function-call overhead.) This is a <a class="uri" href="cache-oblivious" title="wikilink">cache-oblivious</a> algorithm, in the sense that it can exploit the cache line without the cache-line size being an explicit parameter.</p>
+<h3 id="non-square-matrices-following-the-cycles">Non-square matrices: Following the cycles</h3>
+
+<p>For non-square matrices, the algorithms are more complicated. Many of the algorithms prior to 1980 could be described as "follow-the-cycles" algorithms. That is, they loop over the cycles, moving the data from one location to the next in the cycle. In pseudocode form:</p>
+
+<p><strong><code>for</code> <code>each</code></strong><code> length&gt;1 cycle </code><em><code>C</code></em><code> of the permutation</code><br/>
+<code>    pick a starting address </code><em><code>s</code></em><code> in </code><em><code>C</code></em><br/>
+<code>    let </code><em><code>D</code></em><code> = data at </code><em><code>s</code></em><br/>
+<code>    let </code><em><code>x</code></em><code> = predecessor of </code><em><code>s</code></em><code> in the cycle</code><br/>
+<code>    </code><strong><code>while</code></strong><code> </code><em><code>x</code></em><code> ≠ </code><em><code>s</code></em><br/>
+<code>        move data from </code><em><code>x</code></em><code> to successor of </code><em><code>x</code></em><br/>
+<code>        let </code><em><code>x</code></em><code> = predecessor of </code><em><code>x</code></em><br/>
+<code>    move data from </code><em><code>D</code></em><code> to successor of </code><em><code>s</code></em></p>
+
+<p>The differences between the algorithms lie mainly in how they locate the cycles, how they find the starting addresses in each cycle, and how they ensure that each cycle is moved exactly once. Typically, as discussed above, the cycles are moved in pairs, since <em>s</em> and <em>MN</em>−1−<em>s</em> are in cycles of the same length (possibly the same cycle). Sometimes, a small scratch array, typically of length <em>M</em>+<em>N</em> (e.g. Brenner, 1973; Cate &amp; Twigg, 1977) is used to keep track of a subset of locations in the array that have been visited, to accelerate the algorithm.</p>
+
+<p>In order to determine whether a given cycle has been moved already, the simplest scheme would be to use <em>O</em>(<em>MN</em>) auxiliary storage, one <a class="uri" href="bit" title="wikilink">bit</a> per element, to indicate whether a given element has been moved. To use only <em>O</em>(<em>M</em>+<em>N</em>) or even <em>O</em>(log <em>MN</em>) auxiliary storage, more complicated algorithms are required, and the known algorithms have a worst-case <a class="uri" href="linearithmic" title="wikilink">linearithmic</a> computational cost of <em>O</em>(<em>MN</em> log <em>MN</em>) at best, as first proved by <a href="Donald_Knuth" title="wikilink">Knuth</a> (Fich <em>et al.</em>, 1995; Gustavson &amp; Swirszcz, 2007).</p>
+
+<p>Such algorithms are designed to move each data element exactly once. However, they also involve a considerable amount of arithmetic to compute the cycles, and require heavily non-consecutive memory accesses since the adjacent elements of the cycles differ by multiplicative factors of <em>N</em>, as discussed above.</p>
+<h3 id="improving-memory-locality-at-the-cost-of-greater-total-data-movement">Improving memory locality at the cost of greater total data movement</h3>
+
+<p>Several algorithms have been designed to achieve greater memory locality at the cost of greater data movement, as well as slightly greater storage requirements. That is, they may move each data element more than once, but they involve more consecutive memory access (greater spatial locality), which can improve performance on modern CPUs that rely on caches, as well as on <a class="uri" href="SIMD" title="wikilink">SIMD</a> architectures optimized for processing consecutive data blocks. The oldest context in which the spatial locality of transposition seems to have been studied is for out-of-core operation (by Alltop, 1975), where the matrix is too large to fit into main memory ("<a href="Magnetic-core_memory" title="wikilink">core</a>").</p>
+
+<p>For example, if <em>d</em> = <a href="greatest_common_divisor" title="wikilink">gcd</a>(<em>N</em>,<em>M</em>) is not small, one can perform the transposition using a small amount (<em>NM</em>/<em>d</em>) of additional storage, with at most three passes over the array (Alltop, 1975; Dow, 1995). Two of the passes involve a sequence of separate, small transpositions (which can be performed efficiently out of place using a small buffer) and one involves an in-place <em>d</em>×<em>d</em> square transposition of 
+
+<math display="inline" id="In-place_matrix_transposition:15">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>N</mi>
+    <mi>M</mi>
+   </mrow>
+   <mo>/</mo>
+   <msup>
+    <mi>d</mi>
+    <mn>2</mn>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <times></times>
+     <ci>N</ci>
+     <ci>M</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>d</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   NM/d^{2}
+  </annotation>
+ </semantics>
+</math>
+
+ blocks (which is efficient since the blocks being moved are large and consecutive, and the cycles are of length at most 2). Another algorithm for non-<a class="uri" href="coprime" title="wikilink">coprime</a> dimensions, involving multiple subsidiary transpositions, was described by Catanzaro et al. (2014). For the case where |<em>N</em> − <em>M</em>| is small, Dow (1995) describes another algorithm requiring |<em>N</em> − <em>M</em>|⋅min(<em>N</em>,<em>M</em>) additional storage, involving a min(<em>N</em>, <em>M</em>) × min(<em>N</em>, <em>M</em>) square transpose preceded or followed by a small out-of-place transpose. Frigo &amp; Johnson (2005) describe the adaptation of these algorithms to use cache-oblivious techniques for general-purpose CPUs relying on cache lines to exploit spatial locality.</p>
+
+<p>Work on out-of-core matrix transposition, where the matrix does not fit in main memory and must be stored largely on a <a href="hard_disk" title="wikilink">hard disk</a>, has focused largely on the <em>N</em> = <em>M</em> square-matrix case, with some exceptions (e.g. Alltop, 1975). Recent reviews of out-of-core algorithms, especially as applied to <a href="parallel_computing" title="wikilink">parallel computing</a>, can be found in e.g. Suh &amp; Prasanna (2002) and Krishnamoorth et al. (2004).</p>
+<h2 id="references">References</h2>
+<ul>
+<li>P. F. Windley, "Transposing matrices in a digital computer," <em>Computer Journal</em> <strong>2</strong>, p. 47-48 (1959).</li>
+<li>G. Pall, and E. Seiden, "A problem in Abelian Groups, with application to the transposition of a matrix on an electronic computer," <em>Math. Comp.</em> <strong>14</strong>, p. 189-192 (1960).</li>
+<li>J. Boothroyd, "[<a class="uri" href="http://portal.acm.org/citation.cfm?id=363304&amp;dl">http://portal.acm.org/citation.cfm?id=363304&amp;dl;</a>;=GUIDE&amp;coll;=GUIDE&amp;CFID;=436989&amp;CFTOKEN;=18491885 Algorithm 302: Transpose vector stored array]," <em>ACM Transactions on Mathematical Software</em> <strong>10</strong> (5), p. 292-293 (1967).</li>
+<li>Susan Laflin and M. A. Brebner, "[<a class="uri" href="http://portal.acm.org/citation.cfm?id=362368&amp;dl">http://portal.acm.org/citation.cfm?id=362368&amp;dl;</a>;=GUIDE&amp;coll;=GUIDE&amp;CFID;=436989&amp;CFTOKEN;=18491885 Algorithm 380: in-situ transposition of a rectangular matrix]," <em>ACM Transactions on Mathematical Software</em> <strong>13</strong> (5), p. 324-326 (1970). <a href="http://www.netlib.org/toms/380">Source code</a>.</li>
+<li>Norman Brenner, "[<a class="uri" href="http://portal.acm.org/citation.cfm?id=362542&amp;dl">http://portal.acm.org/citation.cfm?id=362542&amp;dl;</a>;=GUIDE&amp;coll;=GUIDE&amp;CFID;=436989&amp;CFTOKEN;=18491885 Algorithm 467: matrix transposition in place]," <em>ACM Transactions on Mathematical Software</em> <strong>16</strong> (11), p. 692-694 (1973). <a href="http://www.netlib.org/toms/467">Source code</a>.</li>
+<li>W. O. Alltop, "A computer algorithm for transposing nonsquare matrices," <em>IEEE Trans. Comput.</em> <strong>24</strong> (10), p. 1038-1040 (1975).</li>
+<li>Esko G. Cate and David W. Twigg, "[<a class="uri" href="http://portal.acm.org/citation.cfm?id=355719.355729&amp;coll">http://portal.acm.org/citation.cfm?id=355719.355729&amp;coll;</a>;=GUIDE&amp;dl;=GUIDE&amp;CFID;=436989&amp;CFTOKEN;=18491885 Algorithm 513: Analysis of In-Situ Transposition]," <em>ACM Transactions on Mathematical Software</em> <strong>3</strong> (1), p. 104-110 (1977). <a href="http://www.netlib.org/toms/513">Source code</a>.</li>
+<li>Bryan Catanzaro, Alexander Keller, and Michael Garland, [A decomposition for in-place matrix transposition <a class="uri" href="http://dl.acm.org/citation.cfm?id=2555253">http://dl.acm.org/citation.cfm?id=2555253</a>], Proceedings of the 19th ACM SIGPLAN symposium on Principles and practice of parallel programming (PPoPP '14), pp.193-206 (2014).</li>
+<li>Murray Dow, "Transposing a matrix on a vector computer," <em>Parallel Computing</em> <strong>21</strong> (12), p. 1997-2005 (1995).</li>
+<li>Donald E. Knuth, <em><a href="The_Art_of_Computer_Programming" title="wikilink">The Art of Computer Programming</a> Volume 1: Fundamental Algorithms</em>, third edition, section 1.3.3 exercise 12 (Addison-Wesley: New York, 1997).</li>
+<li>M. Frigo, C. E. Leiserson, H. Prokop, and S. Ramachandran, "<a href="http://supertech.lcs.mit.edu/cilk/papers/abstracts/abstract4.html">Cache-oblivious algorithms</a>," in <em>Proceedings of the 40th IEEE Symposium on Foundations of Computer Science</em> (FOCS 99), p. 285-297 (1999). <a href="http://ieeexplore.ieee.org/iel5/6604/17631/00814600.pdf?arnumber=814600">Extended abstract at IEEE</a>, <a href="http://citeseer.ist.psu.edu/307799.html">at Citeseer</a>.</li>
+<li>J. Suh and V. K. Prasanna, "<a href="http://dx.doi.org/10.1109/12.995452">An efficient algorithm for out-of-core matrix transposition</a>," <em>IEEE Trans. Computers</em> <strong>51</strong> (4), p. 420-438 (2002).</li>
+<li>S. Krishnamoorthy, G. Baumgartner, D. Cociorva, C.-C. Lam, and P. Sadayappan, "<a href="http://csc.lsu.edu/~gb/TCE//Publications/ParTranspose2.pdf">Efficient parallel out-of-core matrix transposition</a>," <em>International Journal of High Performance Computing and Networking</em> <strong>2</strong> (2-4), p. 110-119 (2004).</li>
+<li>M. Frigo and S. G. Johnson, "<a href="http://fftw.org/fftw-paper-ieee.pdf">The Design and Implementation of FFTW3</a>," <em>Proceedings of the IEEE</em> <strong>93</strong> (2), 216–231 (2005). <a href="http://www.fftw.org">Source code</a> of the <a class="uri" href="FFTW" title="wikilink">FFTW</a> library, which includes optimized serial and <a href="parallel_computing" title="wikilink">parallel</a> square and non-square transposes, in addition to <a href="Fast_Fourier_transform" title="wikilink">FFTs</a>.</li>
+<li><a href="Faith_Ellen" title="wikilink">Faith E. Fich</a>, J. Ian Munro, and Patricio V. Poblete, "Permuting in place," <em>SIAM Journal on Computing</em> <strong>24</strong> (2), p. 266-278 (1995).</li>
+<li>Fred G. Gustavson and Tadeusz Swirszcz, "In-place transposition of rectangular matrices," <em>Lecture Notes in Computer Science</em> <strong>4699</strong>, p. 560-569 (2007), from the Proceedings of the 2006 Workshop on State-of-the-Art [<em>sic</em>] in Scientific and Parallel Computing (PARA 2006) (Umeå, Sweden, June 2006).</li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<h3 id="source-code">Source code</h3>
+<ul>
+<li><a href="http://romo661.free.fr/offt.html">OFFT</a> - recursive block in-place transpose of square matrices, in Fortran</li>
+<li><a href="http://groups.google.com/group/sci.math.num-analysis/msg/680211b3fbac30c4?hl=en">Jason Stratos Papadopoulos</a>, blocked in-place transpose of square matrices, in <a href="C_(programming_language)" title="wikilink">C</a>, <em>sci.math.num-analysis</em> newsgroup (April 7, 1998).</li>
+<li>See "Source code" links in the references section above, for additional code to perform in-place transposes of both square and non-square matrices.</li>
+<li><a href="https://bitbucket.org/ijsung/libmarshal/wiki/Home">libmarshal</a> Blocked in-place transpose of rectangular matrices for the GPUs.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Numerical_linear_algebra" title="wikilink">Category:Numerical linear algebra</a> <a class="uri" href="Category:Permutations" title="wikilink">Category:Permutations</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a></p>
+</body>
+</html>

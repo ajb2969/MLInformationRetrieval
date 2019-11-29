@@ -1,0 +1,338 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1329">Sethi–Ullman algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Sethi–Ullman algorithm</h1>
+<hr/>
+
+<p>In <a href="computer_science" title="wikilink">computer science</a>, the <strong>Sethi–Ullman algorithm</strong> is an <a class="uri" href="algorithm" title="wikilink">algorithm</a> named after <a href="Ravi_Sethi" title="wikilink">Ravi Sethi</a> and <a href="Jeffrey_D._Ullman" title="wikilink">Jeffrey D. Ullman</a>, its inventors, for translating <a href="abstract_syntax_tree" title="wikilink">abstract syntax trees</a> into <a href="machine_code" title="wikilink">machine code</a> that uses as few <a href="Processor_register" title="wikilink">registers</a> as possible.</p>
+<h2 id="overview">Overview</h2>
+
+<p>When <a href="code_generation_(compiler)" title="wikilink">generating code</a> for arithmetic expressions, the <a class="uri" href="compiler" title="wikilink">compiler</a> has to decide which is the best way to translate the expression in terms of number of instructions used as well as number of registers needed to evaluate a certain subtree. Especially in the case that free registers are scarce, the <a href="order_of_evaluation" title="wikilink">order of evaluation</a> can be important to the length of the generated code, because different orderings may lead to larger or smaller numbers of intermediate values being <a href="register_allocation" title="wikilink">spilled</a> to memory and then restored. The Sethi–Ullman algorithm (also known as <strong>Sethi–Ullman numbering</strong>) fulfills the property of producing code which needs the least number of instructions possible as well as the least number of storage references (under the assumption that at the most <a class="uri" href="commutativity" title="wikilink">commutativity</a> and <a class="uri" href="associativity" title="wikilink">associativity</a> apply to the operators used, but distributive laws i.e. 
+
+<math display="inline" id="Sethi–Ullman_algorithm:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>a</mi>
+     <mo>*</mo>
+     <mi>b</mi>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>a</mi>
+     <mo>*</mo>
+     <mi>c</mi>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>a</mi>
+    <mo>*</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>b</mi>
+      <mo>+</mo>
+      <mi>c</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>a</ci>
+      <ci>b</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>a</ci>
+      <ci>c</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>a</ci>
+     <apply>
+      <plus></plus>
+      <ci>b</ci>
+      <ci>c</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a*b+a*c=a*(b+c)
+  </annotation>
+ </semantics>
+</math>
+
+ do not hold). Please note that the algorithm succeeds as well if neither <a class="uri" href="commutativity" title="wikilink">commutativity</a> nor <a class="uri" href="associativity" title="wikilink">associativity</a> hold for the expressions used, and therefore arithmetic transformations can not be applied. The algorithm also does not take advantage of common subexpressions or apply directly to expressions represented as general directed acyclic graphs rather than trees.</p>
+<h2 id="simple-sethiullman-algorithm">Simple Sethi–Ullman algorithm</h2>
+
+<p>The <strong>simple Sethi–Ullman algorithm</strong> works as follows (for a <a href="RISC" title="wikilink">load-store architecture</a>):</p>
+<ol>
+<li>Traverse the <a href="abstract_syntax_tree" title="wikilink">abstract syntax tree</a> in pre- or postorder
+<ol>
+<li>For every non-constant leaf node, assign a 1 (i.e. 1 register is needed to hold the variable/field/etc.). For every constant leaf node (RHS of an operation – literals, values), assign a 0.</li>
+<li>For every non-leaf node <em>n</em>, assign the number of registers needed to evaluate the respective subtrees of <em>n</em>. If the number of registers needed in the left subtree (<em>l</em>) are not equal to the number of registers needed in the right subtree (<em>r</em>), the number of registers needed for the current node <em>n</em> is max(l, r). If <em>l == r</em>, then the number of registers needed for the current node is <em>r</em> + 1.</li>
+</ol></li>
+<li>Code emission
+<ol>
+<li>If the number of registers needed to compute the left subtree of node <em>n</em> is bigger than the number of registers for the right subtree, then the left subtree is evaluated first (since it may be possible that the one more register needed by the right subtree to save the result makes the left subtree <a href="Register_spilling" title="wikilink">spill</a>). If the right subtree needs more registers than the left subtree, the right subtree is evaluated first accordingly. If both subtrees need equal as much registers, then the order of evaluation is irrelevant.</li>
+</ol></li>
+</ol>
+<h3 id="example">Example</h3>
+
+<p>For an arithmetic expression 
+
+<math display="inline" id="Sethi–Ullman_algorithm:1">
+ <semantics>
+  <mrow>
+   <mi>a</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>b</mi>
+      <mo>+</mo>
+      <mi>c</mi>
+      <mo>+</mo>
+      <mrow>
+       <mi>f</mi>
+       <mo>*</mo>
+       <mi>g</mi>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>*</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>d</mi>
+      <mo>+</mo>
+      <mn>3</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>a</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <plus></plus>
+      <ci>b</ci>
+      <ci>c</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>d</ci>
+      <cn type="integer">3</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a=(b+c+f*g)*(d+3)
+  </annotation>
+ </semantics>
+</math>
+
+, the <a href="abstract_syntax_tree" title="wikilink">abstract syntax tree</a> looks like this:</p>
+
+<p><code>               =</code><br/>
+<code>              / \</code><br/>
+<code>             a   *</code><br/>
+<code>                / \</code><br/>
+<code>               /   \</code><br/>
+<code>              +     +</code><br/>
+<code>             / \   / \</code><br/>
+<code>            /   \ d   3</code><br/>
+<code>           +     *</code><br/>
+<code>          / \   / \</code><br/>
+<code>         b   c f   g</code></p>
+
+<p>To continue with the algorithm, we need only to examine the arithmetic expression 
+
+<math display="inline" id="Sethi–Ullman_algorithm:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>b</mi>
+     <mo>+</mo>
+     <mi>c</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi>f</mi>
+      <mo>*</mo>
+      <mi>g</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>*</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>d</mi>
+     <mo>+</mo>
+     <mn>3</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <plus></plus>
+     <ci>b</ci>
+     <ci>c</ci>
+     <apply>
+      <times></times>
+      <ci>f</ci>
+      <ci>g</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>d</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (b+c+f*g)*(d+3)
+  </annotation>
+ </semantics>
+</math>
+
+, i.e. we only have to look at the right subtree of the assignment '=':</p>
+
+<p><code>               *</code><br/>
+<code>              / \</code><br/>
+<code>             /   \</code><br/>
+<code>            +     +</code><br/>
+<code>           / \   / \</code><br/>
+<code>          /   \ d   3</code><br/>
+<code>         +     *</code><br/>
+<code>        / \   / \</code><br/>
+<code>       b   c f   g</code></p>
+
+<p>Now we start traversing the tree (in preorder for now), assigning the number of registers needed to evaluate each subtree (note that the last summand in the expression 
+
+<math display="inline" id="Sethi–Ullman_algorithm:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>b</mi>
+     <mo>+</mo>
+     <mi>c</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi>f</mi>
+      <mo>*</mo>
+      <mi>g</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>*</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>d</mi>
+     <mo>+</mo>
+     <mn>3</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <plus></plus>
+     <ci>b</ci>
+     <ci>c</ci>
+     <apply>
+      <times></times>
+      <ci>f</ci>
+      <ci>g</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>d</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (b+c+f*g)*(d+3)
+  </annotation>
+ </semantics>
+</math>
+
+ is a constant):</p>
+
+<p><code>               *</code><sub><strong><code>2</code></strong></sub><br/>
+<code>              / \</code><br/>
+<code>             /   \</code><br/>
+<code>            +</code><sub><strong><code>2</code></strong></sub><code>    +</code><sub><strong><code>1</code></strong></sub><br/>
+<code>           / \   / \</code><br/>
+<code>          /   \ d</code><sub><strong><code>1</code></strong></sub><code>  3</code><sub><strong><code>0</code></strong></sub><br/>
+<code>         +</code><sub><strong><code>1</code></strong></sub><code>   *</code><sub><strong><code>1</code></strong></sub><br/>
+<code>        / \   / \</code><br/>
+<code>       b</code><sub><strong><code>1</code></strong></sub><code>  c</code><sub><strong><code>0</code></strong></sub><code>f</code><sub><strong><code>1</code></strong></sub><code>  g</code><sub><strong><code>0</code></strong></sub></p>
+
+<p>From this tree it can be seen that we need 2 registers to compute the left subtree of the '*', but only 1 register to compute the right subtree. Nodes 'c' and 'g' do not need registers for the following reasons: If T is a tree leaf, then the number of registers to evaluate T is either 1 or 0 depending whether T is a left or a right subtree(since an operation such as add R1, A can handle the right component A directly without storing it into a register). Therefore we shall start to emit code for the left subtree first, because we might run into the situation that we only have 2 registers left to compute the whole expression. If we now computed the right subtree first (which needs only 1 register), we would then need a register to hold the result of the right subtree while computing the left subtree (which would still need 2 registers), therefore needing 3 registers concurrently. Computing the left subtree first needs 2 registers, but the result can be stored in 1, and since the right subtree needs only 1 register to compute, the evaluation of the expression can do with only 2 registers left.</p>
+<h2 id="advanced-sethiullman-algorithm">Advanced Sethi–Ullman algorithm</h2>
+
+<p>In an advanced version of the <strong>Sethi–Ullman algorithm</strong>, the arithmetic expressions are first transformed, exploiting the algebraic properties of the operators used.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Strahler_number" title="wikilink">Strahler number</a>, the minimum number of registers needed to evaluate an expression without any external storage</li>
+</ul>
+<h2 id="references">References</h2>
+<ul>
+<li>
+
+<p>.</p></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://lambda.uta.edu/cse5317/fall02/notes/node40.html">Code Generation for Trees</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Compiler_construction" title="wikilink">Category:Compiler construction</a> <a href="Category:Graph_algorithms" title="wikilink">Category:Graph algorithms</a></p>
+</body>
+</html>

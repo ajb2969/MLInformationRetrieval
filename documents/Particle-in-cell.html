@@ -1,0 +1,1602 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1836">Particle-in-cell</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Particle-in-cell</h1>
+<hr/>
+
+<p>The <strong>particle-in-cell</strong> (<strong>PIC</strong>) method refers to a technique used to solve a certain class of <a href="partial_differential_equations" title="wikilink">partial differential equations</a>. In this method, individual particles (or fluid elements) in a <a href="Lagrangian_and_Eulerian_coordinates" title="wikilink">Lagrangian</a> frame are tracked in continuous <a href="phase_space" title="wikilink">phase space</a>, whereas moments of the distribution such as densities and currents are computed simultaneously on Eulerian (stationary) <a href="Mesh_(mathematics)" title="wikilink">mesh</a> points.</p>
+
+<p>PIC methods were already in use as early as 1955,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> even before the first <a class="uri" href="Fortran" title="wikilink">Fortran</a> compilers were available. The method gained popularity for plasma simulation in the late 1950s and early 1960s by <a href="Oscar_Buneman" title="wikilink">Buneman</a>, <a href="John_M._Dawson" title="wikilink">Dawson</a>, Hockney, Birdsall, Morse and others. In <a href="Plasma_(physics)" title="wikilink">plasma physics</a> applications, the method amounts to following the trajectories of charged particles in self-consistent electromagnetic (or electrostatic) fields computed on a fixed mesh. <a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+<h2 id="technical-aspects">Technical aspects</h2>
+
+<p>For many types of problems, the PIC method is relatively intuitive and straightforward to implement. This probably accounts for much of its success, particularly for plasma simulation, for which the method typically includes the following procedures:</p>
+<ul>
+<li>Integration of the equations of motion.</li>
+<li>Interpolation of charge and current source terms to the field mesh.</li>
+<li>Computation of the fields on mesh points.</li>
+<li>Interpolation of the fields from the mesh to the particle locations.</li>
+</ul>
+
+<p>Models which include interactions of particles only through the average fields are called <strong>PM</strong> (particle-mesh). Those which include direct binary interactions are <strong>PP</strong> (particle-particle). Models with both types of interactions are called <strong>PP-PM</strong> or <strong>P<sup>3</sup>M</strong>.</p>
+
+<p>Since the early days, it has been recognized that the PIC method is susceptible to error from so-called <em>discrete particle noise</em>. <a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> This error is statistical in nature, and today it remains less-well understood than for traditional fixed-grid methods, such as <a href="Numerical_partial_differential_equations" title="wikilink">Eulerian</a> or <a href="semi-Lagrangian_scheme" title="wikilink">semi-Lagrangian</a> schemes.</p>
+<h2 id="basics-of-the-pic-plasma-simulation-technique">Basics of the PIC plasma simulation technique</h2>
+
+<p>Inside the plasma research community, systems of different species (electrons, ions, neutrals, molecules, dust particles, etc.) are investigated. The set of equations associated with PIC codes are therefore the <a href="Lorentz_force" title="wikilink">Lorentz force</a> as the equation of motion, solved in the so-called <em>pusher</em> or <em>particle mover</em> of the code, and <a href="Maxwell's_equations" title="wikilink">Maxwell's equations</a> determining the <a href="electric_field" title="wikilink">electric</a> and <a href="magnetic_field" title="wikilink">magnetic</a> fields, calculated in the <em>(field) solver</em>.</p>
+<h3 id="super-particles">Super-particles</h3>
+
+<p>The real systems studied are often extremely large in terms of the number of particles they contain. In order to make simulations efficient or at all possible, so-called <em>super-particles</em> are used. A super-particle (or <em>macroparticle</em>) is a computational particle that represents many real particles; it may be millions of electrons or ions in the case of a plasma simulation, or, for instance, a vortex element in a fluid simulation. It is allowed to rescale the number of particles, because the <a href="Lorentz_force" title="wikilink">Lorentz force</a> depends only on the charge to mass ratio, so a super-particle will follow the same trajectory as a real particle would.</p>
+
+<p>The number of real particles corresponding to a super-particle must be chosen such that sufficient statistics can be collected on the particle motion. If there is a significant difference between the density of different species in the system (between ions and neutrals, for instance), separate real to super-particle ratios can be used for them.</p>
+<h3 id="the-particle-mover">The particle mover</h3>
+
+<p>Even with super-particles, the number of simulated particles is usually very large (&gt; 10<sup>5</sup>), and often the particle mover is the most time consuming part of PIC, since it has to be done for each particle separately. Thus, the pusher is required to be of high accuracy and speed and much effort is spent on optimizing the different schemes.</p>
+
+<p>The schemes used for the particle mover can be split into two categories, implicit and explicit solvers. While implicit solvers calculate the particle velocity from the already updated fields, explicit solvers use only the old force from the previous time step, and are therefore simpler and faster, but require a smaller time step. Two frequently used schemes are the <a href="leapfrog_method" title="wikilink">leapfrog method</a>,<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> and the <em>Boris scheme</em>,<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> <a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a>which are explicit solvers.</p>
+
+<p>For plasma applications, the <a href="leapfrog_method" title="wikilink">leapfrog method</a> takes the following form:</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mi>𝐱</mi>
+       <mrow>
+        <mi>k</mi>
+        <mo>+</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+      <mo>-</mo>
+      <msub>
+       <mi>𝐱</mi>
+       <mi>k</mi>
+      </msub>
+     </mrow>
+     <mrow>
+      <mi mathvariant="normal">Δ</mi>
+      <mi>t</mi>
+     </mrow>
+    </mfrac>
+    <mo>=</mo>
+    <msub>
+     <mi>𝐯</mi>
+     <mrow>
+      <mi>k</mi>
+      <mo>+</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>/</mo>
+       <mn>2</mn>
+      </mrow>
+     </mrow>
+    </msub>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <divide></divide>
+     <apply>
+      <minus></minus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐱</ci>
+       <apply>
+        <plus></plus>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐱</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐯</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\mathbf{x}_{k+1}-\mathbf{x}_{k}}{\Delta t}=\mathbf{v}_{k+1/2},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mi>𝐯</mi>
+       <mrow>
+        <mi>k</mi>
+        <mo>+</mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <mn>2</mn>
+        </mrow>
+       </mrow>
+      </msub>
+      <mo>-</mo>
+      <msub>
+       <mi>𝐯</mi>
+       <mrow>
+        <mi>k</mi>
+        <mo>-</mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <mn>2</mn>
+        </mrow>
+       </mrow>
+      </msub>
+     </mrow>
+     <mrow>
+      <mi mathvariant="normal">Δ</mi>
+      <mi>t</mi>
+     </mrow>
+    </mfrac>
+    <mo>=</mo>
+    <mrow>
+     <mfrac>
+      <mi>q</mi>
+      <mi>m</mi>
+     </mfrac>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <msub>
+        <mi>𝐄</mi>
+        <mi>k</mi>
+       </msub>
+       <mo>+</mo>
+       <mrow>
+        <mfrac>
+         <mrow>
+          <msub>
+           <mi>𝐯</mi>
+           <mrow>
+            <mi>k</mi>
+            <mo>+</mo>
+            <mrow>
+             <mn>1</mn>
+             <mo>/</mo>
+             <mn>2</mn>
+            </mrow>
+           </mrow>
+          </msub>
+          <mo>+</mo>
+          <msub>
+           <mi>𝐯</mi>
+           <mrow>
+            <mi>k</mi>
+            <mo>-</mo>
+            <mrow>
+             <mn>1</mn>
+             <mo>/</mo>
+             <mn>2</mn>
+            </mrow>
+           </mrow>
+          </msub>
+         </mrow>
+         <mn>2</mn>
+        </mfrac>
+        <mo>×</mo>
+        <msub>
+         <mi>𝐁</mi>
+         <mi>k</mi>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <divide></divide>
+     <apply>
+      <minus></minus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐯</ci>
+       <apply>
+        <plus></plus>
+        <ci>k</ci>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐯</ci>
+       <apply>
+        <minus></minus>
+        <ci>k</ci>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <ci>q</ci>
+      <ci>m</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐄</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <plus></plus>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐯</ci>
+          <apply>
+           <plus></plus>
+           <ci>k</ci>
+           <apply>
+            <divide></divide>
+            <cn type="integer">1</cn>
+            <cn type="integer">2</cn>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐯</ci>
+          <apply>
+           <minus></minus>
+           <ci>k</ci>
+           <apply>
+            <divide></divide>
+            <cn type="integer">1</cn>
+            <cn type="integer">2</cn>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐁</ci>
+        <ci>k</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\mathbf{v}_{k+1/2}-\mathbf{v}_{k-1/2}}{\Delta t}=\frac{q}{m}\left(%
+\mathbf{E}_{k}+\frac{\mathbf{v}_{k+1/2}+\mathbf{v}_{k-1/2}}{2}\times\mathbf{B}%
+_{k}\right),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where the subscript 
+
+<math display="inline" id="Particle-in-cell:2">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ refers to "old" quantities from the previous time step, 
+
+<math display="inline" id="Particle-in-cell:3">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <ci>k</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k+1
+  </annotation>
+ </semantics>
+</math>
+
+ to updated quantities from the next time step (i.e. 
+
+<math display="inline" id="Particle-in-cell:4">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>t</mi>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>t</mi>
+     <mi>k</mi>
+    </msub>
+    <mo>+</mo>
+    <mrow>
+     <mi mathvariant="normal">Δ</mi>
+     <mi>t</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>t</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>t</ci>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{k+1}=t_{k}+\Delta t
+  </annotation>
+ </semantics>
+</math>
+
+), and velocities are calculated in-between the usual time steps 
+
+<math display="inline" id="Particle-in-cell:5">
+ <semantics>
+  <msub>
+   <mi>t</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>t</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{k}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>In comparison, the equations of the Boris scheme are:</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>𝐱</mi>
+     <mrow>
+      <mi>k</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>𝐱</mi>
+      <mi>k</mi>
+     </msub>
+     <mo>+</mo>
+     <mrow>
+      <mi mathvariant="normal">Δ</mi>
+      <mi>t</mi>
+      <msub>
+       <mi>𝐯</mi>
+       <mrow>
+        <mi>k</mi>
+        <mo>+</mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>/</mo>
+         <mn>2</mn>
+        </mrow>
+       </mrow>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐱</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>t</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐯</ci>
+       <apply>
+        <plus></plus>
+        <ci>k</ci>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{k+1}=\mathbf{x}_{k}+{\Delta t}\mathbf{v}_{k+1/2},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:7">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>𝐯</mi>
+     <mrow>
+      <mi>k</mi>
+      <mo>+</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>/</mo>
+       <mn>2</mn>
+      </mrow>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <msup>
+      <mi>𝐮</mi>
+      <mo>′</mo>
+     </msup>
+     <mo>+</mo>
+     <mrow>
+      <msup>
+       <mi>q</mi>
+       <mo>′</mo>
+      </msup>
+      <msub>
+       <mi>𝐄</mi>
+       <mi>k</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐯</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝐮</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>q</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐄</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{v}_{k+1/2}=\mathbf{u}^{\prime}+q^{\prime}\mathbf{E}_{k},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>with</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>𝐮</mi>
+     <mo>′</mo>
+    </msup>
+    <mo>=</mo>
+    <mrow>
+     <mi>𝐮</mi>
+     <mo>+</mo>
+     <mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>𝐮</mi>
+        <mo>+</mo>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>𝐮</mi>
+          <mo>×</mo>
+          <mi>𝐡</mi>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mo>×</mo>
+      <mi>𝐬</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>𝐮</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>𝐮</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <plus></plus>
+       <ci>𝐮</ci>
+       <apply>
+        <times></times>
+        <ci>𝐮</ci>
+        <ci>𝐡</ci>
+       </apply>
+      </apply>
+      <ci>𝐬</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{u}^{\prime}=\mathbf{u}+(\mathbf{u}+(\mathbf{u}\times\mathbf{h}))\times%
+\mathbf{s},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:9">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝐮</mi>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>𝐯</mi>
+      <mrow>
+       <mi>k</mi>
+       <mo>-</mo>
+       <mrow>
+        <mn>1</mn>
+        <mo>/</mo>
+        <mn>2</mn>
+       </mrow>
+      </mrow>
+     </msub>
+     <mo>+</mo>
+     <mrow>
+      <msup>
+       <mi>q</mi>
+       <mo>′</mo>
+      </msup>
+      <msub>
+       <mi>𝐄</mi>
+       <mi>k</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐮</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐯</ci>
+      <apply>
+       <minus></minus>
+       <ci>k</ci>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>q</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐄</ci>
+       <ci>k</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{u}=\mathbf{v}_{k-1/2}+q^{\prime}\mathbf{E}_{k},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:10">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝐡</mi>
+    <mo>=</mo>
+    <mrow>
+     <msup>
+      <mi>q</mi>
+      <mo>′</mo>
+     </msup>
+     <msub>
+      <mi>𝐁</mi>
+      <mi>k</mi>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐡</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>q</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐁</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{h}=q^{\prime}\mathbf{B}_{k},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:11">
+ <semantics>
+  <mrow>
+   <mi>𝐬</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mn>2</mn>
+     <mi>𝐡</mi>
+    </mrow>
+    <mo>/</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mn>1</mn>
+      <mo>+</mo>
+      <msup>
+       <mi>h</mi>
+       <mn>2</mn>
+      </msup>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐬</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>𝐡</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <cn type="integer">1</cn>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>h</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{s}=2\mathbf{h}/(1+h^{2})
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Particle-in-cell:12">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>q</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi mathvariant="normal">Δ</mi>
+     <mi>t</mi>
+    </mrow>
+    <mo>×</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mrow>
+       <mi>q</mi>
+       <mo>/</mo>
+       <mn>2</mn>
+      </mrow>
+      <mi>m</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>q</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>t</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <ci>q</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>m</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   q^{\prime}=\Delta t\times(q/2m)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Because of its excellent long term accuracy, the Boris algorithm is the de facto standard for advancing a charged particle. It was recently realized that the excellent long term accuracy of Boris algorithm is due to the fact it conserves phase space volume, even though it is not symplectic. The global bound on energy error typically associated with symplectic algorithms still holds for the Boris algorithm, making it an effective algorithm for the multi-scale dynamics of plasmas.</p>
+<h3 id="the-field-solver">The field solver</h3>
+
+<p>The most commonly used methods for solving Maxwell's equations (or more generally, <a href="partial_differential_equation" title="wikilink">partial differential equations</a> (PDE)) belong to one of the following three categories:</p>
+<ul>
+<li><a href="Finite_difference_method" title="wikilink">Finite difference methods</a> (FDM)</li>
+<li><a href="Finite_element_method" title="wikilink">Finite element methods</a> (FEM)</li>
+<li><a href="Spectral_method" title="wikilink">Spectral methods</a></li>
+</ul>
+
+<p>With the FDM, the continuous domain is replaced with a discrete grid of points, on which the <a href="electric_field" title="wikilink">electric</a> and <a href="magnetic_field" title="wikilink">magnetic</a> fields are calculated. Derivatives are then approximated with differences between neighboring grid-point values and thus PDEs are turned into algebraic equations.</p>
+
+<p>Using FEM, the continuous domain is divided into a discrete mesh of elements. The PDEs are treated as an <a href="eigenvalue,_eigenvector_and_eigenspace" title="wikilink">eigenvalue problem</a> and initially a trial solution is calculated using <a href="basis_function" title="wikilink">basis functions</a> that are localized in each element. The final solution is then obtained by optimization until the required accuracy is reached.</p>
+
+<p>Also spectral methods, such as the <a href="fast_Fourier_transform" title="wikilink">fast Fourier transform</a> (FFT), transform the PDEs into an eigenvalue problem, but this time the basis functions are high order and defined globally over the whole domain. The domain itself is not discretized in this case, it remains continuous. Again, a trial solution is found by inserting the basis functions into the eigenvalue equation and then optimized to determine the best values of the initial trial parameters.</p>
+<h3 id="particle-and-field-weighting">Particle and field weighting</h3>
+
+<p>The name "particle-in-cell" originates in the way that plasma macro-quantities (<a href="number_density" title="wikilink">number density</a>, <a href="current_density" title="wikilink">current density</a>, etc.) are assigned to simulation particles (i.e., the <em>particle weighting</em>). Particles can be situated anywhere on the continuous domain, but macro-quantities are calculated only on the mesh points, just as the fields are. To obtain the macro-quantities, one assumes that the particles have a given "shape" determined by the shape function</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:13">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>S</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>𝐱</mi>
+      <mo>-</mo>
+      <mi>𝐗</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>S</ci>
+    <apply>
+     <minus></minus>
+     <ci>𝐱</ci>
+     <ci>𝐗</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S(\mathbf{x}-\mathbf{X}),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Particle-in-cell:14">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ is the coordinate of the particle and 
+
+<math display="inline" id="Particle-in-cell:15">
+ <semantics>
+  <mi>𝐗</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐗</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}
+  </annotation>
+ </semantics>
+</math>
+
+ the observation point. Perhaps the easiest and most used choice for the shape function is the so-called <em>cloud-in-cell</em> (CIC) scheme, which is a first order (linear) weighting scheme. Whatever the scheme is, the shape function has to satisfy the following conditions: <a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> space isotropy, charge conservation, and increasing accuracy (convergence) for higher-order terms.</p>
+
+<p>The fields obtained from the field solver are determined only on the grid points and can't be used directly in the particle mover to calculate the force acting on particles, but have to be interpolated via the <em>field weighting</em>:</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:16">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>𝐄</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>𝐱</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <munder>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mi>i</mi>
+     </munder>
+     <mrow>
+      <msub>
+       <mi>𝐄</mi>
+       <mi>i</mi>
+      </msub>
+      <mi>S</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msub>
+         <mi>𝐱</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>-</mo>
+        <mi>𝐱</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>𝐄</ci>
+     <ci>𝐱</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐄</ci>
+       <ci>i</ci>
+      </apply>
+      <ci>S</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <ci>i</ci>
+       </apply>
+       <ci>𝐱</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{E}(\mathbf{x})=\sum_{i}\mathbf{E}_{i}S(\mathbf{x}_{i}-\mathbf{x}),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where the subscript 
+
+<math display="inline" id="Particle-in-cell:17">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+ labels the grid point. To ensure that the forces acting on particles are self-consistently obtained, the way of calculating macro-quantities from particle positions on the grid points and interpolating fields from grid points to particle positions has to be consistent, too, since they both appear in <a href="Maxwell's_equations" title="wikilink">Maxwell's equations</a>. Above all, the field interpolation scheme should conserve <a class="uri" href="momentum" title="wikilink">momentum</a>. This can be achieved by choosing the same weighting scheme for particles and fields and by ensuring the appropriate space symmetry (i.e. no self-force and fulfilling the <a href="Newton's_laws_of_motion" title="wikilink">action-reaction law</a>) of the field solver at the same time <a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+<h3 id="collisions">Collisions</h3>
+
+<p>As the field solver is required to be free of self-forces, inside a cell the field generated by a particle must decrease with decreasing distance from the particle, and hence inter-particle forces inside the cells are underestimated. This can be balanced with the aid of <a href="Coulomb_collision" title="wikilink">Coulomb collisions</a> between charged particles. Simulating the interaction for every pair of a big system would be computationally too expensive, so several <a href="Monte_Carlo_method" title="wikilink">Monte Carlo methods</a> have been developed instead. A widely used method is the <em>binary collision model</em>,<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> in which particles are grouped according to their cell, then these particles are paired randomly, and finally the pairs are collided.</p>
+
+<p>In a real plasma, many other reactions may play a role, ranging from elastic collisions, such as collisions between charged and neutral particles, over inelastic collisions, such as electron-neutral ionization collision, to chemical reactions; each of them requiring separate treatment. Most of the collision models handling charged-neutral collisions use either the <em>direct Monte-Carlo</em> scheme, in which all particles carry information about their collision probability, or the <em>null-collision</em> scheme,<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a><a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> which does not analyze all particles but uses the maximum collision probability for each charged species instead.</p>
+<h3 id="accuracy-and-stability-conditions">Accuracy and stability conditions</h3>
+
+<p>As in every simulation method, also in PIC, the time step and the grid size must be well chosen, so that the time and length scale phenomena of interest are properly resolved in the problem. In addition, time step and grid size have an impact on the speed and accuracy of the code.</p>
+
+<p>For an electrostatic plasma simulation using an explicit time integration scheme (e.g. leapfrog, which is most commonly used), two important conditions regarding the grid size 
+
+<math display="inline" id="Particle-in-cell:18">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Δ</mi>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Δ</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta x
+  </annotation>
+ </semantics>
+</math>
+
+ and the time step 
+
+<math display="inline" id="Particle-in-cell:19">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Δ</mi>
+   <mi>t</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Δ</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta t
+  </annotation>
+ </semantics>
+</math>
+
+ should be fulfilled in order to ensure the stability of the solution:</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:20">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi mathvariant="normal">Δ</mi>
+     <mi>x</mi>
+    </mrow>
+    <mo><</mo>
+    <mrow>
+     <mn>3.4</mn>
+     <msub>
+      <mi>λ</mi>
+      <mi>D</mi>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <lt></lt>
+    <apply>
+     <times></times>
+     <ci>normal-Δ</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <cn type="float">3.4</cn>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>λ</ci>
+      <ci>D</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta x<3.4\lambda_{D},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:21">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi mathvariant="normal">Δ</mi>
+     <mi>t</mi>
+    </mrow>
+    <mo>≤</mo>
+    <mrow>
+     <mn>2</mn>
+     <msubsup>
+      <mi>ω</mi>
+      <mrow>
+       <mi>p</mi>
+       <mi>e</mi>
+      </mrow>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <ci>normal-Δ</ci>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ω</ci>
+       <apply>
+        <times></times>
+        <ci>p</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta t\leq 2\omega_{pe}^{-1},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>which can be derived considering the harmonic oscillations of a one-dimensional unmagnetized plasma. The latter conditions is strictly required but practical considerations related to energy conservation suggest to use a much stricter constraint where the factor 2 is replaced by a number one order of magnitude smaller. The use of 
+
+<math display="inline" id="Particle-in-cell:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi mathvariant="normal">Δ</mi>
+     <mi>t</mi>
+    </mrow>
+    <mo>≤</mo>
+    <mrow>
+     <mn>0.1</mn>
+     <msubsup>
+      <mi>ω</mi>
+      <mrow>
+       <mi>p</mi>
+       <mi>e</mi>
+      </mrow>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <ci>normal-Δ</ci>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <cn type="float">0.1</cn>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ω</ci>
+       <apply>
+        <times></times>
+        <ci>p</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta t\leq 0.1\omega_{pe}^{-1},
+  </annotation>
+ </semantics>
+</math>
+
+ is typical.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a><a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> Not surprisingly, the natural time scale in the plasma is given by the inverse <a href="plasma_oscillation" title="wikilink">plasma frequency</a> 
+
+<math display="inline" id="Particle-in-cell:23">
+ <semantics>
+  <msubsup>
+   <mi>ω</mi>
+   <mrow>
+    <mi>p</mi>
+    <mi>e</mi>
+   </mrow>
+   <mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>ω</ci>
+     <apply>
+      <times></times>
+      <ci>p</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \omega_{pe}^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+ and length scale by the <a href="Debye_length" title="wikilink">Debye length</a> 
+
+<math display="inline" id="Particle-in-cell:24">
+ <semantics>
+  <msub>
+   <mi>λ</mi>
+   <mi>D</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>λ</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda_{D}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>For an explicit electromagnetic plasma simulation, the time step must also satisfy the CFL condition:</p>
+
+<p>
+
+<math display="block" id="Particle-in-cell:25">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi mathvariant="normal">Δ</mi>
+     <mi>t</mi>
+    </mrow>
+    <mo><</mo>
+    <mrow>
+     <mrow>
+      <mi mathvariant="normal">Δ</mi>
+      <mi>x</mi>
+     </mrow>
+     <mo>/</mo>
+     <mi>c</mi>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <lt></lt>
+    <apply>
+     <times></times>
+     <ci>normal-Δ</ci>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>x</ci>
+     </apply>
+     <ci>c</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta t<\Delta x/c,
+  </annotation>
+ </semantics>
+</math>
+
+ where 
+
+<math display="inline" id="Particle-in-cell:26">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi mathvariant="normal">Δ</mi>
+    <mi>x</mi>
+   </mrow>
+   <mo>∼</mo>
+   <msub>
+    <mi>λ</mi>
+    <mi>D</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <apply>
+     <times></times>
+     <ci>normal-Δ</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>λ</ci>
+     <ci>D</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta x\sim\lambda_{D}
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Particle-in-cell:27">
+ <semantics>
+  <mi>c</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>c</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c
+  </annotation>
+ </semantics>
+</math>
+
+ is the speed of light.</p>
+<h2 id="applications">Applications</h2>
+
+<p>Within plasma physics, PIC simulation has been used successfully to study laser-plasma interactions, electron acceleration and ion heating in the auroral <a class="uri" href="ionosphere" title="wikilink">ionosphere</a>, <a class="uri" href="magnetohydrodynamics" title="wikilink">magnetohydrodynamics</a>, <a href="magnetic_reconnection" title="wikilink">magnetic reconnection</a>, as well as ion-temperature-gradient and other microinstabilities in <a href="tokamak" title="wikilink">tokamaks</a>, furthermore <a href="vacuum_arc" title="wikilink">vacuum discharges</a>, and <a href="dusty_plasma" title="wikilink">dusty plasmas</a>.</p>
+
+<p>Hybrid models may use the PIC method for the kinetic treatment of some species, while other species (that are <a href="Maxwell–Boltzmann_distribution" title="wikilink">Maxwellian</a>) are simulated with a fluid model.</p>
+
+<p>PIC simulations have also been applied outside of plasma physics to problems in <a href="solid_mechanics" title="wikilink">solid</a> and <a href="fluid_mechanics" title="wikilink">fluid mechanics</a>. <a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> <a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Plasma_modeling" title="wikilink">Plasma modeling</a></li>
+<li><a href="Multiphase_particle-in-cell_method" title="wikilink">Multiphase particle-in-cell method</a></li>
+</ul>
+<h2 id="references">References</h2>
+<div class="references">
+</div>
+<ul>
+<li></li>
+</ul>
+<ul>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://picksc.idre.ucla.edu">Particle-In-Cell and Kinetic Simulation Software Center (PICKSC), UCLA.</a></li>
+<li><a href="http://dev.spis.org/projects/spine/home/picup">Open source 3D Particle-In-Cell code for spacecraft plasma interactions (mandatory user registration required).</a></li>
+<li><a href="http://www.particleincell.com/2011/particle-in-cell-example/">Simple Particle-In-Cell code in MATLAB</a></li>
+<li><a href="http://ptsg.eecs.berkeley.edu/">Plasma Theory and Simulation Group (Berkeley)</a> Contains links to freely-available software.</li>
+<li><a href="http://farside.ph.utexas.edu/teaching/329/lectures/node96.html">Introduction to PIC codes (Univ. of Texas)</a></li>
+<li><a href="http://comphys.narod.ru">OpenPIC3D - 3D Hybrid Particle-In-Cell simulation of plasma dynamics</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Computational_physics" title="wikilink">Category:Computational physics</a> <a href="Category:Numerical_differential_equations" title="wikilink">Category:Numerical differential equations</a> <a href="Category:Computational_fluid_dynamics" title="wikilink">Category:Computational fluid dynamics</a> <a href="Category:Scientific_modeling" title="wikilink">Category:Scientific modeling</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+<li id="fn14"><a href="#fnref14">↩</a></li>
+<li id="fn15"><a href="#fnref15">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

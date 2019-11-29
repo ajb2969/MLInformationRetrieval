@@ -1,0 +1,2750 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1306">Module:Convert</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Module:Convert</h1>
+<hr/>
+
+<p>-- Convert a value from one unit of measurement to another. -- Example: <mtpl></mtpl> --&gt; 123 pounds (56 kg) -- See <a href=":en:Template:Convert/Transwiki_guide" title="wikilink">:en:Template:Convert/Transwiki guide</a> if copying to another wiki.</p>
+
+<p>local MINUS = '−' -- Unicode U+2212 MINUS SIGN (UTF-8: e2 88 92) local abs = math.abs local floor = math.floor local format = string.format local log10 = math.log10 local ustring = mw.ustring local ulen = ustring.len local usub = ustring.sub</p>
+
+<p>-- Configuration options to keep magic values in one location. -- Conversion data and message text are defined in separate modules. local config, maxsigfig local numdot -- must be '.' or ',' or a character which works in a regex local numsep, numsep_remove, numsep_remove2 local data_code, all_units local text_code local varname -- can be a code to use variable names that depend on value local from_en_table -- to translate an output string of en digits to local language local to_en_table -- to translate an input string of digits in local language to en -- Use translation_table in convert/text to change the following. local en_default -- true uses lang=en unless convert has lang=local or local digits local group_method = 3 -- code for how many digits are in a group local per_word = 'per' -- for units like "liters per kilometer" local plural_suffix = 's' -- only other useful value is probably '' to disable plural unit names local omitsep -- true to omit separator before local symbol/name</p>
+
+<p>-- All units should be defined in the data module. However, to cater for quick changes -- and experiments, any unknown unit is looked up in an extra data module, if it exists. -- That module would be transcluded in only a small number of pages, so there should be -- little server overhead from making changes, and changes should propagate quickly. local extra_module -- name of module with extra units local extra_units -- nil or table of extra units from extra_module local ignore_extra_units -- if true, do not require the extra module</p>
+
+<p>-- Some options in the invoking template can set variables used later in the module. local currency_text -- for a user-defined currency symbol: <mtpl></mtpl> (euro replaces dollar)</p>
+
+<p>local function from_en(text)</p>
+
+<p><code>   -- Input is a string representing a number in en digits with '.' decimal mark,</code><br/>
+<code>   -- without digit grouping (which is done just after calling this).</code><br/>
+<code>   -- Return the translation of the string with numdot and digits in local language.</code><br/>
+<code>   if numdot ~= '.' then</code><br/>
+<code>       text = text:gsub('%.', numdot)</code><br/>
+<code>   end</code><br/>
+<code>   if from_en_table then</code><br/>
+<code>       text = text:gsub('%d', from_en_table)</code><br/>
+<code>   end</code><br/>
+<code>   return text</code></p>
+
+<p>end</p>
+
+<p>local function to_en(text)</p>
+
+<p><code>   -- Input is a string representing a number in the local language with</code><br/>
+<code>   -- an optional numdot decimal mark and numsep digit grouping.</code><br/>
+<code>   -- Return the translation of the string with '.' mark and en digits,</code><br/>
+<code>   -- and no separators (they have to be removed here to handle cases like</code><br/>
+<code>   -- numsep = '.' and numdot = ',' with input "1.234.567,8").</code><br/>
+<code>   if to_en_table then</code><br/>
+<code>       text = ustring.gsub(text, '%d', to_en_table)</code><br/>
+<code>   end</code><br/>
+<code>   if numsep_remove then</code><br/>
+<code>       text = text:gsub(numsep_remove, '')</code><br/>
+<code>   end</code><br/>
+<code>   if numsep_remove2 then</code><br/>
+<code>       text = text:gsub(numsep_remove2, '')</code><br/>
+<code>   end</code><br/>
+<code>   if numdot ~= '.' then</code><br/>
+<code>       text = text:gsub(numdot, '.')</code><br/>
+<code>   end</code><br/>
+<code>   return text</code></p>
+
+<p>end</p>
+
+<p>local function decimal_mark(text)</p>
+
+<p><code>   -- Return ',' if text probably is using comma for decimal mark, or has no decimal mark.</code><br/>
+<code>   -- Return '.' if text probably is using dot for decimal mark.</code><br/>
+<code>   -- Otherwise return nothing (decimal mark not known).</code><br/>
+<code>   if not text:find('[.,]') then return ',' end</code><br/>
+<code>   text = text:gsub('^%-', ''):gsub('%+%d+/%d+$', ''):gsub('[Ee]%-?%d+$', '')</code><br/>
+<code>   local decimal =</code><br/>
+<code>       text:match('^0?([.,])%d+$') or</code><br/>
+<code>       text:match('%d([.,])%d?%d?$') or</code><br/>
+<code>       text:match('%d([.,])%d%d%d%d+$')</code><br/>
+<code>   if decimal then return decimal end</code><br/>
+<code>   if text:match('%.%d+%.') then return ',' end</code><br/>
+<code>   if text:match('%,%d+,') then return '.' end</code></p>
+
+<p>end</p>
+
+<p>local add_warning, with_separator -- forward declarations local function to_en_with_check(text, parms)</p>
+
+<p><code>   -- Version of to_en() for a wiki using numdot = ',' and numsep = '.' to check</code><br/>
+<code>   -- text (an input number as a string) which might have been copied from enwiki.</code><br/>
+<code>   -- For example, in '1.234' the '.' could be a decimal mark or a group separator.</code><br/>
+<code>   -- From viwiki.</code><br/>
+<code>   if to_en_table then</code><br/>
+<code>       text = ustring.gsub(text, '%d', to_en_table)</code><br/>
+<code>   end</code><br/>
+<code>   if decimal_mark(text) == '.' then</code><br/>
+<code>       local original = text</code><br/>
+<code>       text = text:gsub(',', '')  -- for example, interpret "1,234.5" as an enwiki value</code><br/>
+<code>       if parms then</code><br/>
+<code>           add_warning(parms, 0, 'cvt_enwiki_num', original, with_separator({}, text))</code><br/>
+<code>       end</code><br/>
+<code>   else</code><br/>
+<code>       if numsep_remove then</code><br/>
+<code>           text = text:gsub(numsep_remove, '')</code><br/>
+<code>       end</code><br/>
+<code>       if numsep_remove2 then</code><br/>
+<code>           text = text:gsub(numsep_remove2, '')</code><br/>
+<code>       end</code><br/>
+<code>       if numdot ~= '.' then</code><br/>
+<code>           text = text:gsub(numdot, '.')</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   return text</code></p>
+
+<p>end</p>
+
+<p>local function omit_separator(id)</p>
+
+<p><code>   -- Return true if there should be no separator before id (a unit symbol or name).</code><br/>
+<code>   -- For zhwiki, there should be no separator if id uses local characters.</code><br/>
+<code>   -- The following kludge should be a sufficient test.</code><br/>
+<code>   if omitsep then</code><br/>
+<code>       if id:sub(1, 2) == '-{' then  -- for "-{...}-" content language variant</code><br/>
+<code>           return true</code><br/>
+<code>       end</code><br/>
+<code>       if id:byte() &gt; 127 then</code><br/>
+<code>           local first = usub(id, 1, 1)</code><br/>
+<code>           if first ~= 'Å' and first ~= '°' and first ~= 'µ' then</code><br/>
+<code>               return true</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   return id:sub(1, 1) == '/'  -- no separator before units like "/ha"</code></p>
+
+<p>end</p>
+
+<p>local spell_module -- name of module that can spell numbers local speller -- function from that module to handle spelling (set if spelling is wanted)</p>
+
+<p>local function set_config(args)</p>
+
+<p><code>   -- Set configuration options from template #invoke or defaults.</code><br/>
+<code>   config = args</code><br/>
+<code>   maxsigfig = config.maxsigfig or 14  -- maximum number of significant figures</code><br/>
+<code>   local data_module, text_module</code><br/>
+<code>   local sandbox = config.sandbox and ('/' .. config.sandbox) or ''</code><br/>
+<code>   data_module = "Module:Convert/data" .. sandbox</code><br/>
+<code>   text_module = "Module:Convert/text" .. sandbox</code><br/>
+<code>   extra_module = "Module:Convert/extra" .. sandbox</code><br/>
+<code>   spell_module = "Module:ConvertNumeric"</code><br/>
+<code>   data_code = mw.loadData(data_module)</code><br/>
+<code>   text_code = mw.loadData(text_module)</code><br/>
+<code>   all_units = data_code.all_units</code><br/>
+<code>   local translation = text_code.translation_table</code><br/>
+<code>   if translation then</code><br/>
+<code>       numdot = translation.numdot</code><br/>
+<code>       numsep = translation.numsep</code><br/>
+<code>       if numdot == ',' and numsep == '.' then</code><br/>
+<code>           if text_code.all_messages.cvt_enwiki_num then</code><br/>
+<code>               to_en = to_en_with_check</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       if translation.group then</code><br/>
+<code>           group_method = translation.group</code><br/>
+<code>       end</code><br/>
+<code>       if translation.per_word then</code><br/>
+<code>           per_word = translation.per_word</code><br/>
+<code>       end</code><br/>
+<code>       if translation.plural_suffix then</code><br/>
+<code>           plural_suffix = translation.plural_suffix</code><br/>
+<code>       end</code><br/>
+<code>       varname = translation.varname</code><br/>
+<code>       from_en_table = translation.from_en</code><br/>
+<code>       local use_workaround = true</code><br/>
+<code>       if use_workaround then</code><br/>
+<code>           -- 2013-07-05 workaround bug by making a copy of the required table.</code><br/>
+<code>           -- mw.ustring.gsub fails with a table (to_en_table) as the replacement,</code><br/>
+<code>           -- if the table is accessed via mw.loadData.</code><br/>
+<code>           local source = translation.to_en</code><br/>
+<code>           if source then</code><br/>
+<code>               to_en_table = {}</code><br/>
+<code>               for k, v in pairs(source) do</code><br/>
+<code>                   to_en_table[k] = v</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>       else</code><br/>
+<code>           to_en_table = translation.to_en</code><br/>
+<code>       end</code><br/>
+<code>       if translation.lang == 'en default' then</code><br/>
+<code>           en_default = true  -- for hiwiki</code><br/>
+<code>       end</code><br/>
+<code>       omitsep = translation.omitsep  -- for zhwiki</code><br/>
+<code>   end</code><br/>
+<code>   numdot = config.numdot or numdot or '.'  -- decimal mark before fractional digits</code><br/>
+<code>   numsep = config.numsep or numsep or ','  -- group separator for numbers</code><br/>
+<code>   -- numsep should be ',' or '.' or '' or ' ' or a Unicode character.</code><br/>
+<code>   -- numsep_remove must work in a regex to identify separators to be removed.</code><br/>
+<code>   if numsep ~= '' then</code><br/>
+<code>       numsep_remove = (numsep == '.') and '%.' or numsep</code><br/>
+<code>   end</code><br/>
+<code>   if numsep ~= ',' and numdot ~= ',' then</code><br/>
+<code>       numsep_remove2 = ','  -- so numbers copied from enwiki will work</code><br/>
+<code>   end</code></p>
+
+<p>end</p>
+
+<p>local function collection()</p>
+
+<p><code>   -- Return a table to hold items.</code><br/>
+<code>   return {</code><br/>
+<code>       n = 0,</code><br/>
+<code>       add = function (self, item)</code><br/>
+<code>           self.n = self.n + 1</code><br/>
+<code>           self[self.n] = item</code><br/>
+<code>       end,</code><br/>
+<code>   }</code></p>
+
+<p>end</p>
+
+<p>local function divide(numerator, denominator)</p>
+
+<p><code>   -- Return integers quotient, remainder resulting from dividing the two</code><br/>
+<code>   -- given numbers, which should be unsigned integers.</code><br/>
+<code>   local quotient, remainder = floor(numerator / denominator), numerator % denominator</code><br/>
+<code>   if not (0 </code><code>.</code><br/>
+<code>       remainder = 0</code><br/>
+<code>   end</code><br/>
+<code>   return quotient, remainder</code></p>
+
+<p>end</p>
+
+<p>local function split(text, delimiter)</p>
+
+<p><code>   -- Return a numbered table with fields from splitting text.</code><br/>
+<code>   -- The delimiter is used in a regex without escaping (for example, '.' would fail).</code><br/>
+<code>   -- Each field has any leading/trailing whitespace removed.</code><br/>
+<code>   local t = {}</code><br/>
+<code>   text = text .. delimiter  -- to get last item</code><br/>
+<code>   for item in text:gmatch('%s*(.-)%s*' .. delimiter) do</code><br/>
+<code>       table.insert(t, item)</code><br/>
+<code>   end</code><br/>
+<code>   return t</code></p>
+
+<p>end</p>
+
+<p>local function strip(text)</p>
+
+<p><code>   -- If text is a string, return its content with no leading/trailing</code><br/>
+<code>   -- whitespace. Otherwise return nil (a nil argument gives a nil result).</code><br/>
+<code>   if type(text) == 'string' then</code><br/>
+<code>       return text:match("^%s*(.-)%s*$")</code><br/>
+<code>   end</code></p>
+
+<p>end</p>
+
+<p>local function table_len(t)</p>
+
+<p><code>   -- Return length (</code><code>) breaking</code><br/>
+<code>               -- the mouseover title, any strip marker starting with char(127) is</code><br/>
+<code>               -- replaced with '...' (text not needing i18n).</code><br/>
+<code>               local append</code><br/>
+<code>               local pos = s:find(string.char(127), 1, true)</code><br/>
+<code>               if pos then</code><br/>
+<code>                   append = '...'</code><br/>
+<code>                   s = s:sub(1, pos - 1)</code><br/>
+<code>               end</code><br/>
+<code>               if limit and ulen(s) &gt; limit then</code><br/>
+<code>                   s = usub(s, 1, limit)</code><br/>
+<code>                   append = '...'</code><br/>
+<code>               end</code><br/>
+<code>               s = nowiki(s) .. (append or '')</code><br/>
+<code>           else</code><br/>
+<code>               s = '?'</code><br/>
+<code>           end</code><br/>
+<code>           parts[i] = s</code><br/>
+<code>       end</code><br/>
+<code>       local title = format(msg[1] or 'Missing message', parts[1], parts[2], parts[3])</code><br/>
+<code>       local text = msg[2] or 'Missing message'</code><br/>
+<code>       local cat = wanted_category(text_code.all_categories[msg[3]]) or ''</code><br/>
+<code>       local anchor = msg[4] or ''</code><br/>
+<code>       local fmt = text_code.all_messages[msg.format or 'cvt_format'] or 'convert: bug'</code><br/>
+<code>       title = title:gsub('"', '"')</code><br/>
+<code>       return format(fmt, anchor, title, text, cat)</code><br/>
+<code>   end</code><br/>
+<code>   return 'Convert internal error: unknown message'</code></p>
+
+<p>end</p>
+
+<p>function add_warning(parms, level, key, text1, text2) -- for forward declaration above</p>
+
+<p><code>   -- If enabled, add a warning that will be displayed after the convert result.</code><br/>
+<code>   -- To reduce output noise, only the first warning is displayed.</code><br/>
+<code>   if config.warnings or level </code><code> 60 then</code><br/>
+<code>       a = 60</code><br/>
+<code>   end</code><br/>
+<code>   return mach_table[a + 4] * 0.44704  -- mph converted to m/s</code></p>
+
+<p>end -- END: Code required only for built-in units.</p>
+<hr/>
+
+<p>local function get_range(word)</p>
+
+<p><code>   -- Return a range (string or table) corresponding to word (like "to"),</code><br/>
+<code>   -- or return nil if not a range word.</code><br/>
+<code>   local ranges = text_code.ranges</code><br/>
+<code>   return ranges.types[word] or ranges.types[ranges.aliases[word]]</code></p>
+
+<p>end</p>
+
+<p>local function check_mismatch(unit1, unit2)</p>
+
+<p><code>   -- If unit1 cannot be converted to unit2, return an error message table.</code><br/>
+<code>   -- This allows conversion between units of the same type, and between</code><br/>
+<code>   -- Nm (normally torque) and ftlb (energy), as in gun-related articles.</code><br/>
+<code>   -- This works because Nm is the base unit (scale = 1) for both the</code><br/>
+<code>   -- primary type (torque), and the alternate type (energy, where Nm = J).</code><br/>
+<code>   -- A match occurs if the primary types are the same, or if unit1 matches</code><br/>
+<code>   -- the alternate type of unit2, and vice versa. That provides a whitelist</code><br/>
+<code>   -- of which conversions are permitted between normally incompatible types.</code><br/>
+<code>   if unit1.utype == unit2.utype or</code><br/>
+<code>       (unit1.utype == unit2.alttype and unit1.alttype == unit2.utype) then</code><br/>
+<code>       return nil</code><br/>
+<code>   end</code><br/>
+<code>   return { 'cvt_mismatch', unit1.utype, unit2.utype }</code></p>
+
+<p>end</p>
+
+<p>local function override_from(out_table, in_table, fields)</p>
+
+<p><code>   -- Copy the specified fields from in_table to out_table, but do not</code><br/>
+<code>   -- copy nil fields (keep any corresponding field in out_table).</code><br/>
+<code>   for _, field in ipairs(fields) do</code><br/>
+<code>       if in_table[field] then</code><br/>
+<code>           out_table[field] = in_table[field]</code><br/>
+<code>       end</code><br/>
+<code>   end</code></p>
+
+<p>end</p>
+
+<p>local function shallow_copy(t)</p>
+
+<p><code>   -- Return a shallow copy of table t.</code><br/>
+<code>   -- Do not need the features and overhead of the Scribunto mw.clone().</code><br/>
+<code>   local result = {}</code><br/>
+<code>   for k, v in pairs(t) do</code><br/>
+<code>       result[k] = v</code><br/>
+<code>   end</code><br/>
+<code>   return result</code></p>
+
+<p>end</p>
+
+<p>local unit_mt = {</p>
+
+<p><code>   -- Metatable to get missing values for a unit that does not accept SI prefixes.</code><br/>
+<code>   -- Warning: The boolean value 'false' is returned for any missing field</code><br/>
+<code>   -- so __index is not called twice for the same field in a given unit.</code><br/>
+<code>   __index = function (self, key)</code><br/>
+<code>       local value</code><br/>
+<code>       if key == 'name1' or key == 'sym_us' then</code><br/>
+<code>           value = self.symbol</code><br/>
+<code>       elseif key == 'name2' then</code><br/>
+<code>           value = self.name1 .. plural_suffix</code><br/>
+<code>       elseif key == 'name1_us' then</code><br/>
+<code>           value = self.name1</code><br/>
+<code>           if not rawget(self, 'name2_us') then</code><br/>
+<code>               -- If name1_us is 'foot', do not make name2_us by appending plural_suffix.</code><br/>
+<code>               self.name2_us = self.name2</code><br/>
+<code>           end</code><br/>
+<code>       elseif key == 'name2_us' then</code><br/>
+<code>           local raw1_us = rawget(self, 'name1_us')</code><br/>
+<code>           if raw1_us then</code><br/>
+<code>               value = raw1_us .. plural_suffix</code><br/>
+<code>           else</code><br/>
+<code>               value = self.name2</code><br/>
+<code>           end</code><br/>
+<code>       elseif key == 'link' then</code><br/>
+<code>           value = self.name1</code><br/>
+<code>       else</code><br/>
+<code>           value = false</code><br/>
+<code>       end</code><br/>
+<code>       rawset(self, key, value)</code><br/>
+<code>       return value</code><br/>
+<code>   end</code></p>
+
+<p>}</p>
+
+<p>local function prefixed_name(unit, name, index)</p>
+
+<p><code>   -- Return unit name with SI prefix inserted at correct position.</code><br/>
+<code>   -- index = 1 (name1), 2 (name2), 3 (name1_us), 4 (name2_us).</code><br/>
+<code>   -- The position is a byte (not character) index, so use Lua's sub().</code><br/>
+<code>   local pos = rawget(unit, 'prefix_position')</code><br/>
+<code>   if type(pos) == 'string' then</code><br/>
+<code>       pos = tonumber(split(pos, ',')[index])</code><br/>
+<code>   end</code><br/>
+<code>   if pos then</code><br/>
+<code>       return name:sub(1, pos - 1) .. unit.si_name .. name:sub(pos)</code><br/>
+<code>   end</code><br/>
+<code>   return unit.si_name .. name</code></p>
+
+<p>end</p>
+
+<p>local unit_prefixed_mt = {</p>
+
+<p><code>   -- Metatable to get missing values for a unit that accepts SI prefixes.</code><br/>
+<code>   -- Before use, fields si_name, si_prefix must be defined.</code><br/>
+<code>   -- The unit must define _symbol, _name1 and</code><br/>
+<code>   -- may define _sym_us, _name1_us, _name2_us</code><br/>
+<code>   -- (_sym_us, _name2_us may be defined for a language using sp=us</code><br/>
+<code>   -- to refer to a variant unrelated to U.S. units).</code><br/>
+<code>   __index = function (self, key)</code><br/>
+<code>       local value</code><br/>
+<code>       if key == 'symbol' then</code><br/>
+<code>           value = self.si_prefix .. self._symbol</code><br/>
+<code>       elseif key == 'sym_us' then</code><br/>
+<code>           value = rawget(self, '_sym_us')</code><br/>
+<code>           if value then</code><br/>
+<code>               value = self.si_prefix .. value</code><br/>
+<code>           else</code><br/>
+<code>               value = self.symbol</code><br/>
+<code>           end</code><br/>
+<code>       elseif key == 'name1' then</code><br/>
+<code>           value = prefixed_name(self, self._name1, 1)</code><br/>
+<code>       elseif key == 'name2' then</code><br/>
+<code>           value = rawget(self, '_name2')</code><br/>
+<code>           if value then</code><br/>
+<code>               value = prefixed_name(self, value, 2)</code><br/>
+<code>           else</code><br/>
+<code>               value = self.name1 .. plural_suffix</code><br/>
+<code>           end</code><br/>
+<code>       elseif key == 'name1_us' then</code><br/>
+<code>           value = rawget(self, '_name1_us')</code><br/>
+<code>           if value then</code><br/>
+<code>               value = prefixed_name(self, value, 3)</code><br/>
+<code>           else</code><br/>
+<code>               value = self.name1</code><br/>
+<code>           end</code><br/>
+<code>       elseif key == 'name2_us' then</code><br/>
+<code>           value = rawget(self, '_name2_us')</code><br/>
+<code>           if value then</code><br/>
+<code>               value = prefixed_name(self, value, 4)</code><br/>
+<code>           elseif rawget(self, '_name1_us') then</code><br/>
+<code>               value = self.name1_us .. plural_suffix</code><br/>
+<code>           else</code><br/>
+<code>               value = self.name2</code><br/>
+<code>           end</code><br/>
+<code>       elseif key == 'link' then</code><br/>
+<code>           value = self.name1</code><br/>
+<code>       else</code><br/>
+<code>           value = false</code><br/>
+<code>       end</code><br/>
+<code>       rawset(self, key, value)</code><br/>
+<code>       return value</code><br/>
+<code>   end</code></p>
+
+<p>}</p>
+
+<p>local unit_per_mt = {</p>
+
+<p><code>   -- Metatable to get values for a per unit of form "x/y".</code><br/>
+<code>   -- This is never called to determine a unit name or link because per units</code><br/>
+<code>   -- are handled as a special case.</code><br/>
+<code>   -- Similarly, the default output is handled elsewhere.</code><br/>
+<code>   __index = function (self, key)</code><br/>
+<code>       local value</code><br/>
+<code>       if key == 'symbol' then</code><br/>
+<code>           local per = self.per</code><br/>
+<code>           local unit1, unit2 = per[1], per[2]</code><br/>
+<code>           if unit1 then</code><br/>
+<code>               value = unit1[key] .. '/' .. unit2[key]</code><br/>
+<code>           else</code><br/>
+<code>               value = '/' .. unit2[key]</code><br/>
+<code>           end</code><br/>
+<code>       elseif key == 'sym_us' then</code><br/>
+<code>           value = self.symbol</code><br/>
+<code>       elseif key == 'scale' then</code><br/>
+<code>           local per = self.per</code><br/>
+<code>           local unit1, unit2 = per[1], per[2]</code><br/>
+<code>           value = (unit1 and unit1.scale or 1) * self.scalemultiplier / unit2.scale</code><br/>
+<code>       else</code><br/>
+<code>           value = false</code><br/>
+<code>       end</code><br/>
+<code>       rawset(self, key, value)</code><br/>
+<code>       return value</code><br/>
+<code>   end</code></p>
+
+<p>}</p>
+
+<p>local function make_per(unit_table, force_sp_us, ulookup)</p>
+
+<p><code>   -- Return true, t where t is a per unit with unit codes expanded to unit tables,</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   local result = { utype = unit_table.utype, per = {} }</code><br/>
+<code>   override_from(result, unit_table, { 'invert', 'iscomplex', 'default', 'link', 'symbol', 'symlink' })</code><br/>
+<code>   result.symbol_raw = (result.symbol or false)  -- to distinguish between a defined exception and a metatable calculation</code><br/>
+<code>   local prefix</code><br/>
+<code>   for i, v in ipairs(unit_table.per) do</code><br/>
+<code>       if i == 1 and v == '' then</code><br/>
+<code>           -- First unit symbol can be empty; that gives a nil first unit table.</code><br/>
+<code>       elseif i == 1 and text_code.currency[v] then</code><br/>
+<code>           prefix = currency_text or v</code><br/>
+<code>       else</code><br/>
+<code>           local success, t = ulookup(v)</code><br/>
+<code>           if not success then return false, t end</code><br/>
+<code>           result.per[i] = t</code><br/>
+<code>           if t.sp_us then  -- if the top or bottom unit forces sp=us, set the per unit to use the correct name/symbol</code><br/>
+<code>               force_sp_us = true</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local multiplier = unit_table.multiplier</code><br/>
+<code>   if not result.utype then</code><br/>
+<code>       -- Creating an automatic per unit.</code><br/>
+<code>       local unit1 = result.per[1]</code><br/>
+<code>       local utype = (unit1 and unit1.utype or prefix or '') .. '/' .. result.per[2].utype</code><br/>
+<code>       local t = data_code.per_unit_fixups[utype]</code><br/>
+<code>       if t then</code><br/>
+<code>           if type(t) == 'table' then</code><br/>
+<code>               utype = t.utype or utype</code><br/>
+<code>               result.link = result.link or t.link</code><br/>
+<code>               multiplier = multiplier or t.multiplier</code><br/>
+<code>           else</code><br/>
+<code>               utype = t</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       result.utype = utype</code><br/>
+<code>   end</code><br/>
+<code>   result.scalemultiplier = multiplier or 1</code><br/>
+<code>   result.vprefix = prefix or false  -- set to non-nil to avoid calling __index</code><br/>
+<code>   result.sp_us = force_sp_us</code><br/>
+<code>   return true, setmetatable(result, unit_per_mt)</code></p>
+
+<p>end</p>
+
+<p>local function lookup(unitcode, opt_sp_us, what, utable, fails, depth)</p>
+
+<p><code>   -- Return true, t where t is a copy of the unit's converter table,</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   -- Parameter opt_sp_us is true for US spelling of SI prefixes and</code><br/>
+<code>   -- the symbol and name of the unit. If true, the result includes field</code><br/>
+<code>   -- sp_us = true (that field may also have been in the unit definition).</code><br/>
+<code>   -- Parameter 'what' determines whether combination units are accepted:</code><br/>
+<code>   --   'no_combination'  : single unit only</code><br/>
+<code>   --   'any_combination' : single unit or combination or output multiple</code><br/>
+<code>   --   'only_multiple'   : single unit or output multiple only</code><br/>
+<code>   -- Parameter unitcode is a symbol (like 'g'), with an optional SI prefix (like 'kg').</code><br/>
+<code>   -- If, for example, 'kg' is in this table, that entry is used;</code><br/>
+<code>   -- otherwise the prefix ('k') is applied to the base unit ('g').</code><br/>
+<code>   -- If unitcode is a known combination code (and if allowed by what),</code><br/>
+<code>   -- a table of output multiple unit tables is included in the result.</code><br/>
+<code>   -- For compatibility with the old template, an underscore in a unitcode is</code><br/>
+<code>   -- replaced with a space so usage like </code><mtpl></mtpl><code> works.</code><br/>
+<code>   -- Wikignomes may also put two spaces or " " in combinations, so</code><br/>
+<code>   -- replace underscore, " ", and multiple spaces with a single space.</code><br/>
+<code>   utable = utable or all_units</code><br/>
+<code>   fails = fails or {}</code><br/>
+<code>   depth = depth and depth + 1 or 1</code><br/>
+<code>   if depth &gt; 9 then</code><br/>
+<code>       -- There are ways to mistakenly define units which result in infinite</code><br/>
+<code>       -- recursion when lookup() is called. That gives a long delay and very</code><br/>
+<code>       -- confusing error messages, so the depth parameter is used as a guard.</code><br/>
+<code>       return false, { 'cvt_lookup', unitcode }</code><br/>
+<code>   end</code><br/>
+<code>   if unitcode == nil or unitcode == '' then</code><br/>
+<code>       return false, { 'cvt_no_unit' }</code><br/>
+<code>   end</code><br/>
+<code>   unitcode = unitcode:gsub('_', ' '):gsub(' ', ' '):gsub('  +', ' ')</code><br/>
+<code>   local t = utable[unitcode]</code><br/>
+<code>   if t then</code><br/>
+<code>       if t.shouldbe then</code><br/>
+<code>           return false, { 'cvt_should_be', t.shouldbe }</code><br/>
+<code>       end</code><br/>
+<code>       local force_sp_us = opt_sp_us</code><br/>
+<code>       if t.sp_us then</code><br/>
+<code>           force_sp_us = true</code><br/>
+<code>           opt_sp_us = true</code><br/>
+<code>       end</code><br/>
+<code>       local target = t.target  -- nil, or unitcode is an alias for this target</code><br/>
+<code>       if target then</code><br/>
+<code>           local success, result = lookup(target, opt_sp_us, what, utable, fails, depth)</code><br/>
+<code>           if not success then return false, result end</code><br/>
+<code>           override_from(result, t, { 'customary', 'default', 'link', 'symbol', 'symlink' })</code><br/>
+<code>           local multiplier = t.multiplier</code><br/>
+<code>           if multiplier then</code><br/>
+<code>               result.multiplier = tostring(multiplier)</code><br/>
+<code>               result.scale = result.scale * multiplier</code><br/>
+<code>           end</code><br/>
+<code>           return true, result</code><br/>
+<code>       end</code><br/>
+<code>       if t.per then</code><br/>
+<code>           return make_per(t, force_sp_us, function (ucode) return lookup(ucode, opt_sp_us, 'no_combination', utable, fails, depth) end)</code><br/>
+<code>       end</code><br/>
+<code>       local combo = t.combination  -- nil or a table of unitcodes</code><br/>
+<code>       if combo then</code><br/>
+<code>           local multiple = t.multiple</code><br/>
+<code>           if what == 'no_combination' or (what == 'only_multiple' and not multiple) then</code><br/>
+<code>               return false, { 'cvt_bad_unit', unitcode }</code><br/>
+<code>           end</code><br/>
+<code>           -- Recursively create a combination table containing the</code><br/>
+<code>           -- converter table of each unitcode.</code><br/>
+<code>           local result = { utype = t.utype, multiple = multiple, combination = {} }</code><br/>
+<code>           local cvt = result.combination</code><br/>
+<code>           for i, v in ipairs(combo) do</code><br/>
+<code>               local success, t = lookup(v, opt_sp_us, multiple and 'no_combination' or 'only_multiple', utable, fails, depth)</code><br/>
+<code>               if not success then return false, t end</code><br/>
+<code>               cvt[i] = t</code><br/>
+<code>           end</code><br/>
+<code>           return true, result</code><br/>
+<code>       end</code><br/>
+<code>       local result = shallow_copy(t)</code><br/>
+<code>       result.sp_us = force_sp_us</code><br/>
+<code>       if result.prefixes then</code><br/>
+<code>           result.si_name = ''</code><br/>
+<code>           result.si_prefix = ''</code><br/>
+<code>           return true, setmetatable(result, unit_prefixed_mt)</code><br/>
+<code>       end</code><br/>
+<code>       return true, setmetatable(result, unit_mt)</code><br/>
+<code>   end</code><br/>
+<code>   local SIprefixes = text_code.SIprefixes</code><br/>
+<code>   for plen = SIprefixes[1] or 2, 1, -1 do</code><br/>
+<code>       -- Look for an SI prefix; should never occur with an alias.</code><br/>
+<code>       -- Check for longer prefix first ('dam' is decametre).</code><br/>
+<code>       -- SIprefixes[1] = prefix maximum #characters (as seen by mw.ustring.sub).</code><br/>
+<code>       local prefix = usub(unitcode, 1, plen)</code><br/>
+<code>       local si = SIprefixes[prefix]</code><br/>
+<code>       if si then</code><br/>
+<code>           local t = utable[usub(unitcode, plen+1)]</code><br/>
+<code>           if t and t.prefixes then</code><br/>
+<code>               local result = shallow_copy(t)</code><br/>
+<code>               if opt_sp_us then</code><br/>
+<code>                   result.sp_us = true</code><br/>
+<code>               end</code><br/>
+<code>               if result.sp_us and si.name_us then</code><br/>
+<code>                   result.si_name = si.name_us</code><br/>
+<code>               else</code><br/>
+<code>                   result.si_name = si.name</code><br/>
+<code>               end</code><br/>
+<code>               result.si_prefix = si.prefix or prefix</code><br/>
+<code>               result.scale = t.scale * 10 ^ (si.exponent * t.prefixes)</code><br/>
+<code>               return true, setmetatable(result, unit_prefixed_mt)</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   -- Accept any unit with an engineering notation prefix like "e6cuft"</code><br/>
+<code>   -- (million cubic feet), but not chained prefixes like "e3e6cuft",</code><br/>
+<code>   -- and not if the unit is a combination or multiple,</code><br/>
+<code>   -- and not if the unit has an offset or is a built-in.</code><br/>
+<code>   -- Only en digits are accepted.</code><br/>
+<code>   local has_plus = unitcode:find('+', 1, true)</code><br/>
+<code>   if not has_plus then</code><br/>
+<code>       local exponent, baseunit = unitcode:match('^e(%d+)(.*)')</code><br/>
+<code>       if exponent then</code><br/>
+<code>           local engscale = text_code.eng_scales[exponent]</code><br/>
+<code>           if engscale then</code><br/>
+<code>               local success, result = lookup(baseunit, opt_sp_us, 'no_combination', utable, fails, depth)</code><br/>
+<code>               if success and not (result.offset or result.builtin or result.engscale) then</code><br/>
+<code>                   result.defkey = unitcode  -- key to lookup default exception</code><br/>
+<code>                   result.engscale = engscale</code><br/>
+<code>                   result.scale = result.scale * 10 ^ tonumber(exponent)</code><br/>
+<code>                   return true, result</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   -- Accept user-defined combinations like "acre+m2+ha" or "acre m2 ha" for output.</code><br/>
+<code>   -- If '+' is used, each unit code can include a space, and any error is fatal.</code><br/>
+<code>   -- If ' ' is used and if each space-separated word is a unit code, it is a combo,</code><br/>
+<code>   -- but errors are not fatal so the unit code can be looked up as an extra unit.</code><br/>
+<code>   local err_is_fatal</code><br/>
+<code>   local combo = collection()</code><br/>
+<code>   if has_plus then</code><br/>
+<code>       err_is_fatal = true</code><br/>
+<code>       for item in (unitcode .. '+'):gmatch('%s*(.-)%s*%+') do</code><br/>
+<code>           if item ~= '' then</code><br/>
+<code>               combo:add(item)</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   elseif unitcode:find('%s') then</code><br/>
+<code>       for item in unitcode:gmatch('%S+') do</code><br/>
+<code>           combo:add(item)</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if combo.n &gt; 1 then</code><br/>
+<code>       local function lookup_combo()</code><br/>
+<code>           if what == 'no_combination' or what == 'only_multiple' then</code><br/>
+<code>               return false, { 'cvt_bad_unit', unitcode }</code><br/>
+<code>           end</code><br/>
+<code>           local result = { combination = {} }</code><br/>
+<code>           local cvt = result.combination</code><br/>
+<code>           for i, v in ipairs(combo) do</code><br/>
+<code>               local success, t = lookup(v, opt_sp_us, 'only_multiple', utable, fails, depth)</code><br/>
+<code>               if not success then return false, t end</code><br/>
+<code>               if i == 1 then</code><br/>
+<code>                   result.utype = t.utype</code><br/>
+<code>               else</code><br/>
+<code>                   local mismatch = check_mismatch(result, t)</code><br/>
+<code>                   if mismatch then</code><br/>
+<code>                       return false, mismatch</code><br/>
+<code>                   end</code><br/>
+<code>               end</code><br/>
+<code>               cvt[i] = t</code><br/>
+<code>           end</code><br/>
+<code>           return true, result</code><br/>
+<code>       end</code><br/>
+<code>       local success, result = lookup_combo()</code><br/>
+<code>       if success or err_is_fatal then</code><br/>
+<code>           return success, result</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   -- Look for x/y; split on right-most slash to get scale correct (x/y/z is x/y per z).</code><br/>
+<code>   local top, bottom = unitcode:match('^(.-)/([^/]+)$')</code><br/>
+<code>   if top and not unitcode:find('e%d') then</code><br/>
+<code>       -- If valid, create an automatic per unit for an "x/y" unit code.</code><br/>
+<code>       -- The unitcode must not include extraneous spaces.</code><br/>
+<code>       -- Engineering notation (apart from at start and which has been stripped before here),</code><br/>
+<code>       -- is not supported so do not make a per unit if find text like 'e3' in unitcode.</code><br/>
+<code>       local success, result = make_per({ per = {top, bottom} }, opt_sp_us, function (ucode) return lookup(ucode, opt_sp_us, 'no_combination', utable, fails, depth) end)</code><br/>
+<code>       if success then</code><br/>
+<code>           return true, result</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if not ignore_extra_units and not get_range(unitcode) then</code><br/>
+<code>       -- Want the "what links here" list for the extra_module to show only cases</code><br/>
+<code>       -- where an extra unit is used, so do not require it if invoked from </code><mtpl></mtpl><br/>
+<code>       -- or if looking up a range word which cannot be a unit.</code><br/>
+<code>       if not extra_units then</code><br/>
+<code>           local success, extra = pcall(function () return require(extra_module).extra_units end)</code><br/>
+<code>           if success and type(extra) == 'table' then</code><br/>
+<code>               extra_units = extra</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       if extra_units then</code><br/>
+<code>           -- A unit in one data table might refer to a unit in the other table, so</code><br/>
+<code>           -- switch between them, relying on fails or depth to terminate loops.</code><br/>
+<code>           if not fails[unitcode] then</code><br/>
+<code>               fails[unitcode] = true</code><br/>
+<code>               local other = (utable == all_units) and extra_units or all_units</code><br/>
+<code>               local success, result = lookup(unitcode, opt_sp_us, what, other, fails, depth)</code><br/>
+<code>               if success then</code><br/>
+<code>                   return true, result</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if to_en_table then</code><br/>
+<code>       -- At fawiki it is common to translate all digits so a unit like "km2" becomes "km۲".</code><br/>
+<code>       local en_code = ustring.gsub(unitcode, '%d', to_en_table)</code><br/>
+<code>       if en_code ~= unitcode then</code><br/>
+<code>           return lookup(en_code, opt_sp_us, what, utable, fails, depth)</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   return false, { 'cvt_unknown', unitcode }</code></p>
+
+<p>end</p>
+
+<p>local function valid_number(num)</p>
+
+<p><code>   -- Return true if num is a valid number.</code><br/>
+<code>   -- In Scribunto (different from some standard Lua), when expressed as a string,</code><br/>
+<code>   -- overflow or other problems are indicated with text like "inf" or "nan"</code><br/>
+<code>   -- which are regarded as invalid here (each contains "n").</code><br/>
+<code>   if type(num) == 'number' and tostring(num):find('n', 1, true) == nil then</code><br/>
+<code>       return true</code><br/>
+<code>   end</code></p>
+
+<p>end</p>
+
+<p>local function hyphenated(name, parts)</p>
+
+<p><code>   -- Return a hyphenated form of given name (for adjectival usage).</code><br/>
+<code>   -- The name may be linked and the target of the link must not be changed.</code><br/>
+<code>   -- Hypothetical examples:</code><br/>
+<code>   --   </code><a href="long_ton" title="wikilink"><code>ton</code></a><code>         →  </code><a href="long_ton" title="wikilink"><code>ton</code></a><code>          (no change)</code><br/>
+<code>   --   </code><a href="tonne" title="wikilink"><code>long</code> <code>ton</code></a><code>       →  </code><a href="tonne" title="wikilink"><code>long-ton</code></a><br/>
+<code>   --   </code><a href="metric_ton" title="wikilink"><code>long</code> <code>ton</code></a><code>  →  </code><a href="metric_ton" title="wikilink"><code>long-ton</code></a><br/>
+<code>   --   </code><a href="long_ton" title="wikilink"><code>long</code> <code>ton</code></a><code>             →  </code><a href="long_ton" title="wikilink"><code>long-ton</code></a><br/>
+<code>   -- Input can also have multiple links in a single name like:</code><br/>
+<code>   --   </code><a href="United_States_customary_units" title="wikilink"><code>U.S.</code></a><code> </code><a href="US_gallon" title="wikilink"><code>gallon</code></a><br/>
+<code>   --   </code><a href="mile" title="wikilink"><code>miles</code></a><code> per </code><a href="United_States_customary_units" title="wikilink"><code>U.S.</code></a><code> </code><a href="quart" title="wikilink"><code>quart</code></a><br/>
+<code>   --   </code><a href="long_ton" title="wikilink"><code>long</code> <code>tons</code></a><code> per </code><a href="short_ton" title="wikilink"><code>short</code> <code>ton</code></a><br/>
+<code>   -- Assume that links cannot be nested (never like "</code><a href="abc[[def" title="wikilink"><code>abc[[defghi</code></a><code>]]").</code><br/>
+<code>   -- This uses a simple and efficient procedure that works for most cases.</code><br/>
+<code>   -- Some units (if used) would require more, and can later think about</code><br/>
+<code>   -- adding a method to handle exceptions.</code><br/>
+<code>   -- The procedure is to replace each space with a hyphen, but</code><br/>
+<code>   -- not a space after ')' [for "(pre-1954 US) nautical mile"], and</code><br/>
+<code>   -- not spaces immediately before '(' or in '(...)' [for cases like</code><br/>
+<code>   -- "British thermal unit (ISO)" and "Calorie (International Steam Table)"].</code><br/>
+<code>   if name:find(' ', 1, true) then</code><br/>
+<code>       if parts then</code><br/>
+<code>           local pos</code><br/>
+<code>           if name:sub(1, 1) == '(' then</code><br/>
+<code>               pos = name:find(')', 1, true)</code><br/>
+<code>               if pos then</code><br/>
+<code>                   return name:sub(1, pos+1) .. name:sub(pos+2):gsub(' ', '-')</code><br/>
+<code>               end</code><br/>
+<code>           elseif name:sub(-1) == ')' then</code><br/>
+<code>               pos = name:find('(', 1, true)</code><br/>
+<code>               if pos then</code><br/>
+<code>                   return name:sub(1, pos-2):gsub(' ', '-') .. name:sub(pos-1)</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>           return name:gsub(' ', '-')</code><br/>
+<code>       end</code><br/>
+<code>       parts = collection()</code><br/>
+<code>       for before, item, after in name:gmatch('([^[]*)(%[%[[^[]*%]%])([^[]*)') do</code><br/>
+<code>           if item:find(' ', 1, true) then</code><br/>
+<code>               local prefix</code><br/>
+<code>               local plen = item:find('|', 1, true)</code><br/>
+<code>               if plen then</code><br/>
+<code>                   prefix = item:sub(1, plen)</code><br/>
+<code>                   item = item:sub(plen + 1, -3)</code><br/>
+<code>               else</code><br/>
+<code>                   prefix = item:sub(1, -3) .. '|'</code><br/>
+<code>                   item = item:sub(3, -3)</code><br/>
+<code>               end</code><br/>
+<code>               item = prefix .. hyphenated(item, parts) .. ']]'</code><br/>
+<code>           end</code><br/>
+<code>           parts:add(before:gsub(' ', '-') .. item .. after:gsub(' ', '-'))</code><br/>
+<code>       end</code><br/>
+<code>       if parts.n == 0 then</code><br/>
+<code>           -- No link like "</code><a href="..." title="wikilink"><code>...</code></a><code>" was found in the original name.</code><br/>
+<code>           parts:add(hyphenated(name, parts))</code><br/>
+<code>       end</code><br/>
+<code>       return table.concat(parts)</code><br/>
+<code>   end</code><br/>
+<code>   return name</code></p>
+
+<p>end</p>
+
+<p>local function hyphenated_maybe(parms, want_name, sep, id, inout)</p>
+
+<p><code>   -- Return s, f where</code><br/>
+<code>   --   s = id, possibly modified</code><br/>
+<code>   --   f = true if hyphenated</code><br/>
+<code>   -- Possible modifications: hyphenate; prepend '-'; append mid text.</code><br/>
+<code>   if id == nil or id == '' then</code><br/>
+<code>       return ''</code><br/>
+<code>   end</code><br/>
+<code>   local mid = (inout == (parms.opt_flip and 'out' or 'in')) and parms.mid or ''</code><br/>
+<code>   if want_name then</code><br/>
+<code>       if parms.opt_adjectival then</code><br/>
+<code>           return '-' .. hyphenated(id) .. mid, true</code><br/>
+<code>       end</code><br/>
+<code>       if parms.opt_add_s and id:sub(-1) ~= 's' then</code><br/>
+<code>           id = id .. 's'  -- for nowiki</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   return sep .. id .. mid</code></p>
+
+<p>end</p>
+
+<p>local function change_sign(text)</p>
+
+<p><code>   -- Change sign of text for correct appearance because it is negated.</code><br/>
+<code>   if text:sub(1, 1) == '-' then</code><br/>
+<code>       return text:sub(2)</code><br/>
+<code>   end</code><br/>
+<code>   return '-' .. text</code></p>
+
+<p>end</p>
+
+<p>local function use_minus(text)</p>
+
+<p><code>   -- Return text with Unicode minus instead of '-', if present.</code><br/>
+<code>   if text:sub(1, 1) == '-' then</code><br/>
+<code>       return MINUS .. text:sub(2)</code><br/>
+<code>   end</code><br/>
+<code>   return text</code></p>
+
+<p>end</p>
+
+<p>local function digit_groups(parms, text, method)</p>
+
+<p><code>   -- Return a numbered table of groups of digits (left-to-right, in local language).</code><br/>
+<code>   -- Parameter method is a number or nil:</code><br/>
+<code>   --   3 for 3-digit grouping (default), or</code><br/>
+<code>   --   2 for 3-then-2 grouping (only for digits before decimal mark).</code><br/>
+<code>   local len_right</code><br/>
+<code>   local len_left = text:find('.', 1, true)</code><br/>
+<code>   if len_left then</code><br/>
+<code>       len_right = #text - len_left</code><br/>
+<code>       len_left = len_left - 1</code><br/>
+<code>   else</code><br/>
+<code>       len_left = #text</code><br/>
+<code>   end</code><br/>
+<code>   local twos = method == 2 and len_left &gt; 5</code><br/>
+<code>   local groups = collection()</code><br/>
+<code>   local run = len_left</code><br/>
+<code>   local n</code><br/>
+<code>   if run </code><code> 0 do</code><br/>
+<code>       groups:add(n)</code><br/>
+<code>       run = run - n</code><br/>
+<code>       n = (twos and run &gt; 3) and 2 or 3</code><br/>
+<code>   end</code><br/>
+<code>   if len_right then</code><br/>
+<code>       if groups.n == 0 then</code><br/>
+<code>           groups:add(0)</code><br/>
+<code>       end</code><br/>
+<code>       if parms.opt_gaps and len_right &gt; 3 then</code><br/>
+<code>           local want4 = not parms.opt_gaps3  -- true gives no gap before trailing single digit</code><br/>
+<code>           local isfirst = true</code><br/>
+<code>           run = len_right</code><br/>
+<code>           while run &gt; 0 do</code><br/>
+<code>               n = (want4 and run == 4) and 4 or (run &gt; 3 and 3 or run)</code><br/>
+<code>               if isfirst then</code><br/>
+<code>                   isfirst = false</code><br/>
+<code>                   groups[groups.n] = groups[groups.n] + 1 + n</code><br/>
+<code>               else</code><br/>
+<code>                   groups:add(n)</code><br/>
+<code>               end</code><br/>
+<code>               run = run - n</code><br/>
+<code>           end</code><br/>
+<code>       else</code><br/>
+<code>           groups[groups.n] = groups[groups.n] + 1 + len_right</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local pos = 1</code><br/>
+<code>   for i, length in ipairs(groups) do</code><br/>
+<code>       groups[i] = from_en(text:sub(pos, pos + length - 1))</code><br/>
+<code>       pos = pos + length</code><br/>
+<code>   end</code><br/>
+<code>   return groups</code></p>
+
+<p>end</p>
+
+<p>function with_separator(parms, text) -- for forward declaration above</p>
+
+<p><code>   -- Input text is a number in en digits with optional '.' decimal mark.</code><br/>
+<code>   -- Return an equivalent, formatted for display:</code><br/>
+<code>   --   with a custom decimal mark instead of '.', if wanted</code><br/>
+<code>   --   with thousand separators inserted, if wanted</code><br/>
+<code>   --   digits in local language</code><br/>
+<code>   -- The given text is like '123' or '123.' or '12345.6789'.</code><br/>
+<code>   -- The text has no sign (caller inserts that later, if necessary).</code><br/>
+<code>   -- When using gaps, they are inserted before and after the decimal mark.</code><br/>
+<code>   -- Separators are inserted only before the decimal mark.</code><br/>
+<code>   if #text </code><code>'</code><br/>
+<code>       local gap = '</code><span style="margin-left: 0.25em"><code>'</code><br/>
+<code>       local close = '</code></span><code>'</code><br/>
+<code>       return nowrap .. groups[1] .. gap .. table.concat(groups, close .. gap, 2, groups.n) .. close .. close</code><br/>
+<code>   end</code><br/>
+<code>   return table.concat(groups, numsep)</code></p>
+
+<p>end</p>
+
+<p>-- An input value like 1.23e12 is displayed using scientific notation (1.23×10¹²). -- That also makes the output use scientific notation, except for small values. -- In addition, very small or very large output values use scientific notation. -- Use format(fmtpower, significand, '10', exponent) where each argument is a string. local fmtpower = '%s<span style="margin:0 .15em 0 .25em">×</span>%s<sup>%s</sup>'</p>
+
+<p>local function with_exponent(parms, show, exponent)</p>
+
+<p><code>   -- Return wikitext to display the implied value in scientific notation.</code><br/>
+<code>   -- Input uses en digits; output uses digits in local language.</code><br/>
+<code>   return format(fmtpower, with_separator(parms, show), from_en('10'), use_minus(from_en(tostring(exponent))))</code></p>
+
+<p>end</p>
+
+<p>local function make_sigfig(value, sigfig)</p>
+
+<p><code>   -- Return show, exponent that are equivalent to the result of</code><br/>
+<code>   -- converting the number 'value' (where value &gt;= 0) to a string,</code><br/>
+<code>   -- rounded to 'sigfig' significant figures.</code><br/>
+<code>   -- The returned items are:</code><br/>
+<code>   --   show: a string of digits; no sign and no dot;</code><br/>
+<code>   --         there is an implied dot before show.</code><br/>
+<code>   --   exponent: a number (an integer) to shift the implied dot.</code><br/>
+<code>   -- Resulting value = tonumber('.' .. show) * 10^exponent.</code><br/>
+<code>   -- Examples:</code><br/>
+<code>   --   make_sigfig(23.456, 3) returns '235', 2 (.235 * 10^2).</code><br/>
+<code>   --   make_sigfig(0.0023456, 3) returns '235', -2 (.235 * 10^-2).</code><br/>
+<code>   --   make_sigfig(0, 3) returns '000', 1 (.000 * 10^1).</code><br/>
+<code>   if sigfig </code><code> maxsigfig then</code><br/>
+<code>       sigfig = maxsigfig</code><br/>
+<code>   end</code><br/>
+<code>   if value == 0 then</code><br/>
+<code>       return string.rep('0', sigfig), 1</code><br/>
+<code>   end</code><br/>
+<code>   local exp, fracpart = math.modf(log10(value))</code><br/>
+<code>   if fracpart &gt;= 0 then</code><br/>
+<code>       fracpart = fracpart - 1</code><br/>
+<code>       exp = exp + 1</code><br/>
+<code>   end</code><br/>
+<code>   local digits = format('%.0f', 10^(fracpart + sigfig))</code><br/>
+<code>   if #digits &gt; sigfig then</code><br/>
+<code>       -- Overflow (for sigfig=3: like 0.9999 rounding to "1000"; need "100").</code><br/>
+<code>       digits = digits:sub(1, sigfig)</code><br/>
+<code>       exp = exp + 1</code><br/>
+<code>   end</code><br/>
+<code>   assert(#digits == sigfig, 'Bug: rounded number has wrong length')</code><br/>
+<code>   return digits, exp</code></p>
+
+<p>end</p>
+
+<p>-- Fraction output format. local fracfmt = {</p>
+
+<p><code>   { -- Like </code><mtpl></mtpl><code> (fraction slash).</code><br/>
+<code>       -- 1/2    : sign, numerator, denominator</code><br/>
+<code>       -- 1+2/3  : signed_wholenumber, numerator, denominator</code><br/>
+<code>       '</code><span class="frac nowrap"><code>%s</code><sup><code>%s</code></sup><code>⁄</code><sub><code>%s</code></sub></span><code>',</code><br/>
+<code>       '</code><span class="frac nowrap"><code>%s</code><span class="visualhide"><code> </code></span><sup><code>%s</code></sup><code>⁄</code><sub><code>%s</code></sub></span><code>',</code><br/>
+<code>   },</code><br/>
+<code>   { -- Like </code><mtpl></mtpl><code> (fraction horizontal bar).</code><br/>
+<code>       -- 1//2   : sign, numerator, denominator (sign should probably be before the fraction, but then it can wrap, and html is already too long)</code><br/>
+<code>       -- 1+2//3 : signed_wholenumber, numerator, denominator</code><br/>
+<code>       '</code><span class="sfrac nowrap" style="display:inline-block; vertical-align:-0.5em; font-size:85%%; text-align:center;"><span style="display:block; line-height:1em; padding:0 0.1em;"><code>%s%s</code></span><span class="visualhide"><code>/</code></span><span style="display:block; line-height:1em; padding:0 0.1em; border-top:1px solid;"><code>%s</code></span></span><code>',</code><br/>
+<code>       '</code><span class="sfrac nowrap"><code>%s</code><span class="visualhide"><code> </code></span><span style="display:inline-block; vertical-align:-0.5em; font-size:85%%; text-align:center;"><span style="display:block; line-height:1em; padding:0 0.1em;"><code>%s</code></span><span class="visualhide"><code>/</code></span><span style="display:block; line-height:1em; padding:0 0.1em; border-top:1px solid;"><code>%s</code></span></span></span><code>',</code><br/>
+<code>   },</code></p>
+
+<p>}</p>
+
+<p>local function format_fraction(parms, inout, negative, wholestr, numstr, denstr, do_spell, style)</p>
+
+<p><code>   -- Return wikitext for a fraction, possibly spelled.</code><br/>
+<code>   -- Inputs use en digits and have no sign; output uses digits in local language.</code><br/>
+<code>   local wikitext</code><br/>
+<code>   if not style then</code><br/>
+<code>       style=parms.opt_fraction_horizontal and 2 or 1</code><br/>
+<code>   end</code><br/>
+<code>   if wholestr == '' then</code><br/>
+<code>       wholestr = nil</code><br/>
+<code>   end</code><br/>
+<code>   if wholestr then</code><br/>
+<code>       local decorated = with_separator(parms, wholestr)</code><br/>
+<code>       if negative then</code><br/>
+<code>           decorated = MINUS .. decorated</code><br/>
+<code>       end</code><br/>
+<code>       local fmt = fracfmt[style][2]</code><br/>
+<code>       wikitext = format(fmt, decorated, from_en(numstr), from_en(denstr))</code><br/>
+<code>   else</code><br/>
+<code>       local sign = negative and MINUS or ''</code><br/>
+<code>       wikitext = format(fracfmt[style][1], sign, from_en(numstr), from_en(denstr))</code><br/>
+<code>   end</code><br/>
+<code>   if do_spell then</code><br/>
+<code>       if negative then</code><br/>
+<code>           if wholestr then</code><br/>
+<code>               wholestr = '-' .. wholestr</code><br/>
+<code>           else</code><br/>
+<code>               numstr = '-' .. numstr</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       wikitext = spell_number(parms, inout, wholestr, numstr, denstr) or wikitext</code><br/>
+<code>   end</code><br/>
+<code>   return wikitext</code></p>
+
+<p>end</p>
+
+<p>local function format_number(parms, show, exponent, isnegative)</p>
+
+<p><code>   -- Parameter show is a string or a table containing strings.</code><br/>
+<code>   -- Each string is a formatted number in en digits and optional '.' decimal mark.</code><br/>
+<code>   -- A table represents a fraction: integer, numerator, denominator;</code><br/>
+<code>   -- if a table is given, exponent must be nil.</code><br/>
+<code>   -- Return t where t is a table with fields:</code><br/>
+<code>   --   show = wikitext formatted to display implied value</code><br/>
+<code>   --          (digits in local language)</code><br/>
+<code>   --   is_scientific = true if show uses scientific notation</code><br/>
+<code>   --   clean = unformatted show (possibly adjusted and with inserted '.')</code><br/>
+<code>   --          (en digits)</code><br/>
+<code>   --   sign = '' or MINUS</code><br/>
+<code>   --   exponent = exponent (possibly adjusted)</code><br/>
+<code>   -- The clean and exponent fields can be used to calculate the</code><br/>
+<code>   -- rounded absolute value, if needed.</code><br/>
+<code>   --</code><br/>
+<code>   -- The value implied by the arguments is found from:</code><br/>
+<code>   --   exponent is nil; and</code><br/>
+<code>   --   show is a string of digits (no sign), with an optional dot;</code><br/>
+<code>   --   show = '123.4' is value 123.4, '1234' is value 1234.0;</code><br/>
+<code>   -- or:</code><br/>
+<code>   --   exponent is an integer indicating where dot should be;</code><br/>
+<code>   --   show is a string of digits (no sign and no dot);</code><br/>
+<code>   --   there is an implied dot before show;</code><br/>
+<code>   --   show does not start with '0';</code><br/>
+<code>   --   show = '1234', exponent = 3 is value 0.1234*10^3 = 123.4.</code><br/>
+<code>   --</code><br/>
+<code>   -- The formatted result:</code><br/>
+<code>   -- * Is for an output value and is spelled if wanted and possible.</code><br/>
+<code>   -- * Includes a Unicode minus if isnegative and not spelled.</code><br/>
+<code>   -- * Uses a custom decimal mark, if wanted.</code><br/>
+<code>   -- * Has digits grouped where necessary, if wanted.</code><br/>
+<code>   -- * Uses scientific notation if requested, or for very small or large values</code><br/>
+<code>   --   (which forces result to not be spelled).</code><br/>
+<code>   -- * Has no more than maxsigfig significant digits</code><br/>
+<code>   --   (same as old template and </code><mtpl><code>{{#expr}}</code></mtpl><code>).</code><br/>
+<code>   local xhi, xlo  -- these control when scientific notation (exponent) is used</code><br/>
+<code>   if parms.opt_scientific then</code><br/>
+<code>       xhi, xlo = 4, 2  -- default for output if input uses e-notation</code><br/>
+<code>   elseif parms.opt_scientific_always then</code><br/>
+<code>       xhi, xlo = 0, 0  -- always use scientific notation (experimental)</code><br/>
+<code>   else</code><br/>
+<code>       xhi, xlo = 10, 4  -- default</code><br/>
+<code>   end</code><br/>
+<code>   local sign = isnegative and MINUS or ''</code><br/>
+<code>   local maxlen = maxsigfig</code><br/>
+<code>   local tfrac</code><br/>
+<code>   if type(show) == 'table' then</code><br/>
+<code>       tfrac = show</code><br/>
+<code>       show = tfrac.wholestr</code><br/>
+<code>       assert(exponent == nil, 'Bug: exponent given with fraction')</code><br/>
+<code>   end</code><br/>
+<code>   if not tfrac and not exponent then</code><br/>
+<code>       local integer, dot, decimals = show:match('^(%d*)(%.?)(.*)')</code><br/>
+<code>       if integer == '0' or integer == '' then</code><br/>
+<code>           local zeros, figs = decimals:match('^(0*)([^0]?.*)')</code><br/>
+<code>           if #figs == 0 then</code><br/>
+<code>               if #zeros &gt; maxlen then</code><br/>
+<code>                   show = '0.' .. zeros:sub(1, maxlen)</code><br/>
+<code>               end</code><br/>
+<code>           elseif #zeros &gt;= xlo then</code><br/>
+<code>               show = figs</code><br/>
+<code>               exponent = -#zeros</code><br/>
+<code>           elseif #figs &gt; maxlen then</code><br/>
+<code>               show = '0.' .. zeros .. figs:sub(1, maxlen)</code><br/>
+<code>           end</code><br/>
+<code>       elseif #integer &gt;= xhi then</code><br/>
+<code>           show = integer .. decimals</code><br/>
+<code>           exponent = #integer</code><br/>
+<code>       else</code><br/>
+<code>           maxlen = maxlen + #dot</code><br/>
+<code>           if #show &gt; maxlen then</code><br/>
+<code>               show = show:sub(1, maxlen)</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if exponent then</code><br/>
+<code>       local function zeros(n)</code><br/>
+<code>           return string.rep('0', n)</code><br/>
+<code>       end</code><br/>
+<code>       if #show &gt; maxlen then</code><br/>
+<code>           show = show:sub(1, maxlen)</code><br/>
+<code>       end</code><br/>
+<code>       if exponent &gt; xhi or exponent </code><code>= 1e9 or value </code><code> → 1,000,000,000 metres (1,000,000,000 m)</code><br/>
+<code>           local significand</code><br/>
+<code>           if #show &gt; 1 then</code><br/>
+<code>               significand = show:sub(1, 1) .. '.' .. show:sub(2)</code><br/>
+<code>           else</code><br/>
+<code>               significand = show</code><br/>
+<code>           end</code><br/>
+<code>           return {</code><br/>
+<code>               clean = '.' .. show,</code><br/>
+<code>               exponent = exponent,</code><br/>
+<code>               sign = sign,</code><br/>
+<code>               show = sign .. with_exponent(parms, significand, exponent-1),</code><br/>
+<code>               is_scientific = true,</code><br/>
+<code>           }</code><br/>
+<code>       end</code><br/>
+<code>       if exponent &gt;= #show then</code><br/>
+<code>           show = show .. zeros(exponent - #show)  -- result has no dot</code><br/>
+<code>       elseif exponent </code><code> 2 then style=2 end</code><br/>
+<code>   local wikitext = format_fraction(parms, 'in', negative, leading_plus .. wholestr, numstr, denstr, parms.opt_spell_in, style)</code><br/>
+<code>   return value, altvalue, wikitext, denominator</code></p>
+
+<p>end</p>
+
+<p>local function extract_number(parms, text, another, no_fraction)</p>
+
+<p><code>   -- Return true, info if can extract a number from text,</code><br/>
+<code>   -- where info is a table with the result,</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   -- Input can use en digits or digits in local language and can</code><br/>
+<code>   -- have references at the end. Accepting references is intended</code><br/>
+<code>   -- for use in infoboxes with a field for a value passed to convert.</code><br/>
+<code>   -- Parameter another = true if the expected value is not the first.</code><br/>
+<code>   -- Before processing, the input text is cleaned:</code><br/>
+<code>   -- * Any thousand separators (valid or not) are removed.</code><br/>
+<code>   -- * Any sign (and optional following whitespace) is replaced with</code><br/>
+<code>   --   '-' (if negative) or '' (otherwise).</code><br/>
+<code>   --   That replaces Unicode minus with '-'.</code><br/>
+<code>   -- If successful, the returned info table contains named fields:</code><br/>
+<code>   --   value    = a valid number</code><br/>
+<code>   --   altvalue = a valid number, usually same as value but different</code><br/>
+<code>   --              if fraction used (for hands unit)</code><br/>
+<code>   --   singular = true if value is 1 or -1 (to use singular form of units)</code><br/>
+<code>   --   clean    = cleaned text with any separators and sign removed</code><br/>
+<code>   --              (en digits and '.' decimal mark)</code><br/>
+<code>   --   show     = text formatted for output, possibly with ref strip markers</code><br/>
+<code>   --              (digits in local language and custom decimal mark)</code><br/>
+<code>   -- The resulting show:</code><br/>
+<code>   -- * Is for an input value and is spelled if wanted and possible.</code><br/>
+<code>   -- * Has a rounded value, if wanted.</code><br/>
+<code>   -- * Has digits grouped where necessary, if wanted.</code><br/>
+<code>   -- * If negative, a Unicode minus is used; otherwise the sign is</code><br/>
+<code>   --   '+' (if the input text used '+'), or is '' (if no sign in input).</code><br/>
+<code>   text = strip(text or '')</code><br/>
+<code>   local reference</code><br/>
+<code>   local pos = text:find('\127', 1, true)</code><br/>
+<code>   if pos then</code><br/>
+<code>       local before = text:sub(1, pos - 1)</code><br/>
+<code>       local remainder = text:sub(pos)</code><br/>
+<code>       local refs = {}</code><br/>
+<code>       while #remainder &gt; 0 do</code><br/>
+<code>           local ref, spaces</code><br/>
+<code>           ref, spaces, remainder = remainder:match('^(\127UNIQ[^\127]*%-ref%-%x+%-QINU\127)(%s*)(.*)')</code><br/>
+<code>           if ref then</code><br/>
+<code>               table.insert(refs, ref)</code><br/>
+<code>           else</code><br/>
+<code>               refs = {}</code><br/>
+<code>               break</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       if #refs &gt; 0 then</code><br/>
+<code>           text = strip(before)</code><br/>
+<code>           reference = table.concat(refs)</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local clean = to_en(text, parms)</code><br/>
+<code>   if clean == '' then</code><br/>
+<code>       return false, { another and 'cvt_no_num2' or 'cvt_no_num' }</code><br/>
+<code>   end</code><br/>
+<code>   local isnegative, propersign = false, ''  -- most common case</code><br/>
+<code>   local singular, show, denominator</code><br/>
+<code>   local value = tonumber(clean)</code><br/>
+<code>   local altvalue</code><br/>
+<code>   if value then</code><br/>
+<code>       local sign = clean:sub(1, 1)</code><br/>
+<code>       if sign == '+' or sign == '-' then</code><br/>
+<code>           propersign = (sign == '+') and '+' or MINUS</code><br/>
+<code>           clean = clean:sub(2)</code><br/>
+<code>       end</code><br/>
+<code>       if value </code><code> b then</code><br/>
+<code>       a, b = b, a</code><br/>
+<code>   end</code><br/>
+<code>   if a </code><code> 1e8 then</code><br/>
+<code>       return format('%.2f', value)</code><br/>
+<code>   end</code><br/>
+<code>   local integer, decimals = math.modf(value)</code><br/>
+<code>   local numerator = floor((decimals * denominator) +</code><br/>
+<code>       0.5 + 2e-14)  -- add fudge for some common cases of bad rounding</code><br/>
+<code>   if numerator &gt;= denominator then</code><br/>
+<code>       integer = integer + 1</code><br/>
+<code>       numerator = 0</code><br/>
+<code>   end</code><br/>
+<code>   local wholestr = tostring(integer)</code><br/>
+<code>   if numerator &gt; 0 then</code><br/>
+<code>       local div = gcd(numerator, denominator)</code><br/>
+<code>       if div &gt; 1 then</code><br/>
+<code>           numerator = numerator / div</code><br/>
+<code>           denominator = denominator / div</code><br/>
+<code>       end</code><br/>
+<code>       return {</code><br/>
+<code>           wholestr = (integer &gt; 0) and wholestr or '',</code><br/>
+<code>           numstr = tostring(numerator),</code><br/>
+<code>           denstr = tostring(denominator),</code><br/>
+<code>           value = value,</code><br/>
+<code>       }</code><br/>
+<code>   end</code><br/>
+<code>   return wholestr</code></p>
+
+<p>end</p>
+
+<p>local function preunits(count, preunit1, preunit2)</p>
+
+<p><code>   -- If count is 1:</code><br/>
+<code>   --     ignore preunit2</code><br/>
+<code>   --     return p1</code><br/>
+<code>   -- else:</code><br/>
+<code>   --     preunit1 is used for preunit2 if the latter is empty</code><br/>
+<code>   --     return p1, p2</code><br/>
+<code>   -- where:</code><br/>
+<code>   --     p1 is text to insert before the input unit</code><br/>
+<code>   --     p2 is text to insert before the output unit</code><br/>
+<code>   --     p1 or p2 may be nil to mean "no preunit"</code><br/>
+<code>   -- Using '+ ' gives output like "5+ feet" (no preceding space).</code><br/>
+<code>   local function withspace(text, i)</code><br/>
+<code>       -- Insert space at beginning if i == 1, or at end if i == -1.</code><br/>
+<code>       -- However, no space is inserted if there is a space or ' '</code><br/>
+<code>       -- or '-' at that position ('-' is for adjectival text).</code><br/>
+<code>       local current = text:sub(i, i)</code><br/>
+<code>       if current == ' ' or current == '-' then</code><br/>
+<code>           return text</code><br/>
+<code>       end</code><br/>
+<code>       if i == 1 then</code><br/>
+<code>           current = text:sub(1, 6)</code><br/>
+<code>       else</code><br/>
+<code>           current = text:sub(-6, -1)</code><br/>
+<code>       end</code><br/>
+<code>       if current == ' ' then</code><br/>
+<code>           return text</code><br/>
+<code>       end</code><br/>
+<code>       if i == 1 then</code><br/>
+<code>           return ' ' .. text</code><br/>
+<code>       end</code><br/>
+<code>       return text .. ' '</code><br/>
+<code>   end</code><br/>
+<code>   preunit1 = preunit1 or ''</code><br/>
+<code>   local trim1 = strip(preunit1)</code><br/>
+<code>   if count == 1 then</code><br/>
+<code>       if trim1 == '' then</code><br/>
+<code>           return nil</code><br/>
+<code>       end</code><br/>
+<code>       return withspace(withspace(preunit1, 1), -1)</code><br/>
+<code>   end</code><br/>
+<code>   preunit2 = preunit2 or ''</code><br/>
+<code>   local trim2 = strip(preunit2)</code><br/>
+<code>   if trim1 == '' and trim2 == '' then</code><br/>
+<code>       return nil, nil</code><br/>
+<code>   end</code><br/>
+<code>   if trim1 ~= '+' then</code><br/>
+<code>       preunit1 = withspace(preunit1, 1)</code><br/>
+<code>   end</code><br/>
+<code>   if trim2 == ' ' then  -- trick to make preunit2 empty</code><br/>
+<code>       preunit2 = nil</code><br/>
+<code>   elseif trim2 == '' then</code><br/>
+<code>       preunit2 = preunit1</code><br/>
+<code>   elseif trim2 ~= '+' then</code><br/>
+<code>       preunit2 = withspace(preunit2, 1)</code><br/>
+<code>   end</code><br/>
+<code>   return preunit1, preunit2</code></p>
+
+<p>end</p>
+
+<p>local function range_text(range, want_name, parms, before, after, inout)</p>
+
+<p><code>   -- Return before .. rtext .. after</code><br/>
+<code>   -- where rtext is the text that separates two values in a range.</code><br/>
+<code>   local rtext, adj_text, exception</code><br/>
+<code>   if type(range) == 'table' then</code><br/>
+<code>       -- Table must specify range text for ('off' and 'on') or ('input' and 'output'),</code><br/>
+<code>       -- and may specify range text for 'adj=on',</code><br/>
+<code>       -- and may specify exception = true.</code><br/>
+<code>       rtext = range[want_name and 'off' or 'on'] or</code><br/>
+<code>               range[((inout == 'in') == (parms.opt_flip == true)) and 'output' or 'input']</code><br/>
+<code>       adj_text = range['adj']</code><br/>
+<code>       exception = range['exception']</code><br/>
+<code>   else</code><br/>
+<code>       rtext = range</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_adjectival then</code><br/>
+<code>       if want_name or (exception and parms.abbr_org == 'on') then</code><br/>
+<code>           rtext = adj_text or rtext:gsub(' ', '-'):gsub(' ', '-')</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if rtext == '–' and after:sub(1, #MINUS) == MINUS then</code><br/>
+<code>       rtext = ' – '</code><br/>
+<code>   end</code><br/>
+<code>   return before .. rtext .. after</code></p>
+
+<p>end</p>
+
+<p>local function get_composite(parms, iparm, in_unit_table)</p>
+
+<p><code>   -- Look for a composite input unit. For example, "</code><mtpl></mtpl><code>"</code><br/>
+<code>   -- would result in a call to this function with</code><br/>
+<code>   --   iparm = 3 (parms[iparm] = "2", just after the first unit)</code><br/>
+<code>   --   in_unit_table = (unit table for "yd"; contains value 1 for number of yards)</code><br/>
+<code>   -- Return true, iparm, unit where</code><br/>
+<code>   --   iparm = index just after the composite units (7 in above example)</code><br/>
+<code>   --   unit = composite unit table holding all input units,</code><br/>
+<code>   -- or return true if no composite unit is present in parms,</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   local default, subinfo</code><br/>
+<code>   local composite_units, count = { in_unit_table }, 1</code><br/>
+<code>   local fixups = {}</code><br/>
+<code>   local total = in_unit_table.valinfo[1].value</code><br/>
+<code>   local subunit = in_unit_table</code><br/>
+<code>   while subunit.subdivs do  -- subdivs is nil or a table of allowed subdivisions</code><br/>
+<code>       local subcode = strip(parms[iparm+1])</code><br/>
+<code>       local subdiv = subunit.subdivs[subcode] or subunit.subdivs[(all_units[subcode] or {}).target]</code><br/>
+<code>       if not subdiv then</code><br/>
+<code>           break</code><br/>
+<code>       end</code><br/>
+<code>       local success</code><br/>
+<code>       success, subunit = lookup(subcode, parms.opt_sp_us, 'no_combination')</code><br/>
+<code>       if not success then return false, subunit end  -- should never occur</code><br/>
+<code>       success, subinfo = extract_number(parms, parms[iparm])</code><br/>
+<code>       if not success then return false, subinfo end</code><br/>
+<code>       iparm = iparm + 2</code><br/>
+<code>       subunit.inout = 'in'</code><br/>
+<code>       subunit.valinfo = { subinfo }</code><br/>
+<code>       -- Recalculate total as a number of subdivisions.</code><br/>
+<code>       -- subdiv[1] = number of subdivisions per previous unit (integer &gt; 1).</code><br/>
+<code>       total = total * subdiv[1] + subinfo.value</code><br/>
+<code>       if not default then  -- set by the first subdiv with a default defined</code><br/>
+<code>           default = subdiv.default</code><br/>
+<code>       end</code><br/>
+<code>       count = count + 1</code><br/>
+<code>       composite_units[count] = subunit</code><br/>
+<code>       if subdiv.unit or subdiv.name then</code><br/>
+<code>           fixups[count] = { unit = subdiv.unit, name = subdiv.name, valinfo = subunit.valinfo }</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if count == 1 then</code><br/>
+<code>       return true  -- no error and no composite unit</code><br/>
+<code>   end</code><br/>
+<code>   for i, fixup in pairs(fixups) do</code><br/>
+<code>       local unit = fixup.unit</code><br/>
+<code>       local name = fixup.name</code><br/>
+<code>       if not unit or (count &gt; 2 and name) then</code><br/>
+<code>           composite_units[i].fixed_name = name</code><br/>
+<code>       else</code><br/>
+<code>           local success, alternate = lookup(unit, parms.opt_sp_us, 'no_combination')</code><br/>
+<code>           if not success then return false, alternate end  -- should never occur</code><br/>
+<code>           alternate.inout = 'in'</code><br/>
+<code>           alternate.valinfo = fixup.valinfo</code><br/>
+<code>           composite_units[i] = alternate</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   return true, iparm, {</code><br/>
+<code>       utype = in_unit_table.utype,</code><br/>
+<code>       scale = subunit.scale,  -- scale of last (least significant) unit</code><br/>
+<code>       valinfo = { { value = total, clean = subinfo.clean, denominator = subinfo.denominator } },</code><br/>
+<code>       composite = composite_units,</code><br/>
+<code>       default = default or in_unit_table.default</code><br/>
+<code>   }</code></p>
+
+<p>end</p>
+
+<p>local function translate_parms(parms, kv_pairs)</p>
+
+<p><code>   -- Update fields in parms by translating each key:value in kv_pairs to terms</code><br/>
+<code>   -- used by this module (may involve translating from local language to English).</code><br/>
+<code>   -- Also, checks are performed which may display warnings, if enabled.</code><br/>
+<code>   -- Return true if successful or return false, t where t is an error message table.</code><br/>
+<code>   currency_text = nil  -- local testing can hold module in memory; must clear globals</code><br/>
+<code>   if kv_pairs.adj and kv_pairs.sing then</code><br/>
+<code>       -- For enwiki (before translation), warn if attempt to use adj and sing</code><br/>
+<code>       -- as the latter is a deprecated alias for the former.</code><br/>
+<code>       if kv_pairs.adj ~= kv_pairs.sing and kv_pairs.sing ~= '' then</code><br/>
+<code>           add_warning(parms, 1, 'cvt_unknown_option', 'sing=' .. kv_pairs.sing)</code><br/>
+<code>       end</code><br/>
+<code>       kv_pairs.sing = nil</code><br/>
+<code>   end</code><br/>
+<code>   for loc_name, loc_value in pairs(kv_pairs) do</code><br/>
+<code>       local en_name = text_code.en_option_name[loc_name]</code><br/>
+<code>       if en_name then</code><br/>
+<code>           local en_value</code><br/>
+<code>           if en_name == '$' or en_name == 'frac' or en_name == 'sigfig' then</code><br/>
+<code>               if loc_value == '' then</code><br/>
+<code>                   add_warning(parms, 2, 'cvt_empty_option', loc_name)</code><br/>
+<code>               elseif en_name == '$' then</code><br/>
+<code>                   -- Value should be a single character like "€" for the euro currency symbol, but anything is accepted.</code><br/>
+<code>                   currency_text = (loc_value == 'euro') and '€' or loc_value</code><br/>
+<code>               else</code><br/>
+<code>                   local minimum</code><br/>
+<code>                   local number, is_integer = get_number(loc_value)</code><br/>
+<code>                   if en_name == 'frac' then</code><br/>
+<code>                       minimum = 2</code><br/>
+<code>                       if number and number </code><code>= minimum then</code><br/>
+<code>                       en_value = number</code><br/>
+<code>                   else</code><br/>
+<code>                       add_warning(parms, 1, (en_name == 'frac' and 'cvt_bad_frac' or 'cvt_bad_sigfig'), loc_value)</code><br/>
+<code>                   end</code><br/>
+<code>               end</code><br/>
+<code>           elseif en_name == 'stylein' or en_name == 'styleout' then</code><br/>
+<code>               en_value = loc_value  -- accept user text with no validation</code><br/>
+<code>           else</code><br/>
+<code>               en_value = text_code.en_option_value[en_name][loc_value]</code><br/>
+<code>               if en_value and en_value:sub(-1) == '?' then</code><br/>
+<code>                   en_value = en_value:sub(1, -2)</code><br/>
+<code>                   add_warning(parms, -1, 'cvt_deprecated', loc_name .. '=' .. loc_value)</code><br/>
+<code>               end</code><br/>
+<code>               if en_value == nil then</code><br/>
+<code>                   if loc_value == '' then</code><br/>
+<code>                       add_warning(parms, 2, 'cvt_empty_option', loc_name)</code><br/>
+<code>                   else</code><br/>
+<code>                       add_warning(parms, 1, 'cvt_unknown_option', loc_name .. '=' .. loc_value)</code><br/>
+<code>                   end</code><br/>
+<code>               elseif en_value == '' then</code><br/>
+<code>                   en_value = nil  -- an ignored option like adj=off</code><br/>
+<code>               elseif type(en_value) == 'string' and en_value:sub(1, 4) == 'opt_' then</code><br/>
+<code>                   for _, v in ipairs(split(en_value, ',')) do</code><br/>
+<code>                       local lhs, rhs = v:match('^(.-)=(.+)$')</code><br/>
+<code>                       if rhs then</code><br/>
+<code>                           parms[lhs] = tonumber(rhs) or rhs</code><br/>
+<code>                       else</code><br/>
+<code>                           parms[v] = true</code><br/>
+<code>                       end</code><br/>
+<code>                   end</code><br/>
+<code>                   en_value = nil</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>           parms[en_name] = en_value</code><br/>
+<code>       else</code><br/>
+<code>           add_warning(parms, 1, 'cvt_unknown_option', loc_name .. '=' .. loc_value)</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local abbr_entered = parms.abbr</code><br/>
+<code>   local cfg_abbr = config.abbr</code><br/>
+<code>   if cfg_abbr then</code><br/>
+<code>       -- Don't warn if invalid because every convert would show that warning.</code><br/>
+<code>       if cfg_abbr == 'on always' then</code><br/>
+<code>           parms.abbr = 'on'</code><br/>
+<code>       elseif cfg_abbr == 'off always' then</code><br/>
+<code>           parms.abbr = 'off'</code><br/>
+<code>       elseif parms.abbr == nil then</code><br/>
+<code>           if cfg_abbr == 'on default' then</code><br/>
+<code>               parms.abbr = 'on'</code><br/>
+<code>           elseif cfg_abbr == 'off default' then</code><br/>
+<code>               parms.abbr = 'off'</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if parms.abbr then</code><br/>
+<code>       parms.abbr_org = parms.abbr  -- original abbr, before any flip</code><br/>
+<code>   elseif parms.opt_hand_hh then</code><br/>
+<code>       parms.abbr_org = 'on'</code><br/>
+<code>       parms.abbr = 'on'</code><br/>
+<code>   else</code><br/>
+<code>       parms.abbr = 'out'  -- default is to abbreviate output only (use symbol, not name)</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_spell_out and not abbr_entered then</code><br/>
+<code>       parms.abbr = 'off'  -- should show unit name when spelling the output value</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_flip then</code><br/>
+<code>       local function swap_in_out(option)</code><br/>
+<code>           local value = parms[option]</code><br/>
+<code>           if value == 'in' then</code><br/>
+<code>               parms[option] = 'out'</code><br/>
+<code>           elseif value == 'out' then</code><br/>
+<code>               parms[option] = 'in'</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       swap_in_out('abbr')</code><br/>
+<code>       swap_in_out('lk')</code><br/>
+<code>       if parms.opt_spell_in and not parms.opt_spell_out then</code><br/>
+<code>           -- For simplicity, and because it does not appear to be needed,</code><br/>
+<code>           -- user cannot set an option to spell the output only.</code><br/>
+<code>           parms.opt_spell_in = nil</code><br/>
+<code>           parms.opt_spell_out = true</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_spell_upper then</code><br/>
+<code>       parms.spell_upper = parms.opt_flip and 'out' or 'in'</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_table or parms.opt_tablecen then</code><br/>
+<code>       if abbr_entered == nil and parms.lk == nil then</code><br/>
+<code>           parms.opt_values = true</code><br/>
+<code>       end</code><br/>
+<code>       parms.table_align = parms.opt_table and 'right' or 'center'</code><br/>
+<code>   end</code><br/>
+<code>   if parms.table_align or parms.opt_sortable_on then</code><br/>
+<code>       parms.need_table_or_sort = true</code><br/>
+<code>   end</code><br/>
+<code>   local disp_joins = text_code.disp_joins</code><br/>
+<code>   local default_joins = disp_joins['b']</code><br/>
+<code>   parms.join_between = default_joins[3] or '; '</code><br/>
+<code>   local disp = parms.disp</code><br/>
+<code>   if disp == nil then  -- special case for the most common setting</code><br/>
+<code>       parms.joins = default_joins</code><br/>
+<code>   elseif disp == 'x' then</code><br/>
+<code>       -- Later, parms.joins is set from the input parameters.</code><br/>
+<code>   else</code><br/>
+<code>       -- Old template does this.</code><br/>
+<code>       local abbr = parms.abbr</code><br/>
+<code>       if disp == 'slash' then</code><br/>
+<code>           if abbr_entered == nil then</code><br/>
+<code>               disp = 'slash-nbsp'</code><br/>
+<code>           elseif abbr == 'in' or abbr == 'out' then</code><br/>
+<code>               disp = 'slash-sp'</code><br/>
+<code>           else</code><br/>
+<code>               disp = 'slash-nosp'</code><br/>
+<code>           end</code><br/>
+<code>       elseif disp == 'sqbr' then</code><br/>
+<code>           if abbr == 'on' then</code><br/>
+<code>               disp = 'sqbr-nbsp'</code><br/>
+<code>           else</code><br/>
+<code>               disp = 'sqbr-sp'</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       parms.joins = disp_joins[disp] or default_joins</code><br/>
+<code>       parms.join_between = parms.joins[3] or parms.join_between</code><br/>
+<code>       parms.wantname = parms.joins.wantname</code><br/>
+<code>   end</code><br/>
+<code>   if (en_default and not parms.opt_lang_local and (parms[1] or ''):find('%d')) or parms.opt_lang_en then</code><br/>
+<code>       from_en_table = nil</code><br/>
+<code>   end</code><br/>
+<code>   if en_default and from_en_table then</code><br/>
+<code>       -- For hiwiki: localized symbol/name is defined with the US symbol/name field,</code><br/>
+<code>       -- and is used if output uses localized numbers.</code><br/>
+<code>       parms.opt_sp_us = true</code><br/>
+<code>   end</code><br/>
+<code>   return true</code></p>
+
+<p>end</p>
+
+<p>local function get_values(parms)</p>
+
+<p><code>   -- If successful, update parms and return true, v, i where</code><br/>
+<code>   --   v = table of input values</code><br/>
+<code>   --   i = index to next entry in parms after those processed here</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   local valinfo = collection()  -- numbered table of input values</code><br/>
+<code>   local range = collection()  -- numbered table of range items (having, for example, 2 range items requires 3 input values)</code><br/>
+<code>   local had_nocomma  -- true if removed "nocomma" kludge from second parameter (like "tonocomma")</code><br/>
+<code>   local parm2 = strip(parms[2])</code><br/>
+<code>   if parm2 and parm2:sub(-7, -1) == 'nocomma' then</code><br/>
+<code>       parms[2] = strip(parm2:sub(1, -8))</code><br/>
+<code>       parms.opt_nocomma = true</code><br/>
+<code>       had_nocomma = true</code><br/>
+<code>   end</code><br/>
+<code>   local function extractor(i)</code><br/>
+<code>       -- If the parameter is not a value, try unpacking it as a range ("1-23" for "1 to 23").</code><br/>
+<code>       -- However, "-1-2/3" is a negative fraction (-1⅔), so it must be extracted first.</code><br/>
+<code>       -- Do not unpack a parameter if it is like "3-1/2" which is sometimes incorrectly</code><br/>
+<code>       -- used instead of "3+1/2" (and which should not be interpreted as "3 to ½").</code><br/>
+<code>       -- Unpacked items are inserted into the parms table.</code><br/>
+<code>       -- The tail recursion allows combinations like "1x2 to 3x4".</code><br/>
+<code>       local valstr = strip(parms[i])  -- trim so any '-' as a negative sign will be at start</code><br/>
+<code>       local success, result = extract_number(parms, valstr, i &gt; 1)</code><br/>
+<code>       if not success and valstr and i </code><code> with a decent message (en only)</code><br/>
+<code>               end</code><br/>
+<code>               parms[i] = rhs</code><br/>
+<code>               table.insert(parms, i, sep)</code><br/>
+<code>               table.insert(parms, i, lhs)</code><br/>
+<code>               return extractor(i)</code><br/>
+<code>           end</code><br/>
+<code>           if not valstr:match('%-.*/') then</code><br/>
+<code>               for _, sep in ipairs(text_code.ranges.words) do</code><br/>
+<code>                   local start, stop = valstr:find(sep, 2, true)  -- start at 2 to skip any negative sign for range '-'</code><br/>
+<code>                   if start then</code><br/>
+<code>                       parms[i] = valstr:sub(stop + 1)</code><br/>
+<code>                       table.insert(parms, i, sep)</code><br/>
+<code>                       table.insert(parms, i, valstr:sub(1, start - 1))</code><br/>
+<code>                       return extractor(i)</code><br/>
+<code>                   end</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       return success, result</code><br/>
+<code>   end</code><br/>
+<code>   local i = 1</code><br/>
+<code>   local is_change</code><br/>
+<code>   while true do</code><br/>
+<code>       local success, info = extractor(i)  -- need to set parms.opt_nocomma before calling this</code><br/>
+<code>       if not success then return false, info end</code><br/>
+<code>       i = i + 1</code><br/>
+<code>       if is_change then</code><br/>
+<code>           info.is_change = true  -- value is after "±" and so is a change (significant for range like </code><mtpl></mtpl><code>)</code><br/>
+<code>           is_change = nil</code><br/>
+<code>       end</code><br/>
+<code>       valinfo:add(info)</code><br/>
+<code>       local range_item = get_range(strip(parms[i]))</code><br/>
+<code>       if not range_item then</code><br/>
+<code>           break</code><br/>
+<code>       end</code><br/>
+<code>       i = i + 1</code><br/>
+<code>       range:add(range_item)</code><br/>
+<code>       if type(range_item) == 'table' then</code><br/>
+<code>           parms.is_range_x = range_item.is_range_x</code><br/>
+<code>           is_change = range_item.is_range_change</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if range.n &gt; 0 then</code><br/>
+<code>       if range.n &gt; 30 then  -- limit abuse, although 4 is a more likely upper limit</code><br/>
+<code>           return false, { 'cvt_invalid_num' }  -- misleading message but it will do</code><br/>
+<code>       end</code><br/>
+<code>       parms.range = range</code><br/>
+<code>   elseif had_nocomma then</code><br/>
+<code>       return false, { 'cvt_unknown', parm2 }</code><br/>
+<code>   end</code><br/>
+<code>   return true, valinfo, i</code></p>
+
+<p>end</p>
+
+<p>local function simple_get_values(parms)</p>
+
+<p><code>   -- If input is like "</code><mtpl></mtpl><code>",</code><br/>
+<code>   -- return true, 3, in_unit, in_unit_table</code><br/>
+<code>   -- 3 = index in parms of whatever follows valid_unit, if anything).</code><br/>
+<code>   -- The valid_value is not negative and does not use a fraction, and</code><br/>
+<code>   -- no options requiring further processing of the input are used.</code><br/>
+<code>   -- Otherwise, return nothing and caller will reparse the input.</code><br/>
+<code>   -- Testing shows this function is successful for 96% of converts in articles,</code><br/>
+<code>   -- and that on average it speeds up converts by 8%.</code><br/>
+<code>   if parms.opt_ri or parms.opt_spell_in then return end</code><br/>
+<code>   local clean = to_en(strip(parms[1] or ''), parms)</code><br/>
+<code>   if #clean &gt; 10 or not clean:match('^[0-9.]+$') then return end</code><br/>
+<code>   local value = tonumber(clean)</code><br/>
+<code>   if not value then return end</code><br/>
+<code>   local info = {</code><br/>
+<code>       value = value,</code><br/>
+<code>       altvalue = value,</code><br/>
+<code>       singular = (value == 1),</code><br/>
+<code>       clean = clean,</code><br/>
+<code>       show = with_separator(parms, clean),</code><br/>
+<code>   }</code><br/>
+<code>   local in_unit = strip(parms[2])</code><br/>
+<code>   local success, in_unit_table = lookup(in_unit, parms.opt_sp_us, 'no_combination')</code><br/>
+<code>   if not success then return end</code><br/>
+<code>   in_unit_table.valinfo = { info }</code><br/>
+<code>   return true, 3, in_unit, in_unit_table</code></p>
+
+<p>end</p>
+
+<p>local function get_parms(args)</p>
+
+<p><code>   -- If successful, return true, parms, unit where</code><br/>
+<code>   --   parms is a table of all arguments passed to the template</code><br/>
+<code>   --        converted to named arguments, and</code><br/>
+<code>   --   unit is the input unit table;</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   -- The returned input unit table may be for a fake unit using the specified</code><br/>
+<code>   -- unit code as the symbol and name, and with bad_mcode = message code table.</code><br/>
+<code>   -- MediaWiki removes leading and trailing whitespace from the values of</code><br/>
+<code>   -- named arguments. However, the values of numbered arguments include any</code><br/>
+<code>   -- whitespace entered in the template, and whitespace is used by some</code><br/>
+<code>   -- parameters (example: the numbered parameters associated with "disp=x").</code><br/>
+<code>   local parms = {}  -- arguments passed to template, after translation</code><br/>
+<code>   local kv_pairs = {}  -- table of input key:value pairs where key is a name; needed because cannot iterate parms and add new fields to it</code><br/>
+<code>   for k, v in pairs(args) do</code><br/>
+<code>       if type(k) == 'number' or k == 'test' then  -- parameter "test" is reserved for testing and is not translated</code><br/>
+<code>           parms[k] = v</code><br/>
+<code>       else</code><br/>
+<code>           kv_pairs[k] = v</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local success, msg = translate_parms(parms, kv_pairs)</code><br/>
+<code>   if not success then return false, msg end</code><br/>
+<code>   ignore_extra_units = parms.opt_ignore_error</code><br/>
+<code>   local success, i, in_unit, in_unit_table = simple_get_values(parms)</code><br/>
+<code>   if not success then</code><br/>
+<code>       local valinfo</code><br/>
+<code>       success, valinfo, i = get_values(parms)</code><br/>
+<code>       if not success then return false, valinfo end</code><br/>
+<code>       in_unit = strip(parms[i])</code><br/>
+<code>       i = i + 1</code><br/>
+<code>       success, in_unit_table = lookup(in_unit, parms.opt_sp_us, 'no_combination')</code><br/>
+<code>       if not success then</code><br/>
+<code>           if in_unit == nil then</code><br/>
+<code>               in_unit = ''</code><br/>
+<code>           end</code><br/>
+<code>           if parms.opt_ignore_error then  -- display given unit code with no error (for use with </code><mtpl></mtpl><code>)</code><br/>
+<code>               in_unit_table = ''  -- suppress error message and prevent processing of output unit</code><br/>
+<code>           end</code><br/>
+<code>           in_unit_table = setmetatable({ symbol = in_unit, name2 = in_unit,</code><br/>
+<code>               default = "m", defkey = "m", linkey = "m",</code><br/>
+<code>               utype = "length", scale = 1, bad_mcode = in_unit_table }, unit_mt)</code><br/>
+<code>       end</code><br/>
+<code>       in_unit_table.valinfo = valinfo</code><br/>
+<code>   end</code><br/>
+<code>   if parms.test == 'msg' then</code><br/>
+<code>       -- Am testing the messages produced when no output unit is specified, and</code><br/>
+<code>       -- the input unit has a missing or invalid default.</code><br/>
+<code>       -- Set two units for testing that.</code><br/>
+<code>       -- LATER: Remove this code.</code><br/>
+<code>       if in_unit == 'chain' then</code><br/>
+<code>           in_unit_table.default = nil  -- no default</code><br/>
+<code>       elseif in_unit == 'rd' then</code><br/>
+<code>           in_unit_table.default  = "ft!X!m"  -- an invalid expression</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   in_unit_table.inout = 'in'  -- this is an input unit</code><br/>
+<code>   if not parms.range then</code><br/>
+<code>       local success, inext, composite_unit = get_composite(parms, i, in_unit_table)</code><br/>
+<code>       if not success then return false, inext end</code><br/>
+<code>       if composite_unit then</code><br/>
+<code>           in_unit_table = composite_unit</code><br/>
+<code>           i = inext</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if in_unit_table.builtin == 'mach' then</code><br/>
+<code>       -- As with old template, a number following Mach as the input unit is the altitude,</code><br/>
+<code>       -- and there is no way to specify an altitude for the output unit.</code><br/>
+<code>       -- Could put more code in this function to get any output unit and check for</code><br/>
+<code>       -- an altitude following that unit.</code><br/>
+<code>       local success, info = extract_number(parms, parms[i], false, true)</code><br/>
+<code>       if success then</code><br/>
+<code>           i = i + 1</code><br/>
+<code>           in_unit_table.altitude = info.value</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local next = strip(parms[i])</code><br/>
+<code>   i = i + 1</code><br/>
+<code>   local precision, is_bad_precision</code><br/>
+<code>   local function set_precision(text)</code><br/>
+<code>       local number, is_integer = get_number(text)</code><br/>
+<code>       if number then</code><br/>
+<code>           if is_integer then</code><br/>
+<code>               precision = number</code><br/>
+<code>           else</code><br/>
+<code>               precision = text</code><br/>
+<code>               is_bad_precision = true</code><br/>
+<code>           end</code><br/>
+<code>           return true  -- text was used for precision, good or bad</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if not set_precision(next) then</code><br/>
+<code>       parms.out_unit = next</code><br/>
+<code>       if set_precision(strip(parms[i])) then</code><br/>
+<code>           i = i + 1</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_adj_mid then</code><br/>
+<code>       next = parms[i]</code><br/>
+<code>       i = i + 1</code><br/>
+<code>       if next then  -- mid-text words</code><br/>
+<code>           if next:sub(1, 1) == '-' then</code><br/>
+<code>               parms.mid = next</code><br/>
+<code>           else</code><br/>
+<code>               parms.mid = ' ' .. next</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_one_preunit then</code><br/>
+<code>       parms[parms.opt_flip and 'preunit2' or 'preunit1'] = preunits(1, parms[i])</code><br/>
+<code>       i = i + 1</code><br/>
+<code>   end</code><br/>
+<code>   if parms.disp == 'x' then</code><br/>
+<code>       -- Following is reasonably compatible with the old template.</code><br/>
+<code>       local first = parms[i] or ''</code><br/>
+<code>       local second = parms[i+1] or ''</code><br/>
+<code>       i = i + 2</code><br/>
+<code>       if strip(first) == '' then  -- user can enter ' ' rather than ' ' to avoid the default</code><br/>
+<code>           first = ' [ ' .. first</code><br/>
+<code>           second = ' ]' .. second</code><br/>
+<code>       end</code><br/>
+<code>       parms.joins = { first, second }</code><br/>
+<code>   elseif parms.opt_two_preunits then</code><br/>
+<code>       local p1, p2 = preunits(2, parms[i], parms[i+1])</code><br/>
+<code>       i = i + 2</code><br/>
+<code>       if parms.preunit1 then</code><br/>
+<code>           -- To simplify documentation, allow unlikely use of adj=pre with disp=preunit</code><br/>
+<code>           -- (however, an output unit must be specified with adj=pre and with disp=preunit).</code><br/>
+<code>           parms.preunit1 = parms.preunit1 .. p1</code><br/>
+<code>           parms.preunit2 = p2</code><br/>
+<code>       else</code><br/>
+<code>           parms.preunit1, parms.preunit2 = p1, p2</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if precision == nil then</code><br/>
+<code>       if set_precision(strip(parms[i])) then</code><br/>
+<code>           i = i + 1</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if is_bad_precision then</code><br/>
+<code>       add_warning(parms, 1, 'cvt_bad_prec', precision)</code><br/>
+<code>   else</code><br/>
+<code>       parms.precision = precision</code><br/>
+<code>   end</code><br/>
+<code>   return true, parms, in_unit_table</code></p>
+
+<p>end</p>
+
+<p>local function record_default_precision(parms, out_current, precision)</p>
+
+<p><code>   -- If necessary, adjust parameters and return a possibly adjusted precision.</code><br/>
+<code>   -- When converting a range of values where a default precision is required,</code><br/>
+<code>   -- that default is calculated for each value because the result sometimes</code><br/>
+<code>   -- depends on the precise input and output values. This function may cause</code><br/>
+<code>   -- the entire convert process to be repeated in order to ensure that the</code><br/>
+<code>   -- same default precision is used for each individual convert.</code><br/>
+<code>   -- If that were not done, a range like 1000 to 1000.4 may give poor results</code><br/>
+<code>   -- because the first output could be heavily rounded, while the second is not.</code><br/>
+<code>   -- For range 1000.4 to 1000, this function can give the second convert the</code><br/>
+<code>   -- same default precision that was used for the first.</code><br/>
+<code>   if not parms.opt_round_each then</code><br/>
+<code>       local maxdef = out_current.max_default_precision</code><br/>
+<code>       if maxdef then</code><br/>
+<code>           if maxdef </code><code> adds this, so we do too</code><br/>
+<code>   local prec, minprec, adjust</code><br/>
+<code>   local utype = out_current.utype</code><br/>
+<code>   local subunit_ignore_trailing_zero</code><br/>
+<code>   local subunit_more_precision  -- kludge for "in" used in input like "|2|ft|6|in"</code><br/>
+<code>   local composite = in_current.composite</code><br/>
+<code>   if composite then</code><br/>
+<code>       subunit_ignore_trailing_zero = true  -- input "|2|st|10|lb" has precision 0, not -1</code><br/>
+<code>       if composite[#composite].exception == 'subunit_more_precision' then</code><br/>
+<code>           subunit_more_precision = true  -- do not use standard precision with input like "|2|ft|6|in"</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if denominator and denominator &gt; 0 then</code><br/>
+<code>       prec = math.max(log10(denominator), 1)</code><br/>
+<code>   else</code><br/>
+<code>       -- Count digits after decimal mark, handling cases like '12.345e6'.</code><br/>
+<code>       local exponent</code><br/>
+<code>       local integer, dot, decimals, expstr = inclean:match('^(%d*)(%.?)(%d*)(.*)')</code><br/>
+<code>       local e = expstr:sub(1, 1)</code><br/>
+<code>       if e == 'e' or e == 'E' then</code><br/>
+<code>           exponent = tonumber(expstr:sub(2))</code><br/>
+<code>       end</code><br/>
+<code>       if dot == '' then</code><br/>
+<code>           prec = subunit_ignore_trailing_zero and 0 or -integer:match('0*$'):len()</code><br/>
+<code>       else</code><br/>
+<code>           prec = #decimals</code><br/>
+<code>       end</code><br/>
+<code>       if exponent then</code><br/>
+<code>           -- So '1230' and '1.23e3' both give prec = -1, and '0.00123' and '1.23e-3' give 5.</code><br/>
+<code>           prec = prec - exponent</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if in_current.istemperature and out_current.istemperature then</code><br/>
+<code>       -- Converting between common temperatures (°C, °F, °R, K); not keVT, MK.</code><br/>
+<code>       -- Kelvin value can be almost zero, or small but negative due to precision problems.</code><br/>
+<code>       -- Also, an input value like -300 C (below absolute zero) gives negative kelvins.</code><br/>
+<code>       -- Calculate minimum precision from absolute value.</code><br/>
+<code>       adjust = 0</code><br/>
+<code>       local kelvin = abs((invalue - in_current.offset) * in_current.scale)</code><br/>
+<code>       if kelvin </code><code>" (where subunit is "in")</code><br/>
+<code>           -- has a non-standard adjust value, to give more output precision.</code><br/>
+<code>           adjust = log10(out_current.scale) + 2</code><br/>
+<code>       else</code><br/>
+<code>           adjust = log10(abs(invalue / outvalue))</code><br/>
+<code>       end</code><br/>
+<code>       adjust = adjust + log10(2)</code><br/>
+<code>       -- Ensure that the output has at least two significant figures.</code><br/>
+<code>       minprec = 1 - floor(log10(outvalue) + fudge)</code><br/>
+<code>   end</code><br/>
+<code>   if extra then</code><br/>
+<code>       adjust = extra.adjust or adjust</code><br/>
+<code>       minprec = extra.minprec or minprec</code><br/>
+<code>   end</code><br/>
+<code>   return record_default_precision(parms, out_current, math.max(floor(prec + adjust), minprec))</code></p>
+
+<p>end</p>
+
+<p>local function convert(parms, invalue, info, in_current, out_current)</p>
+
+<p><code>   -- Convert given input value from one unit to another.</code><br/>
+<code>   -- Return output_value (a number) if a simple convert, or</code><br/>
+<code>   -- return f, t where</code><br/>
+<code>   --   f = true, t = table of information with results, or</code><br/>
+<code>   --   f = false, t = error message table.</code><br/>
+<code>   local inscale = in_current.scale</code><br/>
+<code>   local outscale = out_current.scale</code><br/>
+<code>   if not in_current.iscomplex and not out_current.iscomplex then</code><br/>
+<code>       return invalue * (inscale / outscale)  -- minimize overhead for most common case</code><br/>
+<code>   end</code><br/>
+<code>   if in_current.invert or out_current.invert then</code><br/>
+<code>       -- Inverted units, such as inverse length, inverse time, or</code><br/>
+<code>       -- fuel efficiency. Built-in units do not have invert set.</code><br/>
+<code>       if (in_current.invert or 1) * (out_current.invert or 1) </code><code> 0 then</code><br/>
+<code>               prefix = 7000 + mag</code><br/>
+<code>           else</code><br/>
+<code>               prefix = 2999 - mag</code><br/>
+<code>               outvalue = outvalue + 10^(mag+1)</code><br/>
+<code>           end</code><br/>
+<code>           sortkey = format('%d', prefix) .. format('%015.0f', floor(outvalue * 10^(14-mag)))</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if sortkey and (parms.opt_sortable_debug or not parms.table_align) then</code><br/>
+<code>       parms.join_before = parms.opt_sortable_debug and</code><br/>
+<code>           '</code><span style="border:1px solid"><code>' .. sortkey .. '</code></span><code>' or</code><br/>
+<code>           '</code><span style="display:none"><code>' .. sortkey .. '</code></span><code>'</code><br/>
+<code>   end</code><br/>
+<code>   if parms.table_align then</code><br/>
+<code>       local style='style="text-align:' .. parms.table_align .. ';'</code><br/>
+<code>       local sort = sortkey and ' data-sort-value="' .. sortkey .. '"' or ''</code><br/>
+<code>       local joins = {}</code><br/>
+<code>       for i = 1, 2 do</code><br/>
+<code>           joins[i] = (i == 1 and '' or '\n|') .. style .. user_style(parms, i) .. '"' .. sort .. '|'</code><br/>
+<code>       end</code><br/>
+<code>       parms.table_joins = joins</code><br/>
+<code>   end</code></p>
+
+<p>end</p>
+
+<p>local cvt_to_hand</p>
+
+<p>local function cvtround(parms, info, in_current, out_current)</p>
+
+<p><code>   -- Return true, t where t is a table with the conversion results; fields:</code><br/>
+<code>   --   show = rounded, formatted string with the result of converting value in info,</code><br/>
+<code>   --      using the rounding specified in parms.</code><br/>
+<code>   --   singular = true if result (after rounding and ignoring any negative sign)</code><br/>
+<code>   --      is "1", or like "1.00", or is a fraction with value </code><code>= 0 then</code><br/>
+<code>           local fudge</code><br/>
+<code>           if precision </code><code> and </code><mtpl></mtpl><code>.</code><br/>
+<code>               -- Old template uses #expr round, which invokes PHP round().</code><br/>
+<code>               -- LATER: Investigate how PHP round() works.</code><br/>
+<code>               fudge = 2e-14</code><br/>
+<code>           else</code><br/>
+<code>               fudge = 0</code><br/>
+<code>           end</code><br/>
+<code>           local fmt = '%.' .. format('%d', precision) .. 'f'</code><br/>
+<code>           local success</code><br/>
+<code>           success, show = pcall(format, fmt, outvalue + fudge)</code><br/>
+<code>           if not success then</code><br/>
+<code>               return false, { 'cvt_big_prec', tostring(precision) }</code><br/>
+<code>           end</code><br/>
+<code>       else</code><br/>
+<code>           precision = -precision  -- #digits to zero (in addition to any digits after dot)</code><br/>
+<code>           local shift = 10 ^ precision</code><br/>
+<code>           show = format('%.0f', outvalue/shift)</code><br/>
+<code>           if show ~= '0' then</code><br/>
+<code>               exponent = #show + precision</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local t = format_number(parms, show, exponent, isnegative)</code><br/>
+<code>   if type(show) == 'string' then</code><br/>
+<code>       -- Set singular using match because on some systems 0.99999999999999999 is 1.0.</code><br/>
+<code>       if exponent then</code><br/>
+<code>           t.singular = (exponent == 1 and show:match('^10*$'))</code><br/>
+<code>       else</code><br/>
+<code>           t.singular = (show == '1' or show:match('^1%.0*$'))</code><br/>
+<code>       end</code><br/>
+<code>   else</code><br/>
+<code>       t.fraction_table = show</code><br/>
+<code>       t.singular = (outvalue </code><code> 1 then</code><br/>
+<code>       frac = (precision == 2) and 2 or 4</code><br/>
+<code>   end</code><br/>
+<code>   local out_next = out_current.out_next</code><br/>
+<code>   if out_next then</code><br/>
+<code>       -- Use magic knowledge to determine whether the next unit is inches without requiring i18n.</code><br/>
+<code>       -- The following ensures that when the output combination "hand in" is used, the inches</code><br/>
+<code>       -- value is rounded to match the hands value. Also, displaying say "61½" instead of 61.5</code><br/>
+<code>       -- is better as 61.5 implies the value is not 61.4.</code><br/>
+<code>       if out_next.exception == 'subunit_more_precision' then</code><br/>
+<code>           out_next.frac = frac</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   -- Convert to inches; calculate hands from that.</code><br/>
+<code>   local dummy_unit_table = { scale = out_current.scale / 4, frac = frac }</code><br/>
+<code>   local success, outinfo = cvtround(parms, info, in_current, dummy_unit_table)</code><br/>
+<code>   if not success then return false, outinfo end</code><br/>
+<code>   local tfrac = outinfo.fraction_table</code><br/>
+<code>   local inches = outinfo.raw_absvalue</code><br/>
+<code>   if tfrac then</code><br/>
+<code>       inches = floor(inches)  -- integer part only; fraction added later</code><br/>
+<code>   else</code><br/>
+<code>       inches = floor(inches + 0.5)  -- a hands measurement never shows decimals of an inch</code><br/>
+<code>   end</code><br/>
+<code>   local hands, inches = divide(inches, 4)</code><br/>
+<code>   outinfo.absvalue = hands + inches/4  -- supposed to be the absolute rounded value, but this is close enough</code><br/>
+<code>   local inchstr = tostring(inches)  -- '0', '1', '2' or '3'</code><br/>
+<code>   if precision and precision </code><code>' or '&gt;='</code><br/>
+<code>   -- In addition, the following form is supported:</code><br/>
+<code>   --    LHS and RHS</code><br/>
+<code>   -- where</code><br/>
+<code>   --    LHS, RHS = any of above expressions.</code><br/>
+<code>   local function compare(value, text)</code><br/>
+<code>       local arithop, factor, compop, limit = text:match('^%s*v%s*([*]?)(.-)([</code><code>]=?)(.*)$')</code><br/>
+<code>       if arithop == nil then</code><br/>
+<code>           error('Invalid default expression', 0)</code><br/>
+<code>       elseif arithop == '*' then</code><br/>
+<code>           factor = tonumber(factor)</code><br/>
+<code>           if factor == nil then</code><br/>
+<code>               error('Invalid default expression', 0)</code><br/>
+<code>           end</code><br/>
+<code>           value = value * factor</code><br/>
+<code>       end</code><br/>
+<code>       limit = tonumber(limit)</code><br/>
+<code>       if limit == nil then</code><br/>
+<code>           error('Invalid default expression', 0)</code><br/>
+<code>       end</code><br/>
+<code>       if compop == '</code><code>' then</code><br/>
+<code>           return value &gt; limit</code><br/>
+<code>       elseif compop == '&gt;=' then</code><br/>
+<code>           return value &gt;= limit</code><br/>
+<code>       end</code><br/>
+<code>       error('Invalid default expression', 0)  -- should not occur</code><br/>
+<code>   end</code><br/>
+<code>   local lhs, rhs = condition:match('^(.-%W)and(%W.*)')</code><br/>
+<code>   if lhs == nil then</code><br/>
+<code>       return compare(value, condition)</code><br/>
+<code>   end</code><br/>
+<code>   return compare(value, lhs) and compare(value, rhs)</code></p>
+
+<p>end</p>
+
+<p>local function get_default(value, unit_table)</p>
+
+<p><code>   -- Return true, s where s = name of unit's default output unit,</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   -- Some units have a default that depends on the input value</code><br/>
+<code>   -- (the first value if a range of values is used).</code><br/>
+<code>   -- If '!' is in the default, the first bang-delimited field is an</code><br/>
+<code>   -- expression that uses 'v' to represent the input value.</code><br/>
+<code>   -- Example: 'v </code><code> </code><a href="mile" title="wikilink"><code>mile</code></a><br/>
+<code>   --   </code><a href="Mile" title="wikilink"><code>miles</code></a><code> --&gt; </code><a href="mile" title="wikilink"><code>miles</code></a><br/>
+<code>   -- However, just id is returned if:</code><br/>
+<code>   -- * no link given (so caller does not need to check if a link was defined); or</code><br/>
+<code>   -- * link has previously been used during the current convert (to avoid overlinking).</code><br/>
+<code>   -- Linking with a unit uses the unit table as the link key, which fails to detect</code><br/>
+<code>   -- overlinking for conversions like the following (each links "mile" twice):</code><br/>
+<code>   --   </code><mtpl></mtpl><br/>
+<code>   --   </code><mtpl></mtpl><br/>
+<code>   link_key = link_key or link  -- use key if given (the key, but not the link, may be known when need to cancel a link record)</code><br/>
+<code>   if not link or link == '' or linked_pages[link_key] then</code><br/>
+<code>       return id</code><br/>
+<code>   end</code><br/>
+<code>   linked_pages[link_key] = true</code><br/>
+<code>   -- Following only works for language en, but it should be safe on other wikis,</code><br/>
+<code>   -- and overhead of doing it generally does not seem worthwhile.</code><br/>
+<code>   local l = link:sub(1, 1):lower() .. link:sub(2)</code><br/>
+<code>   if link == id or l == id then</code><br/>
+<code>       return '</code><a href="'_.._id_.._'" title="wikilink"><code>'</code> <code>..</code> <code>id</code> <code>..</code> <code>'</code></a><code>'</code><br/>
+<code>   elseif link .. 's' == id or l .. 's' == id then</code><br/>
+<code>       return '</code><a href="'_.._id:sub(1,_-2)_.._'" title="wikilink"><code>'</code> <code>..</code> <code>id:sub(1,</code> <code>-2)</code> <code>..</code> <code>'s</code></a><code>'</code><br/>
+<code>   else</code><br/>
+<code>       return '</code><a href="'_.._link_.._'" title="wikilink"><code>'</code> <code>..</code> <code>id</code> <code>..</code> <code>'</code></a><code>'</code><br/>
+<code>   end</code></p>
+
+<p>end</p>
+
+<p>local function variable_name(clean, unit_table)</p>
+
+<p><code>   -- For slwiki, a unit name depends on the value.</code><br/>
+<code>   -- Parameter clean is the unsigned rounded value in en digits, as a string.</code><br/>
+<code>   -- Value             Source    Example for "m"</code><br/>
+<code>   -- integer 1:        name1     meter  (also is the name of the unit)</code><br/>
+<code>   -- integer 2:        var{1}    metra</code><br/>
+<code>   -- integer 3 and 4:  var{2}    metri</code><br/>
+<code>   -- integer else:     var{3}    metrov (0 and 5 or more)</code><br/>
+<code>   -- real/fraction:    var{4}    metra</code><br/>
+<code>   -- var{i} means the i'th field in unit_table.varname if it exists and has</code><br/>
+<code>   -- an i'th field, otherwise name2.</code><br/>
+<code>   -- Fields are separated with "!" and are not empty.</code><br/>
+<code>   -- A field for a unit using an SI prefix has the prefix name inserted,</code><br/>
+<code>   -- replacing '#' if found, or before the field otherwise.</code><br/>
+<code>   local vname</code><br/>
+<code>   if clean == '1' then</code><br/>
+<code>       vname = unit_table.name1</code><br/>
+<code>   elseif unit_table.varname then</code><br/>
+<code>       local i</code><br/>
+<code>       if clean == '2' then</code><br/>
+<code>           i = 1</code><br/>
+<code>       elseif clean == '3' or clean == '4' then</code><br/>
+<code>           i = 2</code><br/>
+<code>       elseif clean:find('.', 1, true) then</code><br/>
+<code>           i = 4</code><br/>
+<code>       else</code><br/>
+<code>           i = 3</code><br/>
+<code>       end</code><br/>
+<code>       vname = split(unit_table.varname, '!')[i]</code><br/>
+<code>   end</code><br/>
+<code>   if vname then</code><br/>
+<code>       local si_name = rawget(unit_table, 'si_name') or ''</code><br/>
+<code>       local pos = vname:find('#', 1, true)</code><br/>
+<code>       if pos then</code><br/>
+<code>           vname = vname:sub(1, pos - 1) .. si_name .. vname:sub(pos + 1)</code><br/>
+<code>       else</code><br/>
+<code>           vname = si_name .. vname</code><br/>
+<code>       end</code><br/>
+<code>       return vname</code><br/>
+<code>   end</code><br/>
+<code>   return unit_table.name2</code></p>
+
+<p>end</p>
+
+<p>local function linked_id(unit_table, key_id, want_link, clean)</p>
+
+<p><code>   -- Return final unit id (symbol or name), optionally with a wikilink,</code><br/>
+<code>   -- and update unit_table.sep if required.</code><br/>
+<code>   -- key_id is one of: 'symbol', 'sym_us', 'name1', 'name1_us', 'name2', 'name2_us'.</code><br/>
+<code>   local abbr_on = (key_id == 'symbol' or key_id == 'sym_us')</code><br/>
+<code>   if abbr_on and want_link then</code><br/>
+<code>       local symlink = rawget(unit_table, 'symlink')</code><br/>
+<code>       if symlink then</code><br/>
+<code>           return symlink  -- for exceptions that have the linked symbol built-in</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local multiplier = rawget(unit_table, 'multiplier')</code><br/>
+<code>   local per = unit_table.per</code><br/>
+<code>   if per then</code><br/>
+<code>       local unit1 = per[1]  -- top unit_table, or nil</code><br/>
+<code>       local unit2 = per[2]  -- bottom unit_table</code><br/>
+<code>       if abbr_on then</code><br/>
+<code>           if not unit1 then</code><br/>
+<code>               unit_table.sep = ''  -- no separator in "$2/acre"</code><br/>
+<code>           end</code><br/>
+<code>           if not want_link then</code><br/>
+<code>               local symbol = unit_table.symbol_raw</code><br/>
+<code>               if symbol then</code><br/>
+<code>                   return symbol  -- for exceptions that have the symbol built-in</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       local key_id2  -- unit2 is always singular</code><br/>
+<code>       if key_id == 'name2' then</code><br/>
+<code>           key_id2 = 'name1'</code><br/>
+<code>       elseif key_id == 'name2_us' then</code><br/>
+<code>           key_id2 = 'name1_us'</code><br/>
+<code>       else</code><br/>
+<code>           key_id2 = key_id</code><br/>
+<code>       end</code><br/>
+<code>       local result</code><br/>
+<code>       if abbr_on then</code><br/>
+<code>           result = '/'</code><br/>
+<code>       elseif omitsep then</code><br/>
+<code>           result = per_word</code><br/>
+<code>       elseif unit1 then</code><br/>
+<code>           result = ' ' .. per_word .. ' '</code><br/>
+<code>       else</code><br/>
+<code>           result = per_word .. ' '</code><br/>
+<code>       end</code><br/>
+<code>       if want_link and unit_table.link then</code><br/>
+<code>           if abbr_on or not varname then</code><br/>
+<code>               result = (unit1 and linked_id(unit1, key_id, false, clean) or '') .. result .. linked_id(unit2, key_id2, false, '1')</code><br/>
+<code>           else</code><br/>
+<code>               result = (unit1 and variable_name(clean, unit1) or '') .. result .. variable_name('1', unit2)</code><br/>
+<code>           end</code><br/>
+<code>           if omit_separator(result) then</code><br/>
+<code>               unit_table.sep = ''</code><br/>
+<code>           end</code><br/>
+<code>           return make_link(unit_table.link, result, unit_table)</code><br/>
+<code>       end</code><br/>
+<code>       if unit1 then</code><br/>
+<code>           result = linked_id(unit1, key_id, want_link, clean) .. result</code><br/>
+<code>           if unit1.sep then</code><br/>
+<code>               unit_table.sep = unit1.sep</code><br/>
+<code>           end</code><br/>
+<code>       elseif omitsep then</code><br/>
+<code>           unit_table.sep = ''</code><br/>
+<code>       end</code><br/>
+<code>       return result .. linked_id(unit2, key_id2, want_link, '1')</code><br/>
+<code>   end</code><br/>
+<code>   if multiplier then</code><br/>
+<code>       -- A multiplier (like "100" in "100km") forces the unit to be plural.</code><br/>
+<code>       multiplier = from_en(multiplier)</code><br/>
+<code>       if not omitsep then</code><br/>
+<code>           multiplier = multiplier .. (abbr_on and ' ' or ' ')</code><br/>
+<code>       end</code><br/>
+<code>       if not abbr_on then</code><br/>
+<code>           if key_id == 'name1' then</code><br/>
+<code>               key_id = 'name2'</code><br/>
+<code>           elseif key_id == 'name1_us' then</code><br/>
+<code>               key_id = 'name2_us'</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   else</code><br/>
+<code>       multiplier = ''</code><br/>
+<code>   end</code><br/>
+<code>   local id = unit_table.fixed_name or ((varname and not abbr_on) and variable_name(clean, unit_table) or unit_table[key_id])</code><br/>
+<code>   if omit_separator(id) then</code><br/>
+<code>       unit_table.sep = ''</code><br/>
+<code>   end</code><br/>
+<code>   if want_link then</code><br/>
+<code>       local link = data_code.link_exceptions[unit_table.linkey or unit_table.symbol] or unit_table.link</code><br/>
+<code>       if link then</code><br/>
+<code>           local before = ''</code><br/>
+<code>           local i = unit_table.customary</code><br/>
+<code>           if i == 1 and unit_table.sp_us then</code><br/>
+<code>               i = 2  -- show "U.S." not "US"</code><br/>
+<code>           end</code><br/>
+<code>           if i == 3 and abbr_on then</code><br/>
+<code>               i = 4  -- abbreviate "imperial" to "imp"</code><br/>
+<code>           end</code><br/>
+<code>           local customary = text_code.customary_units[i]</code><br/>
+<code>           if customary then</code><br/>
+<code>               -- LATER: This works for language en only, but it's esoteric so ignore for now.</code><br/>
+<code>               local pertext</code><br/>
+<code>               if id:sub(1, 1) == '/' then</code><br/>
+<code>                   -- Want unit "/USgal" to display as "/U.S. gal", not "U.S. /gal".</code><br/>
+<code>                   pertext = '/'</code><br/>
+<code>                   id = id:sub(2)</code><br/>
+<code>               elseif id:sub(1, 4) == 'per ' then</code><br/>
+<code>                   -- Similarly want "per U.S. gallon", not "U.S. per gallon" (but in practice this is unlikely to be used).</code><br/>
+<code>                   pertext = 'per '</code><br/>
+<code>                   id = id:sub(5)</code><br/>
+<code>               else</code><br/>
+<code>                   pertext = ''</code><br/>
+<code>               end</code><br/>
+<code>               -- Omit any "US"/"U.S."/"imp"/"imperial" from start of id since that will be inserted.</code><br/>
+<code>               local removes = (i </code><code>×</code><span style="margin-left:0.1em"><code>' ..</code><br/>
+<code>               from_en('10') ..</code><br/>
+<code>               '</code></span><s style="display:none"><code>^</code></s><sup><code>' ..</code><br/>
+<code>               from_en(tostring(engscale.exponent)) .. '</code></sup><code>'</code><br/>
+<code>           else</code><br/>
+<code>               local number_id</code><br/>
+<code>               local lk = parms.lk</code><br/>
+<code>               if lk == 'on' or lk == inout then</code><br/>
+<code>                   number_id = make_link(engscale.link, engscale[1])</code><br/>
+<code>               else</code><br/>
+<code>                   number_id = engscale[1]</code><br/>
+<code>               end</code><br/>
+<code>               -- WP:NUMERAL recommends " " in values like "12 million".</code><br/>
+<code>               info.show = info.show .. (parms.opt_adjectival and '-' or ' ') .. number_id</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       if prefix then</code><br/>
+<code>           info.show = prefix .. info.show</code><br/>
+<code>       end</code><br/>
+<code>   end</code></p>
+
+<p>end</p>
+
+<p>local function process_input(parms, in_current)</p>
+
+<p><code>   -- Processing required once per conversion.</code><br/>
+<code>   -- Return block of text to represent input (value/unit).</code><br/>
+<code>   if parms.opt_output_only or parms.opt_output_number_only or parms.opt_output_unit_only then</code><br/>
+<code>       parms.joins = { '', '' }</code><br/>
+<code>       return ''</code><br/>
+<code>   end</code><br/>
+<code>   local first_unit</code><br/>
+<code>   local composite = in_current.composite  -- nil or table of units</code><br/>
+<code>   if composite then</code><br/>
+<code>       first_unit = composite[1]</code><br/>
+<code>   else</code><br/>
+<code>       first_unit = in_current</code><br/>
+<code>   end</code><br/>
+<code>   local id1, want_name = make_id(parms, 1, first_unit)</code><br/>
+<code>   local sep = first_unit.sep  -- separator between value and unit, set by make_id</code><br/>
+<code>   local preunit = parms.preunit1</code><br/>
+<code>   if preunit then</code><br/>
+<code>       sep = ''  -- any separator is included in preunit</code><br/>
+<code>   else</code><br/>
+<code>       preunit = ''</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_input_unit_only then</code><br/>
+<code>       parms.joins = { '', '' }</code><br/>
+<code>       if composite then</code><br/>
+<code>           local parts = { id1 }</code><br/>
+<code>           for i, unit in ipairs(composite) do</code><br/>
+<code>               if i &gt; 1 then</code><br/>
+<code>                   table.insert(parts, (make_id(parms, 1, unit)))</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>           id1 = table.concat(parts, ' ')</code><br/>
+<code>       end</code><br/>
+<code>       if want_name and parms.opt_adjectival then</code><br/>
+<code>           return preunit .. hyphenated(id1)</code><br/>
+<code>       end</code><br/>
+<code>       return  preunit .. id1</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_also_symbol and not composite then</code><br/>
+<code>       local join1 = parms.joins[1]</code><br/>
+<code>       if join1 == ' (' or join1 == ' [' then</code><br/>
+<code>           parms.joins = { ' [' .. first_unit[first_unit.sp_us and 'sym_us' or 'symbol'] .. ']' .. join1 , parms.joins[2] }</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if in_current.builtin == 'mach' and first_unit.sep ~= '' then  -- '' means omitsep with non-enwiki name</code><br/>
+<code>       local prefix = id1 .. ' '</code><br/>
+<code>       local range = parms.range</code><br/>
+<code>       local valinfo = first_unit.valinfo</code><br/>
+<code>       local result = prefix .. valinfo[1].show</code><br/>
+<code>       if range then</code><br/>
+<code>           -- For simplicity and because more not needed, handle one range item only.</code><br/>
+<code>           local prefix2 = make_id(parms, 2, first_unit) .. ' '</code><br/>
+<code>           result = range_text(range[1], want_name, parms, result, prefix2 .. valinfo[2].show, 'in')</code><br/>
+<code>       end</code><br/>
+<code>       return preunit .. result</code><br/>
+<code>   end</code><br/>
+<code>   if composite then</code><br/>
+<code>       -- Simplify: assume there is no range, and no decoration.</code><br/>
+<code>       local mid = (not parms.opt_flip) and parms.mid or ''</code><br/>
+<code>       local sep1 = ' '</code><br/>
+<code>       local sep2 = ' '</code><br/>
+<code>       if parms.opt_adjectival and want_name then</code><br/>
+<code>           sep1 = '-'</code><br/>
+<code>           sep2 = '-'</code><br/>
+<code>       end</code><br/>
+<code>       if omitsep and sep == '' then</code><br/>
+<code>           -- Testing the id of the most significant unit should be sufficient.</code><br/>
+<code>           sep1 = ''</code><br/>
+<code>           sep2 = ''</code><br/>
+<code>       end</code><br/>
+<code>       local parts = { first_unit.valinfo[1].show .. sep1 .. id1 }</code><br/>
+<code>       for i, unit in ipairs(composite) do</code><br/>
+<code>           if i &gt; 1 then</code><br/>
+<code>               table.insert(parts, unit.valinfo[1].show .. sep1 .. (make_id(parms, 1, unit)))</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>       return table.concat(parts, sep2) .. mid</code><br/>
+<code>   end</code><br/>
+<code>   local result, mos</code><br/>
+<code>   local abbr = parms.abbr</code><br/>
+<code>   local range = parms.range</code><br/>
+<code>   if range then</code><br/>
+<code>       mos = (abbr == 'mos')</code><br/>
+<code>       if not (mos or (parms.is_range_x and not want_name)) then</code><br/>
+<code>           linked_pages[first_unit] = nil  -- so the second and only id will be linked, if wanted</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local id = (range == nil) and id1 or make_id(parms, 2, first_unit)</code><br/>
+<code>   local extra, was_hyphenated = hyphenated_maybe(parms, want_name, sep, id, 'in')</code><br/>
+<code>   if mos and was_hyphenated then</code><br/>
+<code>       mos = false  -- suppress repeat of unit in a range</code><br/>
+<code>       if linked_pages[first_unit] then</code><br/>
+<code>           linked_pages[first_unit] = nil</code><br/>
+<code>           id = make_id(parms, 2, first_unit)</code><br/>
+<code>           extra = hyphenated_maybe(parms, want_name, sep, id, 'in')</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local valinfo = first_unit.valinfo</code><br/>
+<code>   if range then</code><br/>
+<code>       if range.n == 1 then</code><br/>
+<code>           -- Like </code><mtpl></mtpl><code> (one range item; two values).</code><br/>
+<code>           -- Do what old template did.</code><br/>
+<code>           local sep1 = first_unit.sep</code><br/>
+<code>           if mos then</code><br/>
+<code>               decorate_value(parms, in_current, 1)</code><br/>
+<code>               decorate_value(parms, in_current, 2)</code><br/>
+<code>               result = valinfo[1].show .. sep1 .. id1</code><br/>
+<code>           elseif parms.is_range_x and not want_name then</code><br/>
+<code>               if abbr == 'in' or abbr == 'on' then</code><br/>
+<code>                   decorate_value(parms, in_current, 1)</code><br/>
+<code>               end</code><br/>
+<code>               decorate_value(parms, in_current, 2)</code><br/>
+<code>               result = valinfo[1].show .. sep1 .. id1</code><br/>
+<code>           else</code><br/>
+<code>               if abbr == 'in' or abbr == 'on' then</code><br/>
+<code>                   decorate_value(parms, in_current, 1)</code><br/>
+<code>               end</code><br/>
+<code>               decorate_value(parms, in_current, 2)</code><br/>
+<code>               result = valinfo[1].show</code><br/>
+<code>           end</code><br/>
+<code>           result = range_text(range[1], want_name, parms, result, valinfo[2].show, 'in')</code><br/>
+<code>       else</code><br/>
+<code>           -- Like </code><mtpl></mtpl><code> (two or more range items): simplify.</code><br/>
+<code>           decorate_value(parms, in_current, 1)</code><br/>
+<code>           result = valinfo[1].show</code><br/>
+<code>           for i = 1, range.n do</code><br/>
+<code>               decorate_value(parms, in_current, i+1)</code><br/>
+<code>               result = range_text(range[i], want_name, parms, result, valinfo[i+1].show, 'in')</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   else</code><br/>
+<code>       decorate_value(parms, first_unit, 1)</code><br/>
+<code>       result = valinfo[1].show</code><br/>
+<code>   end</code><br/>
+<code>   return result .. preunit .. extra</code></p>
+
+<p>end</p>
+
+<p>local function process_one_output(parms, out_current)</p>
+
+<p><code>   -- Processing required for each output unit.</code><br/>
+<code>   -- Return block of text to represent output (value/unit).</code><br/>
+<code>   local id1, want_name = make_id(parms, 1, out_current)</code><br/>
+<code>   local sep = out_current.sep  -- set by make_id</code><br/>
+<code>   local preunit = parms.preunit2</code><br/>
+<code>   if preunit then</code><br/>
+<code>       sep = ''  -- any separator is included in preunit</code><br/>
+<code>   else</code><br/>
+<code>       preunit = ''</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_output_unit_only then</code><br/>
+<code>       if want_name and parms.opt_adjectival then</code><br/>
+<code>           return preunit .. hyphenated(id1)</code><br/>
+<code>       end</code><br/>
+<code>       return preunit .. id1</code><br/>
+<code>   end</code><br/>
+<code>   if out_current.builtin == 'mach' and out_current.sep ~= '' then  -- '' means omitsep with non-enwiki name</code><br/>
+<code>       local prefix = id1 .. ' '</code><br/>
+<code>       local range = parms.range</code><br/>
+<code>       local valinfo = out_current.valinfo</code><br/>
+<code>       local result = prefix .. valinfo[1].show</code><br/>
+<code>       if range then</code><br/>
+<code>           -- For simplicity and because more not needed, handle one range item only.</code><br/>
+<code>           result = range_text(range[1], want_name, parms, result, prefix .. valinfo[2].show, 'out')</code><br/>
+<code>       end</code><br/>
+<code>       return preunit .. result</code><br/>
+<code>   end</code><br/>
+<code>   local result</code><br/>
+<code>   local range = parms.range</code><br/>
+<code>   if range then</code><br/>
+<code>       if not (parms.is_range_x and not want_name) then</code><br/>
+<code>           linked_pages[out_current] = nil  -- so the second and only id will be linked, if wanted</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local id = (range == nil) and id1 or make_id(parms, 2, out_current)</code><br/>
+<code>   local extra = hyphenated_maybe(parms, want_name, sep, id, 'out')</code><br/>
+<code>   local valinfo = out_current.valinfo</code><br/>
+<code>   if range then</code><br/>
+<code>       if range.n == 1 then</code><br/>
+<code>           local sep1 = out_current.sep</code><br/>
+<code>           local abbr = parms.abbr</code><br/>
+<code>           if parms.is_range_x and not want_name then</code><br/>
+<code>               if abbr == 'out' or abbr == 'on' then</code><br/>
+<code>                   decorate_value(parms, out_current, 1)</code><br/>
+<code>               end</code><br/>
+<code>               decorate_value(parms, out_current, 2)</code><br/>
+<code>               result = valinfo[1].show .. sep1 .. id1</code><br/>
+<code>           else</code><br/>
+<code>               if abbr == 'out' or abbr == 'on' then</code><br/>
+<code>                   decorate_value(parms, out_current, 1)</code><br/>
+<code>               end</code><br/>
+<code>               decorate_value(parms, out_current, 2)</code><br/>
+<code>               result = valinfo[1].show</code><br/>
+<code>           end</code><br/>
+<code>           result = range_text(range[1], want_name, parms, result, valinfo[2].show, 'out')</code><br/>
+<code>       else</code><br/>
+<code>           -- Like </code><mtpl></mtpl><code> (two or more range items): simplify.</code><br/>
+<code>           decorate_value(parms, out_current, 1)</code><br/>
+<code>           result = valinfo[1].show</code><br/>
+<code>           for i = 1, range.n do</code><br/>
+<code>               decorate_value(parms, out_current, i+1)</code><br/>
+<code>               result = range_text(range[i], want_name, parms, result, valinfo[i+1].show, 'out')</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   else</code><br/>
+<code>       decorate_value(parms, out_current, 1)</code><br/>
+<code>       result = valinfo[1].show</code><br/>
+<code>   end</code><br/>
+<code>   if parms.opt_output_number_only then</code><br/>
+<code>       return result</code><br/>
+<code>   end</code><br/>
+<code>   return result .. preunit .. extra</code></p>
+
+<p>end</p>
+
+<p>local function make_output_single(parms, in_unit_table, out_unit_table)</p>
+
+<p><code>   -- Return true, item where item = wikitext of the conversion result</code><br/>
+<code>   -- for a single output (which is not a combination or a multiple);</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   out_unit_table.valinfo = collection()</code><br/>
+<code>   local range = parms.range</code><br/>
+<code>   for i = 1, (range and (range.n + 1) or 1) do</code><br/>
+<code>       local success, info = cvtround(parms, in_unit_table.valinfo[i], in_unit_table, out_unit_table)</code><br/>
+<code>       if not success then return false, info end</code><br/>
+<code>       out_unit_table.valinfo:add(info)</code><br/>
+<code>   end</code><br/>
+<code>   return true, process_one_output(parms, out_unit_table)</code></p>
+
+<p>end</p>
+
+<p>local function make_output_multiple(parms, in_unit_table, out_unit_table)</p>
+
+<p><code>   -- Return true, item where item = wikitext of the conversion result</code><br/>
+<code>   -- for an output which is a multiple (like 'ftin');</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   local multiple = out_unit_table.multiple  -- table of scaling factors (will not be nil)</code><br/>
+<code>   local combos = out_unit_table.combination  -- table of unit tables (will not be nil)</code><br/>
+<code>   local abbr = parms.abbr</code><br/>
+<code>   local abbr_org = parms.abbr_org</code><br/>
+<code>   local disp = parms.disp</code><br/>
+<code>   local want_name = (abbr_org == nil and (disp == 'or' or disp == 'slash')) or</code><br/>
+<code>                       not (abbr == 'on' or abbr == 'out' or abbr == 'mos')</code><br/>
+<code>   local want_link = (parms.lk == 'on' or parms.lk == 'out')</code><br/>
+<code>   local mid = parms.opt_flip and parms.mid or ''</code><br/>
+<code>   local sep1 = ' '</code><br/>
+<code>   local sep2 = ' '</code><br/>
+<code>   if parms.opt_adjectival and want_name then</code><br/>
+<code>       sep1 = '-'</code><br/>
+<code>       sep2 = '-'</code><br/>
+<code>   end</code><br/>
+<code>   local do_spell = parms.opt_spell_out</code><br/>
+<code>   parms.opt_spell_out = nil  -- so the call to cvtround does not spell the value</code><br/>
+<code>   local function make_result(info, isfirst)</code><br/>
+<code>       local fmt, outvalue, sign</code><br/>
+<code>       local results = {}</code><br/>
+<code>       for i = 1, #combos do</code><br/>
+<code>           local tfrac, thisvalue, strforce</code><br/>
+<code>           local out_current = combos[i]</code><br/>
+<code>           out_current.inout = 'out'</code><br/>
+<code>           local scale = multiple[i]</code><br/>
+<code>           if i == 1 then  -- least significant unit ('in' from 'ftin')</code><br/>
+<code>               local decimals</code><br/>
+<code>               out_current.frac = out_unit_table.frac</code><br/>
+<code>               local success, outinfo = cvtround(parms, info, in_unit_table, out_current)</code><br/>
+<code>               if not success then return false, outinfo end</code><br/>
+<code>               if isfirst then</code><br/>
+<code>                   out_unit_table.valinfo = { outinfo }  -- in case output value of first least significant unit is needed</code><br/>
+<code>               end</code><br/>
+<code>               sign = outinfo.sign</code><br/>
+<code>               tfrac = outinfo.fraction_table</code><br/>
+<code>               if outinfo.is_scientific then</code><br/>
+<code>                   strforce = outinfo.show</code><br/>
+<code>                   decimals = ''</code><br/>
+<code>               elseif tfrac then</code><br/>
+<code>                   decimals = ''</code><br/>
+<code>               else</code><br/>
+<code>                   local show = outinfo.show  -- number as a string in local language</code><br/>
+<code>                   local p1, p2 = show:find(numdot, 1, true)</code><br/>
+<code>                   decimals = p1 and show:sub(p2 + 1) or ''  -- text after numdot, if any</code><br/>
+<code>               end</code><br/>
+<code>               fmt = '%.' .. ulen(decimals) .. 'f'  -- to reproduce precision</code><br/>
+<code>               if decimals == '' then</code><br/>
+<code>                   if tfrac then</code><br/>
+<code>                       outvalue = floor(outinfo.raw_absvalue)  -- integer part only; fraction added later</code><br/>
+<code>                   else</code><br/>
+<code>                       outvalue = floor(outinfo.raw_absvalue + 0.5)  -- keep all integer digits of least significant unit</code><br/>
+<code>                   end</code><br/>
+<code>               else</code><br/>
+<code>                   outvalue = outinfo.absvalue</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>           if scale then</code><br/>
+<code>               outvalue, thisvalue = divide(outvalue, scale)</code><br/>
+<code>           else</code><br/>
+<code>               thisvalue = outvalue</code><br/>
+<code>           end</code><br/>
+<code>           local id</code><br/>
+<code>           if want_name then</code><br/>
+<code>               if varname then</code><br/>
+<code>                   local clean</code><br/>
+<code>                   if strforce or tfrac then</code><br/>
+<code>                       clean = '.1'  -- dummy value to force name for floating point</code><br/>
+<code>                   else</code><br/>
+<code>                       clean = format(fmt, thisvalue)</code><br/>
+<code>                   end</code><br/>
+<code>                   id = variable_name(clean, out_current)</code><br/>
+<code>               else</code><br/>
+<code>                   local key = 'name2'</code><br/>
+<code>                   if parms.opt_adjectival then</code><br/>
+<code>                       key = 'name1'</code><br/>
+<code>                   elseif tfrac then</code><br/>
+<code>                       if thisvalue == 0 then</code><br/>
+<code>                           key = 'name1'</code><br/>
+<code>                       end</code><br/>
+<code>                   elseif parms.opt_singular then</code><br/>
+<code>                       if 0 </code><code> 0) and tostring(thisvalue) or nil</code><br/>
+<code>               strval = format_fraction(parms, inout, false, wholestr, tfrac.numstr, tfrac.denstr, do_spell)</code><br/>
+<code>           else</code><br/>
+<code>               strval = (thisvalue == 0) and from_en('0') or with_separator(parms, format(fmt, thisvalue))</code><br/>
+<code>               if do_spell then</code><br/>
+<code>                   strval = spell_number(parms, inout, strval) or strval</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>           table.insert(results, strval .. sep1 .. id)</code><br/>
+<code>           if outvalue == 0 then</code><br/>
+<code>               break</code><br/>
+<code>           end</code><br/>
+<code>           fmt = '%.0f'  -- only least significant unit can have a non-integral value</code><br/>
+<code>       end</code><br/>
+<code>       local reversed, count = {}, #results</code><br/>
+<code>       for i = 1, count do</code><br/>
+<code>           reversed[i] = results[count + 1 - i]</code><br/>
+<code>       end</code><br/>
+<code>       return true, sign .. table.concat(reversed, sep2)</code><br/>
+<code>   end</code><br/>
+<code>   local valinfo = in_unit_table.valinfo</code><br/>
+<code>   local success, result = make_result(valinfo[1], true)</code><br/>
+<code>   if not success then return false, result end</code><br/>
+<code>   local range = parms.range</code><br/>
+<code>   if range then</code><br/>
+<code>       for i = 1, range.n do</code><br/>
+<code>           local success, result2 = make_result(valinfo[i+1])</code><br/>
+<code>           if not success then return false, result2 end</code><br/>
+<code>           result = range_text(range[i], want_name, parms, result, result2, 'out')</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   return true, result .. mid</code></p>
+
+<p>end</p>
+
+<p>local function process(parms, in_unit_table, out_unit_table)</p>
+
+<p><code>   -- Return true, s where s = final wikitext result,</code><br/>
+<code>   -- or return false, t where t is an error message table.</code><br/>
+<code>   linked_pages = {}</code><br/>
+<code>   local success, bad_output</code><br/>
+<code>   local bad_input_mcode = in_unit_table.bad_mcode  -- false if input unit is valid</code><br/>
+<code>   local invalue1 = in_unit_table.valinfo[1].value</code><br/>
+<code>   local out_unit = parms.out_unit</code><br/>
+<code>   if out_unit == nil or out_unit == '' then</code><br/>
+<code>       if bad_input_mcode or parms.opt_input_unit_only then</code><br/>
+<code>           bad_output = ''</code><br/>
+<code>       else</code><br/>
+<code>           success, out_unit = get_default(invalue1, in_unit_table)</code><br/>
+<code>           parms.out_unit = out_unit</code><br/>
+<code>           if not success then</code><br/>
+<code>               bad_output = out_unit</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if not bad_output and not out_unit_table then</code><br/>
+<code>       success, out_unit_table = lookup(out_unit, parms.opt_sp_us, 'any_combination')</code><br/>
+<code>       if success then</code><br/>
+<code>           local mismatch = check_mismatch(in_unit_table, out_unit_table)</code><br/>
+<code>           if mismatch then</code><br/>
+<code>               bad_output = mismatch</code><br/>
+<code>           end</code><br/>
+<code>       else</code><br/>
+<code>           bad_output = out_unit_table</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   local flipped = parms.opt_flip and not bad_input_mcode</code><br/>
+<code>   local parts = {}</code><br/>
+<code>   for part = 1, 2 do</code><br/>
+<code>       -- The LHS (parts[1]) is normally the input, but is the output if flipped.</code><br/>
+<code>       -- Process LHS first so it will be linked, if wanted.</code><br/>
+<code>       -- Linking to the same item is suppressed in the RHS to avoid overlinking.</code><br/>
+<code>       if (part == 1 and not flipped) or (part == 2 and flipped) then</code><br/>
+<code>           parts[part] = process_input(parms, in_unit_table)</code><br/>
+<code>       elseif bad_output then</code><br/>
+<code>           parts[part] = (bad_output == '') and '' or message(bad_output)</code><br/>
+<code>       else</code><br/>
+<code>           local outputs = {}</code><br/>
+<code>           local combos  -- nil (for 'ft' or 'ftin'), or table of unit tables (for 'm ft')</code><br/>
+<code>           if not out_unit_table.multiple then  -- nil/false ('ft' or 'm ft'), or table of factors ('ftin')</code><br/>
+<code>               combos = out_unit_table.combination</code><br/>
+<code>           end</code><br/>
+<code>           local frac = parms.frac  -- nil or denominator of fraction for output values</code><br/>
+<code>           if frac then</code><br/>
+<code>               -- Apply fraction to the unit (if only one), or to non-SI units (if a combination),</code><br/>
+<code>               -- except that if a precision is also specified, the fraction only applies to</code><br/>
+<code>               -- the hand unit; that allows the following result:</code><br/>
+<code>               -- </code><mtpl></mtpl><code> → 156 centimetres (61.4 in; 15.1½ hands)</code><br/>
+<code>               -- However, the following is handled elsewhere as a special case:</code><br/>
+<code>               -- </code><mtpl></mtpl><code> → 156 centimetres (15.1½ hands; 61½ in)</code><br/>
+<code>               if combos then</code><br/>
+<code>                   local precision = parms.precision</code><br/>
+<code>                   for _, unit in ipairs(combos) do</code><br/>
+<code>                       if unit.builtin == 'hand' or (not precision and not unit.prefixes) then</code><br/>
+<code>                           unit.frac = frac</code><br/>
+<code>                       end</code><br/>
+<code>                   end</code><br/>
+<code>               else</code><br/>
+<code>                   out_unit_table.frac = frac</code><br/>
+<code>               end</code><br/>
+<code>           end</code><br/>
+<code>           local out_first</code><br/>
+<code>           local imax = combos and #combos or 1  -- 1 (single unit) or number of unit tables</code><br/>
+<code>           for i = 1, imax do</code><br/>
+<code>               local success, item</code><br/>
+<code>               local out_current = combos and combos[i] or out_unit_table</code><br/>
+<code>               out_current.inout = 'out'</code><br/>
+<code>               if i == 1 then</code><br/>
+<code>                   out_first = out_current</code><br/>
+<code>                   if imax &gt; 1 and out_current.builtin == 'hand' then</code><br/>
+<code>                       out_current.out_next = combos[2]  -- built-in hand can influence next unit in a combination</code><br/>
+<code>                   end</code><br/>
+<code>               end</code><br/>
+<code>               if out_current.multiple then</code><br/>
+<code>                   success, item = make_output_multiple(parms, in_unit_table, out_current)</code><br/>
+<code>               else</code><br/>
+<code>                   success, item = make_output_single(parms, in_unit_table, out_current)</code><br/>
+<code>               end</code><br/>
+<code>               if not success then return false, item end</code><br/>
+<code>               table.insert(outputs, item)</code><br/>
+<code>           end</code><br/>
+<code>           if parms.opt_input_unit_only then</code><br/>
+<code>               parts[part] = ''</code><br/>
+<code>           else</code><br/>
+<code>               local sep = parms.table_joins and parms.table_joins[2] or parms.join_between</code><br/>
+<code>               parts[part] = table.concat(outputs, sep)</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   end</code><br/>
+<code>   if parms.join_before then</code><br/>
+<code>       parts[1] = parms.join_before .. parts[1]</code><br/>
+<code>   end</code><br/>
+<code>   local wikitext</code><br/>
+<code>   if bad_input_mcode then</code><br/>
+<code>       if bad_input_mcode == '' then</code><br/>
+<code>           wikitext = parts[1]</code><br/>
+<code>       else</code><br/>
+<code>           wikitext = parts[1] .. message(bad_input_mcode)</code><br/>
+<code>       end</code><br/>
+<code>   elseif parms.table_joins then</code><br/>
+<code>       wikitext = parms.table_joins[1] .. parts[1] .. parms.table_joins[2] .. parts[2]</code><br/>
+<code>   else</code><br/>
+<code>       wikitext = parts[1] .. parms.joins[1] .. parts[2] .. parms.joins[2]</code><br/>
+<code>   end</code><br/>
+<code>   if parms.warnings and not bad_input_mcode then</code><br/>
+<code>       wikitext = wikitext .. parms.warnings</code><br/>
+<code>   end</code><br/>
+<code>   return true, wikitext, out_unit_table</code></p>
+
+<p>end</p>
+
+<p>local function main_convert(frame)</p>
+
+<p><code>   -- Do convert, and if needed, do it again with higher default precision.</code><br/>
+<code>   set_config(frame.args)</code><br/>
+<code>   local result, out_unit_table</code><br/>
+<code>   local success, parms, in_unit_table = get_parms(frame:getParent().args)</code><br/>
+<code>   if success then</code><br/>
+<code>       for i = 1, 2 do  -- use counter so cannot get stuck repeating convert</code><br/>
+<code>           success, result, out_unit_table = process(parms, in_unit_table, out_unit_table)</code><br/>
+<code>           if success and parms.do_convert_again then</code><br/>
+<code>               parms.do_convert_again = false</code><br/>
+<code>           else</code><br/>
+<code>               break</code><br/>
+<code>           end</code><br/>
+<code>       end</code><br/>
+<code>   else</code><br/>
+<code>       result = parms</code><br/>
+<code>   end</code><br/>
+<code>   if success then</code><br/>
+<code>       return result</code><br/>
+<code>   end</code><br/>
+<code>   return message(result)</code></p>
+
+<p>end</p>
+
+<p>return { convert = main_convert }"</p>
+</body>
+</html>

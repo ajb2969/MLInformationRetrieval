@@ -1,0 +1,4563 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1118">Kanade–Lucas–Tomasi feature tracker</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Kanade–Lucas–Tomasi feature tracker</h1>
+<hr/>
+
+<p>In <a href="computer_vision" title="wikilink">computer vision</a>, the <strong>Kanade–Lucas–Tomasi (KLT) feature tracker</strong> is an approach to <a href="feature_extraction" title="wikilink">feature extraction</a>. It is proposed mainly for the purpose of dealing with the problem that traditional <a href="image_registration" title="wikilink">image registration</a> techniques are generally costly. KLT makes use of spatial intensity information to direct the search for the position that yields the best match. It is faster than traditional techniques for examining far fewer potential matches between the images.</p>
+<h2 id="the-registration-problem">The registration problem</h2>
+
+<p>The translational image registration problem can be characterized as follows: Given two functions 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:0">
+ <semantics>
+  <mrow>
+   <mi>F</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>F</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:1">
+ <semantics>
+  <mrow>
+   <mi>G</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>G</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G(x)
+  </annotation>
+ </semantics>
+</math>
+
+, representing values at each location 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:2">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:3">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ is a vector, in two images, respectively, we wish to find the disparity vector 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:4">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ that minimizes some measure of the difference between 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:5">
+ <semantics>
+  <mrow>
+   <mi>F</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>+</mo>
+     <mi>h</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>F</ci>
+    <apply>
+     <plus></plus>
+     <ci>x</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x+h)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:6">
+ <semantics>
+  <mrow>
+   <mi>G</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>G</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G(x)
+  </annotation>
+ </semantics>
+</math>
+
+, for 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:7">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ in some region of interest 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:8">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Some measures of the difference between 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:9">
+ <semantics>
+  <mrow>
+   <mi>F</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>+</mo>
+     <mi>h</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>F</ci>
+    <apply>
+     <plus></plus>
+     <ci>x</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x+h)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:10">
+ <semantics>
+  <mrow>
+   <mi>G</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>G</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G(x)
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+<ul>
+<li>L<sub>1</sub> norm = 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:11">
+ <semantics>
+  <mrow>
+   <msub>
+    <mo largeop="true" symmetric="true">∑</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>∈</mo>
+     <mi>R</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo>|</mo>
+    <mrow>
+     <mrow>
+      <mi>F</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>x</mi>
+        <mo>+</mo>
+        <mi>h</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>-</mo>
+     <mrow>
+      <mi>G</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>|</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <sum></sum>
+     <apply>
+      <in></in>
+      <ci>x</ci>
+      <ci>R</ci>
+     </apply>
+    </apply>
+    <apply>
+     <abs></abs>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>F</ci>
+       <apply>
+        <plus></plus>
+        <ci>x</ci>
+        <ci>h</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>G</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sum_{x\in R}\left|F(x+h)-G(x)\right|
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>L<sub>2</sub> norm = 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:12">
+ <semantics>
+  <msqrt>
+   <mrow>
+    <msub>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>x</mi>
+      <mo>∈</mo>
+      <mi>R</mi>
+     </mrow>
+    </msub>
+    <msup>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <mrow>
+        <mi>F</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>x</mi>
+          <mo>+</mo>
+          <mi>h</mi>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>G</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>x</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <in></in>
+       <ci>x</ci>
+       <ci>R</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>F</ci>
+         <apply>
+          <plus></plus>
+          <ci>x</ci>
+          <ci>h</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>G</ci>
+         <ci>x</ci>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{\sum_{x\in R}\left[F(x+h)-G(x)\right]^{2}}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>Negative of normalized correlation<br/>
+ = 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:13">
+ <semantics>
+  <mstyle displaystyle="true">
+   <mfrac>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>x</mi>
+        <mo>∈</mo>
+        <mi>R</mi>
+       </mrow>
+      </msub>
+      <mrow>
+       <mi>F</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mi>x</mi>
+         <mo>+</mo>
+         <mi>h</mi>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mi>G</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mrow>
+     <msqrt>
+      <mrow>
+       <msub>
+        <mo largeop="true" symmetric="true">∑</mo>
+        <mrow>
+         <mi>x</mi>
+         <mo>∈</mo>
+         <mi>R</mi>
+        </mrow>
+       </msub>
+       <mrow>
+        <mi>F</mi>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mi>x</mi>
+           <mo>+</mo>
+           <mi>h</mi>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+      </mrow>
+     </msqrt>
+     <msqrt>
+      <mrow>
+       <msub>
+        <mo largeop="true" symmetric="true">∑</mo>
+        <mrow>
+         <mi>x</mi>
+         <mo>∈</mo>
+         <mi>R</mi>
+        </mrow>
+       </msub>
+       <mrow>
+        <mi>G</mi>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+      </mrow>
+     </msqrt>
+    </mrow>
+   </mfrac>
+  </mstyle>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <minus></minus>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <in></in>
+        <ci>x</ci>
+        <ci>R</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>F</ci>
+       <apply>
+        <plus></plus>
+        <ci>x</ci>
+        <ci>h</ci>
+       </apply>
+       <ci>G</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <root></root>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <in></in>
+         <ci>x</ci>
+         <ci>R</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>F</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <plus></plus>
+          <ci>x</ci>
+          <ci>h</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <root></root>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <in></in>
+         <ci>x</ci>
+         <ci>R</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>G</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dfrac{-\sum_{x\in R}F(x+h)G(x)}{\sqrt{\sum_{x\in R}F(x+h)^{2}}\sqrt{\sum_{x%
+\in R}G(x)^{2}}}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+</ul>
+<h2 id="basic-description-of-the-registration-algorithm">Basic description of the registration algorithm</h2>
+
+<p>The KLT feature tracker is based on two papers: In the first paper, Lucas and Kanade<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> developed the idea of a local search using gradients weighted by an approximation to the second derivative of the image.</p>
+<h3 id="one-dimensional-case">One-dimensional case</h3>
+
+<p>If 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:14">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ is the displacement between two images 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:15">
+ <semantics>
+  <mrow>
+   <mi>F</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>F</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:16">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>G</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>F</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>x</mi>
+      <mo>+</mo>
+      <mi>h</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>G</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>F</ci>
+     <apply>
+      <plus></plus>
+      <ci>x</ci>
+      <ci>h</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G(x)=F(x+h)
+  </annotation>
+ </semantics>
+</math>
+
+ then the approximation is made that</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:17">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>F</mi>
+     <mo>′</mo>
+    </msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>≈</mo>
+   <mfrac>
+    <mrow>
+     <mrow>
+      <mi>F</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>x</mi>
+        <mo>+</mo>
+        <mi>h</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>-</mo>
+     <mrow>
+      <mi>F</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mi>h</mi>
+   </mfrac>
+   <mo>=</mo>
+   <mpadded width="+1.7pt">
+    <mfrac>
+     <mrow>
+      <mrow>
+       <mi>G</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>-</mo>
+      <mrow>
+       <mi>F</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mi>h</mi>
+    </mfrac>
+   </mpadded>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <approx></approx>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>F</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <ci>F</ci>
+        <apply>
+         <plus></plus>
+         <ci>x</ci>
+         <ci>h</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>F</ci>
+        <ci>x</ci>
+       </apply>
+      </apply>
+      <ci>h</ci>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <ci>G</ci>
+        <ci>x</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>F</ci>
+        <ci>x</ci>
+       </apply>
+      </apply>
+      <ci>h</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F^{\prime}(x)\approx\dfrac{F(x+h)-F(x)}{h}=\dfrac{G(x)-F(x)}{h}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>so that</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:18">
+ <semantics>
+  <mrow>
+   <mi>h</mi>
+   <mo>≈</mo>
+   <mpadded width="+1.7pt">
+    <mfrac>
+     <mrow>
+      <mrow>
+       <mi>G</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>-</mo>
+      <mrow>
+       <mi>F</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msup>
+       <mi>F</mi>
+       <mo>′</mo>
+      </msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mpadded>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <ci>h</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>G</ci>
+       <ci>x</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>F</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>F</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>x</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h\approx\dfrac{G(x)-F(x)}{F^{\prime}(x)}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This approximation to the gradient of the image is only accurate if the displacement of the local area between the two images to be registered is not too large. The approximation to 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:19">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ depends on 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:20">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+. For combining the various estimates of 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:21">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ at various values of 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:22">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+, it is natural to average them:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:23">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>h</mi>
+    <mo>≈</mo>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mi>x</mi>
+      </msub>
+      <mstyle displaystyle="true">
+       <mfrac>
+        <mrow>
+         <mrow>
+          <mi>G</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>x</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>-</mo>
+         <mrow>
+          <mi>F</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>x</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mrow>
+         <msup>
+          <mi>F</mi>
+          <mo>′</mo>
+         </msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mfrac>
+      </mstyle>
+     </mrow>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mi>x</mi>
+      </msub>
+      <mn>1</mn>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <ci>h</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <ci>x</ci>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>G</ci>
+         <ci>x</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>F</ci>
+         <ci>x</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>F</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>x</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <ci>x</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h\approx\dfrac{\sum_{x}\dfrac{G(x)-F(x)}{F^{\prime}(x)}}{\sum_{x}1}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The average can be further improved by weighting the contribution of each term to it, which is inversely proportional to an estimate of 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:24">
+ <semantics>
+  <mrow>
+   <mo>|</mo>
+   <mrow>
+    <msup>
+     <mi>F</mi>
+     <mi>′′</mi>
+    </msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>|</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <abs></abs>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>F</ci>
+      <ci>′′</ci>
+     </apply>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left|F^{\prime\prime}(x)\right|
+  </annotation>
+ </semantics>
+</math>
+
+, where</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:25">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msup>
+      <mi>F</mi>
+      <mi>′′</mi>
+     </msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>≈</mo>
+    <mfrac>
+     <mrow>
+      <mrow>
+       <msup>
+        <mi>G</mi>
+        <mo>′</mo>
+       </msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>-</mo>
+      <mrow>
+       <msup>
+        <mi>F</mi>
+        <mo>′</mo>
+       </msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mi>h</mi>
+    </mfrac>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>F</ci>
+      <ci>′′</ci>
+     </apply>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>G</ci>
+        <ci>normal-′</ci>
+       </apply>
+       <ci>x</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>F</ci>
+        <ci>normal-′</ci>
+       </apply>
+       <ci>x</ci>
+      </apply>
+     </apply>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F^{\prime\prime}(x)\approx\dfrac{G^{\prime}(x)-F^{\prime}(x)}{h}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>For the purpose of facilitating the expression, a <a href="weighting_function" title="wikilink">weighting function</a> is defined:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:26">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>w</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mfrac>
+     <mn>1</mn>
+     <mrow>
+      <mo>|</mo>
+      <mrow>
+       <mrow>
+        <msup>
+         <mi>G</mi>
+         <mo>′</mo>
+        </msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>x</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <msup>
+         <mi>F</mi>
+         <mo>′</mo>
+        </msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>x</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>|</mo>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>w</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <apply>
+      <abs></abs>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>G</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>x</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>F</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>x</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w(x)=\dfrac{1}{\left|G^{\prime}(x)-F^{\prime}(x)\right|}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The average with weighting is thereby:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:27">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>h</mi>
+    <mo>=</mo>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mi>x</mi>
+      </msub>
+      <mstyle displaystyle="true">
+       <mfrac>
+        <mrow>
+         <mi>w</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mrow>
+          <mo>[</mo>
+          <mrow>
+           <mrow>
+            <mi>G</mi>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mi>x</mi>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+           <mo>-</mo>
+           <mrow>
+            <mi>F</mi>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mi>x</mi>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+          </mrow>
+          <mo>]</mo>
+         </mrow>
+        </mrow>
+        <mrow>
+         <msup>
+          <mi>F</mi>
+          <mo>′</mo>
+         </msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mfrac>
+      </mstyle>
+     </mrow>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mi>x</mi>
+      </msub>
+      <mrow>
+       <mi>w</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>h</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <ci>x</ci>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <ci>w</ci>
+        <ci>x</ci>
+        <apply>
+         <csymbol cd="latexml">delimited-[]</csymbol>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <ci>G</ci>
+           <ci>x</ci>
+          </apply>
+          <apply>
+           <times></times>
+           <ci>F</ci>
+           <ci>x</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>F</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>x</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <ci>x</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>w</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h=\dfrac{\sum_{x}\dfrac{w(x)\left[G(x)-F(x)\right]}{F^{\prime}(x)}}{\sum_{x}w(%
+x)}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Upon obtaining the estimate 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:28">
+ <semantics>
+  <mrow>
+   <mi>F</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>F</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x)
+  </annotation>
+ </semantics>
+</math>
+
+ can be moved by the estimate of 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:29">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+. The procedure is applied repeatedly, yielding a type of <a class="uri" href="Newton-Raphson" title="wikilink">Newton-Raphson</a> iteration. The sequence of estimates will ideally converge to the best 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:30">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+. The iteration can be expressed by<br/>
+
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:31">
+ <semantics>
+  <mrow>
+   <mo>{</mo>
+   <mtable>
+    <mtr>
+     <mtd columnalign="left">
+      <mrow>
+       <msub>
+        <mi>h</mi>
+        <mn>0</mn>
+       </msub>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+     </mtd>
+     <mtd></mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="left">
+      <mrow>
+       <msub>
+        <mi>h</mi>
+        <mrow>
+         <mi>k</mi>
+         <mo>+</mo>
+         <mn>1</mn>
+        </mrow>
+       </msub>
+       <mo>=</mo>
+       <mrow>
+        <msub>
+         <mi>h</mi>
+         <mi>k</mi>
+        </msub>
+        <mo>+</mo>
+        <mstyle displaystyle="true">
+         <mfrac>
+          <mrow>
+           <msub>
+            <mo largeop="true" symmetric="true">∑</mo>
+            <mi>x</mi>
+           </msub>
+           <mstyle displaystyle="true">
+            <mfrac>
+             <mrow>
+              <mi>w</mi>
+              <mrow>
+               <mo stretchy="false">(</mo>
+               <mi>x</mi>
+               <mo stretchy="false">)</mo>
+              </mrow>
+              <mrow>
+               <mo>[</mo>
+               <mrow>
+                <mrow>
+                 <mi>G</mi>
+                 <mrow>
+                  <mo stretchy="false">(</mo>
+                  <mi>x</mi>
+                  <mo stretchy="false">)</mo>
+                 </mrow>
+                </mrow>
+                <mo>-</mo>
+                <mrow>
+                 <mi>F</mi>
+                 <mrow>
+                  <mo stretchy="false">(</mo>
+                  <mrow>
+                   <mi>x</mi>
+                   <mo>+</mo>
+                   <msub>
+                    <mi>h</mi>
+                    <mi>k</mi>
+                   </msub>
+                  </mrow>
+                  <mo stretchy="false">)</mo>
+                 </mrow>
+                </mrow>
+               </mrow>
+               <mo>]</mo>
+              </mrow>
+             </mrow>
+             <mrow>
+              <msup>
+               <mi>F</mi>
+               <mo>′</mo>
+              </msup>
+              <mrow>
+               <mo stretchy="false">(</mo>
+               <mrow>
+                <mi>x</mi>
+                <mo>+</mo>
+                <msub>
+                 <mi>h</mi>
+                 <mi>k</mi>
+                </msub>
+               </mrow>
+               <mo stretchy="false">)</mo>
+              </mrow>
+             </mrow>
+            </mfrac>
+           </mstyle>
+          </mrow>
+          <mrow>
+           <msub>
+            <mo largeop="true" symmetric="true">∑</mo>
+            <mi>x</mi>
+           </msub>
+           <mrow>
+            <mi>w</mi>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mi>x</mi>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+          </mrow>
+         </mfrac>
+        </mstyle>
+       </mrow>
+      </mrow>
+     </mtd>
+     <mtd></mtd>
+    </mtr>
+   </mtable>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">cases</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>h</ci>
+      <cn type="integer">0</cn>
+     </apply>
+     <cn type="integer">0</cn>
+    </apply>
+    <mtext>otherwise</mtext>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>h</ci>
+      <apply>
+       <plus></plus>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>h</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <ci>x</ci>
+        </apply>
+        <apply>
+         <divide></divide>
+         <apply>
+          <times></times>
+          <ci>w</ci>
+          <ci>x</ci>
+          <apply>
+           <csymbol cd="latexml">delimited-[]</csymbol>
+           <apply>
+            <minus></minus>
+            <apply>
+             <times></times>
+             <ci>G</ci>
+             <ci>x</ci>
+            </apply>
+            <apply>
+             <times></times>
+             <ci>F</ci>
+             <apply>
+              <plus></plus>
+              <ci>x</ci>
+              <apply>
+               <csymbol cd="ambiguous">subscript</csymbol>
+               <ci>h</ci>
+               <ci>k</ci>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <ci>F</ci>
+           <ci>normal-′</ci>
+          </apply>
+          <apply>
+           <plus></plus>
+           <ci>x</ci>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>h</ci>
+            <ci>k</ci>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <ci>x</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>w</ci>
+         <ci>x</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <mtext>otherwise</mtext>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{cases}h_{0}=0\\
+h_{k+1}=h_{k}+\dfrac{\sum_{x}\dfrac{w(x)\left[G(x)-F(x+h_{k})\right]}{F^{%
+\prime}(x+h_{k})}}{\sum_{x}w(x)}\end{cases}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h3 id="an-alternative-derivation">An alternative derivation</h3>
+
+<p>The derivation above cannot be generalized well to two dimensions for the 2-D <a href="linear_approximation" title="wikilink">linear approximation</a> occurs differently. This can be corrected by applying the linear approximation in the form:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:32">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>F</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>x</mi>
+       <mo>+</mo>
+       <mi>h</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>≈</mo>
+    <mrow>
+     <mrow>
+      <mi>F</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mi>h</mi>
+      <msup>
+       <mi>F</mi>
+       <mo>′</mo>
+      </msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <apply>
+     <times></times>
+     <ci>F</ci>
+     <apply>
+      <plus></plus>
+      <ci>x</ci>
+      <ci>h</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>F</ci>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>h</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>F</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>x</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x+h)\approx F(x)+hF^{\prime}(x),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>to find the 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:33">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ which minimizes the L<sub>2</sub> norm measure of the difference (or error) between the curves, where the error can be expressed as:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:34">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>E</mi>
+    <mo>=</mo>
+    <mrow>
+     <munder>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mi>x</mi>
+     </munder>
+     <msup>
+      <mrow>
+       <mo>[</mo>
+       <mrow>
+        <mrow>
+         <mi>F</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mi>x</mi>
+           <mo>+</mo>
+           <mi>h</mi>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>-</mo>
+        <mrow>
+         <mi>G</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>]</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>E</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>F</ci>
+         <apply>
+          <plus></plus>
+          <ci>x</ci>
+          <ci>h</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>G</ci>
+         <ci>x</ci>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E=\sum_{x}\left[F(x+h)-G(x)\right]^{2}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>To minimize the error with respect to 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:35">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+, partially differentiate 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:36">
+ <semantics>
+  <mi>E</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>E</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E
+  </annotation>
+ </semantics>
+</math>
+
+ and set it to zero:</p>
+
+<p>
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:37">
+ <semantics>
+  <mn>0</mn>
+  <annotation-xml encoding="MathML-Content">
+   <cn type="integer">0</cn>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle 0
+  </annotation>
+ </semantics>
+</math>
+
+
+,</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:38">
+ <semantics>
+  <mrow>
+   <mi></mi>
+   <mo>⇒</mo>
+   <mi>h</mi>
+   <mo>≈</mo>
+   <mpadded width="+1.7pt">
+    <mfrac>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mi>x</mi>
+      </msub>
+      <mrow>
+       <msup>
+        <mi>F</mi>
+        <mo>′</mo>
+       </msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mrow>
+         <mrow>
+          <mi>G</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>x</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>-</mo>
+         <mrow>
+          <mi>F</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>x</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">]</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mi>x</mi>
+      </msub>
+      <mrow>
+       <msup>
+        <mi>F</mi>
+        <mo>′</mo>
+       </msup>
+       <msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>x</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mpadded>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <ci>normal-⇒</ci>
+     <csymbol cd="latexml">absent</csymbol>
+     <ci>h</ci>
+    </apply>
+    <apply>
+     <approx></approx>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <ci>x</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>F</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>x</ci>
+        <apply>
+         <csymbol cd="latexml">delimited-[]</csymbol>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <ci>G</ci>
+           <ci>x</ci>
+          </apply>
+          <apply>
+           <times></times>
+           <ci>F</ci>
+           <ci>x</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <ci>x</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>F</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Rightarrow h\approx\dfrac{\sum_{x}F^{\prime}(x)[G(x)-F(x)]}{\sum_{x}F^{\prime%
+}(x)^{2}}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This is basically the same as the 1-D case, except for the fact that the weighting function 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:39">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>w</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <msup>
+      <mi>F</mi>
+      <mo>′</mo>
+     </msup>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>w</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>F</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w(x)=F^{\prime}(x)^{2}.
+  </annotation>
+ </semantics>
+</math>
+
+ And the iteration form with weighting can be expressed as:</p>
+
+<p>
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:40">
+ <semantics>
+  <mrow>
+   <mo>{</mo>
+   <mtable>
+    <mtr>
+     <mtd columnalign="left">
+      <mrow>
+       <msub>
+        <mi>h</mi>
+        <mn>0</mn>
+       </msub>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+     </mtd>
+     <mtd></mtd>
+    </mtr>
+    <mtr>
+     <mtd columnalign="left">
+      <mrow>
+       <msub>
+        <mi>h</mi>
+        <mrow>
+         <mi>k</mi>
+         <mo>+</mo>
+         <mn>1</mn>
+        </mrow>
+       </msub>
+       <mo>=</mo>
+       <mrow>
+        <msub>
+         <mi>h</mi>
+         <mi>k</mi>
+        </msub>
+        <mo>+</mo>
+        <mstyle displaystyle="true">
+         <mfrac>
+          <mrow>
+           <msub>
+            <mo largeop="true" symmetric="true">∑</mo>
+            <mi>x</mi>
+           </msub>
+           <mrow>
+            <mi>w</mi>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mi>x</mi>
+             <mo stretchy="false">)</mo>
+            </mrow>
+            <msup>
+             <mi>F</mi>
+             <mo>′</mo>
+            </msup>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mrow>
+              <mi>x</mi>
+              <mo>+</mo>
+              <msub>
+               <mi>h</mi>
+               <mi>k</mi>
+              </msub>
+             </mrow>
+             <mo stretchy="false">)</mo>
+            </mrow>
+            <mrow>
+             <mo>[</mo>
+             <mrow>
+              <mrow>
+               <mi>G</mi>
+               <mrow>
+                <mo stretchy="false">(</mo>
+                <mi>x</mi>
+                <mo stretchy="false">)</mo>
+               </mrow>
+              </mrow>
+              <mo>-</mo>
+              <mrow>
+               <mi>F</mi>
+               <mrow>
+                <mo stretchy="false">(</mo>
+                <mrow>
+                 <mi>x</mi>
+                 <mo>+</mo>
+                 <msub>
+                  <mi>h</mi>
+                  <mi>k</mi>
+                 </msub>
+                </mrow>
+                <mo stretchy="false">)</mo>
+               </mrow>
+              </mrow>
+             </mrow>
+             <mo>]</mo>
+            </mrow>
+           </mrow>
+          </mrow>
+          <mrow>
+           <msub>
+            <mo largeop="true" symmetric="true">∑</mo>
+            <mi>x</mi>
+           </msub>
+           <mrow>
+            <mi>w</mi>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mi>x</mi>
+             <mo stretchy="false">)</mo>
+            </mrow>
+            <msup>
+             <mi>F</mi>
+             <mo>′</mo>
+            </msup>
+            <msup>
+             <mrow>
+              <mo stretchy="false">(</mo>
+              <mrow>
+               <mi>x</mi>
+               <mo>+</mo>
+               <msub>
+                <mi>h</mi>
+                <mi>k</mi>
+               </msub>
+              </mrow>
+              <mo stretchy="false">)</mo>
+             </mrow>
+             <mn>2</mn>
+            </msup>
+           </mrow>
+          </mrow>
+         </mfrac>
+        </mstyle>
+       </mrow>
+      </mrow>
+     </mtd>
+     <mtd></mtd>
+    </mtr>
+   </mtable>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">cases</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>h</ci>
+      <cn type="integer">0</cn>
+     </apply>
+     <cn type="integer">0</cn>
+    </apply>
+    <mtext>otherwise</mtext>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>h</ci>
+      <apply>
+       <plus></plus>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>h</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <ci>x</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>w</ci>
+         <ci>x</ci>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>F</ci>
+          <ci>normal-′</ci>
+         </apply>
+         <apply>
+          <plus></plus>
+          <ci>x</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>h</ci>
+           <ci>k</ci>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="latexml">delimited-[]</csymbol>
+          <apply>
+           <minus></minus>
+           <apply>
+            <times></times>
+            <ci>G</ci>
+            <ci>x</ci>
+           </apply>
+           <apply>
+            <times></times>
+            <ci>F</ci>
+            <apply>
+             <plus></plus>
+             <ci>x</ci>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>h</ci>
+              <ci>k</ci>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <ci>x</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>w</ci>
+         <ci>x</ci>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>F</ci>
+          <ci>normal-′</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <plus></plus>
+           <ci>x</ci>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>h</ci>
+            <ci>k</ci>
+           </apply>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <mtext>otherwise</mtext>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{cases}h_{0}=0\\
+h_{k+1}=h_{k}+\dfrac{\sum_{x}w(x)F^{\prime}(x+h_{k})\left[G(x)-F(x+h_{k})%
+\right]}{\sum_{x}w(x)F^{\prime}(x+h_{k})^{2}}\end{cases}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h3 id="performance">Performance</h3>
+
+<p>To evaluate the <a class="uri" href="performance" title="wikilink">performance</a> of the algorithm, we are naturally curious about under what conditions and how fast the sequence of 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:41">
+ <semantics>
+  <msub>
+   <mi>h</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>h</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h_{k}
+  </annotation>
+ </semantics>
+</math>
+
+'s converges to the real 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:42">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+.<br/>
+Consider the case:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:43">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>F</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mi>sin</mi>
+     <mi>x</mi>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>F</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <sin></sin>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x)=\sin x,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:44">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>G</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mi>F</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>x</mi>
+       <mo>+</mo>
+       <mi>h</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mi>sin</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>x</mi>
+       <mo>+</mo>
+       <mi>h</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>G</ci>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>F</ci>
+      <apply>
+       <plus></plus>
+       <ci>x</ci>
+       <ci>h</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <sin></sin>
+      <apply>
+       <plus></plus>
+       <ci>x</ci>
+       <ci>h</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G(x)=F(x+h)=\sin(x+h).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Both versions of the registration algorithm will converge to the correct 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:45">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ for 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:46">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>|</mo>
+    <mi>h</mi>
+    <mo>|</mo>
+   </mrow>
+   <mo><</mo>
+   <mi>π</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <lt></lt>
+    <apply>
+     <abs></abs>
+     <ci>h</ci>
+    </apply>
+    <ci>π</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left|h\right|<\pi
+  </annotation>
+ </semantics>
+</math>
+
+, i.e. for initial misregistrations as large as one-half wavelength. The range of convergence can be improved by suppressing high spatial frequencies in the image, which could be achieved by <a class="uri" href="smoothing" title="wikilink">smoothing</a> the image, that will also undesirably suppress small details of it. If the window of smoothing is much larger than the size of the object being matched, the object may be suppressed entirely, so that a match would be no longer possible.</p>
+
+<p>Since lowpass-filtered images can be sampled at lower <a href="Image_resolution" title="wikilink">resolution</a> with no loss of information, a coarse-to-fine strategy is adopted. A low-resolution smoothed version of the image can be used to obtain an approximate match. Applying the algorithm to higher resolution images will refine the match obtained at lower resolution.</p>
+
+<p>As smoothing extends the range of convergence, the weighting function improves the accuracy of approximation, speeding up the convergence. Without weighting, the calculated displacement 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:47">
+ <semantics>
+  <msub>
+   <mi>h</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>h</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ of the first iteration with 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:48">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>F</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>sin</mi>
+    <mi>x</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>F</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <sin></sin>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x)=\sin x
+  </annotation>
+ </semantics>
+</math>
+
+ falls off to zero as the displacement approaches one-half wavelength.</p>
+<h3 id="implementation">Implementation</h3>
+
+<p>The implementation requires the calculation of the weighted sums of the quantities 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:49">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>F</mi>
+     <mo>′</mo>
+    </msup>
+    <mi>G</mi>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>F</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>G</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F^{\prime}G,
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:50">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>F</mi>
+     <mo>′</mo>
+    </msup>
+    <mi>F</mi>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>F</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>F</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F^{\prime}F,
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:51">
+ <semantics>
+  <msup>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>F</mi>
+     <mo>′</mo>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mn>2</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>F</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (F^{\prime})^{2}
+  </annotation>
+ </semantics>
+</math>
+
+ over the region of interest 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:52">
+ <semantics>
+  <mrow>
+   <mi>R</mi>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R.
+  </annotation>
+ </semantics>
+</math>
+
+ Although 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:53">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>F</mi>
+    <mo>′</mo>
+   </msup>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>F</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F^{\prime}(x)
+  </annotation>
+ </semantics>
+</math>
+
+ cannot be calculated exactly, it can be estimated by:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:54">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msup>
+      <mi>F</mi>
+      <mo>′</mo>
+     </msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>≈</mo>
+    <mfrac>
+     <mrow>
+      <mrow>
+       <mi>F</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mi>x</mi>
+         <mo>+</mo>
+         <mrow>
+          <mi mathvariant="normal">Δ</mi>
+          <mi>x</mi>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>-</mo>
+      <mrow>
+       <mi>F</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi mathvariant="normal">Δ</mi>
+      <mi>x</mi>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>F</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>F</ci>
+       <apply>
+        <plus></plus>
+        <ci>x</ci>
+        <apply>
+         <times></times>
+         <ci>normal-Δ</ci>
+         <ci>x</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>F</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>x</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F^{\prime}(x)\approx\dfrac{F(x+\Delta x)-F(x)}{\Delta x},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:55">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Δ</mi>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Δ</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta x
+  </annotation>
+ </semantics>
+</math>
+
+ is chosen appropriately small.<br/>
+Some sophisticated technique can be used for estimating the first derivatives, but in general such techniques are equivalent to first smoothing the function, and then taking the difference.</p>
+<h3 id="generalization-to-multiple-dimensions">Generalization to multiple dimensions</h3>
+
+<p>The registration algorithm for 1-D and 2-D can be generalized to more dimensions. To do so, we try to minimize the L<sub>2</sub> norm measure of error:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:56">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>E</mi>
+    <mo>=</mo>
+    <mrow>
+     <munder>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>𝐱</mi>
+       <mo>∈</mo>
+       <mi>R</mi>
+      </mrow>
+     </munder>
+     <msup>
+      <mrow>
+       <mo>[</mo>
+       <mrow>
+        <mrow>
+         <mi>F</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mi>𝐱</mi>
+           <mo>+</mo>
+           <mi>𝐡</mi>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>-</mo>
+        <mrow>
+         <mi>G</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>𝐱</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>]</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>E</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <in></in>
+       <ci>𝐱</ci>
+       <ci>R</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>F</ci>
+         <apply>
+          <plus></plus>
+          <ci>𝐱</ci>
+          <ci>𝐡</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>G</ci>
+         <ci>𝐱</ci>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E=\sum_{\mathbf{x}\in R}\left[F(\mathbf{x}+\mathbf{h})-G(\mathbf{x})\right]^{2},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:57">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:58">
+ <semantics>
+  <mi>𝐡</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐡</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{h}
+  </annotation>
+ </semantics>
+</math>
+
+ are n-dimensional row vectors.<br/>
+A linear approximation analogous:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:59">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>F</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>𝐱</mi>
+       <mo>+</mo>
+       <mi>𝐡</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>≈</mo>
+    <mrow>
+     <mrow>
+      <mi>F</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mi>𝐡</mi>
+      <msup>
+       <mrow>
+        <mo>(</mo>
+        <mrow>
+         <mfrac>
+          <mo>∂</mo>
+          <mrow>
+           <mo>∂</mo>
+           <mi>𝐱</mi>
+          </mrow>
+         </mfrac>
+         <mi>F</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>𝐱</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>)</mo>
+       </mrow>
+       <mi>T</mi>
+      </msup>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <apply>
+     <times></times>
+     <ci>F</ci>
+     <apply>
+      <plus></plus>
+      <ci>𝐱</ci>
+      <ci>𝐡</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>F</ci>
+      <ci>𝐱</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>𝐡</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>𝐱</ci>
+         </apply>
+        </apply>
+        <ci>F</ci>
+        <ci>𝐱</ci>
+       </apply>
+       <ci>T</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(\mathbf{x}+\mathbf{h})\approx F(\mathbf{x})+\mathbf{h}\left(\dfrac{\partial}%
+{\partial\mathbf{x}}F(\mathbf{x})\right)^{T}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>And partially differentiate 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:60">
+ <semantics>
+  <mi>E</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>E</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E
+  </annotation>
+ </semantics>
+</math>
+
+ with respect to 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:61">
+ <semantics>
+  <mi>𝐡</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐡</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{h}
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:62">
+ <semantics>
+  <mn>0</mn>
+  <annotation-xml encoding="MathML-Content">
+   <cn type="integer">0</cn>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle 0
+  </annotation>
+ </semantics>
+</math>
+
+
+,</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:63">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi></mi>
+    <mo>⇒</mo>
+    <mi>𝐡</mi>
+    <mo>≈</mo>
+    <mrow>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <munder>
+        <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+        <mi>𝐱</mi>
+       </munder>
+       <mrow>
+        <mrow>
+         <mo>[</mo>
+         <mrow>
+          <mrow>
+           <mi>G</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mi>𝐱</mi>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+          <mo>-</mo>
+          <mrow>
+           <mi>F</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mi>𝐱</mi>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+         </mrow>
+         <mo>]</mo>
+        </mrow>
+        <mrow>
+         <mo>(</mo>
+         <mfrac>
+          <mrow>
+           <mo>∂</mo>
+           <mi>F</mi>
+          </mrow>
+          <mrow>
+           <mo>∂</mo>
+           <mi>𝐱</mi>
+          </mrow>
+         </mfrac>
+         <mo>)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+     <msup>
+      <mrow>
+       <mo>[</mo>
+       <mrow>
+        <munder>
+         <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+         <mi>𝐱</mi>
+        </munder>
+        <mrow>
+         <msup>
+          <mrow>
+           <mo>(</mo>
+           <mfrac>
+            <mrow>
+             <mo>∂</mo>
+             <mi>F</mi>
+            </mrow>
+            <mrow>
+             <mo>∂</mo>
+             <mi>𝐱</mi>
+            </mrow>
+           </mfrac>
+           <mo>)</mo>
+          </mrow>
+          <mi>T</mi>
+         </msup>
+         <mrow>
+          <mo>(</mo>
+          <mfrac>
+           <mrow>
+            <mo>∂</mo>
+            <mi>F</mi>
+           </mrow>
+           <mrow>
+            <mo>∂</mo>
+            <mi>𝐱</mi>
+           </mrow>
+          </mfrac>
+          <mo>)</mo>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>]</mo>
+      </mrow>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msup>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <ci>normal-⇒</ci>
+     <csymbol cd="latexml">absent</csymbol>
+     <ci>𝐡</ci>
+    </apply>
+    <apply>
+     <approx></approx>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <ci>𝐱</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="latexml">delimited-[]</csymbol>
+          <apply>
+           <minus></minus>
+           <apply>
+            <times></times>
+            <ci>G</ci>
+            <ci>𝐱</ci>
+           </apply>
+           <apply>
+            <times></times>
+            <ci>F</ci>
+            <ci>𝐱</ci>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <divide></divide>
+          <apply>
+           <partialdiff></partialdiff>
+           <ci>F</ci>
+          </apply>
+          <apply>
+           <partialdiff></partialdiff>
+           <ci>𝐱</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <sum></sum>
+          <ci>𝐱</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <divide></divide>
+            <apply>
+             <partialdiff></partialdiff>
+             <ci>F</ci>
+            </apply>
+            <apply>
+             <partialdiff></partialdiff>
+             <ci>𝐱</ci>
+            </apply>
+           </apply>
+           <ci>T</ci>
+          </apply>
+          <apply>
+           <divide></divide>
+           <apply>
+            <partialdiff></partialdiff>
+            <ci>F</ci>
+           </apply>
+           <apply>
+            <partialdiff></partialdiff>
+            <ci>𝐱</ci>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Rightarrow\mathbf{h}\approx\left[\sum_{\mathbf{x}}\left[G(\mathbf{x})-F(%
+\mathbf{x})\right]\left(\dfrac{\partial F}{\partial\mathbf{x}}\right)\right]%
+\left[\sum_{\mathbf{x}}\left(\dfrac{\partial F}{\partial\mathbf{x}}\right)^{T}%
+\left(\dfrac{\partial F}{\partial\mathbf{x}}\right)\right]^{-1},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>which has much the same form as the 1-D version.</p>
+<h3 id="further-generalizations">Further generalizations</h3>
+
+<p>The method can also be extended to take into account registration based on more complex transformations, such as rotation, scaling, and shearing, by considering</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:64">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>G</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mi>F</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mrow>
+        <mi>A</mi>
+        <mi>x</mi>
+       </mrow>
+       <mo>+</mo>
+       <mi>h</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>G</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>F</ci>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <ci>A</ci>
+       <ci>x</ci>
+      </apply>
+      <ci>h</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G(x)=F(Ax+h),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:65">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ is a linear spatial transform. The error to be minimized is then</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:66">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>E</mi>
+    <mo>=</mo>
+    <mrow>
+     <munder>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mi>x</mi>
+     </munder>
+     <msup>
+      <mrow>
+       <mo>[</mo>
+       <mrow>
+        <mrow>
+         <mi>F</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mrow>
+            <mi>A</mi>
+            <mi>x</mi>
+           </mrow>
+           <mo>+</mo>
+           <mi>h</mi>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>-</mo>
+        <mrow>
+         <mi>G</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>]</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>E</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>F</ci>
+         <apply>
+          <plus></plus>
+          <apply>
+           <times></times>
+           <ci>A</ci>
+           <ci>x</ci>
+          </apply>
+          <ci>h</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>G</ci>
+         <ci>x</ci>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E=\sum_{x}\left[F(Ax+h)-G(x)\right]^{2}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>To determine the amount 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:67">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Δ</mi>
+   <mi>A</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Δ</ci>
+    <ci>A</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta A
+  </annotation>
+ </semantics>
+</math>
+
+ to adjust 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:68">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:69">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Δ</mi>
+   <mi>h</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Δ</ci>
+    <ci>h</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta h
+  </annotation>
+ </semantics>
+</math>
+
+ to adjust 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:70">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+, again, use the linear approximation:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:71">
+ <semantics>
+  <mrow>
+   <mi>F</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mrow>
+      <mi>x</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>A</mi>
+        <mo>+</mo>
+        <mrow>
+         <mi mathvariant="normal">Δ</mi>
+         <mi>A</mi>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>h</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi mathvariant="normal">Δ</mi>
+        <mi>h</mi>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>F</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>x</ci>
+      <apply>
+       <plus></plus>
+       <ci>A</ci>
+       <apply>
+        <times></times>
+        <ci>normal-Δ</ci>
+        <ci>A</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>h</ci>
+      <apply>
+       <times></times>
+       <ci>normal-Δ</ci>
+       <ci>h</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x(A+\Delta A)+(h+\Delta h))
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:72">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi></mi>
+    <mo>≈</mo>
+    <mrow>
+     <mrow>
+      <mi>F</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mrow>
+         <mi>A</mi>
+         <mi>x</mi>
+        </mrow>
+        <mo>+</mo>
+        <mi>h</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mrow>
+         <mi mathvariant="normal">Δ</mi>
+         <mi>A</mi>
+         <mi>x</mi>
+        </mrow>
+        <mo>+</mo>
+        <mrow>
+         <mi mathvariant="normal">Δ</mi>
+         <mi>h</mi>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mfrac>
+       <mo>∂</mo>
+       <mrow>
+        <mo>∂</mo>
+        <mi>x</mi>
+       </mrow>
+      </mfrac>
+      <mi>F</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <csymbol cd="latexml">absent</csymbol>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>F</ci>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <ci>A</ci>
+        <ci>x</ci>
+       </apply>
+       <ci>h</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <ci>normal-Δ</ci>
+        <ci>A</ci>
+        <ci>x</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>normal-Δ</ci>
+        <ci>h</ci>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <partialdiff></partialdiff>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>x</ci>
+       </apply>
+      </apply>
+      <ci>F</ci>
+      <ci>x</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \approx F(Ax+h)+(\Delta Ax+\Delta h)\dfrac{\partial}{\partial x}F(x).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The approximation can be used similarly to find the error expression, which becomes quadratic in the quantities to be minimized with respect to. After figuring out the error expression, differentiate it with respect to the quantities to be minimized and set the results zero, yielding a set of linear equations, then solve them.</p>
+
+<p>A further generalization is designed for accounting for the fact that the brightness may be different in the two views, due to the difference of the viewpoints of the cameras or to differences in the processing of the two images. Assume the difference as linear transformation:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:73">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>F</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mi>α</mi>
+      <mi>G</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mi>β</mi>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>F</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>α</ci>
+      <ci>G</ci>
+      <ci>x</ci>
+     </apply>
+     <ci>β</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(x)=\alpha G(x)+\beta,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:74">
+ <semantics>
+  <mi>α</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha
+  </annotation>
+ </semantics>
+</math>
+
+ represents a contrast adjustment and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:75">
+ <semantics>
+  <mi>β</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>β</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta
+  </annotation>
+ </semantics>
+</math>
+
+ represents a brightness adjustment.<br/>
+Combining this expression with the general linear transformation registration problem:</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:76">
+ <semantics>
+  <mrow>
+   <mi>E</mi>
+   <mo>=</mo>
+   <mrow>
+    <munder>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mi>x</mi>
+    </munder>
+    <msup>
+     <mrow>
+      <mo>[</mo>
+      <mrow>
+       <mrow>
+        <mi>F</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mrow>
+           <mi>A</mi>
+           <mi>x</mi>
+          </mrow>
+          <mo>+</mo>
+          <mi>h</mi>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mrow>
+          <mi>α</mi>
+          <mi>G</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>x</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>+</mo>
+         <mi>β</mi>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>]</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>E</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>F</ci>
+         <apply>
+          <plus></plus>
+          <apply>
+           <times></times>
+           <ci>A</ci>
+           <ci>x</ci>
+          </apply>
+          <ci>h</ci>
+         </apply>
+        </apply>
+        <apply>
+         <plus></plus>
+         <apply>
+          <times></times>
+          <ci>α</ci>
+          <ci>G</ci>
+          <ci>x</ci>
+         </apply>
+         <ci>β</ci>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E=\sum_{x}\left[F(Ax+h)-(\alpha G(x)+\beta)\right]^{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>as the quantity to minimize with respect to 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:77">
+ <semantics>
+  <mrow>
+   <mi>α</mi>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha,
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:78">
+ <semantics>
+  <mrow>
+   <mi>β</mi>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <ci>β</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta,
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:79">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A,
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:80">
+ <semantics>
+  <mrow>
+   <mi>h</mi>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="detection-and-tracking-of-point-features">Detection and tracking of point features</h2>
+
+<p>In the second paper Tomasi and Kanade<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> used the same basic method for finding the registration due to the translation but improved the technique by tracking features that are suitable for the tracking algorithm. The proposed features would be selected if both the eigenvalues of the gradient matrix were larger than some threshold.</p>
+
+<p>By a very similar derivation, the problem is formulated as</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:81">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>∇</mo>
+    <mi>d</mi>
+   </mrow>
+   <mo>=</mo>
+   <mpadded width="+1.7pt">
+    <mi>e</mi>
+   </mpadded>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-∇</ci>
+     <ci>d</ci>
+    </apply>
+    <ci>e</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla d=e\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:82">
+ <semantics>
+  <mo>∇</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-∇</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla
+  </annotation>
+ </semantics>
+</math>
+
+ is the gradient. This is the same as the last formula of Lucas–Kanade above. A local patch is considered a good feature to track if both of the two eigenvalues (
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:83">
+ <semantics>
+  <msub>
+   <mi>λ</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>λ</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:84">
+ <semantics>
+  <msub>
+   <mi>λ</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>λ</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda_{2}
+  </annotation>
+ </semantics>
+</math>
+
+) of 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:85">
+ <semantics>
+  <mo>∇</mo>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-∇</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla
+  </annotation>
+ </semantics>
+</math>
+
+ are larger than a threshold.</p>
+
+<p>A tracking method based on these two papers is generally considered a KLT tracker.</p>
+<h2 id="improvements-and-variations">Improvements and variations</h2>
+
+<p>In a third paper, Shi and Tomasi<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> proposed an additional stage of verifying that features were tracked correctly.</p>
+
+<p>An affine transformation is fit between the image of the currently tracked feature and its image from a non-consecutive previous frame. If the affine compensated image is too dissimilar the feature is dropped.</p>
+
+<p>The reasoning is that between consecutive frames a translation is a sufficient model for tracking but due to more complex motion, perspective effects, etc. a more complex model is required when frames are further apart.</p>
+
+<p>Using a similar derivation as for the KLT, Shi and Tomasi showed that the search can be performed using the formula</p>
+
+<p>
+
+<math display="block" id="Kanade–Lucas–Tomasi_feature_tracker:86">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>T</mi>
+    <mi>z</mi>
+   </mrow>
+   <mo>=</mo>
+   <mpadded width="+1.7pt">
+    <mi>a</mi>
+   </mpadded>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>T</ci>
+     <ci>z</ci>
+    </apply>
+    <ci>a</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Tz=a\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:87">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T
+  </annotation>
+ </semantics>
+</math>
+
+ is a matrix of gradients, 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:88">
+ <semantics>
+  <mi>z</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>z</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z
+  </annotation>
+ </semantics>
+</math>
+
+ is a vector of affine coefficients and 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:89">
+ <semantics>
+  <mi>a</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>a</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a
+  </annotation>
+ </semantics>
+</math>
+
+ is an error vector. Compare this to 
+
+<math display="inline" id="Kanade–Lucas–Tomasi_feature_tracker:90">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>∇</mo>
+    <mi>d</mi>
+   </mrow>
+   <mo>=</mo>
+   <mi>e</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-∇</ci>
+     <ci>d</ci>
+    </apply>
+    <ci>e</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla d=e
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h2 id="references">References</h2>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Corner_detection#The_Shi_and_Tomasi_corner_detection_algorithm" title="wikilink">Kanade–Tomasi features</a> in the context of feature detection</li>
+<li><a href="Lucas–Kanade_method" title="wikilink">Lucas–Kanade method</a> An optical flow algorithm derived from reference 1.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Motion_in_computer_vision" title="wikilink">Category:Motion in computer vision</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Bruce D. Lucas and Takeo Kanade. An Iterative Image Registration Technique with an Application to Stereo Vision. <em>International Joint Conference on Artificial Intelligence</em>, pages 674–679, 1981.<a href="#fnref1">↩</a></li>
+<li id="fn2">Carlo Tomasi and Takeo Kanade. Detection and Tracking of Point Features. <em>Carnegie Mellon University Technical Report CMU-CS-91-132</em>, April 1991.<a href="#fnref2">↩</a></li>
+<li id="fn3">Jianbo Shi and Carlo Tomasi. Good Features to Track. <em>IEEE Conference on Computer Vision and Pattern Recognition</em>, pages 593–600, 1994.<a href="#fnref3">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

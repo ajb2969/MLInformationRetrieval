@@ -1,0 +1,6742 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1966">Active contour model</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Active contour model</h1>
+<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</body></html>
+<body>
+<hr/>
+
+<p><strong>Active contour model</strong>, also called <strong>snakes</strong>, is a framework in <a href="computer_vision" title="wikilink">computer vision</a> for delineating an object outline from a possibly <a href="image_noise" title="wikilink">noisy</a> 2D <a class="uri" href="image" title="wikilink">image</a>. The snakes model is popular in computer vision, and snakes are greatly used in applications like object tracking, shape recognition, segmentation, edge detection and stereo matching.</p>
+
+<p>A snake is an energy minimizing, deformable <a href="Spline_(mathematics)" title="wikilink">spline</a> influenced by constraint and image forces that pull it towards object contours and internal forces that resist deformation. Snakes may be understood as a special case of the general technique of matching a deformable model to an image by means of energy minimization.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> In two dimensions, the <a href="active_shape_model" title="wikilink">active shape model</a> represents a discrete version of this approach, taking advantage of the <a href="point_distribution_model" title="wikilink">point distribution model</a> to restrict the shape range to an explicit domain learned from a training set. </p>
+
+<p>Snakes do not solve the entire problem of finding contours in images, since the method requires knowledge of the desired contour shape beforehand. Rather, they depend on other mechanisms such as interaction with a user, interaction with some higher level image understanding process, or information from image data adjacent in time or space.</p>
+<h2 id="motivation">Motivation</h2>
+
+<p>In computer vision, contour models describe the boundaries of shapes in an image. Snakes in particular are designed to solve problems where the approximate shape of the boundary is known. By being a deformable model, snakes can adapt to differences and noise in stereo matching and motion tracking. Additionally, the method can find <a href="Illusory_contours" title="wikilink">Illusory contours</a> in the image by ignoring missing boundary information.</p>
+
+<p>Compared to classical feature attraction techniques, snakes have multiple advantages:</p>
+<ul>
+<li>They autonomously and adaptively search for the minimum state.</li>
+<li>External image forces act upon the snake in an intuitive manner.</li>
+<li>Incorporating Gaussian smoothing in the image energy function introduces scale sensitivity.</li>
+<li>They can be used to track dynamic objects.</li>
+</ul>
+
+<p>The key drawbacks of the traditional snakes are</p>
+<ul>
+<li>They are sensitive to local minima states, which can be counteracted by simulated annealing techniques.</li>
+<li>Minute features are often ignored during energy minimization over the entire contour.</li>
+<li>Their accuracy depends on the convergence policy.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></li>
+</ul>
+<h2 id="energy-formulation">Energy formulation</h2>
+
+<p>A simple elastic snake is defined by a set of <em>n</em> points 
+
+<math display="inline" id="Active_contour_model:0">
+ <semantics>
+  <msub>
+   <mi>𝐯</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐯</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{v}_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ where 
+
+<math display="inline" id="Active_contour_model:1">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mn>0</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>i</ci>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <cn type="integer">0</cn>
+      <ci>normal-…</ci>
+      <ci>n</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i=0\ldots n-1
+  </annotation>
+ </semantics>
+</math>
+
+, the internal elastic energy term 
+
+<math display="inline" id="Active_contour_model:2">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mrow>
+    <mi>i</mi>
+    <mi>n</mi>
+    <mi>t</mi>
+    <mi>e</mi>
+    <mi>r</mi>
+    <mi>n</mi>
+    <mi>a</mi>
+    <mi>l</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <ci>n</ci>
+     <ci>t</ci>
+     <ci>e</ci>
+     <ci>r</ci>
+     <ci>n</ci>
+     <ci>a</ci>
+     <ci>l</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{internal}
+  </annotation>
+ </semantics>
+</math>
+
+, and the external edge-based energy term 
+
+<math display="inline" id="Active_contour_model:3">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mrow>
+    <mi>e</mi>
+    <mi>x</mi>
+    <mi>t</mi>
+    <mi>e</mi>
+    <mi>r</mi>
+    <mi>n</mi>
+    <mi>a</mi>
+    <mi>l</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <apply>
+     <times></times>
+     <ci>e</ci>
+     <ci>x</ci>
+     <ci>t</ci>
+     <ci>e</ci>
+     <ci>r</ci>
+     <ci>n</ci>
+     <ci>a</ci>
+     <ci>l</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{external}
+  </annotation>
+ </semantics>
+</math>
+
+. The purpose of the internal energy term is to control the deformations made to the snake, and the purpose of the external energy term is to control the fitting of the contour onto the image. The external energy is usually a combination of the forces due to the image itself 
+
+<math display="inline" id="Active_contour_model:4">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mrow>
+    <mi>i</mi>
+    <mi>m</mi>
+    <mi>a</mi>
+    <mi>g</mi>
+    <mi>e</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <ci>m</ci>
+     <ci>a</ci>
+     <ci>g</ci>
+     <ci>e</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{image}
+  </annotation>
+ </semantics>
+</math>
+
+ and the constraint forces introduced by the user 
+
+<math display="inline" id="Active_contour_model:5">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mrow>
+    <mi>c</mi>
+    <mi>o</mi>
+    <mi>n</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <apply>
+     <times></times>
+     <ci>c</ci>
+     <ci>o</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{con}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The energy function of the snake is the sum of its external energy and internal energy, or</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:6">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>E</mi>
+    <mrow>
+     <mi>s</mi>
+     <mi>n</mi>
+     <mi>a</mi>
+     <mi>k</mi>
+     <mi>e</mi>
+    </mrow>
+    <mo>*</mo>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∫</mo>
+     <mn>0</mn>
+     <mn>1</mn>
+    </munderover>
+    <mrow>
+     <msub>
+      <mi>E</mi>
+      <mrow>
+       <mi>s</mi>
+       <mi>n</mi>
+       <mi>a</mi>
+       <mi>k</mi>
+       <mi>e</mi>
+      </mrow>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>𝐯</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>s</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo rspace="4.2pt" stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <mi>s</mi>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∫</mo>
+     <mn>0</mn>
+     <mn>1</mn>
+    </munderover>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>E</mi>
+         <mrow>
+          <mi>i</mi>
+          <mi>n</mi>
+          <mi>t</mi>
+          <mi>e</mi>
+          <mi>r</mi>
+          <mi>n</mi>
+          <mi>a</mi>
+          <mi>l</mi>
+         </mrow>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>𝐯</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>s</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <msub>
+         <mi>E</mi>
+         <mrow>
+          <mi>i</mi>
+          <mi>m</mi>
+          <mi>a</mi>
+          <mi>g</mi>
+          <mi>e</mi>
+         </mrow>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>𝐯</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>s</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <msub>
+         <mi>E</mi>
+         <mrow>
+          <mi>c</mi>
+          <mi>o</mi>
+          <mi>n</mi>
+         </mrow>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>𝐯</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>s</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo rspace="4.2pt" stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <mi>s</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <apply>
+        <times></times>
+        <ci>s</ci>
+        <ci>n</ci>
+        <ci>a</ci>
+        <ci>k</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+      <times></times>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <int></int>
+        <cn type="integer">0</cn>
+       </apply>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>E</ci>
+        <apply>
+         <times></times>
+         <ci>s</ci>
+         <ci>n</ci>
+         <ci>a</ci>
+         <ci>k</ci>
+         <ci>e</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>𝐯</ci>
+        <ci>s</ci>
+       </apply>
+       <ci>d</ci>
+       <ci>s</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <int></int>
+        <cn type="integer">0</cn>
+       </apply>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <plus></plus>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>E</ci>
+          <apply>
+           <times></times>
+           <ci>i</ci>
+           <ci>n</ci>
+           <ci>t</ci>
+           <ci>e</ci>
+           <ci>r</ci>
+           <ci>n</ci>
+           <ci>a</ci>
+           <ci>l</ci>
+          </apply>
+         </apply>
+         <apply>
+          <times></times>
+          <ci>𝐯</ci>
+          <ci>s</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>E</ci>
+          <apply>
+           <times></times>
+           <ci>i</ci>
+           <ci>m</ci>
+           <ci>a</ci>
+           <ci>g</ci>
+           <ci>e</ci>
+          </apply>
+         </apply>
+         <apply>
+          <times></times>
+          <ci>𝐯</ci>
+          <ci>s</ci>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>E</ci>
+          <apply>
+           <times></times>
+           <ci>c</ci>
+           <ci>o</ci>
+           <ci>n</ci>
+          </apply>
+         </apply>
+         <apply>
+          <times></times>
+          <ci>𝐯</ci>
+          <ci>s</ci>
+         </apply>
+        </apply>
+       </apply>
+       <ci>d</ci>
+       <ci>s</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{snake}^{*}=\int\limits_{0}^{1}E_{snake}(\mathbf{v}(s))\,ds=\int\limits_{0}^%
+{1}(E_{internal}(\mathbf{v}(s))+E_{image}(\mathbf{v}(s))+E_{con}(\mathbf{v}(s)%
+))\,ds
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h3 id="internal-energy">Internal energy</h3>
+
+<p>The internal energy of the snake is composed of the continuity of the contour 
+
+<math display="inline" id="Active_contour_model:7">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mrow>
+    <mi>c</mi>
+    <mi>o</mi>
+    <mi>n</mi>
+    <mi>t</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <apply>
+     <times></times>
+     <ci>c</ci>
+     <ci>o</ci>
+     <ci>n</ci>
+     <ci>t</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{cont}
+  </annotation>
+ </semantics>
+</math>
+
+ and the smoothness of the contour 
+
+<math display="inline" id="Active_contour_model:8">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mrow>
+    <mi>c</mi>
+    <mi>u</mi>
+    <mi>r</mi>
+    <mi>v</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <apply>
+     <times></times>
+     <ci>c</ci>
+     <ci>u</ci>
+     <ci>r</ci>
+     <ci>v</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{curv}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:9">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>n</mi>
+     <mi>t</mi>
+     <mi>e</mi>
+     <mi>r</mi>
+     <mi>n</mi>
+     <mi>a</mi>
+     <mi>l</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mrow>
+      <mi>c</mi>
+      <mi>o</mi>
+      <mi>n</mi>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo>+</mo>
+    <msub>
+     <mi>E</mi>
+     <mrow>
+      <mi>c</mi>
+      <mi>u</mi>
+      <mi>r</mi>
+      <mi>v</mi>
+     </mrow>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>n</ci>
+      <ci>t</ci>
+      <ci>e</ci>
+      <ci>r</ci>
+      <ci>n</ci>
+      <ci>a</ci>
+      <ci>l</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <times></times>
+       <ci>c</ci>
+       <ci>o</ci>
+       <ci>n</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <times></times>
+       <ci>c</ci>
+       <ci>u</ci>
+       <ci>r</ci>
+       <ci>v</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{internal}=E_{cont}+E_{curv}
+  </annotation>
+ </semantics>
+</math>
+
+ <a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>This can be expanded as</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:10">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>n</mi>
+     <mi>t</mi>
+     <mi>e</mi>
+     <mi>r</mi>
+     <mi>n</mi>
+     <mi>a</mi>
+     <mi>l</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <mn>2</mn>
+     </mfrac>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>α</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>s</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <msup>
+        <mrow>
+         <mo>|</mo>
+         <mrow>
+          <msub>
+           <mi>𝐯</mi>
+           <mi>s</mi>
+          </msub>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>s</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>|</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <mn>2</mn>
+     </mfrac>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>β</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>s</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <msup>
+        <mrow>
+         <mo>|</mo>
+         <mrow>
+          <msub>
+           <mi>𝐯</mi>
+           <mrow>
+            <mi>s</mi>
+            <mi>s</mi>
+           </mrow>
+          </msub>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>s</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>|</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mn>2</mn>
+    </mfrac>
+    <mrow>
+     <mo maxsize="210%" minsize="210%">(</mo>
+     <mrow>
+      <mrow>
+       <mi>α</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>s</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <msup>
+        <mrow>
+         <mo>∥</mo>
+         <mrow>
+          <mfrac>
+           <mrow>
+            <mi>d</mi>
+            <mover accent="true">
+             <mi>v</mi>
+             <mo stretchy="false">¯</mo>
+            </mover>
+           </mrow>
+           <mrow>
+            <mi>d</mi>
+            <mi>s</mi>
+           </mrow>
+          </mfrac>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>s</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>∥</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <mi>β</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>s</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <msup>
+        <mrow>
+         <mo>∥</mo>
+         <mrow>
+          <mfrac>
+           <mrow>
+            <msup>
+             <mi>d</mi>
+             <mn>2</mn>
+            </msup>
+            <mover accent="true">
+             <mi>v</mi>
+             <mo stretchy="false">¯</mo>
+            </mover>
+           </mrow>
+           <mrow>
+            <mi>d</mi>
+            <msup>
+             <mi>s</mi>
+             <mn>2</mn>
+            </msup>
+           </mrow>
+          </mfrac>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>s</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo>∥</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+      </mrow>
+     </mrow>
+     <mo maxsize="210%" minsize="210%">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <ci>n</ci>
+       <ci>t</ci>
+       <ci>e</ci>
+       <ci>r</ci>
+       <ci>n</ci>
+       <ci>a</ci>
+       <ci>l</ci>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>α</ci>
+        <ci>s</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <abs></abs>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>𝐯</ci>
+            <ci>s</ci>
+           </apply>
+           <ci>s</ci>
+          </apply>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>β</ci>
+        <ci>s</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <abs></abs>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>𝐯</ci>
+            <apply>
+             <times></times>
+             <ci>s</ci>
+             <ci>s</ci>
+            </apply>
+           </apply>
+           <ci>s</ci>
+          </apply>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <ci>α</ci>
+        <ci>s</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="latexml">norm</csymbol>
+          <apply>
+           <times></times>
+           <apply>
+            <divide></divide>
+            <apply>
+             <times></times>
+             <ci>d</ci>
+             <apply>
+              <ci>normal-¯</ci>
+              <ci>v</ci>
+             </apply>
+            </apply>
+            <apply>
+             <times></times>
+             <ci>d</ci>
+             <ci>s</ci>
+            </apply>
+           </apply>
+           <ci>s</ci>
+          </apply>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>β</ci>
+        <ci>s</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="latexml">norm</csymbol>
+          <apply>
+           <times></times>
+           <apply>
+            <divide></divide>
+            <apply>
+             <times></times>
+             <apply>
+              <csymbol cd="ambiguous">superscript</csymbol>
+              <ci>d</ci>
+              <cn type="integer">2</cn>
+             </apply>
+             <apply>
+              <ci>normal-¯</ci>
+              <ci>v</ci>
+             </apply>
+            </apply>
+            <apply>
+             <times></times>
+             <ci>d</ci>
+             <apply>
+              <csymbol cd="ambiguous">superscript</csymbol>
+              <ci>s</ci>
+              <cn type="integer">2</cn>
+             </apply>
+            </apply>
+           </apply>
+           <ci>s</ci>
+          </apply>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{internal}=\frac{1}{2}(\alpha\,\!(s)\left|\mathbf{v}_{s}(s)\right|^{2})+%
+\frac{1}{2}(\beta\,\!(s)\left|\mathbf{v}_{ss}(s)\right|^{2})=\frac{1}{2}\bigg(%
+\alpha\,\!(s)\left\|\frac{d\bar{v}}{ds}(s)\right\|^{2}+\beta\,\!(s)\left\|%
+\frac{d^{2}\bar{v}}{ds^{2}}(s)\right\|^{2}\bigg)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Where 
+
+<math display="inline" id="Active_contour_model:11">
+ <semantics>
+  <mrow>
+   <mi>α</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>α</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha(s)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Active_contour_model:12">
+ <semantics>
+  <mrow>
+   <mi>β</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>β</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta(s)
+  </annotation>
+ </semantics>
+</math>
+
+ are user-defined weights; these control the internal energy function's sensitivity to the amount of stretch in the snake and the amount of curvature in the snake, respectively, and thereby control the number of constraints on the shape of the snake.</p>
+
+<p>In practice, a large weight 
+
+<math display="inline" id="Active_contour_model:13">
+ <semantics>
+  <mrow>
+   <mi>α</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>α</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha(s)
+  </annotation>
+ </semantics>
+</math>
+
+ for the continuity term penalizes changes in distances between points in the contour. A large weight 
+
+<math display="inline" id="Active_contour_model:14">
+ <semantics>
+  <mrow>
+   <mi>β</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>β</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta(s)
+  </annotation>
+ </semantics>
+</math>
+
+ for the smoothness term penalizes oscillations in the contour and will cause the contour to act as a thin plate.</p>
+<h3 id="image-energy">Image energy</h3>
+
+<p>Energy in the image is some function of the features of the image. This is one of the most common points of modification in derivative methods. Features in images and images themselves can be processed in many and various ways.</p>
+
+<p>For an image 
+
+<math display="inline" id="Active_contour_model:15">
+ <semantics>
+  <mrow>
+   <mi>I</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>y</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>I</ci>
+    <interval closure="open">
+     <ci>x</ci>
+     <ci>y</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I(x,y)
+  </annotation>
+ </semantics>
+</math>
+
+, lines, edges, and terminations present in the image, the general formulation of energy due to the image is</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:16">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>m</mi>
+     <mi>a</mi>
+     <mi>g</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>w</mi>
+      <mrow>
+       <mi>l</mi>
+       <mi>i</mi>
+       <mi>n</mi>
+       <mi>e</mi>
+      </mrow>
+     </msub>
+     <msub>
+      <mi>E</mi>
+      <mrow>
+       <mi>l</mi>
+       <mi>i</mi>
+       <mi>n</mi>
+       <mi>e</mi>
+      </mrow>
+     </msub>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mi>w</mi>
+      <mrow>
+       <mi>e</mi>
+       <mi>d</mi>
+       <mi>g</mi>
+       <mi>e</mi>
+      </mrow>
+     </msub>
+     <msub>
+      <mi>E</mi>
+      <mrow>
+       <mi>e</mi>
+       <mi>d</mi>
+       <mi>g</mi>
+       <mi>e</mi>
+      </mrow>
+     </msub>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mi>w</mi>
+      <mrow>
+       <mi>t</mi>
+       <mi>e</mi>
+       <mi>r</mi>
+       <mi>m</mi>
+      </mrow>
+     </msub>
+     <msub>
+      <mi>E</mi>
+      <mrow>
+       <mi>t</mi>
+       <mi>e</mi>
+       <mi>r</mi>
+       <mi>m</mi>
+      </mrow>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>m</ci>
+      <ci>a</ci>
+      <ci>g</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>w</ci>
+       <apply>
+        <times></times>
+        <ci>l</ci>
+        <ci>i</ci>
+        <ci>n</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <apply>
+        <times></times>
+        <ci>l</ci>
+        <ci>i</ci>
+        <ci>n</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>w</ci>
+       <apply>
+        <times></times>
+        <ci>e</ci>
+        <ci>d</ci>
+        <ci>g</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <apply>
+        <times></times>
+        <ci>e</ci>
+        <ci>d</ci>
+        <ci>g</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>w</ci>
+       <apply>
+        <times></times>
+        <ci>t</ci>
+        <ci>e</ci>
+        <ci>r</ci>
+        <ci>m</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <apply>
+        <times></times>
+        <ci>t</ci>
+        <ci>e</ci>
+        <ci>r</ci>
+        <ci>m</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{image}=w_{line}E_{line}+w_{edge}E_{edge}+w_{term}E_{term}
+  </annotation>
+ </semantics>
+</math>
+
+,</p>
+
+<p>where 
+
+<math display="inline" id="Active_contour_model:17">
+ <semantics>
+  <msub>
+   <mi>w</mi>
+   <mrow>
+    <mi>l</mi>
+    <mi>i</mi>
+    <mi>n</mi>
+    <mi>e</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>w</ci>
+    <apply>
+     <times></times>
+     <ci>l</ci>
+     <ci>i</ci>
+     <ci>n</ci>
+     <ci>e</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{line}
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Active_contour_model:18">
+ <semantics>
+  <msub>
+   <mi>w</mi>
+   <mrow>
+    <mi>e</mi>
+    <mi>d</mi>
+    <mi>g</mi>
+    <mi>e</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>w</ci>
+    <apply>
+     <times></times>
+     <ci>e</ci>
+     <ci>d</ci>
+     <ci>g</ci>
+     <ci>e</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{edge}
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Active_contour_model:19">
+ <semantics>
+  <msub>
+   <mi>w</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>e</mi>
+    <mi>r</mi>
+    <mi>m</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>w</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>e</ci>
+     <ci>r</ci>
+     <ci>m</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{term}
+  </annotation>
+ </semantics>
+</math>
+
+ are weights of these salient features. Higher weights indicate that the salient feature will have a larger contribution to the image force.</p>
+<h4 id="line-functional">Line functional</h4>
+
+<p>The line functional is the intensity of the image, which can be represented as</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:20">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>l</mi>
+     <mi>i</mi>
+     <mi>n</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>I</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>y</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <apply>
+      <times></times>
+      <ci>l</ci>
+      <ci>i</ci>
+      <ci>n</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>I</ci>
+     <interval closure="open">
+      <ci>x</ci>
+      <ci>y</ci>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{line}=I(x,y)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The sign of 
+
+<math display="inline" id="Active_contour_model:21">
+ <semantics>
+  <msub>
+   <mi>w</mi>
+   <mrow>
+    <mi>l</mi>
+    <mi>i</mi>
+    <mi>n</mi>
+    <mi>e</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>w</ci>
+    <apply>
+     <times></times>
+     <ci>l</ci>
+     <ci>i</ci>
+     <ci>n</ci>
+     <ci>e</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{line}
+  </annotation>
+ </semantics>
+</math>
+
+ will determine whether the line will be attracted to either dark lines or light lines.</p>
+
+<p>Some smoothing or noise reduction may be used on the image, which then the line functional appears as</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:22">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>l</mi>
+     <mi>i</mi>
+     <mi>n</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>f</mi>
+    <mi>i</mi>
+    <mi>l</mi>
+    <mi>t</mi>
+    <mi>e</mi>
+    <mi>r</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>I</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo>,</mo>
+       <mi>y</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <apply>
+      <times></times>
+      <ci>l</ci>
+      <ci>i</ci>
+      <ci>n</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>f</ci>
+     <ci>i</ci>
+     <ci>l</ci>
+     <ci>t</ci>
+     <ci>e</ci>
+     <ci>r</ci>
+     <apply>
+      <times></times>
+      <ci>I</ci>
+      <interval closure="open">
+       <ci>x</ci>
+       <ci>y</ci>
+      </interval>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{line}=filter(I(x,y))
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h4 id="edge-functional">Edge functional</h4>
+
+<p>The edge functional is based on the image gradient. One implementation of this is</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:23">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>e</mi>
+     <mi>d</mi>
+     <mi>g</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <msup>
+     <mrow>
+      <mo>|</mo>
+      <mrow>
+       <mrow>
+        <mo>∇</mo>
+        <mi>I</mi>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>x</mi>
+        <mo>,</mo>
+        <mi>y</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>|</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <apply>
+      <times></times>
+      <ci>e</ci>
+      <ci>d</ci>
+      <ci>g</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <abs></abs>
+       <apply>
+        <times></times>
+        <apply>
+         <ci>normal-∇</ci>
+         <ci>I</ci>
+        </apply>
+        <interval closure="open">
+         <ci>x</ci>
+         <ci>y</ci>
+        </interval>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{edge}=-\left|\nabla I(x,y)\right|^{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>A snake originating far from the desired object contour may erroneously converge to some local minimum. Scale space continuation can be used in order to avoid these local minima. This is achieved by using a blur filter on the image and reducing the amount of blur as the calculation progresses to refine the fit of the snake. The energy functional using scale space continuation is</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:24">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>e</mi>
+     <mi>d</mi>
+     <mi>g</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <msup>
+     <mrow>
+      <mo>|</mo>
+      <mrow>
+       <msub>
+        <mi>G</mi>
+        <mi>σ</mi>
+       </msub>
+       <mo>*</mo>
+       <mrow>
+        <msup>
+         <mo>∇</mo>
+         <mn>2</mn>
+        </msup>
+        <mi>I</mi>
+       </mrow>
+      </mrow>
+      <mo>|</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <apply>
+      <times></times>
+      <ci>e</ci>
+      <ci>d</ci>
+      <ci>g</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <abs></abs>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>G</ci>
+         <ci>σ</ci>
+        </apply>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>normal-∇</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>I</ci>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{edge}=-\left|G_{\sigma}*\nabla^{2}I\right|^{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Active_contour_model:25">
+ <semantics>
+  <msub>
+   <mi>G</mi>
+   <mi>σ</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>G</ci>
+    <ci>σ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G_{\sigma}
+  </annotation>
+ </semantics>
+</math>
+
+ is a Gaussian with standard deviation 
+
+<math display="inline" id="Active_contour_model:26">
+ <semantics>
+  <mi>σ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>σ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma
+  </annotation>
+ </semantics>
+</math>
+
+. Minima of this function fall on the <a href="Zero_crossing" title="wikilink">zero-crossings</a> of 
+
+<math display="inline" id="Active_contour_model:27">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>G</mi>
+    <mi>σ</mi>
+   </msub>
+   <mrow>
+    <msup>
+     <mo>∇</mo>
+     <mn>2</mn>
+    </msup>
+    <mi>I</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>G</ci>
+     <ci>σ</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>normal-∇</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>I</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G_{\sigma}\nabla^{2}I
+  </annotation>
+ </semantics>
+</math>
+
+ which define edges as per <a href="Marr–Hildreth_algorithm" title="wikilink">Marr–Hildreth</a> theory.</p>
+<h4 id="termination-functional">Termination functional</h4>
+
+<p>Curvature of level lines in a slightly smoothed image can be used to detect corners and terminations in an image. Using this method, let 
+
+<math display="inline" id="Active_contour_model:28">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>y</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>C</ci>
+    <interval closure="open">
+     <ci>x</ci>
+     <ci>y</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C(x,y)
+  </annotation>
+ </semantics>
+</math>
+
+ be the image smoothed by</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:29">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>C</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>y</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>G</mi>
+      <mi>σ</mi>
+     </msub>
+     <mo>*</mo>
+     <mi>I</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>y</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>C</ci>
+     <interval closure="open">
+      <ci>x</ci>
+      <ci>y</ci>
+     </interval>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>G</ci>
+       <ci>σ</ci>
+      </apply>
+      <ci>I</ci>
+     </apply>
+     <interval closure="open">
+      <ci>x</ci>
+      <ci>y</ci>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C(x,y)=G_{\sigma}*I(x,y)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>with gradient angle</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:30">
+ <semantics>
+  <mrow>
+   <mi>θ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>arctan</mi>
+    <mrow>
+     <mo maxsize="260%" minsize="260%">(</mo>
+     <mfrac>
+      <msub>
+       <mi>C</mi>
+       <mi>y</mi>
+      </msub>
+      <msub>
+       <mi>C</mi>
+       <mi>x</mi>
+      </msub>
+     </mfrac>
+     <mo maxsize="260%" minsize="260%">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>θ</ci>
+    <apply>
+     <arctan></arctan>
+     <apply>
+      <divide></divide>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>C</ci>
+       <ci>y</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>C</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta=\arctan\Bigg(\frac{C_{y}}{C_{x}}\Bigg)
+  </annotation>
+ </semantics>
+</math>
+
+,</p>
+
+<p>unit vectors along the gradient direction</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:31">
+ <semantics>
+  <mrow>
+   <mi>𝐧</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>cos</mi>
+     <mi>θ</mi>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi>sin</mi>
+     <mi>θ</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐧</ci>
+    <interval closure="open">
+     <apply>
+      <cos></cos>
+      <ci>θ</ci>
+     </apply>
+     <apply>
+      <sin></sin>
+      <ci>θ</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{n}=(\cos\theta,\sin\theta)
+  </annotation>
+ </semantics>
+</math>
+
+,</p>
+
+<p>and unit vectors perpendicular to the gradient direction</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:32">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>𝐧</mi>
+    <mo>⟂</mo>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <mi>sin</mi>
+      <mi>θ</mi>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi>cos</mi>
+     <mi>θ</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐧</ci>
+     <csymbol cd="latexml">perpendicular-to</csymbol>
+    </apply>
+    <interval closure="open">
+     <apply>
+      <minus></minus>
+      <apply>
+       <sin></sin>
+       <ci>θ</ci>
+      </apply>
+     </apply>
+     <apply>
+      <cos></cos>
+      <ci>θ</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{n}_{\perp}=(-\sin\theta,\cos\theta)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The termination functional of energy can be represented as</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:33">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>t</mi>
+     <mi>e</mi>
+     <mi>r</mi>
+     <mi>m</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mo>∂</mo>
+     <mi>θ</mi>
+    </mrow>
+    <mrow>
+     <mo>∂</mo>
+     <msub>
+      <mi>n</mi>
+      <mo>⟂</mo>
+     </msub>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mrow>
+      <msup>
+       <mo>∂</mo>
+       <mn>2</mn>
+      </msup>
+      <mi>C</mi>
+     </mrow>
+     <mo>/</mo>
+     <mrow>
+      <msup>
+       <mo>∂</mo>
+       <mn>2</mn>
+      </msup>
+      <msub>
+       <mi>n</mi>
+       <mo>⟂</mo>
+      </msub>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mrow>
+      <mo>∂</mo>
+      <mi>C</mi>
+     </mrow>
+     <mo>/</mo>
+     <mrow>
+      <mo>∂</mo>
+      <mi>n</mi>
+     </mrow>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mrow>
+      <mrow>
+       <msub>
+        <mi>C</mi>
+        <mrow>
+         <mi>y</mi>
+         <mi>y</mi>
+        </mrow>
+       </msub>
+       <msubsup>
+        <mi>C</mi>
+        <mi>x</mi>
+        <mn>2</mn>
+       </msubsup>
+      </mrow>
+      <mo>-</mo>
+      <mrow>
+       <mn>2</mn>
+       <msub>
+        <mi>C</mi>
+        <mrow>
+         <mi>x</mi>
+         <mi>y</mi>
+        </mrow>
+       </msub>
+       <msub>
+        <mi>C</mi>
+        <mi>x</mi>
+       </msub>
+       <msub>
+        <mi>C</mi>
+        <mi>y</mi>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <msub>
+       <mi>C</mi>
+       <mrow>
+        <mi>x</mi>
+        <mi>x</mi>
+       </mrow>
+      </msub>
+      <msubsup>
+       <mi>C</mi>
+       <mi>y</mi>
+       <mn>2</mn>
+      </msubsup>
+     </mrow>
+    </mrow>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>+</mo>
+       <msubsup>
+        <mi>C</mi>
+        <mi>x</mi>
+        <mn>2</mn>
+       </msubsup>
+       <mo>+</mo>
+       <msubsup>
+        <mi>C</mi>
+        <mi>y</mi>
+        <mn>2</mn>
+       </msubsup>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mrow>
+      <mn>3</mn>
+      <mo>/</mo>
+      <mn>2</mn>
+     </mrow>
+    </msup>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <times></times>
+       <ci>t</ci>
+       <ci>e</ci>
+       <ci>r</ci>
+       <ci>m</ci>
+      </apply>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>θ</ci>
+      </apply>
+      <apply>
+       <partialdiff></partialdiff>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>n</ci>
+        <csymbol cd="latexml">perpendicular-to</csymbol>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <apply>
+       <divide></divide>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <partialdiff></partialdiff>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>C</ci>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <partialdiff></partialdiff>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>n</ci>
+         <csymbol cd="latexml">perpendicular-to</csymbol>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>C</ci>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>n</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <apply>
+       <plus></plus>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>C</ci>
+          <apply>
+           <times></times>
+           <ci>y</ci>
+           <ci>y</ci>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>C</ci>
+           <ci>x</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <cn type="integer">2</cn>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>C</ci>
+          <apply>
+           <times></times>
+           <ci>x</ci>
+           <ci>y</ci>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>C</ci>
+          <ci>x</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>C</ci>
+          <ci>y</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>C</ci>
+         <apply>
+          <times></times>
+          <ci>x</ci>
+          <ci>x</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>C</ci>
+          <ci>y</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <plus></plus>
+        <cn type="integer">1</cn>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>C</ci>
+          <ci>x</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>C</ci>
+          <ci>y</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <divide></divide>
+        <cn type="integer">3</cn>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{term}={\partial\theta\over\partial n_{\perp}}={\partial^{2}C/\partial^{2}n_%
+{\perp}\over\partial C/\partial n}={{C_{yy}C_{x}^{2}-2C_{xy}C_{x}C_{y}+C_{xx}C%
+_{y}^{2}}\over(1+C_{x}^{2}+C_{y}^{2})^{3/2}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h3 id="constraint-energy">Constraint energy</h3>
+
+<p>Some systems, including the original snakes implementation, allowed for user interaction to guide the snakes, not only in initial placement but also in their energy terms. Such constraint energy 
+
+<math display="inline" id="Active_contour_model:34">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mrow>
+    <mi>c</mi>
+    <mi>o</mi>
+    <mi>n</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <apply>
+     <times></times>
+     <ci>c</ci>
+     <ci>o</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{con}
+  </annotation>
+ </semantics>
+</math>
+
+ can be used to interactively guide the snakes towards or away from particular features.</p>
+<h2 id="optimization-through-gradient-descent">Optimization through gradient descent</h2>
+
+<p>Given an initial guess for a snake, the energy function of the snake is iteratively minimized. <a href="Gradient_descent" title="wikilink">Gradient descent</a> minimization is one of the simplest optimizations which can be used to minimize snake energy.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> Each iteration takes one step in the negative gradient of the point with controlled step size 
+
+<math display="inline" id="Active_contour_model:35">
+ <semantics>
+  <mi>γ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>γ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma
+  </annotation>
+ </semantics>
+</math>
+
+ to find local minima. This gradient-descent minimization can be implemented as</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:36">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>v</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mi>i</mi>
+   </msub>
+   <mo>←</mo>
+   <mrow>
+    <msub>
+     <mover accent="true">
+      <mi>v</mi>
+      <mo stretchy="false">¯</mo>
+     </mover>
+     <mi>i</mi>
+    </msub>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mi>F</mi>
+      <mrow>
+       <mi>s</mi>
+       <mi>n</mi>
+       <mi>a</mi>
+       <mi>k</mi>
+       <mi>e</mi>
+      </mrow>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mover accent="true">
+        <mi>v</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-←</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>v</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-¯</ci>
+       <ci>v</ci>
+      </apply>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>F</ci>
+       <apply>
+        <times></times>
+        <ci>s</ci>
+        <ci>n</ci>
+        <ci>a</ci>
+        <ci>k</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-¯</ci>
+        <ci>v</ci>
+       </apply>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{v}_{i}\leftarrow\bar{v}_{i}+F_{snake}(\bar{v}_{i})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Where 
+
+<math display="inline" id="Active_contour_model:37">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>F</mi>
+    <mrow>
+     <mi>s</mi>
+     <mi>n</mi>
+     <mi>a</mi>
+     <mi>k</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mover accent="true">
+      <mi>v</mi>
+      <mo stretchy="false">¯</mo>
+     </mover>
+     <mi>i</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>F</ci>
+     <apply>
+      <times></times>
+      <ci>s</ci>
+      <ci>n</ci>
+      <ci>a</ci>
+      <ci>k</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>v</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F_{snake}(\bar{v}_{i})
+  </annotation>
+ </semantics>
+</math>
+
+ is the force on the snake, which is defined by the negative of the gradient of the energy field.</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:38">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>F</mi>
+     <mrow>
+      <mi>s</mi>
+      <mi>n</mi>
+      <mi>a</mi>
+      <mi>k</mi>
+      <mi>e</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mover accent="true">
+       <mi>v</mi>
+       <mo stretchy="false">¯</mo>
+      </mover>
+      <mi>i</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mrow>
+     <mrow>
+      <mo>∇</mo>
+      <msub>
+       <mi>E</mi>
+       <mrow>
+        <mi>s</mi>
+        <mi>n</mi>
+        <mi>a</mi>
+        <mi>k</mi>
+        <mi>e</mi>
+       </mrow>
+      </msub>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mover accent="true">
+        <mi>v</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mrow>
+     <mo maxsize="260%" minsize="260%">(</mo>
+     <mrow>
+      <mrow>
+       <msub>
+        <mi>w</mi>
+        <mrow>
+         <mi>i</mi>
+         <mi>n</mi>
+         <mi>t</mi>
+         <mi>e</mi>
+         <mi>r</mi>
+         <mi>n</mi>
+         <mi>a</mi>
+         <mi>l</mi>
+        </mrow>
+       </msub>
+       <mrow>
+        <mo>∇</mo>
+        <msub>
+         <mi>E</mi>
+         <mrow>
+          <mi>i</mi>
+          <mi>n</mi>
+          <mi>t</mi>
+          <mi>e</mi>
+          <mi>r</mi>
+          <mi>n</mi>
+          <mi>a</mi>
+          <mi>l</mi>
+         </mrow>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mover accent="true">
+          <mi>v</mi>
+          <mo stretchy="false">¯</mo>
+         </mover>
+         <mi>i</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <msub>
+        <mi>w</mi>
+        <mrow>
+         <mi>e</mi>
+         <mi>x</mi>
+         <mi>t</mi>
+         <mi>e</mi>
+         <mi>r</mi>
+         <mi>n</mi>
+         <mi>a</mi>
+         <mi>l</mi>
+        </mrow>
+       </msub>
+       <mrow>
+        <mo>∇</mo>
+        <msub>
+         <mi>E</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+          <mi>e</mi>
+          <mi>r</mi>
+          <mi>n</mi>
+          <mi>a</mi>
+          <mi>l</mi>
+         </mrow>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mover accent="true">
+          <mi>v</mi>
+          <mo stretchy="false">¯</mo>
+         </mover>
+         <mi>i</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo maxsize="260%" minsize="260%">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>F</ci>
+       <apply>
+        <times></times>
+        <ci>s</ci>
+        <ci>n</ci>
+        <ci>a</ci>
+        <ci>k</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-¯</ci>
+        <ci>v</ci>
+       </apply>
+       <ci>i</ci>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <apply>
+        <ci>normal-∇</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>E</ci>
+         <apply>
+          <times></times>
+          <ci>s</ci>
+          <ci>n</ci>
+          <ci>a</ci>
+          <ci>k</ci>
+          <ci>e</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-¯</ci>
+         <ci>v</ci>
+        </apply>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <minus></minus>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <apply>
+          <times></times>
+          <ci>i</ci>
+          <ci>n</ci>
+          <ci>t</ci>
+          <ci>e</ci>
+          <ci>r</ci>
+          <ci>n</ci>
+          <ci>a</ci>
+          <ci>l</ci>
+         </apply>
+        </apply>
+        <apply>
+         <ci>normal-∇</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>E</ci>
+          <apply>
+           <times></times>
+           <ci>i</ci>
+           <ci>n</ci>
+           <ci>t</ci>
+           <ci>e</ci>
+           <ci>r</ci>
+           <ci>n</ci>
+           <ci>a</ci>
+           <ci>l</ci>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <ci>normal-¯</ci>
+          <ci>v</ci>
+         </apply>
+         <ci>i</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+          <ci>e</ci>
+          <ci>r</ci>
+          <ci>n</ci>
+          <ci>a</ci>
+          <ci>l</ci>
+         </apply>
+        </apply>
+        <apply>
+         <ci>normal-∇</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>E</ci>
+          <apply>
+           <times></times>
+           <ci>e</ci>
+           <ci>x</ci>
+           <ci>t</ci>
+           <ci>e</ci>
+           <ci>r</ci>
+           <ci>n</ci>
+           <ci>a</ci>
+           <ci>l</ci>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <ci>normal-¯</ci>
+          <ci>v</ci>
+         </apply>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F_{snake}(\bar{v}_{i})=-\nabla E_{snake}(\bar{v}_{i})=-\Bigg(w_{internal}%
+\nabla E_{internal}(\bar{v}_{i})+w_{external}\nabla E_{external}(\bar{v}_{i})\Bigg)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Assuming the weights 
+
+<math display="inline" id="Active_contour_model:39">
+ <semantics>
+  <mrow>
+   <mi>α</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>α</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha(s)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Active_contour_model:40">
+ <semantics>
+  <mrow>
+   <mi>β</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>β</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta(s)
+  </annotation>
+ </semantics>
+</math>
+
+ are constant with respect to 
+
+<math display="inline" id="Active_contour_model:41">
+ <semantics>
+  <mi>s</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>s</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s
+  </annotation>
+ </semantics>
+</math>
+
+, this iterative method can be simplified to</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:42">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>v</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mo>←</mo>
+   <msub>
+    <mover accent="true">
+     <mi>v</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mi>i</mi>
+   </msub>
+   <mo>-</mo>
+   <mi>γ</mi>
+   <mrow>
+    <mo maxsize="260%" minsize="260%">{</mo>
+    <msub>
+     <mi>w</mi>
+     <mrow>
+      <mi>i</mi>
+      <mi>n</mi>
+      <mi>t</mi>
+      <mi>e</mi>
+      <mi>r</mi>
+      <mi>n</mi>
+      <mi>a</mi>
+      <mi>l</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo maxsize="210%" minsize="210%">[</mo>
+     <mi>α</mi>
+     <mfrac>
+      <mrow>
+       <msup>
+        <mo>∂</mo>
+        <mn>2</mn>
+       </msup>
+       <mover accent="true">
+        <mi>v</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+      </mrow>
+      <mrow>
+       <mo>∂</mo>
+       <msup>
+        <mi>s</mi>
+        <mn>2</mn>
+       </msup>
+      </mrow>
+     </mfrac>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mover accent="true">
+        <mi>v</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>+</mo>
+     <mi>β</mi>
+     <mfrac>
+      <mrow>
+       <msup>
+        <mo>∂</mo>
+        <mn>4</mn>
+       </msup>
+       <mover accent="true">
+        <mi>v</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+      </mrow>
+      <mrow>
+       <mo>∂</mo>
+       <msup>
+        <mi>s</mi>
+        <mn>4</mn>
+       </msup>
+      </mrow>
+     </mfrac>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mover accent="true">
+        <mi>v</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo maxsize="210%" minsize="210%">]</mo>
+    </mrow>
+    <mo>+</mo>
+    <mo>∇</mo>
+    <msub>
+     <mi>E</mi>
+     <mrow>
+      <mi>e</mi>
+      <mi>x</mi>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mover accent="true">
+       <mi>v</mi>
+       <mo stretchy="false">¯</mo>
+      </mover>
+      <mi>i</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo maxsize="260%" minsize="260%">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>v</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <eq></eq>
+    <ci>normal-←</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>v</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <minus></minus>
+    <csymbol cd="unknown">γ</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <ci>n</ci>
+       <ci>t</ci>
+       <ci>e</ci>
+       <ci>r</ci>
+       <ci>n</ci>
+       <ci>a</ci>
+       <ci>l</ci>
+      </apply>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-[</ci>
+      <csymbol cd="unknown">α</csymbol>
+      <apply>
+       <divide></divide>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <partialdiff></partialdiff>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <ci>normal-¯</ci>
+         <ci>v</ci>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>s</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-¯</ci>
+         <ci>v</ci>
+        </apply>
+        <ci>i</ci>
+       </apply>
+       <ci>normal-)</ci>
+      </cerror>
+      <plus></plus>
+      <csymbol cd="unknown">β</csymbol>
+      <apply>
+       <divide></divide>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <partialdiff></partialdiff>
+         <cn type="integer">4</cn>
+        </apply>
+        <apply>
+         <ci>normal-¯</ci>
+         <ci>v</ci>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>s</ci>
+         <cn type="integer">4</cn>
+        </apply>
+       </apply>
+      </apply>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-¯</ci>
+         <ci>v</ci>
+        </apply>
+        <ci>i</ci>
+       </apply>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-]</ci>
+     </cerror>
+     <plus></plus>
+     <ci>normal-∇</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <times></times>
+       <ci>e</ci>
+       <ci>x</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-¯</ci>
+        <ci>v</ci>
+       </apply>
+       <ci>i</ci>
+      </apply>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-}</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{v}_{i}=\leftarrow\bar{v}_{i}-\gamma\Bigg\{w_{internal}\bigg[\alpha\frac{%
+\partial^{2}\bar{v}}{\partial s^{2}}(\bar{v}_{i})+\beta\frac{\partial^{4}\bar{%
+v}}{\partial s^{4}}(\bar{v}_{i})\bigg]+\nabla E_{ext}(\bar{v}_{i})\Bigg\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="discrete-approximation">Discrete approximation</h2>
+
+<p>In practice, images have finite resolution and can only be integrated over finite time steps 
+
+<math display="inline" id="Active_contour_model:43">
+ <semantics>
+  <mi>τ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>τ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tau
+  </annotation>
+ </semantics>
+</math>
+
+. As such, discrete approximations must be made for practical implementation of snakes.</p>
+
+<p>The energy function of the snake can be approximated by using the discrete points on the snake.</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:44">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>E</mi>
+    <mrow>
+     <mi>s</mi>
+     <mi>n</mi>
+     <mi>a</mi>
+     <mi>k</mi>
+     <mi>e</mi>
+    </mrow>
+    <mo>*</mo>
+   </msubsup>
+   <mo>≈</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mn>1</mn>
+     <mi>n</mi>
+    </munderover>
+    <mrow>
+     <msub>
+      <mi>E</mi>
+      <mrow>
+       <mi>s</mi>
+       <mi>n</mi>
+       <mi>a</mi>
+       <mi>k</mi>
+       <mi>e</mi>
+      </mrow>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mover accent="true">
+        <mi>v</mi>
+        <mo stretchy="false">¯</mo>
+       </mover>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <times></times>
+       <ci>s</ci>
+       <ci>n</ci>
+       <ci>a</ci>
+       <ci>k</ci>
+       <ci>e</ci>
+      </apply>
+     </apply>
+     <times></times>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <apply>
+        <times></times>
+        <ci>s</ci>
+        <ci>n</ci>
+        <ci>a</ci>
+        <ci>k</ci>
+        <ci>e</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-¯</ci>
+        <ci>v</ci>
+       </apply>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{snake}^{*}\approx\displaystyle\sum_{1}^{n}E_{snake}(\bar{v}_{i})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Consequentially, the forces of the snake can be approximated as</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:45">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>F</mi>
+    <mrow>
+     <mi>s</mi>
+     <mi>n</mi>
+     <mi>a</mi>
+     <mi>k</mi>
+     <mi>e</mi>
+    </mrow>
+    <mo>*</mo>
+   </msubsup>
+   <mo>≈</mo>
+   <mrow>
+    <mo>-</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mn>1</mn>
+      <mi>n</mi>
+     </munderover>
+     <mrow>
+      <mrow>
+       <mo>∇</mo>
+       <msub>
+        <mi>E</mi>
+        <mrow>
+         <mi>s</mi>
+         <mi>n</mi>
+         <mi>a</mi>
+         <mi>k</mi>
+         <mi>e</mi>
+        </mrow>
+       </msub>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mover accent="true">
+         <mi>v</mi>
+         <mo stretchy="false">¯</mo>
+        </mover>
+        <mi>i</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>F</ci>
+      <apply>
+       <times></times>
+       <ci>s</ci>
+       <ci>n</ci>
+       <ci>a</ci>
+       <ci>k</ci>
+       <ci>e</ci>
+      </apply>
+     </apply>
+     <times></times>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <ci>normal-∇</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>E</ci>
+         <apply>
+          <times></times>
+          <ci>s</ci>
+          <ci>n</ci>
+          <ci>a</ci>
+          <ci>k</ci>
+          <ci>e</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-¯</ci>
+         <ci>v</ci>
+        </apply>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F_{snake}^{*}\approx-\displaystyle\sum_{1}^{n}\nabla E_{snake}(\bar{v}_{i})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Gradient approximation can be done through any finite approximation method with respect to <em>s</em>, such as <a href="Finite_difference" title="wikilink">Finite difference</a>.</p>
+<h3 id="numerical-instability-due-to-discrete-time">Numerical instability due to discrete time</h3>
+
+<p>The introduction of discrete time into the algorithm can introduce updates which the snake is moved past the minima it is attracted to; this further can cause oscillations around the minima or lead to a different minima being found.</p>
+
+<p>This can be avoided through tuning the time step such that the step size is never greater than a pixel due to the image forces. However, in regions of low energy, the internal energies will dominate the update.</p>
+
+<p>Alternatively, the image forces can be normalized for each step such that the image forces only update the snake by one pixel. This can be formulated as</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:46">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>F</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>m</mi>
+     <mi>a</mi>
+     <mi>g</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mrow>
+     <mi>k</mi>
+     <mfrac>
+      <mrow>
+       <mo>∇</mo>
+       <msub>
+        <mi>E</mi>
+        <mrow>
+         <mi>i</mi>
+         <mi>m</mi>
+         <mi>a</mi>
+         <mi>g</mi>
+         <mi>e</mi>
+        </mrow>
+       </msub>
+      </mrow>
+      <mrow>
+       <mo>∥</mo>
+       <mrow>
+        <mo>∇</mo>
+        <msub>
+         <mi>E</mi>
+         <mrow>
+          <mi>i</mi>
+          <mi>m</mi>
+          <mi>a</mi>
+          <mi>g</mi>
+          <mi>e</mi>
+         </mrow>
+        </msub>
+       </mrow>
+       <mo>∥</mo>
+      </mrow>
+     </mfrac>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>F</ci>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>m</ci>
+      <ci>a</ci>
+      <ci>g</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <ci>k</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <ci>normal-∇</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>E</ci>
+         <apply>
+          <times></times>
+          <ci>i</ci>
+          <ci>m</ci>
+          <ci>a</ci>
+          <ci>g</ci>
+          <ci>e</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="latexml">norm</csymbol>
+        <apply>
+         <ci>normal-∇</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>E</ci>
+          <apply>
+           <times></times>
+           <ci>i</ci>
+           <ci>m</ci>
+           <ci>a</ci>
+           <ci>g</ci>
+           <ci>e</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F_{image}=-k\frac{\nabla E_{image}}{\|\nabla E_{image}\|}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Active_contour_model:47">
+ <semantics>
+  <mrow>
+   <mi>τ</mi>
+   <mi>k</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>τ</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tau k
+  </annotation>
+ </semantics>
+</math>
+
+ is near the value of the pixel size. This avoids the problem of dominating internal energies that arise from tuning the time step.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+<h3 id="numerical-instability-due-to-discrete-space">Numerical instability due to discrete space</h3>
+
+<p>The energies in a continuous image may have zero-crossing that do not exist as a pixel in the image. In this case, a point in the snake would oscillate between the two pixels that neighbor this zero-crossing. This oscillation can be avoided by using interpolation between pixels instead of nearest neighbor.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+<h2 id="implementation">Implementation</h2>
+
+<p>The following <a class="uri" href="pseudocode" title="wikilink">pseudocode</a> implements the snakes method in a general form</p>
+<div class="sourceCode"><pre class="sourceCode matlab"><code class="sourceCode matlab">
+function v = snakes (I, v)
+  <span class="co">% INPUT: N by M image I, a contour v of n control points</span>
+  <span class="co">% OUTPUT: converged contour v of n control points</span>
+
+  E_image = generateImageEnergy (I);
+
+  while not converged
+    F_cont = weight.alpha * contourDerivative(v, <span class="fl">2</span>);
+    F_curv = weight.beta * contourDerivative(v, <span class="fl">4</span>);
+    F_image = interp2 (E_image, v(:,<span class="fl">2</span>), v(:,<span class="fl">1</span>);
+    F_image_norm = weight.k * F_image ./ norm (F_image);
+    F_con = inputForces();
+
+    F_internal = F_cont + weight.external * F_curv;
+    F_external = weight.external * (F_image + F_con);
+
+    v = updateSnake(v, F_internal, F_external);
+
+    checkConvergence ();
+  end
+
+end</code></pre></div>
+
+<p>Where <em>generateImageEnergy (I)</em> can be written as</p>
+<div class="sourceCode"><pre class="sourceCode matlab"><code class="sourceCode matlab">function E_image = generateImageEnergy (I)
+  [C, Cx, Cy, Cxx, Cxy, Cyy] = generateGradients (I);
+
+  E_line = I;
+  E_edge = -(Cx.^<span class="fl">2</span> + Cy.^<span class="fl">2</span>)^<span class="fl">0.5</span>;
+  E_term = (Cyy.*Cx.^<span class="fl">2</span> - <span class="fl">2</span>*Cxy.*Cx.*Cy + Cxx.*Cy.^<span class="fl">2</span>)./((<span class="fl">1</span> + Cx.^<span class="fl">2</span> + Cy.^<span class="fl">2</span>).^(<span class="fl">1.5</span>));
+
+  E_image = weight.line * E_line + weight.edge * E_edge + weight.term * E_term;
+end</code></pre></div>
+<h2 id="some-variants-of-snakes">Some variants of snakes</h2>
+
+<p>The default method of snakes has various limitation and corner cases where the convergence performs poorly. Several alternatives exist which addresses issues of the default method, though with their own trade-offs. A few are listed here.</p>
+<h3 id="gvf-snake-model">GVF snake model</h3>
+
+<p>The gradient vector flow (GVF) snake model<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> addresses two issues with snakes:</p>
+<ul>
+<li>poor convergence performance for concave boundaries</li>
+<li>poor convergence performance when snake is initialized far from minimum</li>
+</ul>
+
+<p>In 2D, the GVF vector field 
+
+<math display="inline" id="Active_contour_model:48">
+ <semantics>
+  <msub>
+   <mi>F</mi>
+   <mrow>
+    <mi>G</mi>
+    <mi>V</mi>
+    <mi>F</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>F</ci>
+    <apply>
+     <times></times>
+     <ci>G</ci>
+     <ci>V</ci>
+     <ci>F</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F_{GVF}
+  </annotation>
+ </semantics>
+</math>
+
+ minimizes the energy functional</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:49">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>G</mi>
+     <mi>V</mi>
+     <mi>F</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mrow>
+      <mo largeop="true" symmetric="true">∫</mo>
+      <mrow>
+       <mi>μ</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <msubsup>
+          <mi>u</mi>
+          <mi>x</mi>
+          <mn>2</mn>
+         </msubsup>
+         <mo>+</mo>
+         <msubsup>
+          <mi>u</mi>
+          <mi>y</mi>
+          <mn>2</mn>
+         </msubsup>
+         <mo>+</mo>
+         <msubsup>
+          <mi>v</mi>
+          <mi>x</mi>
+          <mn>2</mn>
+         </msubsup>
+         <mo>+</mo>
+         <msubsup>
+          <mi>v</mi>
+          <mi>y</mi>
+          <mn>2</mn>
+         </msubsup>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mrow>
+       <mo stretchy="false">|</mo>
+       <mrow>
+        <mo>∇</mo>
+        <mi>f</mi>
+       </mrow>
+       <mo stretchy="false">|</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+     <msup>
+      <mrow>
+       <mo stretchy="false">|</mo>
+       <mrow>
+        <mi>𝐯</mi>
+        <mo>-</mo>
+        <mrow>
+         <mo>∇</mo>
+         <mi>f</mi>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">|</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+     <mi>d</mi>
+     <mi>x</mi>
+     <mi>d</mi>
+     <mi>y</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <apply>
+      <times></times>
+      <ci>G</ci>
+      <ci>V</ci>
+      <ci>F</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <int></int>
+      <apply>
+       <int></int>
+       <apply>
+        <times></times>
+        <ci>μ</ci>
+        <apply>
+         <plus></plus>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>u</ci>
+           <ci>x</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>u</ci>
+           <ci>y</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>v</ci>
+           <ci>x</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>v</ci>
+           <ci>y</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <abs></abs>
+        <apply>
+         <ci>normal-∇</ci>
+         <ci>f</ci>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <abs></abs>
+        <apply>
+         <minus></minus>
+         <ci>𝐯</ci>
+         <apply>
+          <ci>normal-∇</ci>
+          <ci>f</ci>
+         </apply>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>d</ci>
+      <ci>x</ci>
+      <ci>d</ci>
+      <ci>y</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{GVF}=\int\int\mu(u_{x}^{2}+u_{y}^{2}+v_{x}^{2}+v_{y}^{2})+|\nabla f|^{2}|%
+\mathbf{v}-\nabla f|^{2}dxdy
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Active_contour_model:50">
+ <semantics>
+  <mi>μ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>μ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu
+  </annotation>
+ </semantics>
+</math>
+
+ is a controllable smoothing term. This can be solved by solving the Euler equations</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:51">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>μ</mi>
+     <mrow>
+      <msup>
+       <mo>∇</mo>
+       <mn>2</mn>
+      </msup>
+      <mi>u</mi>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mrow>
+      <mo maxsize="260%" minsize="260%">(</mo>
+      <mrow>
+       <mi>u</mi>
+       <mo>-</mo>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>x</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo maxsize="260%" minsize="260%">)</mo>
+     </mrow>
+     <mrow>
+      <mo maxsize="260%" minsize="260%">(</mo>
+      <mrow>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>x</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo>,</mo>
+          <mi>y</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>y</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo>,</mo>
+          <mi>y</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+      </mrow>
+      <mo maxsize="260%" minsize="260%">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <ci>μ</ci>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>normal-∇</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <ci>u</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <minus></minus>
+       <ci>u</ci>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>x</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>x</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <interval closure="open">
+          <ci>x</ci>
+          <ci>y</ci>
+         </interval>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>y</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <interval closure="open">
+          <ci>x</ci>
+          <ci>y</ci>
+         </interval>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu\nabla^{2}u-\Bigg(u-\frac{\partial}{\partial x}F_{ext}\Bigg)\Bigg(\frac{%
+\partial}{\partial x}F_{ext}(x,y)^{2}+\frac{\partial}{\partial y}F_{ext}(x,y)^%
+{2}\Bigg)=0
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:52">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>μ</mi>
+     <mrow>
+      <msup>
+       <mo>∇</mo>
+       <mn>2</mn>
+      </msup>
+      <mi>v</mi>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mrow>
+      <mo maxsize="260%" minsize="260%">(</mo>
+      <mrow>
+       <mi>v</mi>
+       <mo>-</mo>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>y</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo maxsize="260%" minsize="260%">)</mo>
+     </mrow>
+     <mrow>
+      <mo maxsize="260%" minsize="260%">(</mo>
+      <mrow>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>x</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo>,</mo>
+          <mi>y</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>y</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo>,</mo>
+          <mi>y</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+      </mrow>
+      <mo maxsize="260%" minsize="260%">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <ci>μ</ci>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>normal-∇</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <ci>v</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <minus></minus>
+       <ci>v</ci>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>y</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>x</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <interval closure="open">
+          <ci>x</ci>
+          <ci>y</ci>
+         </interval>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>y</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <interval closure="open">
+          <ci>x</ci>
+          <ci>y</ci>
+         </interval>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu\nabla^{2}v-\Bigg(v-\frac{\partial}{\partial y}F_{ext}\Bigg)\Bigg(\frac{%
+\partial}{\partial x}F_{ext}(x,y)^{2}+\frac{\partial}{\partial y}F_{ext}(x,y)^%
+{2}\Bigg)=0
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This can be solved through iteration towards a steady-state value.</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:53">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>u</mi>
+    <mrow>
+     <mi>i</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>u</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>+</mo>
+     <mrow>
+      <mi>μ</mi>
+      <mrow>
+       <msup>
+        <mo>∇</mo>
+        <mn>2</mn>
+       </msup>
+       <msub>
+        <mi>u</mi>
+        <mi>i</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mrow>
+      <mo maxsize="260%" minsize="260%">(</mo>
+      <mrow>
+       <msub>
+        <mi>u</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>-</mo>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>x</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo maxsize="260%" minsize="260%">)</mo>
+     </mrow>
+     <mrow>
+      <mo maxsize="260%" minsize="260%">(</mo>
+      <mrow>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>x</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo>,</mo>
+          <mi>y</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>y</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo>,</mo>
+          <mi>y</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+      </mrow>
+      <mo maxsize="260%" minsize="260%">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>u</ci>
+     <apply>
+      <plus></plus>
+      <ci>i</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>u</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>μ</ci>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>normal-∇</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>u</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>u</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>x</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>x</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <interval closure="open">
+          <ci>x</ci>
+          <ci>y</ci>
+         </interval>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>y</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <interval closure="open">
+          <ci>x</ci>
+          <ci>y</ci>
+         </interval>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   u_{i+1}=u_{i}+\mu\nabla^{2}u_{i}-\Bigg(u_{i}-\frac{\partial}{\partial x}F_{ext%
+}\Bigg)\Bigg(\frac{\partial}{\partial x}F_{ext}(x,y)^{2}+\frac{\partial}{%
+\partial y}F_{ext}(x,y)^{2}\Bigg)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:54">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>v</mi>
+    <mrow>
+     <mi>i</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>v</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>+</mo>
+     <mrow>
+      <mi>μ</mi>
+      <mrow>
+       <msup>
+        <mo>∇</mo>
+        <mn>2</mn>
+       </msup>
+       <msub>
+        <mi>v</mi>
+        <mi>i</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mrow>
+      <mo maxsize="260%" minsize="260%">(</mo>
+      <mrow>
+       <msub>
+        <mi>v</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>-</mo>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>y</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo maxsize="260%" minsize="260%">)</mo>
+     </mrow>
+     <mrow>
+      <mo maxsize="260%" minsize="260%">(</mo>
+      <mrow>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>x</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo>,</mo>
+          <mi>y</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mfrac>
+         <mo>∂</mo>
+         <mrow>
+          <mo>∂</mo>
+          <mi>y</mi>
+         </mrow>
+        </mfrac>
+        <msub>
+         <mi>F</mi>
+         <mrow>
+          <mi>e</mi>
+          <mi>x</mi>
+          <mi>t</mi>
+         </mrow>
+        </msub>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>x</mi>
+          <mo>,</mo>
+          <mi>y</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+      </mrow>
+      <mo maxsize="260%" minsize="260%">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>v</ci>
+     <apply>
+      <plus></plus>
+      <ci>i</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>v</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>μ</ci>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>normal-∇</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>v</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>v</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>y</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>x</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <interval closure="open">
+          <ci>x</ci>
+          <ci>y</ci>
+         </interval>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <partialdiff></partialdiff>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>y</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>F</ci>
+         <apply>
+          <times></times>
+          <ci>e</ci>
+          <ci>x</ci>
+          <ci>t</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <interval closure="open">
+          <ci>x</ci>
+          <ci>y</ci>
+         </interval>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v_{i+1}=v_{i}+\mu\nabla^{2}v_{i}-\Bigg(v_{i}-\frac{\partial}{\partial y}F_{ext%
+}\Bigg)\Bigg(\frac{\partial}{\partial x}F_{ext}(x,y)^{2}+\frac{\partial}{%
+\partial y}F_{ext}(x,y)^{2}\Bigg)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This result replaces the default external force.</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:55">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>F</mi>
+    <mrow>
+     <mi>e</mi>
+     <mi>x</mi>
+     <mi>t</mi>
+    </mrow>
+    <mo>*</mo>
+   </msubsup>
+   <mo>=</mo>
+   <msub>
+    <mi>F</mi>
+    <mrow>
+     <mi>G</mi>
+     <mi>V</mi>
+     <mi>F</mi>
+    </mrow>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>F</ci>
+      <apply>
+       <times></times>
+       <ci>e</ci>
+       <ci>x</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <times></times>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>F</ci>
+     <apply>
+      <times></times>
+      <ci>G</ci>
+      <ci>V</ci>
+      <ci>F</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F_{ext}^{*}=F_{GVF}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The primary issue with using GVF is the smoothing term 
+
+<math display="inline" id="Active_contour_model:56">
+ <semantics>
+  <mi>μ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>μ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu
+  </annotation>
+ </semantics>
+</math>
+
+ causes rounding of the edges of the contour. Reducing the value of 
+
+<math display="inline" id="Active_contour_model:57">
+ <semantics>
+  <mi>μ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>μ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu
+  </annotation>
+ </semantics>
+</math>
+
+ reduces the rounding but weakens the amount of smoothing.</p>
+<h3 id="the-balloon-model">The balloon model</h3>
+
+<p>The balloon model<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> addresses these problems with the default active contour model:</p>
+<ul>
+<li>The snake is not attracted to distant edges.</li>
+<li>The snake will shrink inwards if no substantial images forces are acting upon it.</li>
+<li>a snake larger than the minima contour will eventually shrink into it, but a snake smaller than the minima contour will not find the minima and instead continue to shrink.</li>
+</ul>
+
+<p>The balloon model introduces an inflation term into the forces acting on the snake</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:58">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>F</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>n</mi>
+     <mi>f</mi>
+     <mi>l</mi>
+     <mi>a</mi>
+     <mi>t</mi>
+     <mi>i</mi>
+     <mi>o</mi>
+     <mi>n</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>k</mi>
+     <mn>1</mn>
+    </msub>
+    <mover accent="true">
+     <mi>n</mi>
+     <mo stretchy="false">→</mo>
+    </mover>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>s</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>F</ci>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>n</ci>
+      <ci>f</ci>
+      <ci>l</ci>
+      <ci>a</ci>
+      <ci>t</ci>
+      <ci>i</ci>
+      <ci>o</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <ci>normal-→</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>s</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F_{inflation}=k_{1}\vec{n}(s)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Active_contour_model:59">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>n</mi>
+    <mo stretchy="false">→</mo>
+   </mover>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <ci>normal-→</ci>
+     <ci>n</ci>
+    </apply>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \vec{n}(s)
+  </annotation>
+ </semantics>
+</math>
+
+ is the normal unitary vector of the curve at 
+
+<math display="inline" id="Active_contour_model:60">
+ <semantics>
+  <mrow>
+   <mi>v</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>v</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v(s)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Active_contour_model:61">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ is the magnitude of the force. 
+
+<math display="inline" id="Active_contour_model:62">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ should have the same magnitude as the image normalization factor 
+
+<math display="inline" id="Active_contour_model:63">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ and be smaller in value than 
+
+<math display="inline" id="Active_contour_model:64">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ to allow forces at image edges to overcome the inflation force.</p>
+
+<p>Three issues arise from using the balloon model:</p>
+<ul>
+<li>Instead of shrinking, the snake expands into the minima and will not find minima contours smaller than it.</li>
+<li>The outward force causes the contour to be slightly larger than the actual minima. This can be solved by decreasing the balloon force after a stable solution has been found.</li>
+<li>The inflation force can overpower forces from weak edges, amplifying the issue with snakes ignoring weaker features in an image.</li>
+</ul>
+<h3 id="diffusion-snakes-model">Diffusion snakes model</h3>
+
+<p>The diffusion snake model<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> addresses the sensitivity of snakes to noise, clutter, and occlusion. It implements a modification of the <a href="Mumford–Shah_functional" title="wikilink">Mumford–Shah functional</a> and its cartoon limit and incorporates statistical shape knowledge. The default image energy functional 
+
+<math display="inline" id="Active_contour_model:65">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mrow>
+    <mi>i</mi>
+    <mi>m</mi>
+    <mi>a</mi>
+    <mi>g</mi>
+    <mi>e</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <ci>m</ci>
+     <ci>a</ci>
+     <ci>g</ci>
+     <ci>e</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{image}
+  </annotation>
+ </semantics>
+</math>
+
+ is replaced with</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:66">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>E</mi>
+    <mrow>
+     <mi>i</mi>
+     <mi>m</mi>
+     <mi>a</mi>
+     <mi>g</mi>
+     <mi>e</mi>
+    </mrow>
+    <mo>*</mo>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>+</mo>
+    <mrow>
+     <mi>α</mi>
+     <msub>
+      <mi>E</mi>
+      <mi>c</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <ci>m</ci>
+       <ci>a</ci>
+       <ci>g</ci>
+       <ci>e</ci>
+      </apply>
+     </apply>
+     <times></times>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>α</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <ci>c</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{image}^{*}=E_{i}+\alpha E_{c}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Active_contour_model:67">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ is based on a modified Mumford–Shah functional</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:68">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>E</mi>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>J</mi>
+     <mo>,</mo>
+     <mi>B</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <mn>2</mn>
+     </mfrac>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∫</mo>
+       <mi>D</mi>
+      </msub>
+      <mrow>
+       <msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mrow>
+           <mi>I</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mover accent="true">
+             <mi>x</mi>
+             <mo stretchy="false">→</mo>
+            </mover>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+          <mo>-</mo>
+          <mrow>
+           <mi>J</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mover accent="true">
+             <mi>x</mi>
+             <mo stretchy="false">→</mo>
+            </mover>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+       <mi>d</mi>
+       <mover accent="true">
+        <mi>x</mi>
+        <mo stretchy="false">→</mo>
+       </mover>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>λ</mi>
+     <mfrac>
+      <mn>1</mn>
+      <mn>2</mn>
+     </mfrac>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∫</mo>
+       <mrow>
+        <mi>D</mi>
+        <mo>/</mo>
+        <mi>B</mi>
+       </mrow>
+      </msub>
+      <mrow>
+       <mrow>
+        <mrow>
+         <mover accent="true">
+          <mo>∇</mo>
+          <mo stretchy="false">→</mo>
+         </mover>
+         <mi>J</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mover accent="true">
+           <mi>x</mi>
+           <mo stretchy="false">→</mo>
+          </mover>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>⋅</mo>
+        <mover accent="true">
+         <mo>∇</mo>
+         <mo stretchy="false">→</mo>
+        </mover>
+       </mrow>
+       <mi>J</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mover accent="true">
+         <mi>x</mi>
+         <mo stretchy="false">→</mo>
+        </mover>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mi>d</mi>
+       <mover accent="true">
+        <mi>x</mi>
+        <mo stretchy="false">→</mo>
+       </mover>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>ν</mi>
+     <mrow>
+      <msubsup>
+       <mo largeop="true" symmetric="true">∫</mo>
+       <mn>0</mn>
+       <mn>1</mn>
+      </msubsup>
+      <mrow>
+       <msup>
+        <mrow>
+         <mo maxsize="260%" minsize="260%">(</mo>
+         <mrow>
+          <mfrac>
+           <mi>d</mi>
+           <mrow>
+            <mi>d</mi>
+            <mi>s</mi>
+           </mrow>
+          </mfrac>
+          <mi>B</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>s</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo maxsize="260%" minsize="260%">)</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+       <mi>d</mi>
+       <mi>s</mi>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>E</ci>
+     <interval closure="closed">
+      <ci>J</ci>
+      <ci>B</ci>
+     </interval>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <int></int>
+        <ci>D</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <ci>I</ci>
+           <apply>
+            <ci>normal-→</ci>
+            <ci>x</ci>
+           </apply>
+          </apply>
+          <apply>
+           <times></times>
+           <ci>J</ci>
+           <apply>
+            <ci>normal-→</ci>
+            <ci>x</ci>
+           </apply>
+          </apply>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <ci>normal-→</ci>
+         <ci>x</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>λ</ci>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <int></int>
+        <apply>
+         <divide></divide>
+         <ci>D</ci>
+         <ci>B</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <ci>normal-⋅</ci>
+         <apply>
+          <times></times>
+          <apply>
+           <ci>normal-→</ci>
+           <ci>normal-∇</ci>
+          </apply>
+          <ci>J</ci>
+          <apply>
+           <ci>normal-→</ci>
+           <ci>x</ci>
+          </apply>
+         </apply>
+         <apply>
+          <ci>normal-→</ci>
+          <ci>normal-∇</ci>
+         </apply>
+        </apply>
+        <ci>J</ci>
+        <apply>
+         <ci>normal-→</ci>
+         <ci>x</ci>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <ci>normal-→</ci>
+         <ci>x</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>ν</ci>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <int></int>
+         <cn type="integer">0</cn>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <times></times>
+          <apply>
+           <divide></divide>
+           <ci>d</ci>
+           <apply>
+            <times></times>
+            <ci>d</ci>
+            <ci>s</ci>
+           </apply>
+          </apply>
+          <ci>B</ci>
+          <ci>s</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>d</ci>
+        <ci>s</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E[J,B]=\frac{1}{2}\int_{D}(I(\vec{x})-J(\vec{x}))^{2}d\vec{x}+\lambda\frac{1}{%
+2}\int_{D/B}\vec{\nabla}J(\vec{x})\cdot\vec{\nabla}J(\vec{x})d\vec{x}+\nu\int_%
+{0}^{1}\Bigg(\frac{d}{ds}B(s)\Bigg)^{2}ds
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Active_contour_model:69">
+ <semantics>
+  <mrow>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mover accent="true">
+     <mi>x</mi>
+     <mo stretchy="false">→</mo>
+    </mover>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>J</ci>
+    <apply>
+     <ci>normal-→</ci>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(\vec{x})
+  </annotation>
+ </semantics>
+</math>
+
+ is the piecewise smooth model of the image 
+
+<math display="inline" id="Active_contour_model:70">
+ <semantics>
+  <mrow>
+   <mi>I</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mover accent="true">
+     <mi>x</mi>
+     <mo stretchy="false">→</mo>
+    </mover>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>I</ci>
+    <apply>
+     <ci>normal-→</ci>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I(\vec{x})
+  </annotation>
+ </semantics>
+</math>
+
+ of domain 
+
+<math display="inline" id="Active_contour_model:71">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+. Boundaries 
+
+<math display="inline" id="Active_contour_model:72">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>B</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(s)
+  </annotation>
+ </semantics>
+</math>
+
+ are defined as</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:73">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>B</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>s</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>n</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>N</mi>
+    </munderover>
+    <mrow>
+     <msub>
+      <mover accent="true">
+       <mi>p</mi>
+       <mo stretchy="false">→</mo>
+      </mover>
+      <mi>n</mi>
+     </msub>
+     <msub>
+      <mi>B</mi>
+      <mi>n</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>s</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <ci>s</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>n</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>N</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-→</ci>
+        <ci>p</ci>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>B</ci>
+       <ci>n</ci>
+      </apply>
+      <ci>s</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B(s)=\sum_{n=1}^{N}\vec{p}_{n}B_{n}(s)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Active_contour_model:74">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>B</mi>
+    <mi>n</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>B</ci>
+     <ci>n</ci>
+    </apply>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{n}(s)
+  </annotation>
+ </semantics>
+</math>
+
+ are quadratic B-spline basis functions and 
+
+<math display="inline" id="Active_contour_model:75">
+ <semantics>
+  <msub>
+   <mover accent="true">
+    <mi>p</mi>
+    <mo stretchy="false">→</mo>
+   </mover>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <ci>normal-→</ci>
+     <ci>p</ci>
+    </apply>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \vec{p}_{n}
+  </annotation>
+ </semantics>
+</math>
+
+ are the control points of the splines. The modified cartoon limit is obtained as 
+
+<math display="inline" id="Active_contour_model:76">
+ <semantics>
+  <mrow>
+   <mi>λ</mi>
+   <mo>→</mo>
+   <mi mathvariant="normal">∞</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <ci>λ</ci>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda\to\infty
+  </annotation>
+ </semantics>
+</math>
+
+ and is a valid configuration of 
+
+<math display="inline" id="Active_contour_model:77">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{i}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The functional 
+
+<math display="inline" id="Active_contour_model:78">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>c</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>c</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{c}
+  </annotation>
+ </semantics>
+</math>
+
+ is based on training from binary images of various contours and is controlled in strength by the parameter 
+
+<math display="inline" id="Active_contour_model:79">
+ <semantics>
+  <mi>α</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha
+  </annotation>
+ </semantics>
+</math>
+
+. For a Gaussian distribution of control point vectors 
+
+<math display="inline" id="Active_contour_model:80">
+ <semantics>
+  <mover accent="true">
+   <mi>z</mi>
+   <mo stretchy="false">→</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-→</ci>
+    <ci>z</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \vec{z}
+  </annotation>
+ </semantics>
+</math>
+
+ with mean control point vector 
+
+<math display="inline" id="Active_contour_model:81">
+ <semantics>
+  <msub>
+   <mover accent="true">
+    <mi>z</mi>
+    <mo stretchy="false">→</mo>
+   </mover>
+   <mn>0</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <ci>normal-→</ci>
+     <ci>z</ci>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \vec{z}_{0}
+  </annotation>
+ </semantics>
+</math>
+
+ and covariance matrix 
+
+<math display="inline" id="Active_contour_model:82">
+ <semantics>
+  <mi mathvariant="normal">Σ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-Σ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma
+  </annotation>
+ </semantics>
+</math>
+
+ , the quadratic energy that corresponds to the Gaussian probability is</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:83">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>c</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mover accent="true">
+      <mi>z</mi>
+      <mo stretchy="false">→</mo>
+     </mover>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mn>2</mn>
+    </mfrac>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mover accent="true">
+        <mi>z</mi>
+        <mo stretchy="false">→</mo>
+       </mover>
+       <mo>-</mo>
+       <msub>
+        <mover accent="true">
+         <mi>z</mi>
+         <mo stretchy="false">→</mo>
+        </mover>
+        <mn>0</mn>
+       </msub>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>t</mi>
+    </msup>
+    <msup>
+     <mi mathvariant="normal">Σ</mi>
+     <mo>*</mo>
+    </msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mover accent="true">
+       <mi>z</mi>
+       <mo stretchy="false">→</mo>
+      </mover>
+      <mo>-</mo>
+      <msub>
+       <mover accent="true">
+        <mi>z</mi>
+        <mo stretchy="false">→</mo>
+       </mover>
+       <mn>0</mn>
+      </msub>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>c</ci>
+     </apply>
+     <apply>
+      <ci>normal-→</ci>
+      <ci>z</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <minus></minus>
+       <apply>
+        <ci>normal-→</ci>
+        <ci>z</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-→</ci>
+         <ci>z</ci>
+        </apply>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <ci>t</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>normal-Σ</ci>
+      <times></times>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <ci>normal-→</ci>
+       <ci>z</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-→</ci>
+        <ci>z</ci>
+       </apply>
+       <cn type="integer">0</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{c}(\vec{z})=\frac{1}{2}(\vec{z}-\vec{z}_{0})^{t}\Sigma^{*}(\vec{z}-\vec{z}_%
+{0})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The strength of this method relies on the strength of the training data as well as the tuning of the modified Mumford–Shah functional. Different snakes will require different training data sets and tunings.</p>
+<h3 id="geometric-active-contours">Geometric active contours</h3>
+
+<p>Geometric snakes, or geodesic snakes,<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> or conformal active contours<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> employs ideas from Euclidean curve shortening evolution. Contours split and merge depending on the detection of objects in the image. These models are largely implemented using <a href="level_sets" title="wikilink">level sets</a>, and have been extensively employed in <a href="medical_image_computing" title="wikilink">medical image computing</a>. The level set function 
+
+<math display="inline" id="Active_contour_model:84">
+ <semantics>
+  <mi mathvariant="normal">Φ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-Φ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Phi
+  </annotation>
+ </semantics>
+</math>
+
+ used in this method is of the form</p>
+
+<p>
+
+<math display="block" id="Active_contour_model:85">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mo>∂</mo>
+     <mrow>
+      <mo>∂</mo>
+      <mi>t</mi>
+     </mrow>
+    </mfrac>
+    <mi mathvariant="normal">Φ</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <mrow>
+       <mo>∇</mo>
+       <mi mathvariant="normal">Φ</mi>
+      </mrow>
+      <mo stretchy="false">|</mo>
+     </mrow>
+     <mi>D</mi>
+     <mi>I</mi>
+     <mi>V</mi>
+     <mrow>
+      <mo maxsize="260%" minsize="260%">(</mo>
+      <mrow>
+       <mfrac>
+        <mrow>
+         <mi>g</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>I</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mrow>
+         <mo>∇</mo>
+         <mi mathvariant="normal">Φ</mi>
+        </mrow>
+       </mfrac>
+       <mrow>
+        <mo>∇</mo>
+        <mi mathvariant="normal">Φ</mi>
+       </mrow>
+      </mrow>
+      <mo maxsize="260%" minsize="260%">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mo>∇</mo>
+       <mi>g</mi>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>I</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>⋅</mo>
+     <mrow>
+      <mo>∇</mo>
+      <mi mathvariant="normal">Φ</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <partialdiff></partialdiff>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <ci>normal-Φ</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <abs></abs>
+       <apply>
+        <ci>normal-∇</ci>
+        <ci>normal-Φ</ci>
+       </apply>
+      </apply>
+      <ci>D</ci>
+      <ci>I</ci>
+      <ci>V</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <times></times>
+         <ci>g</ci>
+         <ci>I</ci>
+        </apply>
+        <apply>
+         <ci>normal-∇</ci>
+         <ci>normal-Φ</ci>
+        </apply>
+       </apply>
+       <apply>
+        <ci>normal-∇</ci>
+        <ci>normal-Φ</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <ci>normal-∇</ci>
+        <ci>g</ci>
+       </apply>
+       <ci>I</ci>
+      </apply>
+      <apply>
+       <ci>normal-∇</ci>
+       <ci>normal-Φ</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\partial}{\partial t}\Phi=|\nabla\Phi|DIV\Bigg(\frac{g(I)}{\nabla\Phi}%
+\nabla\Phi\Bigg)+\nabla g(I)\cdot\nabla\Phi
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Active_contour_model:86">
+ <semantics>
+  <mrow>
+   <mi>g</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>I</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>g</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g(I)
+  </annotation>
+ </semantics>
+</math>
+
+ is a halting function.</p>
+
+<p>Statistical models combining local and global features have been formulated by Lankton and Tannenbaum.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://homepages.inf.ed.ac.uk/rbf/CVonline/LOCAL_COPIES/YOUNG/vision7.html">David Young, March 1995</a></li>
+<li><a href="http://homepages.inf.ed.ac.uk/cgi/rbf/CVONLINE/entries.pl?TAG709">Snakes: Active Contours, CVOnline</a></li>
+<li><a href="http://www.isbe.man.ac.uk/courses/Computer_Vision/downloads/L11_Snakes.pdf">ICBE, University of Manchester</a></li>
+<li><a href="http://www.mathworks.com/matlabcentral/fileexchange/30284-active-contours-implementation---test-platform-gui">Active contours implementation &amp; test platform GUI</a></li>
+<li><a href="http://www.cb.uu.se/~cris/blog/index.php/archives/217">A simple implementation of snakes</a> by Associate Professor Cris Luengo</li>
+<li><a href="http://www.mathworks.com/help/images/ref/activecontour.html">MATLAB documentation for activecontour, which segments an image using active contours</a></li>
+</ul>
+<h3 id="sample-code">Sample code</h3>
+<ul>
+<li><a href="http://www.icaen.uiowa.edu/~image/Prince-snakes/">Practical examples of different snakes</a> developed by Prince and Xu</li>
+<li><a href="http://www.isbe.man.ac.uk/~bim/software/qsnake_demo/qsnake_demo.html">Basic tool to play with snakes (active contour models) from Tim Cootes,University of Manchester</a></li>
+<li><a href="http://www.mathworks.com/matlabcentral/fileexchange/28149">Matlab implementation of 2D and 3D snake including GVF and balloon force</a></li>
+<li><a href="https://engineering.purdue.edu/~malcolm/interval/1995-017/snake.m">Matlab Snake Demo</a> by Chris Bregler and Malcolm Slaney, Interval Research Corporation.</li>
+<li><a href="http://www.markschulze.net/snakes/">A Demonstration Using Java</a></li>
+<li><a href="http://www.mathworks.com/matlabcentral/fileexchange/30284-active-contours-implementation---test-platform-gui">Active Contours implementation &amp; test platform GUI</a> by Nikolay S. and Alex Blekhman implementing "Active Contours without Edges"</li>
+<li><a href="http://www.mathworks.com/matlabcentral/fileexchange/19567-active-contour-segmentation">Active Contour Segmentation</a> by Shawn Lankton implementing "Active Contours without Edges"</li>
+<li><a href="http://www.jarnoralli.fi/joomla/code/active-contour-code">Geometric Active Contour Code</a> by Jarno Ralli</li>
+<li><a href="https://github.com/pmneila/morphsnakes">Morphological Snakes</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Computer_vision" title="wikilink">Category:Computer vision</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2">Snakes: an active model,Ramani Pichumani,http://homepages.inf.ed.ac.uk/rbf/CVonline/LOCAL_COPIES/RAMANI1/node31.html<a href="#fnref2">↩</a></li>
+<li id="fn3">Dr. George Bebis,University of Nevada,http://www.cse.unr.edu/~bebis/CS791E/Notes/DeformableContours.pdf<a href="#fnref3">↩</a></li>
+<li id="fn4">Image Understanding,Bryan S. Morse,Brigham Young University,1998-2000 <a class="uri" href="http://homepages.inf.ed.ac.uk/rbf/CVonline/LOCAL_COPIES/MORSE/iu.pdf">http://homepages.inf.ed.ac.uk/rbf/CVonline/LOCAL_COPIES/MORSE/iu.pdf</a><a href="#fnref4">↩</a></li>
+<li id="fn5">Laurent D. Cohen, On active contour models and balloons, CVGIP: Image Understanding, Volume 53, Issue 2, March 1991, Pages 211-218, ISSN 1049-9660, <a href="#fnref5">↩</a></li>
+<li id="fn6"></li>
+<li id="fn7">C. Xu and J.L. Prince, "Gradient Vector Flow: A New External Force for Snakes," Proc. IEEE Conf. on Comp. Vis. Patt. Recog. (CVPR), Los Alamitos: Comp. Soc. Press, pp. 66–71, June 1997, <a class="uri" href="http://iacl.ece.jhu.edu/pubs/p087c.pdf">http://iacl.ece.jhu.edu/pubs/p087c.pdf</a><a href="#fnref7">↩</a></li>
+<li id="fn8"></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10">Geodesic Active Contours, V. Caselles, R. Kimmel, G. Sapiro <a class="uri" href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.21.2196">http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.21.2196</a><a href="#fnref10">↩</a></li>
+<li id="fn11">Conformal curvature flows: From phase transitions to active vision, Satyanad Kichenassamy, Arun Kumar, Peter Olver, Allen Tannenbaum and Anthony Yezzi <a class="uri" href="http://www.springerlink.com/content/u457157212872201/">http://www.springerlink.com/content/u457157212872201/</a><a href="#fnref11">↩</a></li>
+<li id="fn12">Lankton, S.; Tannenbaum, A., "Localizing Region-Based Active Contours," Image Processing, IEEE Transactions on , vol.17, no.11, pp.2029,2039, Nov. 2008 doi: 10.1109/TIP.2008.2004611 <a class="uri" href="http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=4636741&amp;tag">http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=4636741&amp;tag;</a>;=1<a href="#fnref12">↩</a></li>
+</ol>
+</section>
+</body>
+

@@ -1,0 +1,294 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1716">Holomorphic embedding load flow method</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Holomorphic embedding load flow method</h1>
+<hr/>
+
+<p>The <strong>Holomorphic Embedding Load-flow Method</strong> (<strong>HELM</strong><a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a>) is a solution method for the <a href="Power_flow_study" title="wikilink">power flow</a> equations of electrical power systems. Its main features are that it is <a href="Direct_method_(computational_mathematics)" title="wikilink">direct</a> (that is, non-iterative) and that it mathematically guarantees a consistent selection of the correct operative branch of the multivalued problem, also signalling the condition of voltage collapse when there is no solution. These properties are relevant not only for the reliability of existing off-line and real-time applications, but also because they enable new types of analytical tools that would be impossible to build with existing iterative load flows (due to their convergence problems). An example of this would be decision-support tools providing validated action plans in real time.</p>
+
+<p>The HELM load flow algorithm was invented by Antonio Trias and has been granted two US Patents.<ref> </ref></p>
+<ul>
+<li>
+
+<p> A detailed description was presented at the 2012 IEEE PES General Meeting, and published in.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p></li>
+</ul>
+
+<p>The method is founded on advanced concepts and results from <a href="complex_analysis" title="wikilink">complex analysis</a>, such as <a href="Holomorphic_function" title="wikilink">holomorphicity</a>, the theory of <a href="algebraic_curve" title="wikilink">algebraic curves</a>, and <a href="analytic_continuation" title="wikilink">analytic continuation</a>. However, the numerical implementation is rather straightforward as it uses standard linear algebra and <a href="Padé_approximant" title="wikilink">Padé approximation</a>. Additionally, since the limiting part of the computation is the factorization of the admittance matrix and this is done only once, its performance is competitive with established fast-decoupled loadflows. The method is currently implemented into industrial-strength real-time and off-line packaged EMS applications.</p>
+<h2 id="background">Background</h2>
+
+<p>The <a href="Power_flow_study" title="wikilink">load-flow</a> calculation is one of the most fundamental components in the analysis of power systems and is the cornerstone for almost all other tools used in <a href="power_system_simulation" title="wikilink">power system simulation</a> and <a href="Energy_management_system" title="wikilink">management</a>. The load-flow equations can be written in the following general form:</p>
+
+<p>V_i = \frac{S_i^*}{V_i^*}|<mtpl><eqref>1<eqref></eqref></eqref></mtpl>}}</p>
+
+<p>where the given (complex) parameters are the admittance matrix <mtpl></mtpl>, the bus shunt admittances <mtpl></mtpl>, and the bus power injections <mtpl></mtpl> representing constant-power loads and generators.</p>
+
+<p>To solve this non-linear system of algebraic equations, traditional load-flow algorithms were developed based on three iterative techniques: the <a class="uri" href="Gauss-Seidel" title="wikilink">Gauss-Seidel</a> method <ref>J. B. Ward and H. W. Hale, "Digital Computer Solution of Power-Flow Problems," <em>Power Apparatus and Systems, Part III. Transactions of the American Institute of Electrical Engineers</em>, vol.75, no.3, pp.398-404, Jan. 1956.</ref></p>
+<ul>
+<li>A. F. Glimn and G. W. Stagg, "Automatic Calculation of Load Flows", <em>Power Apparatus and Systems, Part III. Transactions of the American Institute of Electrical Engineers</em>, vol.76, no.3, pp.817-825, April 1957.</li>
+<li>Hale, H. W.; Goodrich, R. W.; , "Digital Computation or Power Flow - Some New Aspects," <em>Power Apparatus and Systems, Part III. Transactions of the American Institute of Electrical Engineers</em>, vol.78, no.3, pp.919-923, April 1959.</li>
+</ul>
+
+<p>, which has poor convergence properties but very little memory requirements and is straightforward to implement; the full <a class="uri" href="Newton-Raphson" title="wikilink">Newton-Raphson</a> method <ref>W. F. Tinney and C. E. Hart, "Power Flow Solution by Newton's Method," <em>IEEE Transactions on Power Apparatus and Systems</em>, vol. PAS-86, no.11, pp.1449-1460, Nov. 1967.</ref></p>
+<ul>
+<li>S. T. Despotovic, B. S. Babic, and V. P. Mastilovic, "A Rapid and Reliable Method for Solving Load Flow Problems," <em>IEEE Transactions on Power Apparatus and Systems</em>, vol. PAS-90, no.1, pp.123-130, Jan. 1971.</li>
+</ul>
+
+<p>, which has fast (quadratic) iterative convergence properties, but it is computationally costly; and the Fast Decoupled Load-Flow (FDLF) method <a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> , which is based on Newton-Raphson, but greatly reduces its computational cost by means of a decoupling approximation that is valid in most transmission networks. Many other incremental improvements exist; however, the underlying technique in all of them is still an iterative solver, either of Gauss-Seidel or of Newton type. There are two fundamental problems with all iterative schemes of this type. On the one hand, there is no guarantee that the iteration will always converge to a solution; on the other, since the system has multiple solutions,<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> it is not possible to control which solution will be selected. As the power system approaches the point of voltage collapse, spurious solutions get closer to the correct one, and the iterative scheme may be easily attracted to one of them because of the phenomenon of Newton fractals: when the Newton method is applied to complex functions, the basins of attraction for the various solutions show fractal behavior.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> As a result, no matter how close the chosen initial point of the iterations (seed) is to the correct solution, there is always some non-zero chance of straying off to a different solution. These fundamental problems of iterative loadflows have been extensively documented .<ref>R. Klump and T. Overbye, “A new method for finding low-voltage power flow solutions", <em>in IEEE 2000 Power Engineering Society Summer Meeting,</em>, Vol. 1, pp. 593-–597, 2000.</ref></p>
+<ul>
+<li>J. S. Thorp and S. A. Naqavi, "Load flow fractals", ''in Proceedings of the 28th IEEE Conference on Decision and Control, Vol. 2, pp. 1822--1827, 1989.</li>
+<li>J. S. Thorp, S. A. Naqavi, and H. D. Chiang, "More load flow fractals", ''in Proceedings of the 29th IEEE Conference on Decision and Control, Vol. 6, pp. 3028--3030, 1990.</li>
+<li>S. A. Naqavi, <em>Fractals in power system load flows</em>, Cornell University, August 1994.</li>
+<li>J. S. Thorp, and S. A. Naqavi, S.A., "Load-flow fractals draw clues to erratic behaviour", IEEE Computer Applications in Power, Vol. 10, No. 1, pp. 59--62, 1997.</li>
+<li>H. Mori, "Chaotic behavior of the Newton-Raphson method with the optimal multiplier for ill-conditioned power systems", in ''The 2000 IEEE International Symposium on Circuits and Systems (ISCAS 2000 Geneva), Vol. 4, pp. 237--240, 2000.</li>
+</ul>
+
+<p> A simple illustration for the two-bus model is provided in<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Although there exist <a href="Homotopy" title="wikilink">homotopic</a> <a href="Numerical_continuation" title="wikilink">continuation</a> techniques that alleviate the problem to some degree,<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> the fractal nature of the basins of attraction precludes a 100% reliable method for all electrical scenarios.</p>
+
+<p>The key differential advantage of the HELM is that it is fully deterministic and unambiguous: it guarantees that the solution always corresponds to the correct operative solution, when it exists; and it signals the non-existence of the solution when the conditions are such that there is no solution (voltage collapse). Additionally, the method is competitive with the FDNR method in terms of computational cost. It brings a solid mathematical treatment of the load-flow problem that provides new insights not previously available with the iterative numerical methods.</p>
+<h2 id="methodology-and-applications">Methodology and applications</h2>
+
+<p>HELM is grounded on a rigorous mathematical theory, and in practical terms it could be summarized as follows:</p>
+<ol>
+<li>Define a specific (holomorphic) embedding for the equations in terms of a complex parameter <mtpl></mtpl>, such that for <mtpl>0}}</mtpl> the system has an obvious correct solution, and for <mtpl>1}}</mtpl> one recovers the original problem.</li>
+<li>Given this holomorphic embedding, it is now possible to compute univocally power series for voltages as analytic functions of <mtpl></mtpl>. The correct load-flow solution at <mtpl>1}}</mtpl> will be obtained by analytic continuation of the known correct solution at <mtpl>0}}</mtpl>.</li>
+<li>Perform the analytic continuation using algebraic approximants, which in this case are guaranteed to either converge to the solution if it exists, or not converge if the solution does not exist (voltage collapse).</li>
+</ol>
+
+<p>HELM provides a solution to a long-standing problem of all iterative load-flow methods, namely the unreliability of the iterations in finding the correct solution (or any solution at all).</p>
+
+<p>This makes HELM particularly suited for real-time applications, and mandatory for any EMS software based on exploratory algorithms, such as contingency analysis, and under alert and emergency conditions solving operational limits violations and restoration providing guidance through action plans.</p>
+<h2 id="holomorphic-embedding">Holomorphic embedding</h2>
+
+<p>For the purposes of the discussion, we will omit the treatment of controls, but the method can accommodate all types of controls. For the constraint equations imposed by these controls, an appropriate holomorphic embedding must be also defined.</p>
+
+<p>The method uses an embedding technique by means of a complex parameter <mtpl></mtpl>. The first key ingredient in the method lies in requiring the embedding to be holomorphic, that is, that the system of equations for voltages <mtpl></mtpl> is turned into a system of equations for functions <mtpl></mtpl> in such a way that the new system defines <mtpl></mtpl> as holomorphic functions (i.e. complex analytic) of the new complex variable <mtpl></mtpl>. The aim is to be able to use the process of analytic continuation which will allow the calculation of <mtpl></mtpl> at <mtpl>1}}</mtpl>. Looking at equations (), a necessary condition for the embedding to be holomorphic is that <mtpl></mtpl> is replaced under the embedding with <mtpl></mtpl>, not <mtpl></mtpl>. This is because complex conjugation itself is not a holomorphic function. On the other hand, it is easy to see that the replacement <mtpl></mtpl> does allow the equations to define a holomorphic function <mtpl></mtpl>. However, for a given arbitrary embedding, it remains to be proven that <mtpl></mtpl> is indeed holomorphic. Taking into account all these considerations, an embedding of this type is proposed:</p>
+
+<p>V_i(s) = s\frac{S_i^*}{V_i ^*(s^*)}|<mtpl><eqref>1<eqref></eqref></eqref></mtpl>}}</p>
+
+<p>With this choice, at <mtpl>0}}</mtpl> the right hand side terms become zero, (provided that the denominator is not zero), this corresponds to the case where all the injections are zero and this case has a well known and simple operational solution: all voltages are equal and all flow intensiti es are zero. Therefore this choice for the embedding provides at s=0 a well known operational solution.</p>
+
+<p>Now using classical techniques for variable elimination in polynomial systems<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> (results from the theory of <a class="uri" href="Resultants" title="wikilink">Resultants</a> and <a href="Groebner_basis#Elimination_property" title="wikilink">Gröbner basis</a> it can be proven that equations () do in fact define <mtpl></mtpl> as holomorphic functions. More significantly, they define <mtpl></mtpl> as <a href="algebraic_curves" title="wikilink">algebraic curves</a>. It is this specific fact, which becomes true because the embedding is holomorphic that guarantees the uniqueness of the result. The solution at <mtpl>0}}</mtpl> determines uniquely the solution everywhere (except on a finite number of branch cuts), thus getting rid of the multi-valuedness of the load-flow problem.</p>
+
+<p>The technique to obtain the coefficients for the power series expansion (on <mtpl>0}}</mtpl>) of voltages <mtpl></mtpl> is quite straightforward, once one realizes that equations () can be used to obtain them order after order. Consider the power series expansion for 
+
+<math display="inline" id="Holomorphic_embedding_load_flow_method:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>V</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>s</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>n</mi>
+      <mo>=</mo>
+      <mn>0</mn>
+     </mrow>
+     <mi mathvariant="normal">∞</mi>
+    </msubsup>
+    <mrow>
+     <mi>a</mi>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mi>n</mi>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <msup>
+      <mi>s</mi>
+      <mi>n</mi>
+     </msup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>V</ci>
+     <ci>s</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>n</ci>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <infinity></infinity>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>a</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>s</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \textstyle V(s)=\sum_{n=0}^{\infty}a[n]s^{n}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Holomorphic_embedding_load_flow_method:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mn>1</mn>
+     <mo>/</mo>
+     <mi>V</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>s</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>n</mi>
+      <mo>=</mo>
+      <mn>0</mn>
+     </mrow>
+     <mi mathvariant="normal">∞</mi>
+    </msubsup>
+    <mrow>
+     <mi>b</mi>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mi>n</mi>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <msup>
+      <mi>s</mi>
+      <mi>n</mi>
+     </msup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>V</ci>
+     </apply>
+     <ci>s</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>n</ci>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <infinity></infinity>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>b</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>s</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \textstyle 1/V(s)=\sum_{n=0}^{\infty}b[n]s^{n}
+  </annotation>
+ </semantics>
+</math>
+
+. By substitution into equations () and identifying terms at each order in <mtpl></mtpl>, one obtains:</p>
+
+<p>a_i[n] = S_i^* b_i^*[n-1] \qquad (n=0, \ldots, \infty)|<mtpl><eqref>2<eqref></eqref></eqref></mtpl>}}</p>
+
+<p>It is then straightforward to solve the sequence of linear systems () successively order after order, starting from <mtpl>0}}</mtpl>. Note that the coefficients of the expansions for <mtpl></mtpl> and <mtpl></mtpl> are related by the simple convolution formulas derived from the following identity:  so that the right-hand side in () can always be calculated from the solution of the system at the previous order. Note also how the procedure works by solving just <a href="System_of_linear_equations" title="wikilink">linear systems</a>, in which the matrix remains constant.</p>
+
+<p>A more detailed discussion about this procedure is offered in Ref.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+<h2 id="analytic-continuation">Analytic continuation</h2>
+
+<p>Once the power series at <mtpl>0}}</mtpl> are calculated to the desired order, the problem of calculating them at <mtpl>1}}</mtpl> becomes one of <a href="analytic_continuation" title="wikilink">analytic continuation</a>. It should be strongly remarked that this does not have anything in common with the techniques of <a href="Homotopy#Applications" title="wikilink">homotopic continuation</a>. Homotopy is powerful since it only makes use of the concept of continuity and thus it is applicable to general smooth nonlinear systems, but on the other hand it does not always provide a reliable method to approximate the functions (as it relies on iterative schemes such as Newton-Raphson).</p>
+
+<p>It can be proven<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> that algebraic curves are complete <a href="global_analytic_function" title="wikilink">global analytic functions</a>, that is, knowledge of the power series expansion at one point (the so-called germ of the function) uniquely determines the function everywhere on the complex plane, except on a finite number of <a href="Branch_point#Branch_cuts" title="wikilink">branch cuts</a>. Stahl’s extremal domain theorem<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> further asserts that there exists a maximal domain for the analytic continuation of the function, which corresponds to the choice of branch cuts with minimal <a href="Conformal_radius#Version_from_infinity:_transfinite_diameter_and_logarithmic_capacity" title="wikilink">logarithmic capacity</a> measure. In the case of algebraic curves the number of cuts is finite, therefore it would be feasible to find maximal continuations by finding the combination of cuts with minimal capacity. For further improvements, Stahl’s theorem on the convergence of Padé Approximants<ref>H. Stahl, “The Convergence of Padé Approximants to Functions with Branch Points”, <em>J. Approx. Theory</em>, <strong>91</strong> (1997), 139-204.</ref></p>
+<ul>
+<li>G. A. Baker Jr and P. Graves-Morris, <em>Padé Approximants</em> (Encyclopedia of Mathematics and its Applications), Cambridge University Press, Second Ed. 2010, p. 326-330. states that the diagonal and supra-diagonal Padé (or equivalently, the continued fraction approximants to the power series) converge to the maximal analytic continuation. The zeros and poles of the approximants remarkably accumulate on the set of <a href="Branch_point#Branch_cuts" title="wikilink">branch cuts</a> having minimal capacity.</li>
+</ul>
+
+<p>These properties confer the load-flow method with the ability to unequivocally detect the condition of voltage collapse: the algebraic approximations are guaranteed to either converge to the solution if it exists, or not converge if the solution does not exist.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Power_flow_study" title="wikilink">Power flow study</a></li>
+<li><a href="Power_system_simulation" title="wikilink">Power system simulation</a></li>
+</ul>
+<h2 id="notes">Notes</h2>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Electrical_engineering" title="wikilink">Category:Electrical engineering</a> <a href="Category:Power_engineering" title="wikilink">Category:Power engineering</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">HELM is a trademark of Gridquant Inc.<a href="#fnref1">↩</a></li>
+<li id="fn2">A. Trias, "The Holomorphic Embedding Load Flow Method", <em>IEEE Power and Energy Society General Meeting 2011</em>, 22–26 July 2012.<a href="#fnref2">↩</a></li>
+<li id="fn3">B. Stott and O. Alsac, "Fast Decoupled Load Flow," <em>IEEE Transactions on Power Apparatus and Systems</em>, vol. PAS-93, no.3, pp.859-869, May 1974.<a href="#fnref3">↩</a></li>
+<li id="fn4">It is a well-known fact that the load flow equations for a power system have multiple solutions. For a network with <mtpl></mtpl> non-swing buses, the system may have up to <mtpl></mtpl> possible solutions, but only one is actually possible in the real electrical system. This fact is used in stability studies, see for instance: Y. Tamura, H. Mori, and S. Iwamoto,"Relationship Between Voltage Instability and Multiple Load Flow Solutions in Electric Power Systems", '' IEEE Transactions on Power Apparatus and Systems'', vol. PAS-102 , no.5, pp.1115-1125, 1983.<a href="#fnref4">↩</a></li>
+<li id="fn5">This is a general phenomenon affecting the Newton-Raphson method when applied to equations in <em>complex</em> variables. See for instance <a class="uri" href="Newton's_method#Complex_functions" title="wikilink">Newton's_method#Complex_functions</a>.<a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="http://www.elequant.com/products/agora/demo/iterativeloadflow/">Problems with Iterative Load Flow</a>, Elequant, 2010.<a href="#fnref6">↩</a></li>
+<li id="fn7">V. Ajjarapu and C. Christy, "The continuation power flow: A tool for steady state voltage stability analysis", <em>IEEE Trans. on Power Systems</em>, vol.7, no.1, pp. 416-423, Feb 1992.<a href="#fnref7">↩</a></li>
+<li id="fn8">B. Sturmfels, "Solving Systems of Polynomial Equations”, CBMS Regional Conference Series in Mathematics 97, AMS, 2002.<a href="#fnref8">↩</a></li>
+<li id="fn9"></li>
+<li id="fn10">L. Ahlfors, <em>Complex analysis (3rd ed.)</em>, McGraw Hill, 1979.<a href="#fnref10">↩</a></li>
+<li id="fn11">G. A. Baker Jr and P. Graves-Morris, <em>Padé Approximants</em> (Encyclopedia of Mathematics and its Applications), Cambridge University Press, Second Ed. 2010, p. 326.<a href="#fnref11">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

@@ -1,0 +1,1362 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1890">3D reconstruction from multiple images</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>3D reconstruction from multiple images</h1>
+<hr/>
+
+<p><strong>3D reconstruction from multiple images</strong> is the creation of three-dimensional models from a set of images. It is the reverse process of obtaining 2D images from 3D scenes.</p>
+
+<p>The essence of an image is a projection from a 3D scene onto a 2D plane, during which process the depth is lost. The 3D point corresponding to a specific image point is constrained to be on the line of sight. From a single image, it is impossible to determine which point on this line corresponds to the image point. If two images are available, then the position of a 3D point can be found as the intersection of the two projection rays. This process is referred to as <a class="uri" href="triangulation" title="wikilink">triangulation</a>. The key for this process is the relations between multiple views which convey the information that corresponding sets of points must contain some structure and that this structure is related to the poses and the calibration of the camera.</p>
+
+<p>In recent decades, there is an important demand for 3D content for <a href="computer_graphics" title="wikilink">computer graphics</a>, <a href="virtual_reality" title="wikilink">virtual reality</a> and communication, triggering a change in emphasis for the requirements. Many existing systems for constructing 3D models are built around specialized hardware (e.g. stereo rigs) resulting in a high cost, which cannot satisfy the requirement of its new applications. This gap stimulates the use of digital imaging facilities (like a camera). Moore's law also tells us that more work can be done in software. An early method was proposed by Tomasi and Kanade.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> They used an affine factorization approach to extract 3D from images sequences. However, the assumption of <a href="orthographic_projection" title="wikilink">orthographic projection</a> is a significant limitation of this system.</p>
+<h2 id="processing">Processing</h2>
+
+<p>The task of converting multiple 2D images into 3D model consists of a series of processing steps:</p>
+
+<p><a href="Camera_calibration" title="wikilink">Camera calibration</a> consists of intrinsic and extrinsic parameters, without which at some level no arrangement of algorithms can work. The dotted line between Calibration and Depth determination represents that the camera calibration is usually required for determining depth.</p>
+
+<p><strong>Depth determination</strong> serves as the most challenging part in the whole process, as it calculates the 3D component missing from any given image – depth. The correspondence problem, finding matches between two images so the position of the matched elements can then be triangulated in 3D space is the key issue here.</p>
+
+<p>Once you have the multiple depth maps you have to combine them to create a final mesh by calculating depth and projecting out of the camera – <strong>registration</strong>. Camera calibration will be used to identify where the many meshes created by depth maps can be combined together to develop a larger one, providing more than one view for observation.</p>
+
+<p>By the stage of <strong>Material Application</strong> you have a complete 3D mesh, which may be the final goal, but usually you will want to apply the color from the original photographs to the mesh. This can range from projecting the images onto the mesh randomly, through approaches of combining the textures for super resolution and finally to segmenting the mesh by material, such as specular and diffuse properties.</p>
+<h2 id="mathematical-description-of-reconstruction">Mathematical description of reconstruction</h2>
+
+<p>Given a group of 3D points viewed by N cameras with matrices <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:0">
+ <semantics>
+  <msub>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <msup>
+     <mi>P</mi>
+     <mi>i</mi>
+    </msup>
+    <mo stretchy="false">}</mo>
+   </mrow>
+   <mrow>
+    <mi>i</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <set>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>P</ci>
+      <ci>i</ci>
+     </apply>
+    </set>
+    <apply>
+     <eq></eq>
+     <ci>i</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>N</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{P^{i}\}_{i=1\ldots N}
+  </annotation>
+ </semantics>
+</math>
+
+</strong>. Define <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:1">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>m</mi>
+    <mi>j</mi>
+    <mi>i</mi>
+   </msubsup>
+   <mo>≃</mo>
+   <mrow>
+    <msup>
+     <mi>P</mi>
+     <mi>i</mi>
+    </msup>
+    <msub>
+     <mi>w</mi>
+     <mi>j</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">similar-to-or-equals</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>m</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>P</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m_{j}^{i}\simeq P^{i}w_{j}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> be the homogeneous coordinates of the projection of the <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:2">
+ <semantics>
+  <msup>
+   <mi>j</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>j</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j^{th}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> point onto the <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:3">
+ <semantics>
+  <msup>
+   <mi>i</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>i</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i^{th}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> camera. The reconstruction problem can be changed to: given the group of pixel coordinates <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:4">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <msubsup>
+    <mi>m</mi>
+    <mi>j</mi>
+    <mi>i</mi>
+   </msubsup>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>m</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{m_{j}^{i}\}
+  </annotation>
+ </semantics>
+</math>
+
+</strong>, find the corresponding set of camera matrices <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:5">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <msup>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msup>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{P^{i}\}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> and the scene structure <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:6">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <msub>
+    <mi>w</mi>
+    <mi>j</mi>
+   </msub>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>w</ci>
+     <ci>j</ci>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{w_{j}\}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> such that</p>
+
+<p>
+
+<math display="block" id="3D_reconstruction_from_multiple_images:7">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>m</mi>
+    <mi>j</mi>
+    <mi>i</mi>
+   </msubsup>
+   <mo>≃</mo>
+   <mrow>
+    <msup>
+     <mi>P</mi>
+     <mi>i</mi>
+    </msup>
+    <msub>
+     <mi>w</mi>
+     <mi>j</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">similar-to-or-equals</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>m</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>P</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m_{j}^{i}\simeq P^{i}w_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ (1)</p>
+
+<p>Generally, without further restrictions, we will obtain a projective reconstruction.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> If <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:8">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <msup>
+    <mi>P</mi>
+    <mi>i</mi>
+   </msup>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>P</ci>
+     <ci>i</ci>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{P^{i}\}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> and <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:9">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <msub>
+    <mi>w</mi>
+    <mi>j</mi>
+   </msub>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>w</ci>
+     <ci>j</ci>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{w_{j}\}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> satisfy (1), <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:10">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <mrow>
+    <msup>
+     <mi>P</mi>
+     <mi>i</mi>
+    </msup>
+    <mi>T</mi>
+   </mrow>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>P</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>T</ci>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{P^{i}T\}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> and <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:11">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <mrow>
+    <msup>
+     <mi>T</mi>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msup>
+    <msub>
+     <mi>w</mi>
+     <mi>j</mi>
+    </msub>
+   </mrow>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>T</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{T^{-1}w_{j}\}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> will satisfy (1) with any <strong>4 × 4</strong> nonsingular matrix <strong>T</strong>.</p>
+
+<p>A projective reconstruction can be calculated by points correspondences only, without any a-priori information.</p>
+<h2 id="autocalibration">Autocalibration</h2>
+
+<p><strong>Autocalibration</strong> or self-calibration is the classical approach, in which camera motion and parameters are recovered first, using rigidity, then structure is readily calculated. Two methods implementing this idea are presented as follows:</p>
+<h3 id="kruppa-equations">Kruppa equations</h3>
+
+<p>With a minimum of three displacements, we can obtain the internal parameters of the camera using a system of polynomial equations due to Kruppa,<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> which are derived from a geometric interpretation of the rigidity constraint.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a><a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+
+<p>The matrix <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:12">
+ <semantics>
+  <mrow>
+   <mi>K</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>A</mi>
+    <msup>
+     <mi>A</mi>
+     <mo>⊤</mo>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>K</ci>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>A</ci>
+      <csymbol cd="latexml">top</csymbol>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K=AA^{\top}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> is unknown in the Kruppa equations, named Kruppa coefficients matrix. With <em>' K</em>' and by the method of Cholesky factorization one can obtain the intrinsic parameters easily:</p>
+
+<p>
+
+<math display="block" id="3D_reconstruction_from_multiple_images:13">
+ <semantics>
+  <mrow>
+   <mi>K</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo>[</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="center">
+       <msub>
+        <mi>k</mi>
+        <mn>1</mn>
+       </msub>
+      </mtd>
+      <mtd columnalign="center">
+       <msub>
+        <mi>k</mi>
+        <mn>2</mn>
+       </msub>
+      </mtd>
+      <mtd columnalign="center">
+       <msub>
+        <mi>k</mi>
+        <mn>3</mn>
+       </msub>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="center">
+       <msub>
+        <mi>k</mi>
+        <mn>2</mn>
+       </msub>
+      </mtd>
+      <mtd columnalign="center">
+       <msub>
+        <mi>k</mi>
+        <mn>4</mn>
+       </msub>
+      </mtd>
+      <mtd columnalign="center">
+       <msub>
+        <mi>k</mi>
+        <mn>5</mn>
+       </msub>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="center">
+       <msub>
+        <mi>k</mi>
+        <mn>3</mn>
+       </msub>
+      </mtd>
+      <mtd columnalign="center">
+       <msub>
+        <mi>k</mi>
+        <mn>5</mn>
+       </msub>
+      </mtd>
+      <mtd columnalign="center">
+       <mn>1</mn>
+      </mtd>
+     </mtr>
+    </mtable>
+    <mo>]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>K</ci>
+    <matrix>
+     <matrixrow>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">3</cn>
+      </apply>
+     </matrixrow>
+     <matrixrow>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">4</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">5</cn>
+      </apply>
+     </matrixrow>
+     <matrixrow>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">3</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">5</cn>
+      </apply>
+      <cn type="integer">1</cn>
+     </matrixrow>
+    </matrix>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K=\begin{bmatrix}k_{1}&k_{2}&k_{3}\\
+k_{2}&k_{4}&k_{5}\\
+k_{3}&k_{5}&1\\
+\end{bmatrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Recently Hartley <a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> proposed a simpler form. Let <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:14">
+ <semantics>
+  <mi>F</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>F</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F
+  </annotation>
+ </semantics>
+</math>
+
+</strong> be written as <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:15">
+ <semantics>
+  <mrow>
+   <mi>F</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>D</mi>
+    <mi>U</mi>
+    <msup>
+     <mi>V</mi>
+     <mo>⊤</mo>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>F</ci>
+    <apply>
+     <times></times>
+     <ci>D</ci>
+     <ci>U</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>V</ci>
+      <csymbol cd="latexml">top</csymbol>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F=DUV^{\top}
+  </annotation>
+ </semantics>
+</math>
+
+</strong>, where</p>
+
+<p>Then the Kruppa equations are rewritten (the derivation can be found in <a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a>)</p>
+<h3 id="mendonça-and-cipolla">Mendonça and Cipolla</h3>
+
+<p>This method is based on the use of rigidity constraint. Design a cost function, which considers the intrinsic parameters as arguments and the <a href="Fundamental_matrix_(computer_vision)" title="wikilink">fundamental matrices</a> as parameters. <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:16">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>F</mi>
+    <mi>i</mi>
+   </msub>
+   <mi>j</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>F</ci>
+     <ci>i</ci>
+    </apply>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {F}_{i}j
+  </annotation>
+ </semantics>
+</math>
+
+</strong> is defined as the fundamental matrix, <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:17">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {A}_{i}
+  </annotation>
+ </semantics>
+</math>
+
+</strong>and <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:18">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {A}_{j}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> as intrinsic parameters matrices.</p>
+<h2 id="stratification">Stratification</h2>
+
+<p>Recently, new methods based on the concept of <strong>stratification</strong> have been proposed. Starting from a projective structure, which can be calculated from correspondences only, upgrade this projective reconstruction to a Euclidean reconstruction, by making use of all the available constraints. With this idea the problem can be stratified into different sections: according to the amount of constraints available, it can be analyzed at a different level, projective, affine or Euclidean.</p>
+<h3 id="the-stratification-of-3d-geometry">The stratification of 3D geometry</h3>
+
+<p>Usually, the world is perceived as a 3D <a href="Euclidean_space" title="wikilink">Euclidean space</a>. In some cases, it is not possible to use the full Euclidean structure of 3D space. The simplest being projective, then the affine geometry which forms the intermediate layers and finally Euclidean geometry. The concept of stratification is closely related to the series of transformations on geometric entities: in the projective stratum is a series of projective transformations (a <a href="homography_(computer_vision)" title="wikilink">homography</a>), in the affine stratum is a series of <a href="affine_transformations" title="wikilink">affine transformations</a>, and in Euclidean stratum is a series of Euclidean transformations.</p>
+
+<p>Suppose that a fixed scene is captured by two or more perspective cameras and the correspondences between visible points in different images are already given. However, in practice, the matching is an essential and extremely challenging issue in computer vision. Here, we suppose that 
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:19">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ 3D points 
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:20">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ are observed by 
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:21">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+ cameras with projection matrices 
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mrow>
+      <msub>
+       <mi>P</mi>
+       <mi>j</mi>
+      </msub>
+      <mo>,</mo>
+      <mi>j</mi>
+     </mrow>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <mi>m</mi>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>P</ci>
+       <ci>j</ci>
+      </apply>
+      <ci>j</ci>
+     </list>
+     <cn type="integer">1</cn>
+    </apply>
+    <list>
+     <ci>normal-…</ci>
+     <ci>m</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j},j=1,\ldots,m.
+  </annotation>
+ </semantics>
+</math>
+
+ Neither the positions of point nor the projection of camera are known. Only the projections 
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:23">
+ <semantics>
+  <msub>
+   <mi>a</mi>
+   <mrow>
+    <mi>i</mi>
+    <mi>j</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>a</ci>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <ci>j</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a_{ij}
+  </annotation>
+ </semantics>
+</math>
+
+ of the 
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:24">
+ <semantics>
+  <msup>
+   <mi>i</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>i</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ point in the 
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:25">
+ <semantics>
+  <msup>
+   <mi>j</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>j</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ image are known.</p>
+<h3 id="projective-reconstruction">Projective reconstruction</h3>
+
+<p>Simple counting indicates we have 
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:26">
+ <semantics>
+  <mrow>
+   <mn>2</mn>
+   <mi>n</mi>
+   <mi>m</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <cn type="integer">2</cn>
+    <ci>n</ci>
+    <ci>m</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   2nm
+  </annotation>
+ </semantics>
+</math>
+
+ independent measurements and only 
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:27">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mn>11</mn>
+    <mi>m</mi>
+   </mrow>
+   <mo>+</mo>
+   <mrow>
+    <mn>3</mn>
+    <mi>n</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <times></times>
+     <cn type="integer">11</cn>
+     <ci>m</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <cn type="integer">3</cn>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   11m+3n
+  </annotation>
+ </semantics>
+</math>
+
+ unknowns, so the problem is supposed to be soluble with enough points and images. The equations in homogeneous coordinates can be represented:</p>
+
+<p>
+
+<math display="block" id="3D_reconstruction_from_multiple_images:28">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>a</mi>
+     <mrow>
+      <mi>i</mi>
+      <mi>j</mi>
+     </mrow>
+    </msub>
+    <mo>∼</mo>
+    <mrow>
+     <msub>
+      <mi>P</mi>
+      <mi>j</mi>
+     </msub>
+     <msub>
+      <mi>A</mi>
+      <mi>i</mi>
+     </msub>
+    </mrow>
+   </mrow>
+   <mrow>
+    <mrow>
+     <mi>i</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mo>,</mo>
+      <mrow>
+       <mi mathvariant="normal">…</mi>
+       <mi>n</mi>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo rspace="9.1pt">,</mo>
+    <mrow>
+     <mi>j</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mo>,</mo>
+      <mrow>
+       <mi mathvariant="normal">…</mi>
+       <mi>m</mi>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <csymbol cd="latexml">similar-to</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>a</ci>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <ci>j</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>P</ci>
+       <ci>j</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>A</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <ci>i</ci>
+      <list>
+       <cn type="integer">1</cn>
+       <apply>
+        <times></times>
+        <ci>normal-…</ci>
+        <ci>n</ci>
+       </apply>
+      </list>
+     </apply>
+     <apply>
+      <eq></eq>
+      <ci>j</ci>
+      <list>
+       <cn type="integer">1</cn>
+       <apply>
+        <times></times>
+        <ci>normal-…</ci>
+        <ci>m</ci>
+       </apply>
+      </list>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a_{ij}\sim P_{j}A_{i}\qquad i=1,\ldots n,~{}~{}j=1,\ldots m
+  </annotation>
+ </semantics>
+</math>
+
+ (2)</p>
+
+<p>So we can apply a nonsingular <strong>4 × 4</strong> transformation <em>H</em> to projections <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:29">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}
+  </annotation>
+ </semantics>
+</math>
+
+→
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:30">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>j</mi>
+   </msub>
+   <msup>
+    <mi>H</mi>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>H</ci>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{j}H^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+</strong> and world points <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:31">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{i}
+  </annotation>
+ </semantics>
+</math>
+
+→
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:32">
+ <semantics>
+  <mrow>
+   <mi>H</mi>
+   <msub>
+    <mi>A</mi>
+    <mi>i</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>H</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>A</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   HA_{i}
+  </annotation>
+ </semantics>
+</math>
+
+</strong>. Hence, without further constraints, reconstruction is only an unknown projective deformation of the 3D world.</p>
+<h3 id="affine-reconstruction">Affine Reconstruction</h3>
+
+<p><em>See <a href="affine_space" title="wikilink">affine space</a> for more detailed information about computing the location of the plane at infinity <strong>
+
+<math display="inline" id="3D_reconstruction_from_multiple_images:33">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Π</mi>
+   <mi mathvariant="normal">∞</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Π</ci>
+    <infinity></infinity>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\Pi}_{\infty}
+  </annotation>
+ </semantics>
+</math>
+
+</strong>.</em> The simplest way is to exploit prior knowledge, for example the information that lines in the scene are parallel or that a point is the one thirds between two others.</p>
+
+<p>We can also use prior constraints on the camera motion. By analyzing different images of the same point can obtain a line in the direction of motion. The intersection of several lines is the point at infinity in the motion direction, and one constraint on the affine structure.</p>
+<h3 id="euclidean-reconstruction">Euclidean Reconstruction</h3>
+
+<p>By mapping the projective reconstruction to one that satisfies a group of redundant Euclidean constraints,we can find a projective transformation <em>H</em> in equation (2).The equations are highly nonlinear and a good initial guess for the structure is required. This can be obtained by assuming a linear projection - parallel projection, which also allows easy reconstruction by SVD decomposition.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+<h2 id="algebraic-vs-geometric-error">Algebraic vs geometric error</h2>
+
+<p>Inevitably, measured data (i.e., image or world point positions) is noisy and the noise comes from many sources. To reduce the effect of noise, we usually use more equations than necessary and solve with <a href="least_squares" title="wikilink">least squares</a>.</p>
+
+<p>For example, in a typical null-space problem formulation Ax = 0 (like the DLT algorithm), the square of the residual ||Ax|| is being minimized with the least squares method.</p>
+
+<p>In general, if ||Ax|| can be considered as a distance between the geometrical entities (points, lines, planes, etc.), then what is being minimized is a <strong>geometric error</strong>, otherwise (when the error lacks a good geometrical interpretation) it is called an <strong>algebraic error</strong>.</p>
+
+<p>Therefore, compared with algebraic error, we prefer to minimize a geometric error for the reasons listed:</p>
+
+<p>1). the quantity being minimized has a meaning.</p>
+
+<p>2). the solution is more stable.</p>
+
+<p>3). the solution is constant under Euclidean transforms.</p>
+
+<p>All the linear algorithms (DLT and others) we have seen so far minimize an algebraic error. Actually, there is no justification in minimizing an algebraic error apart from the ease of implementation, as it results in a linear problem. The minimization of a geometric error is often a non-linear problem, that admit only iterative solutions and requires a starting point.</p>
+
+<p>Usually, linear solution based on algebraic residuals serves as a starting point for a non-linear minimization of a geometric cost function, which provides the solution a final “polish”.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="3D_modeling" title="wikilink">3D modeling</a></li>
+<li><a href="3D_reconstruction" title="wikilink">3D reconstruction</a></li>
+<li><a href="3D_photography" title="wikilink">3D photography</a></li>
+<li><a href="2D_to_3D_conversion" title="wikilink">2D to 3D conversion</a></li>
+<li><a href="3D_data_acquisition_and_object_reconstruction" title="wikilink">3D data acquisition and object reconstruction</a></li>
+<li><a href="Epipolar_geometry" title="wikilink">Epipolar geometry</a></li>
+<li><a href="Camera_resectioning" title="wikilink">Camera resectioning</a></li>
+<li><a href="Computer_stereo_vision" title="wikilink">Computer stereo vision</a></li>
+<li><a class="uri" href="Stereophotogrammetry" title="wikilink">Stereophotogrammetry</a></li>
+<li><a href="Comparison_of_photogrammetry_software" title="wikilink">Comparison of photogrammetry software</a></li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li>[<a class="uri" href="http://dl.acm.org/citation.cfm?id=1754449&amp;preflayout">http://dl.acm.org/citation.cfm?id=1754449&amp;preflayout;</a>;=tabs 3D Reconstruction from Multiple Images] - discusses methods to extract 3D models from plain images.</li>
+<li><a href="http://sites.google.com/site/leeplus/bmvs">Visual 3D Modeling from Images and Videos</a> - a tech-report describes the theory, practice and tricks on 3D reconstruction from images and videos.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Computer_vision" title="wikilink">Category:Computer vision</a> <a href="Category:Applications_of_computer_vision" title="wikilink">Category:Applications of computer vision</a> <a href="Category:Image_processing" title="wikilink">Category:Image processing</a> <a href="Category:Artificial_intelligence" title="wikilink">Category:Artificial intelligence</a> <a class="uri" href="Category:Stereophotogrammetry" title="wikilink">Category:Stereophotogrammetry</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">C. Tomasi and T. Kanade, “Shape and motion from image streams under orthography: A factorization approach”, International Journal of Computer Vision, 9(2):137-154, 1992.<a href="#fnref1">↩</a></li>
+<li id="fn2">R. Mohr and E. Arbogast. It can be done without camera calibration. Pattern Recognition Letters, 12:39-43, 1991.<a href="#fnref2">↩</a></li>
+<li id="fn3">O. Faugeras. What can be seen in three dimensions with an uncalibrated stereo rig? In Proceedings of the European Conference on Computer Vision, pages 563-578, Santa Margherita L., 1992.<a href="#fnref3">↩</a></li>
+<li id="fn4">E. Kruppa. Zur Ermittlung eines Objektes aus zwei Perspektiven mit innerer Orientierung. Sitz.-Ber.Akad.Wiss., Wien, math. naturw. Kl., Abt. IIa., 122:1939-1948, 1913.<a href="#fnref4">↩</a></li>
+<li id="fn5">S. J. Maybank and O. Faugeras. A theory of self-calibration of a moving camera. International Journal of Computer Vision, 8(2):123-151, 1992.<a href="#fnref5">↩</a></li>
+<li id="fn6">O. Faugeras and S. Maybank. Motion from point matches: multiplicity of solutions. International Journal of Computer Vision, 4(3):225-246, June 1990.<a href="#fnref6">↩</a></li>
+<li id="fn7">R. I. Hartley. Kruppa's equations derived from the fundamental matrix. IEEE Transactions on Pattern Analysis and Machine Intelligence, 19(2):133-135, February 1997.<a href="#fnref7">↩</a></li>
+<li id="fn8">R. I. Hartley. Kruppa's equations derived from the fundamental matrix. IEEE Transactions on Pattern Analysis and Machine Intelligence, 19(2):133-135, February 1997.<a href="#fnref8">↩</a></li>
+<li id="fn9">C. Tomasi and T. Kanade. Shape and motion from image streams under orthography: A factorization method. International Journal of Computer Vision, 9(2):137-154, 1992.<a href="#fnref9">↩</a></li>
+<li id="fn10">R. Hartley and A. Zisserman. Multiple view geometry in computer vision. Cambridge University Press, 2nd edition, 2003.<a href="#fnref10">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

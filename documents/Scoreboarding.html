@@ -1,0 +1,102 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1538">Scoreboarding</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Scoreboarding</h1>
+<hr/>
+
+<p><strong>Scoreboarding</strong> is a centralized method, used in the <a href="CDC_6600" title="wikilink">CDC 6600</a> <a class="uri" href="computer" title="wikilink">computer</a>, for dynamically scheduling a <a href="Pipeline_(computing)" title="wikilink">pipeline</a> so that the instructions can <a href="Out-of-order_execution" title="wikilink">execute out of order</a> when there are no conflicts and the hardware is available.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> In a scoreboard, the <a href="data_dependency" title="wikilink">data dependencies</a> of every instruction are logged. Instructions are released only when the scoreboard determines that there are no conflicts with previously issued and incomplete instructions. If an instruction is stalled because it is unsafe to continue, the scoreboard monitors the flow of executing instructions until all dependencies have been resolved before the stalled instruction is issued.</p>
+<h2 id="stages">Stages</h2>
+
+<p>Instructions are decoded in order and go through the following four stages.</p>
+<ol>
+<li><strong>Issue</strong>: The system checks which registers will be read and written by this instruction. This information is remembered as it will be needed in the following stages. In order to avoid output dependencies (<a href="Data_dependency#Output_dependency" title="wikilink">WAW</a> - Write after Write) the instruction is stalled until instructions intending to write to the same register are completed. The instruction is also stalled when required functional units are currently busy.</li>
+<li><strong>Read operands</strong>: After an instruction has been issued and correctly allocated to the required hardware module, the instruction waits until all operands become available. This procedure resolves read dependencies (<a href="Data_dependency#RAW_-_Read_After_Write" title="wikilink">RAW</a> - Read after Write) because registers which are intended to be written by another instruction are not considered <em>available</em> until they are actually written.</li>
+<li><strong>Execution</strong>: When all operands have been fetched, the functional unit starts its execution. After the result is ready, the scoreboard is notified.</li>
+<li><strong>Write Result</strong>: In this stage the result is about to be written to its destination register. However, this operation is delayed until earlier instructions—which intend to read registers this instruction wants to write to—have completed their <em>read operands</em> stage. This way, so called data dependencies (<a href="Data_dependency#WAR_-_Write_After_Read" title="wikilink">WAR</a> - Write after Read) can be addressed.</li>
+</ol>
+<h2 id="data-structure">Data structure</h2>
+
+<p>To control the execution of the instructions, the scoreboard maintains three status tables:</p>
+<ul>
+<li><strong>Instruction Status</strong>: Indicates, for each instruction being executed, which of the four stages it is in.</li>
+<li><strong>Functional Unit Status</strong>: Indicates the state of each functional unit. Each function unit maintains 9 fields in the table:
+<ul>
+<li>Busy: Indicates whether the unit is being used or not</li>
+<li>Op: Operation to perform in the unit (e.g. MUL, DIV or MOD)</li>
+<li>F<sub>i</sub>: Destination register</li>
+<li>F<sub>j</sub>,F<sub>k</sub>: Source-register numbers</li>
+<li>Q<sub>j</sub>,Q<sub>k</sub>: Functional units that will produce the source registers F<sub>j</sub>, F<sub>k</sub></li>
+<li>R<sub>j</sub>,R<sub>k</sub>: Flags that indicates when F<sub>j</sub>, F<sub>k</sub> are ready</li>
+</ul></li>
+<li><strong>Register Status</strong>: Indicates, for each register, which function unit will write results into it.</li>
+</ul>
+<h2 id="the-algorithm">The algorithm</h2>
+
+<p>The detailed algorithm for the scoreboard control is described below:</p>
+
+<p><code>
+  '''function''' issue(''op'', ''dst'', ''src1'', ''src2'')
+     wait until (!Busy[FU] AND !Result[''dst'']); // FU can be any functional unit that can execute operation ''op''
+     Busy[FU] ← Yes;
+     Op[FU] ← ''op'';
+     F<sub>i</sub>[FU] ← ''dst'';
+     F<sub>j</sub>[FU] ← ''src1'';
+     F<sub>k</sub>[FU] ← ''src2'';
+     Q<sub>j</sub>[FU] ← Result[''src1''];
+     Q<sub>k</sub>[FU] ← Result[''src2''];
+     R<sub>j</sub>[FU] ← Q<sub>j</sub>[FU] == 0;
+     R<sub>k</sub>[FU] ← Q<sub>k</sub>[FU] == 0;
+     Result[''dst''] ← FU;
+
+  '''function''' read_operands(''FU'')
+     wait until (R<sub>j</sub>[''FU''] AND R<sub>k</sub>[''FU'']);
+     R<sub>j</sub>[''FU''] ← No;
+     R<sub>k</sub>[''FU''] ← No;
+
+  '''function''' execute(''FU'')
+     // Execute whatever ''FU'' must do
+
+  '''function''' write_back(''FU'')
+     wait until (<math>\forall</math>f {(F<sub>j</sub>[f]≠F<sub>i</sub>[''FU''] OR R<sub>j</sub>[f]=No) AND (F<sub>k</sub>[f]≠F<sub>i</sub>[''FU''] OR R<sub>k</sub>[f]=No)})
+     foreach f do
+         if Q<sub>j</sub>[f]=''FU'' then R<sub>j</sub>[f] ← Yes;
+         if Q<sub>k</sub>[f]=''FU'' then R<sub>k</sub>[f] ← Yes;
+     Result[F<sub>i</sub>[''FU'']] ← 0; // 0 means no FU generates the register's result
+     Busy[''FU''] ← No;
+</code></p>
+<h2 id="remarks">Remarks</h2>
+
+<p>The scoreboarding method must stall the issue stage when there is no functional unit available. In this case, future instructions that could potentially be executed will wait until the structural hazard is resolved. Some other techniques like <a href="Tomasulo_algorithm" title="wikilink">Tomasulo algorithm</a> can avoid the structural hazard and also resolve WAR and WAW dependencies with <a href="Register_renaming" title="wikilink">Register renaming</a>.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Instruction_level_parallelism" title="wikilink">Instruction level parallelism</a></li>
+<li><a href="Tomasulo_algorithm" title="wikilink">Tomasulo algorithm</a></li>
+<li><a href="Out-of-order_execution" title="wikilink">Out-of-order execution</a></li>
+</ul>
+<h2 id="references">References</h2>
+<ul>
+<li><a href="Glenford_Myers" title="wikilink">Glenford Myers</a>, "Register scoreboarding on a microprocessor chip", United States Patent 4891753</li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.cs.umd.edu/class/fall2001/cmsc411/projects/dynamic/scoreboard.html">Dynamic Scheduling - Scoreboard</a></li>
+<li><em>Computer Architecture: A Quantitative Approach</em>, John L. Hennessy &amp; David A. Patterson</li>
+<li><em><a href="http://www.eecs.berkeley.edu/~culler/courses/cs252-s05/lectures/cs252s05-lec06-scoreboard.ppt">EECS 252 Graduate Computer Architecture Lec XX - TOPIC</a></em>, Electrical Engineering and Computer Sciences, Berkeley, University of California.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Instruction_processing" title="wikilink">Category:Instruction processing</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

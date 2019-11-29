@@ -1,0 +1,166 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="919">TCP tuning</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>TCP tuning</h1>
+<hr/>
+
+<p><strong>TCP tuning</strong> techniques adjust the <a href="network_congestion_avoidance" title="wikilink">network congestion avoidance</a> parameters of <a href="Transmission_Control_Protocol" title="wikilink">TCP</a> connections over high-bandwidth, high-latency networks. Well-tuned networks can perform up to 10 times faster in some cases.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> However, blindly following instructions without understanding their real consequences can hurt performance as well.</p>
+<h2 id="network-and-system-characteristics">Network and system characteristics</h2>
+<h3 id="bandwidth-delay-product-bdp">Bandwidth-delay product (BDP)</h3>
+
+<p><a href="Bandwidth-delay_product" title="wikilink">Bandwidth-delay product</a> (BDP) is a term primarily used in conjunction with <a href="Transmission_control_protocol" title="wikilink">TCP</a> to refer to the number of bytes necessary to fill a TCP "path", i.e. it is equal to the maximum number of simultaneous bits in transit between the transmitter and the receiver.</p>
+
+<p>High performance networks have very large BDPs. To give a practical example, two nodes communicating over a geostationary satellite link with a round trip delay of 0.5 seconds and a bandwidth of 10 Gbit/s can have up to 0.5×10<sup>10</sup> bits, i.e., 5 Gbit = 625 <a href="megabyte" title="wikilink">MB</a> of unacknowledged data in flight. Despite having much lower latencies than satellite links, even terrestrial fiber links can have very high BDPs because their link capacity is so large. Operating systems and protocols designed as recently as a few years ago when networks were slower were tuned for BDPs of orders of magnitude smaller, with implications for limited achievable performance.</p>
+<h3 id="buffers">Buffers</h3>
+
+<p>The original TCP configurations supported <em>TCP receive window size</em> <a href="Buffer_(computer_science)" title="wikilink">buffers</a> of up to 65,535 (64 <a href="kibibyte" title="wikilink">KiB</a> - 1) bytes, which was adequate for slow links or links with small round trip times (RTTs). Larger buffers are required by the high performance options described below.</p>
+
+<p>Buffering is used throughout high performance network systems to handle delays in the system. In general, buffer size will need to be scaled proportionally to the amount of data "in flight" at any time. For very high performance applications that are not sensitive to network delays, it is possible to interpose large end to end buffering delays by putting in intermediate data storage points in an end to end system, and then to use automated and scheduled non-real-time data transfers to get the data to their final endpoints.</p>
+<h2 id="tcp-speed-limits">TCP speed limits</h2>
+
+<p>Maximum achievable throughput for a single TCP connection is determined by different factors. One trivial limitation is the maximum bandwidth of the slowest link in the path. But there are also other, less obvious limits for TCP throughput. Bit errors can create a limitation for the connection as well as <a href="round-trip_time" title="wikilink">round-trip time</a>.</p>
+<h3 id="window-size">Window size</h3>
+
+<p>In <a href="computer_networking" title="wikilink">computer networking</a>, <strong>RWIN</strong> (<a href="Transmission_Control_Protocol" title="wikilink">TCP</a> Receive Window) is the amount of <a href="Data_(computing)" title="wikilink">data</a> that a <a class="uri" href="computer" title="wikilink">computer</a> can accept without acknowledging the sender. If the sender has not received acknowledgement for the first <a href="packet_(information_technology)" title="wikilink">packet</a> it sent, it will stop and wait and if this wait exceeds a certain limit, it may even <a href="Retransmission_(data_networks)" title="wikilink">retransmit</a>. This is how TCP achieves reliable <a href="data_transmission" title="wikilink">data transmission</a>.</p>
+
+<p>Even if there is no packet loss in the network, <a href="Tcp_receive_window" title="wikilink">windowing</a> can limit throughput. Because TCP transmits data up to the window size before waiting for the acknowledgements, the full bandwidth of the network may not always get used. The limitation caused by window size can be calculated as follows:</p>
+
+<p>
+
+<math display="inline" id="TCP_tuning:0">
+ <semantics>
+  <mrow>
+   <mi>Throughput</mi>
+   <mo>≤</mo>
+   <mfrac>
+    <mi>RWIN</mi>
+    <mi>RTT</mi>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <ci>Throughput</ci>
+    <apply>
+     <divide></divide>
+     <ci>RWIN</ci>
+     <ci>RTT</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{Throughput}\leq\frac{\mathrm{RWIN}}{\mathrm{RTT}}\,\!
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where RWIN is the TCP Receive Window and RTT is the <a href="Round-trip_delay_time" title="wikilink">round-trip time</a> for the path.</p>
+
+<p>At any given time, the window advertised by the receive side of TCP corresponds to the amount of free receive memory it has allocated for this connection. Otherwise it would risk dropping received packets due to lack of space.</p>
+
+<p>The sending side should <em>also</em> allocate the same amount of memory as the receive side for good performance. That is because, even after data has been sent on the network, the sending side must hold it in memory until it has been acknowledged as successfully received, just in case it would have to be retransmitted. If the receiver is far away, acknowledgments will take a long time to arrive. If the send memory is small, it can saturate and block emission. A simple computation gives the same optimal send memory size as for the receive memory size given above.</p>
+<h3 id="packet-loss">Packet loss</h3>
+
+<p>When packet loss occurs in the network, an additional limit is imposed on the connection.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> In the case of light to moderate packet loss when the TCP rate is limited by the <a href="TCP_congestion_avoidance_algorithm" title="wikilink">congestion avoidance algorithm</a>, the limit can be calculated according to the formula (Mathis, et al.):</p>
+
+<p>
+
+<math display="inline" id="TCP_tuning:1">
+ <semantics>
+  <mrow>
+   <mi>Throughput</mi>
+   <mo>≤</mo>
+   <mfrac>
+    <mi>MSS</mi>
+    <mrow>
+     <mi>RTT</mi>
+     <msqrt>
+      <msub>
+       <mi>P</mi>
+       <mi>loss</mi>
+      </msub>
+     </msqrt>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <ci>Throughput</ci>
+    <apply>
+     <divide></divide>
+     <ci>MSS</ci>
+     <apply>
+      <times></times>
+      <ci>RTT</ci>
+      <apply>
+       <root></root>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>P</ci>
+        <ci>loss</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{Throughput}\leq\frac{\mathrm{MSS}}{\mathrm{RTT}\sqrt{P_{\mathrm{loss}}}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where MSS is the maximum segment size and <em>P</em><sub>loss</sub> is the probability of packet loss.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> If packet loss is so rare that the TCP window becomes regularly fully extended, this formula doesn't apply.</p>
+<h2 id="tcp-options-for-high-performance">TCP Options for High Performance</h2>
+
+<p>A number of extensions have been made to TCP over the years to increase its performance over fast high-RTT links ("long fat networks", or LFNs for short).</p>
+
+<p>TCP timestamps (RFC 1323) play a double role: they avoid ambiguities due to the 32-bit sequence number field wrapping around, and they allow more precise RTT estimation in the presence of multiple losses per RTT. With those improvements, it becomes reasonable to increase the TCP window beyond 64 kB, which can be done using the window scaling option (RFC 1323).</p>
+
+<p>The TCP selective acknowledgment options (SACK, RFC 2018) allows a TCP receiver to precisely inform the TCP server about which segments have been lost. This increases performance on high-RTT links, when multiple losses per window are possible.</p>
+
+<p><a href="Path_MTU_discovery" title="wikilink">Path MTU discovery</a> avoids the need for in-network fragmentation, which increases performance in the presence of losses.</p>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li>RFC 1323 - TCP Extensions for High Performance</li>
+<li>RFC 2018 - TCP Selective Acknowledgment Options</li>
+<li>RFC 2582 - The NewReno Modification to TCP's Fast Recovery Algorithm</li>
+<li>RFC 2488 - Enhancing TCP Over Satellite Channels using Standard Mechanisms</li>
+<li>RFC 2883 - An Extension to the Selective Acknowledgment (SACK) Option for TCP</li>
+<li>RFC 3517 - A Conservative Selective Acknowledgment-based Loss Recovery Algorithm for TCP</li>
+<li>RFC 4138 - Forward RTO-Recovery (F-RTO): An Algorithm for Detecting Spurious Retransmission Timeouts with TCP and the Stream Control Transmission Protocol (SCTP)</li>
+<li><a href="http://fasterdata.es.net/TCP-tuning/background.html">TCP Tuning Guide</a>, ESnet</li>
+<li><a href="http://www.microsoft.com/technet/technetmag/issues/2007/01/CableGuy/default.aspx">The Cable Guy: TCP Receive Window Auto-Tuning</a></li>
+<li><a href="http://www.web100.org/">The Web100 Data Bandwidth Testing</a></li>
+<li><a href="http://www.dslreports.com/drtcp">DrTCP</a> - a utility for <a href="Microsoft_Windows" title="wikilink">Microsoft Windows</a> (prior to <a href="Windows_Vista" title="wikilink">Vista</a>) which can quickly alter <a href="Transmission_Control_Protocol" title="wikilink">TCP</a> performance parameters in the registry.</li>
+<li><a href="http://www.dslreports.com/tweaks">Information on 'Tweaking' your TCP stack</a>, <a href="Broadband_Reports" title="wikilink">Broadband Reports</a></li>
+<li><a href="http://www.speedguide.net/analyzer.php">TCP/IP Analyzer</a>, speedguide.net</li>
+<li><a href="http://blogs.technet.com/winserverperformance/archive/2008/05/03/nt-ttcp-network-performance-test-tool-available.aspx">NTTTCP Network Performance Test Tool</a>, Microsoft Windows Server Performance Team Blog</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Transmission_Control_Protocol" title="wikilink">Tuning</a> <a href="Category:Network_performance" title="wikilink">Category:Network performance</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="http://www.psc.edu/networking/projects/hpn-ssh/">High Performance Enabled SSH/SCP [PSC</a>]<a href="#fnref1">↩</a></li>
+<li id="fn2"><a class="uri" href="http://www.psc.edu/networking/papers/model_ccr97.ps">http://www.psc.edu/networking/papers/model_ccr97.ps</a><a href="#fnref2">↩</a></li>
+<li id="fn3">RFC 3155<a href="#fnref3">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

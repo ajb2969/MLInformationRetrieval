@@ -1,0 +1,700 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1089">Graph cuts in computer vision</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Graph cuts in computer vision</h1>
+<hr/>
+
+<p>As applied in the field of <a href="computer_vision" title="wikilink">computer vision</a>, <strong><a href="Cut_(graph_theory)" title="wikilink">graph cuts</a></strong> can be employed to <a href="Polynomial_time" title="wikilink">efficiently</a> solve a wide variety of low-level computer vision problems (<em>early vision</em><a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a>), such as image <a class="uri" href="smoothing" title="wikilink">smoothing</a>, the stereo <a href="correspondence_problem" title="wikilink">correspondence problem</a>, and many other computer vision problems that can be formulated in terms of <a href="energy_minimization" title="wikilink">energy minimization</a>. Such energy minimization problems can be <a href="Reduction_(complexity)" title="wikilink">reduced</a> to instances of the <a href="maximum_flow_problem" title="wikilink">maximum flow problem</a> in a <a href="Graph_(mathematics)" title="wikilink">graph</a> (and thus, by the <a href="max-flow_min-cut_theorem" title="wikilink">max-flow min-cut theorem</a>, define a minimal cut of the graph). Under most formulations of such problems in computer vision, the minimum energy solution corresponds to the <a href="MAP_estimate" title="wikilink">maximum a posteriori estimate</a> of a solution. Although many computer vision algorithms involve cutting a graph (e.g., normalized cuts), the term "graph cuts" is applied specifically to those models which employ a max-flow/min-cut optimization (other graph cutting algorithms may be considered as <a href="graph_partitioning" title="wikilink">graph partitioning</a> algorithms).</p>
+
+<p>"Binary" problems (such as denoising a <a href="binary_image" title="wikilink">binary image</a>) can be solved exactly using this approach; problems where pixels can be labeled with more than two different labels (such as stereo correspondence, or denoising of a <a class="uri" href="grayscale" title="wikilink">grayscale</a> image) cannot be solved exactly, but solutions produced are usually near the <a href="global_optimum" title="wikilink">global optimum</a>.</p>
+<h2 id="history">History</h2>
+
+<p>The theory of <a href="Cut_(graph_theory)" title="wikilink">graph cuts</a> was first applied in <a href="computer_vision" title="wikilink">computer vision</a> in the seminal paper by Greig, Porteous and Seheult<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> of <a href="Durham_University" title="wikilink">Durham University</a>. In the <a href="Bayesian_statistics" title="wikilink">Bayesian</a> statistical context of <a class="uri" href="smoothing" title="wikilink">smoothing</a> noisy (or corrupted) images, they showed how the <a href="MAP_estimate" title="wikilink">maximum a posteriori estimate</a> of a <a href="binary_image" title="wikilink">binary image</a> can be obtained <em>exactly</em> by maximizing the <a href="Flow_network" title="wikilink">flow</a> through an associated image network, involving the introduction of a <em>source</em> and <em>sink</em>. The problem was therefore shown to be efficiently solvable. Prior to this result, <em>approximate</em> techniques such as <a href="simulated_annealing" title="wikilink">simulated annealing</a> (as proposed by the <a href="Donald_Geman" title="wikilink">Geman brothers</a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a>), or <a href="iterated_conditional_modes" title="wikilink">iterated conditional modes</a> (a type of <a href="greedy_algorithm" title="wikilink">greedy algorithm</a> as suggested by <a href="Julian_Besag" title="wikilink">Julian Besag</a>)<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> were used to solve such image smoothing problems.</p>
+
+<p>Although the general 
+
+<math display="inline" id="Graph_cuts_in_computer_vision:0">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+<a href="Graph_coloring" title="wikilink">-colour problem</a> remains unsolved for 
+
+<math display="inline" id="Graph_cuts_in_computer_vision:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>k</mi>
+    <mo>></mo>
+    <mn>2</mn>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <ci>k</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k>2,
+  </annotation>
+ </semantics>
+</math>
+
+ the approach of Greig, Porteous and Seheult<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> has turned out<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a><a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> to have wide applicability in general computer vision problems. Greig, Porteous and Seheult approaches are often applied iteratively to a sequence of binary problems, usually yielding near optimal solutions.</p>
+<h2 id="notations">Notations</h2>
+<ul>
+<li>Image
+
+<math display="block" id="Graph_cuts_in_computer_vision:2">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mo>∈</mo>
+   <msup>
+    <mrow>
+     <mo stretchy="false">{</mo>
+     <mi>R</mi>
+     <mo>,</mo>
+     <mi>G</mi>
+     <mo>,</mo>
+     <mi>B</mi>
+     <mo stretchy="false">}</mo>
+    </mrow>
+    <mi>N</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>x</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <set>
+      <ci>R</ci>
+      <ci>G</ci>
+      <ci>B</ci>
+     </set>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x\in\{R,G,B\}^{N}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>Output: Segmentation (also called opacity) 
+
+<math display="inline" id="Graph_cuts_in_computer_vision:3">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mo>∈</mo>
+   <msup>
+    <mi>R</mi>
+    <mi>N</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>S</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>R</ci>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S\in R^{N}
+  </annotation>
+ </semantics>
+</math>
+
+ (soft segmentation). For hard segmentation 
+
+<math display="inline" id="Graph_cuts_in_computer_vision:4">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mo>∈</mo>
+   <msup>
+    <mrow>
+     <mo stretchy="false">{</mo>
+     <mrow>
+      <mn>0</mn>
+      <mtext>for background</mtext>
+     </mrow>
+     <mo>,</mo>
+     <mrow>
+      <mn>1</mn>
+      <mtext>for foreground/object to be detected</mtext>
+     </mrow>
+     <mo stretchy="false">}</mo>
+    </mrow>
+    <mi>N</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>S</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <set>
+      <apply>
+       <times></times>
+       <cn type="integer">0</cn>
+       <mtext>for background</mtext>
+      </apply>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <mtext>for foreground/object to be detected</mtext>
+      </apply>
+     </set>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S\in\{0\text{ for background},1\text{ for foreground/object to be detected}\}^%
+{N}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li><a href="Energy_function" title="wikilink">Energy function</a>
+
+<math display="block" id="Graph_cuts_in_computer_vision:5">
+ <semantics>
+  <mrow>
+   <mi>E</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>S</mi>
+    <mo>,</mo>
+    <mi>C</mi>
+    <mo>,</mo>
+    <mi>λ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>E</ci>
+    <vector>
+     <ci>x</ci>
+     <ci>S</ci>
+     <ci>C</ci>
+     <ci>λ</ci>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E(x,S,C,\lambda)
+  </annotation>
+ </semantics>
+</math>
+
+ where C is the color parameter and λ is the coherence parameter.</li>
+<li>
+
+<math display="inline" id="Graph_cuts_in_computer_vision:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>E</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>S</mi>
+     <mo>,</mo>
+     <mi>C</mi>
+     <mo>,</mo>
+     <mi>λ</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>color</mi>
+    </msub>
+    <mo>+</mo>
+    <msub>
+     <mi>E</mi>
+     <mi>coherence</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>E</ci>
+     <vector>
+      <ci>x</ci>
+      <ci>S</ci>
+      <ci>C</ci>
+      <ci>λ</ci>
+     </vector>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>color</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>coherence</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E(x,S,C,\lambda)=E_{\rm color}+E_{\rm coherence}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>Optimization: The segmentation can be estimated as a global minimum over S
+
+<math display="block" id="Graph_cuts_in_computer_vision:7">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>arg</mi>
+    <mrow>
+     <munder>
+      <mi>min</mi>
+      <mi>S</mi>
+     </munder>
+     <mi>E</mi>
+    </mrow>
+   </mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>S</mi>
+    <mo>,</mo>
+    <mi>C</mi>
+    <mo>,</mo>
+    <mi>λ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <arg></arg>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <min></min>
+       <ci>S</ci>
+      </apply>
+      <ci>E</ci>
+     </apply>
+    </apply>
+    <vector>
+     <ci>x</ci>
+     <ci>S</ci>
+     <ci>C</ci>
+     <ci>λ</ci>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\arg\min}_{S}E(x,S,C,\lambda)
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+</ul>
+<h2 id="existing-methods">Existing methods</h2>
+<ul>
+<li>Standard Graph cuts: optimize energy function over the segmentation (unknown S value).</li>
+</ul>
+<ul>
+<li>Iterated Graph cuts:</li>
+</ul>
+<ol>
+<li>First step optimizes over the color parameters using K-means.</li>
+<li>Second step performs the usual graph cuts algorithm.</li>
+</ol>
+<dl>
+<dd>These 2 steps are repeated recursively until convergence.
+</dd>
+</dl>
+<ul>
+<li>Dynamic graph cuts:<br/>
+Allows to re-run the algorithm much faster after modifying the problem (e.g. after new seeds have been added by a user).</li>
+</ul>
+<h2 id="energy-function">Energy function</h2>
+
+<p><big>
+
+<math display="inline" id="Graph_cuts_in_computer_vision:8">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mi>r</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">|</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>K</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <csymbol cd="unknown">r</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">S</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">K</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Pr(x|S)=K
+  </annotation>
+ </semantics>
+</math>
+
+<sup>
+
+<math display="inline" id="Graph_cuts_in_computer_vision:9">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mrow>
+    <mo>-</mo>
+    <mi>E</mi>
+   </mrow>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <ci>E</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (-E)
+  </annotation>
+ </semantics>
+</math>
+
+</sup></big> where the energy 
+
+<math display="inline" id="Graph_cuts_in_computer_vision:10">
+ <semantics>
+  <mi>E</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>E</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E
+  </annotation>
+ </semantics>
+</math>
+
+ is composed of 2 different models (
+
+<math display="inline" id="Graph_cuts_in_computer_vision:11">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>color</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>color</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{\rm color}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Graph_cuts_in_computer_vision:12">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>coherence</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>coherence</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{\rm coherence}
+  </annotation>
+ </semantics>
+</math>
+
+):</p>
+<h3 id="likelihood-color-model-regional-term">Likelihood / Color model / Regional term</h3>
+
+<p>
+
+<math display="inline" id="Graph_cuts_in_computer_vision:13">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>color</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>color</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{\rm color}
+  </annotation>
+ </semantics>
+</math>
+
+ — unary term describing the likelihood of each color.</p>
+<ul>
+<li>This term can be modeled using different local (e.g. texons) or global (e.g. histograms, GMMs, Adaboost likelihood) approaches that are described below.</li>
+</ul>
+<h4 id="histogram">Histogram</h4>
+<ul>
+<li>We use intensities of pixels marked as seeds to get histograms for object (foreground) and background intensity distributions: P(I|O) and P(I|B).</li>
+<li>Then, we use these histograms to set the regional penalties as negative log-likelihoods.</li>
+</ul>
+<h4 id="gmm-gaussian-mixture-model">GMM (Gaussian Mixture Model)</h4>
+<ul>
+<li>We usually use 2 distributions to model background and foreground pixels.</li>
+<li>Use a Gaussian mixture model (with 5-8 components) to model those 2 distributions.</li>
+<li>Goal: Try to pull apart those 2 distributions.</li>
+</ul>
+<h4 id="texon">Texon</h4>
+<ul>
+<li>A texon (or texton) is a set of pixels that has certain characteristics and is repeated in an image.</li>
+</ul>
+<ul>
+<li>Steps:</li>
+</ul>
+<ol>
+<li>Determine a good natural scale for the texture elements.</li>
+<li>Compute non-parametric statistics of the model-interior texons, either on intensity or on Gabor filter responses.</li>
+</ol>
+<ul>
+<li>References:
+<ul>
+<li><a href="http://www.research.rutgers.edu/~xiaolei/EMMCVPR_paper.pdf">Deformable-model based Textured Object Segmentation</a></li>
+<li><a href="http://www.cs.berkeley.edu/~malik/papers/MalikBLS.pdf">Contour and Texture Analysis for Image Segmentation</a></li>
+</ul></li>
+</ul>
+<h3 id="prior-coherence-model-boundary-term">Prior / Coherence model / Boundary term</h3>
+
+<p>
+
+<math display="inline" id="Graph_cuts_in_computer_vision:14">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>coherence</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>coherence</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{\rm coherence}
+  </annotation>
+ </semantics>
+</math>
+
+ — binary term describing the coherence between neighborhood pixels.</p>
+<ul>
+<li>In practice, pixels are defined as neighbors if they are adjacent either horizontally, vertically or diagonally (4 way connectivity or 8 way connectivity).</li>
+<li>Costs can be based on local intensity gradient, Laplacian zero-crossing, gradient direction, color mixture model,...</li>
+</ul>
+<h3 id="references">References</h3>
+<ul>
+<li>Different energy functions have been defined:
+<ul>
+<li>Standard <a href="Markov_random_field" title="wikilink">Markov random field</a> (MRF): Associate a penalty to disagreeing pixels by evaluating the difference between their segmentation label (crude measure of the length of the boundaries). See Boykov and Kolmogorov ICCV 2003</li>
+<li><a href="Conditional_random_field" title="wikilink">Conditional random field</a> (CRF): If the color is very different, it might be a good place to put a boundary. See Lafferty et al. 2001; Kumar and Hebert 2003</li>
+</ul></li>
+</ul>
+<h2 id="criticism">Criticism</h2>
+
+<p>Graph cuts methods have become popular alternatives to the level set-based approaches for optimizing the location of a contour (see<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> for an extensive comparison). However, graph cut approaches have been criticized in the literature for several issues:</p>
+<ul>
+<li>Metrication artifacts: When an image is represented by a 4-connected lattice, graph cuts methods can exhibit unwanted "blockiness" artifacts. Various methods have been proposed for addressing this issue, such as using additional edges<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> or by formulating the max-flow problem in continuous space.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></li>
+<li>Shrinking bias: Since graph cuts finds a minimum cut, the algorithm can be biased toward producing a small contour.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> For example, the algorithm is not well-suited for segmentation of thin objects like blood vessels (see<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> for a proposed fix).</li>
+<li>Multiple labels: Graph cuts is only able to find a global optimum for binary labeling (i.e., two labels) problems, such as foreground/background image segmentation. Extensions have been proposed that can find approximate solutions for multilabel graph cuts problems.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></li>
+<li>Memory: the memory usage of graph cuts increase quickly as the image size increase. As an illustration, the Boykov-Kolmogorov max-flow algorithm v2.2 allocates 
+
+<math display="inline" id="Graph_cuts_in_computer_vision:15">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mn>24</mn>
+    <mi>n</mi>
+   </mrow>
+   <mo>+</mo>
+   <mrow>
+    <mn>14</mn>
+    <mi>m</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <times></times>
+     <cn type="integer">24</cn>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <cn type="integer">14</cn>
+     <ci>m</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   24n+14m
+  </annotation>
+ </semantics>
+</math>
+
+ bytes (
+
+<math display="inline" id="Graph_cuts_in_computer_vision:16">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Graph_cuts_in_computer_vision:17">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+ are respectively the number of nodes and edges in the graph). Nevertheless, some amount of work has been recently done in this direction for reducing the graphs before the maximum-flow computation.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a><a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a><a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a></li>
+</ul>
+<h2 id="algorithm">Algorithm</h2>
+<ul>
+<li>Minimization is done using a standard minimum cut algorithm.</li>
+<li>Due to the <a href="Max-flow_min-cut_theorem" title="wikilink">Max-flow min-cut theorem</a> we can solve energy minimization by maximizing the flow over the network. The Max Flow problem consists of a directed graph with edges labeled with capacities, and there are two distinct nodes: the source and the sink. Intuitively, it's easy to see that the maximum flow is determined by the bottleneck.</li>
+</ul>
+<h3 id="implementation">Implementation</h3>
+
+<p>Boykov &amp; Kolmogorov<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a> published an efficient way to compute the max-flow for computer vision related graph.</p>
+<h2 id="software">Software</h2>
+<ul>
+<li><a href="http://pub.ist.ac.at/~vnk/software.html"></a><a class="uri" href="http://pub.ist.ac.at/~vnk/software.html">http://pub.ist.ac.at/~vnk/software.html</a> — An implementation of the maxflow algorithm described in "An Experimental Comparison of Min-Cut/Max-Flow Algorithms for Energy Minimization in Computer Vision" by Vladimir Kolmogorov</li>
+<li><a href="http://vision.csd.uwo.ca/code/"></a><a class="uri" href="http://vision.csd.uwo.ca/code/">http://vision.csd.uwo.ca/code/</a> — some graph cut libraries and MATLAB wrappers</li>
+<li><a href="http://gridcut.com/"></a><a class="uri" href="http://gridcut.com/">http://gridcut.com/</a> — fast multi-core max-flow/min-cut solver optimized for grid-like graphs</li>
+</ul>
+<h2 id="references-1">References</h2>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Bayesian_statistics" title="wikilink">Category:Bayesian statistics</a> <a href="Category:Computer_vision" title="wikilink">Category:Computer vision</a> <a href="Category:Computational_problems_in_graph_theory" title="wikilink">Category:Computational problems in graph theory</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Adelson, Edward H., and James R. Bergen (1991), "<a href="http://persci.mit.edu/pub_pdfs/elements91.pdf">The plenoptic function and the elements of early vision</a>", Computational models of visual processing 1.2 (1991).<a href="#fnref1">↩</a></li>
+<li id="fn2">D.M. Greig, B.T. Porteous and A.H. Seheult (1989), <em>Exact maximum a posteriori estimation for binary images</em>, Journal of the Royal Statistical Society Series B, <strong>51</strong>, 271–279.<a href="#fnref2">↩</a></li>
+<li id="fn3">D. Geman and S. Geman (1984), <em>Stochastic relaxation, Gibbs distributions and the Bayesian restoration of images</em>, IEEE Trans. Pattern Anal. Mach. Intell., <strong>6</strong>, 721–741.<a href="#fnref3">↩</a></li>
+<li id="fn4">J.E. Besag (1986), <em>On the statistical analysis of dirty pictures (with discussion)</em>, <a href="Journal_of_the_Royal_Statistical_Society" title="wikilink">Journal of the Royal Statistical Society</a> Series B, <strong>48</strong>, 259–302<a href="#fnref4">↩</a></li>
+<li id="fn5"></li>
+<li id="fn6">Y. Boykov, O. Veksler and R. Zabih (1998), "<a href="http://www.cs.cornell.edu/~rdz/Papers/BVZ-cvpr98.pdf">Markov Random Fields with Efficient Approximations</a>", <em>International Conference on Computer Vision and Pattern Recognition (CVPR)</em>.<a href="#fnref6">↩</a></li>
+<li id="fn7">Y. Boykov, O. Veksler and R. Zabih (2001), "<a href="http://www.cs.cornell.edu/~rdz/Papers/BVZ-pami01-final.pdf">Fast approximate energy minimisation via graph cuts</a>", <em>IEEE Transactions on Pattern Analysis and Machine Intelligence</em>, <strong>29</strong>, 1222–1239.<a href="#fnref7">↩</a></li>
+<li id="fn8">Leo Grady and Christopher Alvino (2009), "<a href="http://www.cns.bu.edu/~lgrady/grady2009combinatorial.pdf">The Piecewise Smooth Mumford-Shah Functional on an Arbitrary Graph</a>", IEEE Trans. on Image Processing, pp. 2547-2561<a href="#fnref8">↩</a></li>
+<li id="fn9">Yuri Boykov and Vladimir Kolmogorov (2003), "Computing Geodesics and Minimal Surfaces via Graph Cuts", Proc. of ICCV<a href="#fnref9">↩</a></li>
+<li id="fn10">Ben Appleton and Hugues Talbot (2006), "Globally Minimal Surfaces by Continuous Maximal Flows", IEEE Trans. on Pattern Analysis and Machine Intelligence, pp. 106-118<a href="#fnref10">↩</a></li>
+<li id="fn11">Ali Kemal Sinop and Leo Grady, "<a href="http://www.cns.bu.edu/~lgrady/sinop2007linf.pdf">A Seeded Image Segmentation Framework Unifying Graph Cuts and Random Walker Which Yields A New Algorithm</a>", Proc. of ICCV, 2007<a href="#fnref11">↩</a></li>
+<li id="fn12">Vladimir Kolmogorov and Yuri Boykov (2005), "What Metrics Can Be Approximated by Geo-Cuts, or Global Optimization of Length/Area and Flux", Proc. of ICCV pp. 564-571<a href="#fnref12">↩</a></li>
+<li id="fn13"></li>
+<li id="fn14">Nicolas Lermé, François Malgouyres and Lucas Létocart (2010), "<a href="http://lipn.fr/~lerme/docs/reducing_graphs_in_graph_cut_segmentation.pdf">Reducing graphs in graph cut segmentation</a>", Proc. of ICIP, pp. 3045-3048<a href="#fnref14">↩</a></li>
+<li id="fn15">Herve Lombaert, Yiyong Sun, Leo Grady, Chenyang Xu (2005), "<a href="http://step.polymtl.ca/~rv101/bandedgraphcuts.pdf">A Multilevel Banded Graph Cuts Method for Fast Image Segmentation</a>", Proc. of ICCV, pp. 259-265<a href="#fnref15">↩</a></li>
+<li id="fn16">Yin Li, Jian Sun, Chi-Keung Tang, and Heung-Yeung Shum (2004), "<a href="http://research.microsoft.com/pubs/69040/lazysnapping_siggraph04.pdf">Lazy Snapping</a>", ACM Transactions on Graphics, pp. 303-308<a href="#fnref16">↩</a></li>
+<li id="fn17">Yuri Boykov, Vladimir Kolmogorov: An Experimental Comparison of Min-Cut/Max-Flow Algorithms for Energy Minimization in Vision. IEEE Trans. Pattern Anal. Mach. Intell. 26(9): 1124-1137 (2004)<a href="#fnref17">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

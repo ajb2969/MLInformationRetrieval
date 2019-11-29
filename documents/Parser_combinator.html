@@ -1,0 +1,478 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="282">Parser combinator</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Parser combinator</h1>
+<hr/>
+
+<p>In <a href="functional_programming" title="wikilink">functional programming</a>, a <strong>parser combinator</strong> is a <a href="higher-order_function" title="wikilink">higher-order function</a> that accepts several parsers as input and returns a new parser as its output. In this context, a <a class="uri" href="parser" title="wikilink">parser</a> is a function accepting strings as input and returning some structure as output, typically a <a href="parse_tree" title="wikilink">parse tree</a> or a set of indices representing locations in the string where parsing stopped successfully. Parser combinators enable a <a href="recursive_descent_parsing" title="wikilink">recursive descent parsing</a> strategy that facilitates modular piecewise construction and testing. This parsing technique is called <strong>combinatory parsing</strong>.</p>
+
+<p>Parsers built using combinators are straightforward to construct, ‘readable,’ modular, well-structured and easily maintainable. They have been used extensively in the prototyping of compilers and processors for <a href="domain-specific_language" title="wikilink">domain-specific languages</a> such as natural-language interfaces to databases, where complex and varied semantic actions are closely integrated with syntactic processing. In 1989, Richard Frost and John Launchbury demonstrated use of parser combinators to construct <a class="uri" href="natural-language" title="wikilink">natural-language</a> interpreters. Graham Hutton also used higher-order functions for basic parsing in 1992. S.D. Swierstra also exhibited the practical aspects of parser combinators in 2001. In 2008, Frost, Hafiz and Callaghan described a set of parser combinators in <a href="Haskell_(programming_language)" title="wikilink">Haskell</a> that solve the long-standing problem of accommodating <a href="left_recursion" title="wikilink">left recursion</a>, and work as a complete <a href="top-down_parsing" title="wikilink">top-down parsing</a> tool in polynomial time and space.</p>
+<h2 id="basic-idea">Basic idea</h2>
+
+<p>In <a href="functional_programming" title="wikilink">functional programming</a>, parser combinators can be used to combine basic parsers to construct parsers for more complex rules. For example, a <a href="Formal_grammar#The_syntax_of_grammars" title="wikilink">production rule</a> of a <a href="context-free_grammar" title="wikilink">context-free grammar</a> (CFG) may have one or more ‘alternatives’ and each alternative may consist of a sequence of non-terminal(s) and/or terminal(s), or the alternative may consist of a single non-terminal or terminal or the empty string. If a simple parser is available for each of these alternatives, a parser combinator can be used to combine each of these parsers, returning a new parser which can recognise any or all of the alternatives.</p>
+
+<p>A parser combinator can take the form of an <a class="uri" href="infix" title="wikilink">infix</a> operator, used to ‘glue’ different parsers to form a complete rule. Parser combinators thereby enable parsers to be defined in an embedded style, in code which is similar in structure to the rules of the grammar. As such, implementations can be thought of as executable specifications with all the associated advantages.</p>
+<h2 id="the-combinators">The combinators</h2>
+
+<p>To keep the discussion relatively straightforward, we discuss parser combinators in terms of <em>recognizers</em> only. If the input string is of length <code>#input</code> and its members are accessed through an index <code>j</code>, a recognizer is a parser which returns, as output, a set of indices representing positions at which the parser successfully finished recognizing a sequence of tokens that began at position <code>j</code>. An empty result set indicates that the recognizer failed to recognize any sequence beginning at index <code>j</code>. A non-empty result set indicates the recognizer ends at different positions successfully.</p>
+<ul>
+<li>The <code>empty</code> recognizer recognizes the empty string. This parser always succeeds, returning a singleton set containing the current position:</li>
+</ul>
+
+<p>
+
+<math display="block" id="Parser_combinator:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>e</mi>
+    <mi>m</mi>
+    <mi>p</mi>
+    <mi>t</mi>
+    <mi>y</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>j</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mi>j</mi>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>e</ci>
+     <ci>m</ci>
+     <ci>p</ci>
+     <ci>t</ci>
+     <ci>y</ci>
+     <ci>j</ci>
+    </apply>
+    <set>
+     <ci>j</ci>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   empty(j)=\{j\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<ul>
+<li>A recognizer <code>term ’x’</code> recognizes the terminal <code>x</code>. If the token at position <code>j</code> in the input string is <code>x</code>, this parser returns a singleton set containing <code>j + 1</code>; otherwise, it returns the empty set.</li>
+</ul>
+
+<p>
+
+<math display="block" id="Parser_combinator:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>t</mi>
+    <mi>e</mi>
+    <mi>r</mi>
+    <mi>m</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>j</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>{</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mrow>
+         <mo>{</mo>
+         <mo>}</mo>
+        </mrow>
+        <mo>,</mo>
+       </mrow>
+      </mtd>
+      <mtd columnalign="left">
+       <mrow>
+        <mi>j</mi>
+        <mo>≥</mo>
+        <mrow>
+         <mi mathvariant="normal">#</mi>
+         <mi>i</mi>
+         <mi>n</mi>
+         <mi>p</mi>
+         <mi>u</mi>
+         <mi>t</mi>
+        </mrow>
+       </mrow>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mrow>
+         <mo>{</mo>
+         <mrow>
+          <mi>j</mi>
+          <mo>+</mo>
+          <mn>1</mn>
+         </mrow>
+         <mo>}</mo>
+        </mrow>
+        <mo>,</mo>
+       </mrow>
+      </mtd>
+      <mtd columnalign="left">
+       <mrow>
+        <mrow>
+         <msup>
+          <mi>j</mi>
+          <mrow>
+           <mi>t</mi>
+           <mi>h</mi>
+          </mrow>
+         </msup>
+         <mtext>element of</mtext>
+         <mi>i</mi>
+         <mi>n</mi>
+         <mi>p</mi>
+         <mi>u</mi>
+         <mi>t</mi>
+        </mrow>
+        <mo>=</mo>
+        <mi>x</mi>
+       </mrow>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mrow>
+         <mo>{</mo>
+         <mo>}</mo>
+        </mrow>
+        <mo>,</mo>
+       </mrow>
+      </mtd>
+      <mtd columnalign="left">
+       <mtext>otherwise</mtext>
+      </mtd>
+     </mtr>
+    </mtable>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>e</ci>
+     <ci>r</ci>
+     <ci>m</ci>
+     <interval closure="open">
+      <ci>x</ci>
+      <ci>j</ci>
+     </interval>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">cases</csymbol>
+     <list></list>
+     <apply>
+      <geq></geq>
+      <ci>j</ci>
+      <apply>
+       <times></times>
+       <ci>normal-#</ci>
+       <ci>i</ci>
+       <ci>n</ci>
+       <ci>p</ci>
+       <ci>u</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+     <set>
+      <apply>
+       <plus></plus>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </set>
+     <apply>
+      <eq></eq>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>j</ci>
+        <apply>
+         <times></times>
+         <ci>t</ci>
+         <ci>h</ci>
+        </apply>
+       </apply>
+       <mtext>element of</mtext>
+       <ci>i</ci>
+       <ci>n</ci>
+       <ci>p</ci>
+       <ci>u</ci>
+       <ci>t</ci>
+      </apply>
+      <ci>x</ci>
+     </apply>
+     <list></list>
+     <mtext>otherwise</mtext>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   term(x,j)=\begin{cases}\left\{\right\},&j\geq\#input\\
+\left\{j+1\right\},&j^{th}\mbox{ element of }input=x\\
+\left\{\right\},&\mbox{otherwise}\end{cases}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Note that there may be multiple distinct ways to parse a string while finishing at the same index: this indicates an <a href="ambiguous_grammar" title="wikilink">ambiguous grammar</a>. Simple recognizers do not acknowledge these ambiguities; each possible finishing index is listed only once in the result set. For a more complete set of results, a more complicated object such as a <a href="parse_tree" title="wikilink">parse tree</a> must be returned.</p>
+
+<p>Following the definitions of two basic recognizers <code>p</code> and <code>q</code>, we can define two major parser combinators for alternative and sequencing:</p>
+<ul>
+<li>The ‘alternative’ parser combinator, ⊕, applies both of the recognizers on the same input position <code>j</code> and sums up the results returned by both of the recognizers, which is eventually returned as the final result. It is used as an infix operator between <code>p</code> and <code>q</code> as follows:</li>
+</ul>
+
+<p>
+
+<math display="block" id="Parser_combinator:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>p</mi>
+      <mo>⊕</mo>
+      <mi>q</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>j</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>j</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>∪</mo>
+    <mrow>
+     <mi>q</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>j</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="latexml">direct-sum</csymbol>
+      <ci>p</ci>
+      <ci>q</ci>
+     </apply>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <union></union>
+     <apply>
+      <times></times>
+      <ci>p</ci>
+      <ci>j</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>q</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (p\oplus q)(j)=p(j)\cup q(j)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<ul>
+<li>The sequencing of recognizers is done with the ⊛ parser combinator. Like ⊕, it is used as an infix operator between <code>p</code> and <code>q</code>. But it applies the first recognizer <code>p</code> to the input position <code>j</code>, and if there is any successful result of this application, then the second recognizer <code>q</code> is applied to every element of the result set returned by the first recognizer. ⊛ ultimately returns the union of these applications of q.</li>
+</ul>
+
+<p>
+
+<math display="block" id="Parser_combinator:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>p</mi>
+      <mo>⊛</mo>
+      <mi>q</mi>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>j</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo largeop="true" mathsize="160%" movablelimits="false" stretchy="false" symmetric="true">⋃</mo>
+    <mrow>
+     <mo stretchy="false">{</mo>
+     <mrow>
+      <mi>q</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>k</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>:</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>∈</mo>
+      <mrow>
+       <mi>p</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>j</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">}</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <ci>normal-⊛</ci>
+      <ci>p</ci>
+      <ci>q</ci>
+     </apply>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <union></union>
+     <apply>
+      <csymbol cd="latexml">conditional-set</csymbol>
+      <apply>
+       <times></times>
+       <ci>q</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <in></in>
+       <ci>k</ci>
+       <apply>
+        <times></times>
+        <ci>p</ci>
+        <ci>j</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (p\circledast q)(j)=\bigcup\{q(k):k\in p(j)\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="examples">Examples</h2>
+
+<p>Consider a highly ambiguous <a href="context-free_grammar" title="wikilink">context-free grammar</a>, <code>s ::= ‘x’ s s | ε</code>. Using the combinators defined earlier, we can modularly define executable notations of this grammar in a modern functional language (e.g. <a href="Haskell_(programming_language)" title="wikilink">Haskell</a>) as <code>s = term ‘x’ &lt;*&gt; s &lt;*&gt; s &lt;+&gt; empty</code>. When the recognizer <code>s</code> is applied on an input sequence <code>xxxxx</code> at position <code>1</code>, according to the above definitions it would return a result set <code>{5,4,3,2}</code>.</p>
+<h2 id="shortcomings-and-solutions">Shortcomings and solutions</h2>
+
+<p>Parser combinators, like all <a href="recursive_descent_parsers" title="wikilink">recursive descent parsers</a>, are not limited to the <a href="context-free_grammar" title="wikilink">context-free grammars</a> and thus do no global search for ambiguities in the <a href="LL_parsing" title="wikilink">LL(k) parsing</a> First<sub>k</sub> and Follow<sub>k</sub> sets. Thus, ambiguities are not known until run-time if and until the input triggers them. In such cases, the recursive descent parser may default (perhaps unknown to the grammar designer) to one of the possible ambiguous paths, resulting in semantic confusion (aliasing) in the use of the language. This leads to bugs by users of ambiguous programming languages, which are not reported at compile-time, and which are introduced not by human error, but by ambiguous grammar. The only solution which eliminates these bugs is to remove the ambiguities and use a context-free grammar.</p>
+
+<p>The simple implementations of parser combinators have some shortcomings, which are common in top-down parsing. Naïve combinatory parsing requires <a href="Exponential_time" title="wikilink">exponential</a> time and space when parsing an ambiguous context-free grammar. In 1996, Frost and Szydlowski demonstrated how <a class="uri" href="memoization" title="wikilink">memoization</a> can be used with parser combinators to reduce the time complexity to polynomial. Later Frost used <a href="Monad_(functional_programming)" title="wikilink">monads</a> to construct the combinators for systematic and correct threading of memo-table throughout the computation.</p>
+
+<p>Like any top-down <a href="Recursive_descent_parser" title="wikilink">recursive descent parsing</a>, the conventional parser combinators (like the combinators described above) will not terminate while processing a <a href="left_recursion" title="wikilink">left-recursive grammar</a> (e.g. <code>s ::= s &lt;*&gt; term ‘x’|empty</code>). A recognition algorithm that accommodates ambiguous grammars with direct left-recursive rules is described by Frost and Hafiz in 2006. The algorithm curtails the otherwise ever-growing left-recursive parse by imposing depth restrictions. That algorithm was extended to a complete parsing algorithm to accommodate indirect as well as direct left-recursion in <a href="polynomial_time" title="wikilink">polynomial time</a>, and to generate compact polynomial-size representations of the potentially exponential number of parse trees for highly ambiguous grammars by Frost, Hafiz and Callaghan in 2007. This extended algorithm accommodates indirect left recursion by comparing its ‘computed context’ with ‘current context’. The same authors also described their implementation of a set of parser combinators written in the Haskell programming language based on the same algorithm.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h2 id="notes">Notes</h2>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="https://github.com/Ramarren/cl-parser-combinators">parser-combinator</a> Common Lisp parser combinator implementation</li>
+<li><a href="http://www.haskell.org/haskellwiki/Parsec">Parsec</a> Industrial strength, monadic parser combinator library for Haskell</li>
+<li><a href="https://github.com/louthy/csharp-monad">csharp-monad</a> C# port of Parsec</li>
+<li><a href="https://github.com/jparsec/jparsec">Jparsec</a> Java port of Parsec</li>
+<li><a href="http://bennu-js.com">Bennu</a> Javascript monadic parser combinator library</li>
+<li><a href="https://github.com/chappers/Ramble">Ramble</a> R parser combinator implementation</li>
+</ul>
+
+<p>"</p>
+
+<p><a class="uri" href="Category:Parsing" title="wikilink">Category:Parsing</a> <a href="Category:Formal_languages" title="wikilink">Category:Formal languages</a> <a href="Category:Functional_programming" title="wikilink">Category:Functional programming</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">cf. <a href="http://www.cs.uwindsor.ca/~hafiz/proHome.html">X-SAIGA</a> — e<strong>x</strong>ecutable <strong>s</strong>pecific<strong>a</strong>t<strong>i</strong>ons of <strong>g</strong>r<strong>a</strong>mmars<a href="#fnref1">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

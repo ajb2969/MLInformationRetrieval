@@ -1,0 +1,1648 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="684">MinHash</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>MinHash</h1>
+<hr/>
+
+<p>In <a href="computer_science" title="wikilink">computer science</a>, <strong>MinHash</strong> (or the <strong>min-wise independent permutations</strong> <a href="locality_sensitive_hashing" title="wikilink">locality sensitive hashing</a> scheme) is a technique for quickly estimating how <a href="Similarity_measure" title="wikilink">similar</a> two sets are. The scheme was invented by ,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> and initially used in the <a class="uri" href="AltaVista" title="wikilink">AltaVista</a> search engine to detect duplicate web pages and eliminate them from search results.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> It has also been applied in large-scale <a href="Cluster_analysis" title="wikilink">clustering</a> problems, such as <a href="document_clustering" title="wikilink">clustering documents</a> by the similarity of their sets of words.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+<h2 id="jaccard-similarity-and-minimum-hash-values">Jaccard similarity and minimum hash values</h2>
+
+<p>The <a href="Jaccard_index" title="wikilink">Jaccard similarity coefficient</a> is a commonly used indicator of the similarity between two sets. For sets 
+
+<math display="inline" id="MinHash:0">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="MinHash:1">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+ it is defined to be the ratio of the number of elements of their <a href="intersection_(set_theory)" title="wikilink">intersection</a> and the number of elements of their <a href="union_(set_theory)" title="wikilink">union</a>:</p>
+
+<p>
+
+<math display="block" id="MinHash:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>J</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>A</mi>
+      <mo>,</mo>
+      <mi>B</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mfrac>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <mrow>
+       <mi>A</mi>
+       <mo>∩</mo>
+       <mi>B</mi>
+      </mrow>
+      <mo stretchy="false">|</mo>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">|</mo>
+      <mrow>
+       <mi>A</mi>
+       <mo>∪</mo>
+       <mi>B</mi>
+      </mrow>
+      <mo stretchy="false">|</mo>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>J</ci>
+     <interval closure="open">
+      <ci>A</ci>
+      <ci>B</ci>
+     </interval>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <abs></abs>
+      <apply>
+       <intersect></intersect>
+       <ci>A</ci>
+       <ci>B</ci>
+      </apply>
+     </apply>
+     <apply>
+      <abs></abs>
+      <apply>
+       <union></union>
+       <ci>A</ci>
+       <ci>B</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(A,B)={{|A\cap B|}\over{|A\cup B|}}.
+  </annotation>
+ </semantics>
+</math>
+
+ This value is 0 when the two sets are <a href="Disjoint_sets" title="wikilink">disjoint</a>, 1 when they are equal, and strictly between 0 and 1 otherwise. Two sets are more similar (i.e. have relatively more members in common) when their Jaccard index is closer to 1. It is our goal to estimate 
+
+<math display="inline" id="MinHash:3">
+ <semantics>
+  <mrow>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mi>B</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>J</ci>
+    <interval closure="open">
+     <ci>A</ci>
+     <ci>B</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(A,B)
+  </annotation>
+ </semantics>
+</math>
+
+ quickly, without explicitly computing the intersection and union.</p>
+
+<p>Let 
+
+<math display="inline" id="MinHash:4">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ be a <a href="hash_function" title="wikilink">hash function</a> that maps the members of 
+
+<math display="inline" id="MinHash:5">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="MinHash:6">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+ to distinct integers, and for any set 
+
+<math display="inline" id="MinHash:7">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ define <mtpl></mtpl> to be the minimal member of 
+
+<math display="inline" id="MinHash:8">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ with respect to 
+
+<math display="inline" id="MinHash:9">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+—that is, the member 
+
+<math display="inline" id="MinHash:10">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ of 
+
+<math display="inline" id="MinHash:11">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ with the minimum value of 
+
+<math display="inline" id="MinHash:12">
+ <semantics>
+  <mrow>
+   <mi>h</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>h</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(x)
+  </annotation>
+ </semantics>
+</math>
+
+. Now, if we apply <mtpl></mtpl> to both 
+
+<math display="inline" id="MinHash:13">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="MinHash:14">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+, we will get the same value exactly when the element of the union 
+
+<math display="inline" id="MinHash:15">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mi mathvariant="normal">∪</mi>
+   <mi>B</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>A</ci>
+    <ci>normal-∪</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A∪B
+  </annotation>
+ </semantics>
+</math>
+
+ with minimum hash value lies in the intersection 
+
+<math display="inline" id="MinHash:16">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mi mathvariant="normal">∩</mi>
+   <mi>B</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>A</ci>
+    <ci>normal-∩</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A∩B
+  </annotation>
+ </semantics>
+</math>
+
+. The probability of this being true is the ratio above, and therefore:</p>
+<dl>
+<dd><mtpl></mtpl>
+</dd>
+</dl>
+
+<p>That is, the <a class="uri" href="probability" title="wikilink">probability</a> that <mtpl></mtpl> is true is equal to the similarity 
+
+<math display="inline" id="MinHash:17">
+ <semantics>
+  <mrow>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mi>B</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>J</ci>
+    <interval closure="open">
+     <ci>A</ci>
+     <ci>B</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(A,B)
+  </annotation>
+ </semantics>
+</math>
+
+, assuming randomly chosen sets 
+
+<math display="inline" id="MinHash:18">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="MinHash:19">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+. In other words, if 
+
+<math display="inline" id="MinHash:20">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+ is the <a href="random_variable" title="wikilink">random variable</a> that is one when <mtpl></mtpl> and zero otherwise, then 
+
+<math display="inline" id="MinHash:21">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+ is an <a href="Bias_of_an_estimator" title="wikilink">unbiased estimator</a> of 
+
+<math display="inline" id="MinHash:22">
+ <semantics>
+  <mrow>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mi>B</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>J</ci>
+    <interval closure="open">
+     <ci>A</ci>
+     <ci>B</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(A,B)
+  </annotation>
+ </semantics>
+</math>
+
+. 
+
+<math display="inline" id="MinHash:23">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+ has too high a <a class="uri" href="variance" title="wikilink">variance</a> to be a useful estimator for the Jaccard similarity on its own—it is always zero or one. The idea of the MinHash scheme is to reduce this variance by averaging together several variables constructed in the same way.</p>
+<h2 id="algorithm">Algorithm</h2>
+<h3 id="variant-with-many-hash-functions">Variant with many hash functions</h3>
+
+<p>The simplest version of the minhash scheme uses 
+
+<math display="inline" id="MinHash:24">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ different hash functions, where 
+
+<math display="inline" id="MinHash:25">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ is a fixed integer parameter, and represents each set 
+
+<math display="inline" id="MinHash:26">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ by the 
+
+<math display="inline" id="MinHash:27">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ values of <mtpl></mtpl> for these 
+
+<math display="inline" id="MinHash:28">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ functions.</p>
+
+<p>To estimate 
+
+<math display="inline" id="MinHash:29">
+ <semantics>
+  <mrow>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mi>B</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>J</ci>
+    <interval closure="open">
+     <ci>A</ci>
+     <ci>B</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(A,B)
+  </annotation>
+ </semantics>
+</math>
+
+ using this version of the scheme, let 
+
+<math display="inline" id="MinHash:30">
+ <semantics>
+  <mi>y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y
+  </annotation>
+ </semantics>
+</math>
+
+ be the number of hash functions for which <mtpl></mtpl>, and use 
+
+<math display="inline" id="MinHash:31">
+ <semantics>
+  <mrow>
+   <mi>y</mi>
+   <mo>/</mo>
+   <mi>k</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>y</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y/k
+  </annotation>
+ </semantics>
+</math>
+
+ as the estimate. This estimate is the average of 
+
+<math display="inline" id="MinHash:32">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ different 0-1 random variables, each of which is one when <mtpl></mtpl> and zero otherwise, and each of which is an unbiased estimator of 
+
+<math display="inline" id="MinHash:33">
+ <semantics>
+  <mrow>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mi>B</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>J</ci>
+    <interval closure="open">
+     <ci>A</ci>
+     <ci>B</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(A,B)
+  </annotation>
+ </semantics>
+</math>
+
+. Therefore, their average is also an unbiased estimator, and by standard <a href="Chernoff_bound" title="wikilink">Chernoff bounds</a> for sums of 0-1 random variables, its expected error is 
+
+<math display="inline" id="MinHash:34">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mrow>
+      <mn>1</mn>
+      <mo>/</mo>
+      <mi mathvariant="normal">√</mi>
+     </mrow>
+     <mi>k</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>normal-√</ci>
+     </apply>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1/√k)
+  </annotation>
+ </semantics>
+</math>
+
+.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>Therefore, for any constant 
+
+<math display="inline" id="MinHash:35">
+ <semantics>
+  <mrow>
+   <mi>ε</mi>
+   <mo>></mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <ci>ε</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ε>0
+  </annotation>
+ </semantics>
+</math>
+
+ there is a constant <mtpl></mtpl> such that the expected error of the estimate is at most 
+
+<math display="inline" id="MinHash:36">
+ <semantics>
+  <mi>ε</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ε</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ε
+  </annotation>
+ </semantics>
+</math>
+
+. For example, 400 hashes would be required to estimate 
+
+<math display="inline" id="MinHash:37">
+ <semantics>
+  <mrow>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mi>B</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>J</ci>
+    <interval closure="open">
+     <ci>A</ci>
+     <ci>B</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(A,B)
+  </annotation>
+ </semantics>
+</math>
+
+ with an expected error less than or equal to .05.</p>
+<h3 id="variant-with-a-single-hash-function">Variant with a single hash function</h3>
+
+<p>It may be computationally expensive to compute multiple hash functions, but a related version of MinHash scheme avoids this penalty by using only a single hash function and uses it to select multiple values from each set rather than selecting only a single minimum value per hash function. Let 
+
+<math display="inline" id="MinHash:38">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ be a hash function, and let 
+
+<math display="inline" id="MinHash:39">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ be a fixed integer. If 
+
+<math display="inline" id="MinHash:40">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ is any set of 
+
+<math display="inline" id="MinHash:41">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ or more values in the domain of 
+
+<math display="inline" id="MinHash:42">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+, define <mtpl></mtpl> to be the subset of the 
+
+<math display="inline" id="MinHash:43">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ members of 
+
+<math display="inline" id="MinHash:44">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ that have the smallest values of 
+
+<math display="inline" id="MinHash:45">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+. This subset <mtpl></mtpl> is used as a <em>signature</em> for the set 
+
+<math display="inline" id="MinHash:46">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+, and the similarity of any two sets is estimated by comparing their signatures.</p>
+
+<p>Specifically, let <em>A</em> and <em>B</em> be any two sets. Then <mtpl></mtpl> is a set of <em>k</em> elements of 
+
+<math display="inline" id="MinHash:47">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mi mathvariant="normal">∪</mi>
+   <mi>B</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>A</ci>
+    <ci>normal-∪</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A∪B
+  </annotation>
+ </semantics>
+</math>
+
+, and if <em>h</em> is a random function then any subset of <em>k</em> elements is equally likely to be chosen; that is, 
+
+<math display="inline" id="MinHash:48">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+ is a <a href="simple_random_sample" title="wikilink">simple random sample</a> of 
+
+<math display="inline" id="MinHash:49">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mi mathvariant="normal">∪</mi>
+   <mi>B</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>A</ci>
+    <ci>normal-∪</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A∪B
+  </annotation>
+ </semantics>
+</math>
+
+. The subset <mtpl></mtpl> is the set of members of 
+
+<math display="inline" id="MinHash:50">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+ that belong to the intersection 
+
+<math display="inline" id="MinHash:51">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mi mathvariant="normal">∩</mi>
+   <mi>B</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>A</ci>
+    <ci>normal-∩</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A∩B
+  </annotation>
+ </semantics>
+</math>
+
+. Therefore, |
+
+<math display="inline" id="MinHash:52">
+ <semantics>
+  <mi>Y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y
+  </annotation>
+ </semantics>
+</math>
+
+|/
+
+<math display="inline" id="MinHash:53">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ is an unbiased estimator of 
+
+<math display="inline" id="MinHash:54">
+ <semantics>
+  <mrow>
+   <mi>J</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mi>B</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>J</ci>
+    <interval closure="open">
+     <ci>A</ci>
+     <ci>B</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   J(A,B)
+  </annotation>
+ </semantics>
+</math>
+
+. The difference between this estimator and the estimator produced by multiple hash functions is that 
+
+<math display="inline" id="MinHash:55">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+ always has exactly 
+
+<math display="inline" id="MinHash:56">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ members, whereas the multiple hash functions may lead to a smaller number of sampled elements due to the possibility that two different hash functions may have the same minima. However, when 
+
+<math display="inline" id="MinHash:57">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ is small relative to the sizes of the sets, this difference is negligible.</p>
+
+<p>By standard <a href="Chernoff_bound" title="wikilink">Chernoff bounds</a> for sampling without replacement, this estimator has expected error 
+
+<math display="inline" id="MinHash:58">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mrow>
+      <mn>1</mn>
+      <mo>/</mo>
+      <mi mathvariant="normal">√</mi>
+     </mrow>
+     <mi>k</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>normal-√</ci>
+     </apply>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1/√k)
+  </annotation>
+ </semantics>
+</math>
+
+, matching the performance of the multiple-hash-function scheme.</p>
+<h3 id="time-analysis">Time analysis</h3>
+
+<p>The estimator 
+
+<math display="inline" id="MinHash:59">
+ <semantics>
+  <mrow>
+   <mi>Y</mi>
+   <mo>/</mo>
+   <mi>k</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>Y</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y/k
+  </annotation>
+ </semantics>
+</math>
+
+ can be computed in time 
+
+<math display="inline" id="MinHash:60">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(k)
+  </annotation>
+ </semantics>
+</math>
+
+ from the two signatures of the given sets, in either variant of the scheme. Therefore, when 
+
+<math display="inline" id="MinHash:61">
+ <semantics>
+  <mi>ε</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ε</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ε
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="MinHash:62">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ are constants, the time to compute the estimated similarity from the signatures is also constant. The signature of each set can be computed in <a href="linear_time" title="wikilink">linear time</a> on the size of the set, so when many pairwise similarities need to be estimated this method can lead to a substantial savings in running time compared to doing a full comparison of the members of each set. Specifically, for set size 
+
+<math display="inline" id="MinHash:63">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ the many hash variant takes 
+
+<math display="inline" id="MinHash:64">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mi>k</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(nk)
+  </annotation>
+ </semantics>
+</math>
+
+ time. The single hash variant is generally faster, requiring 
+
+<math display="inline" id="MinHash:65">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mi>l</mi>
+     <mi>o</mi>
+     <mi>g</mi>
+     <mi>k</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <ci>l</ci>
+     <ci>o</ci>
+     <ci>g</ci>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(nlogk)
+  </annotation>
+ </semantics>
+</math>
+
+ time to maintain the sorted list of minima.</p>
+<h2 id="min-wise-independent-permutations">Min-wise independent permutations</h2>
+
+<p>In order to implement the MinHash scheme as described above, one needs the hash function 
+
+<math display="inline" id="MinHash:66">
+ <semantics>
+  <mi>h</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>h</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h
+  </annotation>
+ </semantics>
+</math>
+
+ to define a random <a class="uri" href="permutation" title="wikilink">permutation</a> on 
+
+<math display="inline" id="MinHash:67">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ elements, where 
+
+<math display="inline" id="MinHash:68">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ is the total number of distinct elements in the union of all of the sets to be compared. But because there are 
+
+<math display="inline" id="MinHash:69">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo lspace="0pt" rspace="3.5pt">!</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <factorial></factorial>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n!
+  </annotation>
+ </semantics>
+</math>
+
+ different permutations, it would require 
+
+<math display="inline" id="MinHash:70">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Ω</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>n</mi>
+     <mi>l</mi>
+     <mi>o</mi>
+     <mi>g</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Ω</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <ci>l</ci>
+     <ci>o</ci>
+     <ci>g</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Ω(nlogn)
+  </annotation>
+ </semantics>
+</math>
+
+ bits just to specify a truly random permutation, an infeasibly large number for even moderate values of 
+
+<math display="inline" id="MinHash:71">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+. Because of this fact, by analogy to the theory of <a href="universal_hashing" title="wikilink">universal hashing</a>, there has been significant work on finding a family of permutations that is "min-wise independent", meaning that for any subset of the domain, any element is equally likely to be the minimum. It has been established that a min-wise independent family of permutations must include at least</p>
+
+<p>
+
+<math display="block" id="MinHash:72">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>l</mi>
+    <mi>c</mi>
+    <mi>m</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>1</mn>
+     <mo>,</mo>
+     <mn>2</mn>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <mi>n</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>≥</mo>
+   <msup>
+    <mi>e</mi>
+    <mrow>
+     <mi>n</mi>
+     <mo>-</mo>
+     <mrow>
+      <mi>o</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>n</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <geq></geq>
+    <apply>
+     <times></times>
+     <ci>l</ci>
+     <ci>c</ci>
+     <ci>m</ci>
+     <vector>
+      <cn type="integer">1</cn>
+      <cn type="integer">2</cn>
+      <ci>normal-…</ci>
+      <ci>n</ci>
+     </vector>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>e</ci>
+     <apply>
+      <minus></minus>
+      <ci>n</ci>
+      <apply>
+       <times></times>
+       <ci>o</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   lcm(1,2,...,n)\geq e^{n-o(n)}
+  </annotation>
+ </semantics>
+</math>
+
+ different permutations, and therefore that it needs 
+
+<math display="inline" id="MinHash:73">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Ω</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>normal-Ω</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Ω(n)
+  </annotation>
+ </semantics>
+</math>
+
+ bits to specify a single permutation, still infeasibly large.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+
+<p>Because of this impracticality, two variant notions of min-wise independence have been introduced: restricted min-wise independent permutations families, and approximate min-wise independent families. Restricted min-wise independence is the min-wise independence property restricted to certain sets of cardinality at most 
+
+<math display="inline" id="MinHash:74">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Approximate min-wise independence has at most a fixed probability 
+
+<math display="inline" id="MinHash:75">
+ <semantics>
+  <mi>ε</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ε</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ε
+  </annotation>
+ </semantics>
+</math>
+
+ of varying from full independence.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+<h2 id="applications">Applications</h2>
+
+<p>The original applications for MinHash involved clustering and eliminating near-duplicates among web documents, represented as sets of the words occurring in those documents.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a><a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> Similar techniques have also been used for clustering and near-duplicate elimination for other types of data, such as images: in the case of image data, an image can be represented as a set of smaller subimages cropped from it, or as sets of more complex image feature descriptions.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>In <a href="data_mining" title="wikilink">data mining</a>,  use MinHash as a tool for <a href="association_rule_learning" title="wikilink">association rule learning</a>. Given a database in which each entry has multiple attributes (viewed as a 0-1 matrix with a row per database entry and a column per attribute) they use MinHash-based approximations to the Jaccard index to identify candidate pairs of attributes that frequently co-occur, and then compute the exact value of the index for only those pairs to determine the ones whose frequencies of co-occurrence are below a given strict threshold.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+<h2 id="other-uses">Other uses</h2>
+
+<p>The MinHash scheme may be seen as an instance of <a href="locality_sensitive_hashing" title="wikilink">locality sensitive hashing</a>, a collection of techniques for using hash functions to map large sets of objects down to smaller hash values in such a way that, when two objects have a small distance from each other, their hash values are likely to be the same. In this instance, the signature of a set may be seen as its hash value. Other locality sensitive hashing techniques exist for <a href="Hamming_distance" title="wikilink">Hamming distance</a> between sets and <a href="cosine_distance" title="wikilink">cosine distance</a> between <a href="Euclidean_vector" title="wikilink">vectors</a>; locality sensitive hashing has important applications in <a href="nearest_neighbor_search" title="wikilink">nearest neighbor search</a> algorithms.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> For large distributed systems, and in particular <a class="uri" href="MapReduce" title="wikilink">MapReduce</a>, there exist modified versions of MinHash to help compute similarities with no dependence on the point dimension.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h2 id="evaluation-and-benchmarks">Evaluation and benchmarks</h2>
+
+<p>A large scale evaluation has been conducted by <a class="uri" href="Google" title="wikilink">Google</a> in 2006 <a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> to compare the performance of Minhash and <a class="uri" href="Simhash" title="wikilink">Simhash</a><a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> algorithms. In 2007 Google reported using Simhash for duplicate detection for web crawling<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a> and using Minhash and <a href="Locality-sensitive_hashing" title="wikilink">LSH</a> for <a href="Google_News" title="wikilink">Google News</a> personalization.<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Approximate_string_matching" title="wikilink">Approximate string matching</a></li>
+<li><a href="Rolling_hash" title="wikilink">Rolling hash</a></li>
+<li><a class="uri" href="w-shingling" title="wikilink">w-shingling</a></li>
+<li><a href="Tabulation_hashing" title="wikilink">Tabulation hashing</a></li>
+<li><a href="Bloom_filter" title="wikilink">Bloom filter</a></li>
+<li><a href="Count-Min_sketch" title="wikilink">Count-Min sketch</a></li>
+<li><a href="Set_cover_problem" title="wikilink">Set cover problem</a></li>
+<li><a href="Levenshtein_distance" title="wikilink">Levenshtein distance</a></li>
+<li><a href="String_metric" title="wikilink">String metric</a></li>
+<li><a href="Semantic_hashing" title="wikilink">Semantic hashing</a><ref>R. R. Salakhutdinov and G. E. Hinton. Semantic hashing. In SIGIR workshop on Information Retrieval and applications</ref></li>
+</ul>
+
+<p>of Graphical Models, 2007.</p>
+<ul>
+<li><a href="Spectral_hashing" title="wikilink">Spectral hashing</a><a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://infolab.stanford.edu/~ullman/mmds.html">Mining of Massive Datasets, Ch. 3. Finding similar Items</a></li>
+<li><a href="http://moultano.wordpress.com/article/simple-simhashing-3kbzhsxyg4467-6/">Simple Simhashing</a></li>
+<li><a href="http://blogs.msdn.com/b/spt/archive/2008/06/10/set-similarity-and-min-hash.aspx">Set Similarity &amp; MinHash - C# implementation</a></li>
+<li><a href="http://blogs.msdn.com/b/spt/archive/2008/06/11/locality-sensitive-hashing-lsh-and-min-hash.aspx">Minhash with LSH for all-pair search (C# implementation)</a></li>
+<li><a href="http://mymagnadata.wordpress.com/2011/01/04/minhash-java-implementation/">MinHash – Java implementation</a></li>
+<li><a href="https://github.com/pmandera/duometer">MinHash – Scala implementation and a duplicate detection tool</a></li>
+<li><a href="https://code.google.com/p/google-all-pairs-similarity-search/">All pairs similarity search (Google Research)</a></li>
+<li><a href="http://reference.wolfram.com/mathematica/guide/DistanceAndSimilarityMeasures.html">Distance and Similarity Measures(Wolfram Alpha)</a></li>
+<li><a href="https://code.google.com/p/py-nilsimsa/source/browse/trunk/nilsimsa/__init__.py">Nilsimsa hash (Python implementation)</a></li>
+<li><a href="http://matpalm.com/resemblance/simhash/">Simhash</a></li>
+</ul>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Hash_functions" title="wikilink">Category:Hash functions</a> <a href="Category:Clustering_criteria" title="wikilink">Category:Clustering criteria</a> <a class="uri" href="Category:Hashing" title="wikilink">Category:Hashing</a> <a href="Category:Probabilistic_data_structures" title="wikilink">Category:Probabilistic data structures</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"></li>
+<li id="fn2">.<a href="#fnref2">↩</a></li>
+<li id="fn3">.<a href="#fnref3">↩</a></li>
+<li id="fn4">.<a href="#fnref4">↩</a></li>
+<li id="fn5"></li>
+<li id="fn6">.<a href="#fnref6">↩</a></li>
+<li id="fn7">.<a href="#fnref7">↩</a></li>
+<li id="fn8"></li>
+<li id="fn9"></li>
+<li id="fn10">; .<a href="#fnref10">↩</a></li>
+<li id="fn11">.<a href="#fnref11">↩</a></li>
+<li id="fn12">.<a href="#fnref12">↩</a></li>
+<li id="fn13">.<a href="#fnref13">↩</a></li>
+<li id="fn14">.<a href="#fnref14">↩</a></li>
+<li id="fn15">.<a href="#fnref15">↩</a></li>
+<li id="fn16">.<a href="#fnref16">↩</a></li>
+<li id="fn17">.<a href="#fnref17">↩</a></li>
+<li id="fn18">Weiss, Yair, Antonio Torralba, and Rob Fergus. "Spectral hashing." Advances in neural information processing systems. 2009.<a href="#fnref18">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

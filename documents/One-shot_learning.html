@@ -1,0 +1,4722 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1824">One-shot learning</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>One-shot learning</h1>
+<hr/>
+
+<p><strong>One-shot learning</strong> is an object categorization problem of current research interest in <a href="computer_vision" title="wikilink">computer vision</a>. Whereas most <a href="machine_learning" title="wikilink">machine learning</a> based object categorization algorithms require training on hundreds or thousands of images and very large datasets, one-shot learning aims to learn information about object categories from one, or only a few, training images.</p>
+
+<p>The primary focus of this article will be on the solution to this problem presented by L. Fei-Fei, R. Fergus and P. Perona in <a href="IEEE_Transactions_on_Pattern_Analysis_and_Machine_Intelligence" title="wikilink">IEEE Transactions on Pattern Analysis and Machine Intelligence</a>, Vol28(4), 2006, which uses a <a href="generative_model" title="wikilink">generative</a> object category model and <a href="variational_Bayesian_methods" title="wikilink">variational Bayesian</a> framework for representation and learning of visual object categories from a handful of training examples. Another paper, presented at the <a href="CVPR" title="wikilink">International Conference on Computer Vision and Pattern Recognition</a> (<a class="uri" href="CVPR" title="wikilink">CVPR</a>) 2000 by Erik Miller, Nicholas Matsakis, and Paul Viola will also be discussed.</p>
+<h2 id="motivation">Motivation</h2>
+
+<p>The ability to learn object categories from few examples, and at a rapid pace, has been demonstrated in humans,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> and it is estimated that a child has learned almost of all the 10 ~ 30 thousand object categories in the world by the age of six.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> Yet this achievement of the human mind is due not only to its computational power, but also to its ability to synthesize and learn new object classes from existing information about different, previously learned classes. The images below illustrate the idea that given two examples from two different object classes: one, an unknown object composed of familiar shapes, the second, an unknown, amorphous shape; it is much easier for humans to recognize the former than the latter, suggesting that humans make use of this existing knowledge of previously learned classes when learning new ones. Thus the key motivation and intuition for this one-shot learning technique in the artificial, computational world is that systems, like humans, can use prior information of object categories to learn and classify new objects.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+<h2 id="background">Background</h2>
+
+<p>As with most classification schemes, one-shot learning involves three main challenges: "</p>
+<ul>
+<li><em>Representation</em>: How should we model objects and categories?</li>
+</ul>
+<ul>
+<li><em>Learning</em>: How may we acquire such models?</li>
+</ul>
+<ul>
+<li><em>Recognition</em>: Given a new image, how do we detect the presence of a known object/category amongst clutter, and despite occlusion, viewpoint, and lighting changes?"<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></li>
+</ul>
+
+<p>However, one-shot learning differs greatly from single object recognition and even standard category recognition algorithms is in its emphasis on the principle of <em>knowledge transfer</em>, which encapsulates prior knowledge of learnt categories and allows for learning on minimal training examples.</p>
+<ul>
+<li><strong>Knowledge transfer by model parameters</strong>: One set of algorithms for one-shot learning achieves knowledge transfer through the reuse of model parameters, often exploiting the similarity between previously learned classes and the new object classes to be learned. Classes of objects are first learned on numerous training examples (i.e. not in a one-shot fashion), then new object classes are learned using transformations of model parameters from the previously learnt classes or selection relevant parameters for a classifier as in M. Fink, 2004.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></li>
+<li><strong>Knowledge transfer by sharing features</strong>: Another class of algorithms achieves knowledge transfer by sharing parts or features of objects across classes. In a paper presented at <a class="uri" href="CVPR" title="wikilink">CVPR</a> 2005 by Bart and Ullman, an algorithm extracts "diagnostic information" in patches from already learnt classes by maximizing the patches' <a href="mutual_information" title="wikilink">mutual information</a>, and then applies these features to the learning of a new class. A <em>dog</em> class, for example, may be learned in one shot from previous knowledge of <em>horse</em> and <em>cow</em> classes, because <em>dog</em> objects may contain similar distinguishing patches.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></li>
+<li><strong>Knowledge transfer by contextual information</strong>: Whereas the previous two groups of knowledge transfer work in one-shot learning relied on the similarity between new object classes and the previously learned classes on which they were based, transfer by contextual information instead appeals to global knowledge of the scene in which the object is placed. A paper presented at <a href="Conference_on_Neural_Information_Processing_Systems" title="wikilink">NIPS</a> 2004 by K. Murphy et al. uses such global information as frequency distributions in a <a href="conditional_random_field" title="wikilink">conditional random field</a> framework to recognize objects.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> Another algorithm by D. Hoiem et al. makes use of contextual information in the form of camera height and scene geometry to prune object detection.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> Algorithms of this type have two advantages. First, they should be able to learn object classes which are relatively dissimilar in visual appearance; and second, they should perform well precisely in situations where an image has not been hand-cropped and carefully aligned, but rather which naturally occur.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></li>
+</ul>
+<h2 id="theory">Theory</h2>
+
+<p>The Bayesian one-shot learning algorithm represents the foreground and background of images as parametrized by a mixture of constellation models.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> During the learning phase, the parameters of these models are learned using a <a href="conjugate_prior" title="wikilink">conjugate</a> density parameter <a href="posterior_probability" title="wikilink">posterior</a> and Variational Bayesian <a class="uri" href="Expectation-Maximization" title="wikilink">Expectation-Maximization</a> (VBEM).<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> It is in this stage that the object classes learned previously outside of the one-shot framework inform the choice of model parameters via transfer by contextual information. For object recognition on new images, the posterior obtained during the learning phase is used in a Bayesian decision framework to estimate the ratio of p(object | test, train) to p(background clutter | test, train).<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a></p>
+<h3 id="bayesian-framework">Bayesian framework</h3>
+
+<p>Given the task of finding a particular object in a query image, the overall objective of the Bayesian One-Shot Learning algorithm is to compare the probability that that object is present in the image and the probability that only background clutter is present in the image. If the former probability is higher, the algorithm reports the object's presence in the image, and if the latter probability is higher, the algorithm reports the absence of that object in the image. In order to compute these probabilities, the object class must be modelled from a set of (1 ~ 5) training images containing examples of that object.</p>
+
+<p>To formalize these ideas, let 
+
+<math display="inline" id="One-shot_learning:0">
+ <semantics>
+  <mi>I</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>I</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I
+  </annotation>
+ </semantics>
+</math>
+
+ be the query image, which contains either an example of the foreground category 
+
+<math display="inline" id="One-shot_learning:1">
+ <semantics>
+  <msub>
+   <mi>O</mi>
+   <mrow>
+    <mi>f</mi>
+    <mi>g</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>f</ci>
+     <ci>g</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O_{fg}
+  </annotation>
+ </semantics>
+</math>
+
+ or only background clutter of a generic background category 
+
+<math display="inline" id="One-shot_learning:2">
+ <semantics>
+  <msub>
+   <mi>O</mi>
+   <mrow>
+    <mi>b</mi>
+    <mi>g</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>O</ci>
+    <apply>
+     <times></times>
+     <ci>b</ci>
+     <ci>g</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O_{bg}
+  </annotation>
+ </semantics>
+</math>
+
+. Also let 
+
+<math display="inline" id="One-shot_learning:3">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{t}
+  </annotation>
+ </semantics>
+</math>
+
+
+ be the set of training images used as the foreground category. The decision of whether 
+
+<math display="inline" id="One-shot_learning:4">
+ <semantics>
+  <mi>I</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>I</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I
+  </annotation>
+ </semantics>
+</math>
+
+ contains an object from the foreground category, or only clutter from the background category is:</p>
+
+<p>
+
+<math display="block" id="One-shot_learning:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>R</mi>
+    <mo>=</mo>
+    <mfrac>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>O</mi>
+        <mrow>
+         <mi>f</mi>
+         <mi>g</mi>
+        </mrow>
+       </msub>
+       <mo stretchy="false">|</mo>
+       <mi>I</mi>
+       <mo>,</mo>
+       <msub>
+        <mi>I</mi>
+        <mi>t</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>O</mi>
+        <mrow>
+         <mi>b</mi>
+         <mi>g</mi>
+        </mrow>
+       </msub>
+       <mo stretchy="false">|</mo>
+       <mi>I</mi>
+       <mo>,</mo>
+       <msub>
+        <mi>I</mi>
+        <mi>t</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+    <mo>=</mo>
+    <mfrac>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>I</mi>
+       <mo stretchy="false">|</mo>
+       <msub>
+        <mi>I</mi>
+        <mi>t</mi>
+       </msub>
+       <mo>,</mo>
+       <msub>
+        <mi>O</mi>
+        <mrow>
+         <mi>f</mi>
+         <mi>g</mi>
+        </mrow>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>O</mi>
+        <mrow>
+         <mi>f</mi>
+         <mi>g</mi>
+        </mrow>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>I</mi>
+       <mo stretchy="false">|</mo>
+       <msub>
+        <mi>I</mi>
+        <mi>t</mi>
+       </msub>
+       <mo>,</mo>
+       <msub>
+        <mi>O</mi>
+        <mrow>
+         <mi>b</mi>
+         <mi>g</mi>
+        </mrow>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>O</mi>
+        <mrow>
+         <mi>b</mi>
+         <mi>g</mi>
+        </mrow>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>R</ci>
+     <apply>
+      <divide></divide>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>f</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-|</ci>
+        <csymbol cd="unknown">I</csymbol>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>I</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+      </cerror>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-|</ci>
+        <csymbol cd="unknown">I</csymbol>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>I</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+      </cerror>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">I</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>I</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>f</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>f</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+      </cerror>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">I</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>I</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+      </cerror>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R=\frac{p(O_{fg}|I,I_{t})}{p(O_{bg}|I,I_{t})}=\frac{p(I|I_{t},O_{fg})p(O_{fg})%
+}{p(I|I_{t},O_{bg})p(O_{bg})},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where the class posteriors 
+
+<math display="inline" id="One-shot_learning:6">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>f</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <mi>I</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>I</mi>
+     <mi>t</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">I</csymbol>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>I</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(O_{fg}|I,I_{t})
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="One-shot_learning:7">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>b</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <mi>I</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>I</mi>
+     <mi>t</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>b</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">I</csymbol>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>I</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(O_{bg}|I,I_{t})
+  </annotation>
+ </semantics>
+</math>
+
+ have been expanded by <a href="Bayes'_Theorem" title="wikilink">Bayes' Theorem</a>, yielding a ratio of <a href="likelihood_function" title="wikilink">likelihoods</a> and a ratio of object category <a href="prior_distribution" title="wikilink">priors</a>. We decide that the image 
+
+<math display="inline" id="One-shot_learning:8">
+ <semantics>
+  <mi>I</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>I</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I
+  </annotation>
+ </semantics>
+</math>
+
+
+ contains an object from the foreground class iff 
+
+<math display="inline" id="One-shot_learning:9">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ exceeds a certain threshold 
+
+<math display="inline" id="One-shot_learning:10">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T
+  </annotation>
+ </semantics>
+</math>
+
+. We next introduce parametric models for the foreground and background classes with parameters 
+
+<math display="inline" id="One-shot_learning:11">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="One-shot_learning:12">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mrow>
+    <mi>b</mi>
+    <mi>g</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <apply>
+     <times></times>
+     <ci>b</ci>
+     <ci>g</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{bg}
+  </annotation>
+ </semantics>
+</math>
+
+ respectively. This foreground parametric model is learned during the learning stage from training images 
+
+<math display="inline" id="One-shot_learning:13">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{t}
+  </annotation>
+ </semantics>
+</math>
+
+
+, as well as prior information of learnt classes. The background model we assume to be uniform across images. Omitting the constant ratio of category priors, 
+
+<math display="inline" id="One-shot_learning:14">
+ <semantics>
+  <mfrac>
+   <mrow>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>O</mi>
+      <mrow>
+       <mi>f</mi>
+       <mi>g</mi>
+      </mrow>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mrow>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>O</mi>
+      <mrow>
+       <mi>b</mi>
+       <mi>g</mi>
+      </mrow>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mfrac>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>b</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{p(O_{fg})}{p(O_{bg})}
+  </annotation>
+ </semantics>
+</math>
+
+, and parametrizing over 
+
+<math display="inline" id="One-shot_learning:15">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="One-shot_learning:16">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mrow>
+    <mi>b</mi>
+    <mi>g</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <apply>
+     <times></times>
+     <ci>b</ci>
+     <ci>g</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{bg}
+  </annotation>
+ </semantics>
+</math>
+
+ yields:</p>
+
+<p>
+
+<math display="block" id="One-shot_learning:17">
+ <semantics>
+  <mrow>
+   <mi>R</mi>
+   <mo>∝</mo>
+   <mfrac>
+    <mrow>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>I</mi>
+      <mo stretchy="false">|</mo>
+      <mi>θ</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>f</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>I</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>f</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <mi>θ</mi>
+    </mrow>
+    <mrow>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>I</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>θ</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>θ</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>I</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <msub>
+      <mi>θ</mi>
+      <mrow>
+       <mi>b</mi>
+       <mi>g</mi>
+      </mrow>
+     </msub>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>I</mi>
+      <mo stretchy="false">|</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>I</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>f</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <mi>θ</mi>
+    </mrow>
+    <mrow>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>I</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>θ</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>θ</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>I</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <msub>
+      <mi>θ</mi>
+      <mrow>
+       <mi>b</mi>
+       <mi>g</mi>
+      </mrow>
+     </msub>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <csymbol cd="latexml">proportional-to</csymbol>
+     <ci>R</ci>
+     <apply>
+      <divide></divide>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <int></int>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">I</csymbol>
+        <ci>normal-|</ci>
+        <csymbol cd="unknown">θ</csymbol>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>f</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">θ</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>I</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>f</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">d</csymbol>
+       <csymbol cd="unknown">θ</csymbol>
+      </cerror>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <int></int>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">I</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>I</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">d</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <apply>
+         <times></times>
+         <ci>b</ci>
+         <ci>g</ci>
+        </apply>
+       </apply>
+      </cerror>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <int></int>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">I</csymbol>
+        <ci>normal-|</ci>
+        <csymbol cd="unknown">θ</csymbol>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">θ</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>I</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>f</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">d</csymbol>
+       <csymbol cd="unknown">θ</csymbol>
+      </cerror>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <int></int>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">I</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>I</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">d</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <apply>
+         <times></times>
+         <ci>b</ci>
+         <ci>g</ci>
+        </apply>
+       </apply>
+      </cerror>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R\propto\frac{\int{p(I|\theta,O_{fg})p(\theta|I_{t},O_{fg})}d\theta}{\int{p(I|%
+\theta_{bg},O_{bg})p(\theta_{bg}|I_{t},O_{bg})}d\theta_{bg}}=\frac{\int{p(I|%
+\theta)p(\theta|I_{t},O_{fg})}d\theta}{\int{p(I|\theta_{bg})p(\theta_{bg}|I_{t%
+},O_{bg})}d\theta_{bg}}
+  </annotation>
+ </semantics>
+</math>
+
+, having simplified 
+
+<math display="inline" id="One-shot_learning:18">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>I</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>f</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">I</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(I|\theta,O_{fg})
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="One-shot_learning:19">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>I</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>b</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">I</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>b</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(I|\theta,O_{bg})
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="One-shot_learning:20">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>I</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>θ</mi>
+     <mrow>
+      <mi>f</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">I</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(I|\theta_{fg})
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="One-shot_learning:21">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>I</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>θ</mi>
+     <mrow>
+      <mi>b</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">I</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <apply>
+       <times></times>
+       <ci>b</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(I|\theta_{bg}).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The posterior distribution of model parameters given the training images, 
+
+<math display="inline" id="One-shot_learning:22">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>I</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>f</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>I</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|I_{t},O_{fg})
+  </annotation>
+ </semantics>
+</math>
+
+ is estimated in the learning phase of the algorithm. In this estimation, one-shot learning deviates sharply from more traditional Bayesian estimation models which approximate the integral as 
+
+<math display="inline" id="One-shot_learning:23">
+ <semantics>
+  <mrow>
+   <mi>δ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>θ</mi>
+     <mrow>
+      <mi>M</mi>
+      <mi>L</mi>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>δ</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>θ</ci>
+     <apply>
+      <times></times>
+      <ci>M</ci>
+      <ci>L</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \delta(\theta^{ML})
+  </annotation>
+ </semantics>
+</math>
+
+
+, in favor of a variational approach which makes use of prior information from previously learnt categories. For the background model, however, as well as the categories learned in advance through numerous training examples, this traditional <a href="maximum_likelihood_estimation" title="wikilink">maximum likelihood estimation</a> of the model parameters is used.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a></p>
+<h3 id="object-category-model">Object category model</h3>
+
+<p>For each query image 
+
+<math display="inline" id="One-shot_learning:24">
+ <semantics>
+  <mi>I</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>I</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I
+  </annotation>
+ </semantics>
+</math>
+
+ and training images 
+
+<math display="inline" id="One-shot_learning:25">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{t}
+  </annotation>
+ </semantics>
+</math>
+
+, a <a href="constellation_model" title="wikilink">constellation model</a> is used for representation.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a><a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a><a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> To obtain this model for a given image 
+
+<math display="inline" id="One-shot_learning:26">
+ <semantics>
+  <mi>I</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>I</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I
+  </annotation>
+ </semantics>
+</math>
+
+, first a set of N interesting regions is detected in the image using the <a href="Kadir_brady_saliency_detector" title="wikilink">Kadir brady saliency detector</a>.<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a> Each region selected is represented by a location in the image, 
+
+<math display="inline" id="One-shot_learning:27">
+ <semantics>
+  <msub>
+   <mi>X</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>X</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ and a description of its appearance, 
+
+<math display="inline" id="One-shot_learning:28">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{i}
+  </annotation>
+ </semantics>
+</math>
+
+
+. Letting 
+
+<math display="inline" id="One-shot_learning:29">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>X</mi>
+    <mo>=</mo>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>N</mi>
+     </msubsup>
+     <msub>
+      <mi>X</mi>
+      <mi>i</mi>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <mi>A</mi>
+    <mo>=</mo>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>N</mi>
+     </msubsup>
+     <msub>
+      <mi>A</mi>
+      <mi>i</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <ci>X</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>X</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <ci>A</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>A</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X=\sum_{i=1}^{N}X_{i},A=\sum_{i=1}^{N}A_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="One-shot_learning:30">
+ <semantics>
+  <msub>
+   <mi>X</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>X</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{t}
+  </annotation>
+ </semantics>
+</math>
+
+and 
+
+<math display="inline" id="One-shot_learning:31">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{t}
+  </annotation>
+ </semantics>
+</math>
+
+ the analogous representations for training images, the expression for R becomes:</p>
+
+<p>
+
+<math display="block" id="One-shot_learning:32">
+ <semantics>
+  <mrow>
+   <mi>R</mi>
+   <mo>∝</mo>
+   <mfrac>
+    <mrow>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>X</mi>
+      <mo>,</mo>
+      <mi>A</mi>
+      <mo stretchy="false">|</mo>
+      <mi>θ</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>f</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>X</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>A</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>f</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <mi>θ</mi>
+    </mrow>
+    <mrow>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>X</mi>
+      <mo>,</mo>
+      <mi>A</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>θ</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>θ</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>X</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>A</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <msub>
+      <mi>θ</mi>
+      <mrow>
+       <mi>b</mi>
+       <mi>g</mi>
+      </mrow>
+     </msub>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>X</mi>
+      <mo>,</mo>
+      <mi>A</mi>
+      <mo stretchy="false">|</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>X</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>A</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>f</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <mi>θ</mi>
+    </mrow>
+    <mrow>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>X</mi>
+      <mo>,</mo>
+      <mi>A</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>θ</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>θ</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>X</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>A</mi>
+       <mi>t</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>O</mi>
+       <mrow>
+        <mi>b</mi>
+        <mi>g</mi>
+       </mrow>
+      </msub>
+      <mo rspace="4.2pt" stretchy="false">)</mo>
+     </mrow>
+     <mi>d</mi>
+     <msub>
+      <mi>θ</mi>
+      <mrow>
+       <mi>b</mi>
+       <mi>g</mi>
+      </mrow>
+     </msub>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <csymbol cd="latexml">proportional-to</csymbol>
+     <ci>R</ci>
+     <apply>
+      <divide></divide>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <int></int>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">X</csymbol>
+        <ci>normal-,</ci>
+        <csymbol cd="unknown">A</csymbol>
+        <ci>normal-|</ci>
+        <csymbol cd="unknown">θ</csymbol>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>f</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">θ</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>X</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>A</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>f</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">d</csymbol>
+       <csymbol cd="unknown">θ</csymbol>
+      </cerror>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <int></int>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">X</csymbol>
+        <ci>normal-,</ci>
+        <csymbol cd="unknown">A</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>X</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>A</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">d</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <apply>
+         <times></times>
+         <ci>b</ci>
+         <ci>g</ci>
+        </apply>
+       </apply>
+      </cerror>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <int></int>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">X</csymbol>
+        <ci>normal-,</ci>
+        <csymbol cd="unknown">A</csymbol>
+        <ci>normal-|</ci>
+        <csymbol cd="unknown">θ</csymbol>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">θ</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>X</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>A</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>f</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">d</csymbol>
+       <csymbol cd="unknown">θ</csymbol>
+      </cerror>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <int></int>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">X</csymbol>
+        <ci>normal-,</ci>
+        <csymbol cd="unknown">A</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>X</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>A</ci>
+         <ci>t</ci>
+        </apply>
+        <ci>normal-,</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>O</ci>
+         <apply>
+          <times></times>
+          <ci>b</ci>
+          <ci>g</ci>
+         </apply>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="unknown">d</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <apply>
+         <times></times>
+         <ci>b</ci>
+         <ci>g</ci>
+        </apply>
+       </apply>
+      </cerror>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R\propto\frac{\int{p(X,A|\theta,O_{fg})p(\theta|X_{t},A_{t},O_{fg})}d\theta}{%
+\int{p(X,A|\theta_{bg},O_{bg})p(\theta_{bg}|X_{t},A_{t},O_{bg})}d\theta_{bg}}=%
+\frac{\int{p(X,A|\theta)p(\theta|X_{t},A_{t},O_{fg})}d\theta}{\int{p(X,A|%
+\theta_{bg})p(\theta_{bg}|X_{t},A_{t},O_{bg})}\,d\theta_{bg}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The likelihoods 
+
+<math display="inline" id="One-shot_learning:33">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(X,A|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="One-shot_learning:34">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>θ</mi>
+     <mrow>
+      <mi>b</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <apply>
+       <times></times>
+       <ci>b</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(X,A|\theta_{bg})
+  </annotation>
+ </semantics>
+</math>
+
+ are represented as <a href="mixture_model" title="wikilink">mixtures</a> of constellation models. A typical constellation model has P(3 ~ 7) parts, but there are N(~100) interest regions. Thus a P-dimensional vector <strong>h</strong> assigns one region of interest (out of N regions) to each model part (for P parts). Thus <strong>h</strong> denotes a <em>hypothesis</em> (an assignment of interest regions to model parts) for the model and a full constellation model is represented by summing over all possible hypotheses <strong>h</strong> in the hypothesis space 
+
+<math display="inline" id="One-shot_learning:35">
+ <semantics>
+  <mi>H</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>H</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H
+  </annotation>
+ </semantics>
+</math>
+
+. Finally the likelihood is written</p>
+
+<p>
+
+<math display="block" id="One-shot_learning:36">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+    <mrow>
+     <mi>ω</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi mathvariant="normal">Ω</mi>
+   </munderover>
+   <munder>
+    <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+    <mrow>
+     <mtext>𝐡</mtext>
+     <mo>∈</mo>
+     <mi>H</mi>
+    </mrow>
+   </munder>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mtext>𝐡</mtext>
+    <mo>,</mo>
+    <mi>ω</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <eq></eq>
+       <ci>ω</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-Ω</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <sum></sum>
+     <apply>
+      <in></in>
+      <mtext>h</mtext>
+      <ci>H</ci>
+     </apply>
+    </apply>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-,</ci>
+     <mtext>h</mtext>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">ω</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(X,A|\theta)=\sum_{\omega=1}^{\Omega}\sum_{\textbf{h}\in H}p(X,A,\textbf{h},%
+\omega|\theta).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The different 
+
+<math display="inline" id="One-shot_learning:37">
+ <semantics>
+  <mi>ω</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ω</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \omega
+  </annotation>
+ </semantics>
+</math>
+
+'s represent different configurations of parts, whereas the different hypotheses <strong>h</strong> represent different assignations of regions to parts, given a part model 
+
+<math display="inline" id="One-shot_learning:38">
+ <semantics>
+  <mi>ω</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ω</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \omega
+  </annotation>
+ </semantics>
+</math>
+
+
+. The assumption that the shape of the model (as represented by 
+
+<math display="inline" id="One-shot_learning:39">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+, the collection of part locations) and appearance are independent allows one to consider the likelihood expression 
+
+<math display="inline" id="One-shot_learning:40">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mtext>𝐡</mtext>
+    <mo>,</mo>
+    <mi>ω</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-,</ci>
+     <mtext>h</mtext>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">ω</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(X,A,\textbf{h},\omega|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+ as two separate likelihoods of appearance and shape.<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a></p>
+<h4 id="appearance">Appearance</h4>
+
+<p>The appearance of each feature is represented by a point in appearance space (discussed below in implementation). "Each part 
+
+<math display="inline" id="One-shot_learning:41">
+ <semantics>
+  <mi>p</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>p</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p
+  </annotation>
+ </semantics>
+</math>
+
+ in the constellation model has a Gaussian density within this space with mean and precision parameters 
+
+<math display="inline" id="One-shot_learning:42">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>θ</mi>
+    <mrow>
+     <mi>p</mi>
+     <mo>,</mo>
+     <mi>ω</mi>
+    </mrow>
+    <mi>A</mi>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mi>μ</mi>
+     <mrow>
+      <mi>p</mi>
+      <mo>,</mo>
+      <mi>ω</mi>
+     </mrow>
+     <mi>A</mi>
+    </msubsup>
+    <mo>,</mo>
+    <msubsup>
+     <mi mathvariant="normal">Γ</mi>
+     <mrow>
+      <mi>p</mi>
+      <mo>,</mo>
+      <mi>ω</mi>
+     </mrow>
+     <mi>A</mi>
+    </msubsup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <list>
+       <ci>p</ci>
+       <ci>ω</ci>
+      </list>
+     </apply>
+     <ci>A</ci>
+    </apply>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>μ</ci>
+       <list>
+        <ci>p</ci>
+        <ci>ω</ci>
+       </list>
+      </apply>
+      <ci>A</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Γ</ci>
+       <list>
+        <ci>p</ci>
+        <ci>ω</ci>
+       </list>
+      </apply>
+      <ci>A</ci>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{p,\omega}^{A}={\mu_{p,\omega}^{A},\Gamma_{p,\omega}^{A}}
+  </annotation>
+ </semantics>
+</math>
+
+." From these the appearance likelihood described above is computed as a product of Gaussians over the model parts for a give hypothesis <strong>h</strong> and mixture component 
+
+<math display="inline" id="One-shot_learning:43">
+ <semantics>
+  <mi>ω</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ω</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \omega
+  </annotation>
+ </semantics>
+</math>
+
+
+.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a></p>
+<h4 id="shape">Shape</h4>
+
+<p>The shape of the model for a given mixture component 
+
+<math display="inline" id="One-shot_learning:44">
+ <semantics>
+  <mi>ω</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ω</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \omega
+  </annotation>
+ </semantics>
+</math>
+
+ and hypothesis <strong>h</strong> is represented as a joint Gaussian density of the locations of features. These features are transformed into a scale and translation-invariant space before modelling the relative location of the parts by a 2(P - 1)-dimensional Gaussian. From this, we obtain the shape likelihood, completing our representation of 
+
+<math display="inline" id="One-shot_learning:45">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mtext>𝐡</mtext>
+    <mo>,</mo>
+    <mi>ω</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-,</ci>
+     <mtext>h</mtext>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">ω</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(X,A,\textbf{h},\omega|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+ . In order to reduce the number of hypotheses in the hypothesis space 
+
+<math display="inline" id="One-shot_learning:46">
+ <semantics>
+  <mi>H</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>H</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H
+  </annotation>
+ </semantics>
+</math>
+
+, only those hypotheses which satisfy the ordering constraint that the x-coordinate of each part is monotonically increasing are considered. This eliminates 
+
+<math display="inline" id="One-shot_learning:47">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mo lspace="0pt" rspace="3.5pt">!</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <factorial></factorial>
+    <ci>P</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P!
+  </annotation>
+ </semantics>
+</math>
+
+ hypotheses from 
+
+<math display="inline" id="One-shot_learning:48">
+ <semantics>
+  <mi>H</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>H</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H
+  </annotation>
+ </semantics>
+</math>
+
+
+.<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a></p>
+<h3 id="conjugate-densities">Conjugate densities</h3>
+
+<p>In order to compute 
+
+<math display="inline" id="One-shot_learning:49">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+, the integral 
+
+<math display="inline" id="One-shot_learning:50">
+ <semantics>
+  <mrow>
+   <mo largeop="true" symmetric="true">∫</mo>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>X</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>A</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>f</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <mi>θ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <int></int>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>A</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <csymbol cd="unknown">θ</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \int{p(X,A|\theta)p(\theta|X_{t},A_{t},O_{fg})}d\theta
+  </annotation>
+ </semantics>
+</math>
+
+ must be evaluated, but is analytically intractable. The object category model above gives information about 
+
+<math display="inline" id="One-shot_learning:51">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(X,A|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+, so what remains is to examine 
+
+<math display="inline" id="One-shot_learning:52">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>X</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>A</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <mi>O</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>A</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">O</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|X_{t},A_{t},O)
+  </annotation>
+ </semantics>
+</math>
+
+, the posterior of 
+
+<math display="inline" id="One-shot_learning:53">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+
+, and find a sufficient approximation to render the integral tractable. Previous work approximates the posterior by a 
+
+<math display="inline" id="One-shot_learning:54">
+ <semantics>
+  <mi>δ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>δ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \delta
+  </annotation>
+ </semantics>
+</math>
+
+function centered at 
+
+<math display="inline" id="One-shot_learning:55">
+ <semantics>
+  <msup>
+   <mi>θ</mi>
+   <mo>*</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>θ</ci>
+    <times></times>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta^{*}
+  </annotation>
+ </semantics>
+</math>
+
+, collapsing the integral in question into 
+
+<math display="inline" id="One-shot_learning:56">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>θ</mi>
+     <mo>*</mo>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>θ</ci>
+      <times></times>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(X,A|\theta^{*})
+  </annotation>
+ </semantics>
+</math>
+
+. This 
+
+<math display="inline" id="One-shot_learning:57">
+ <semantics>
+  <msup>
+   <mi>θ</mi>
+   <mo>*</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>θ</ci>
+    <times></times>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta^{*}
+  </annotation>
+ </semantics>
+</math>
+
+ is normally estimated using a <a href="Maximum_Likelihood" title="wikilink">Maximum Likelihood</a> (
+
+<math display="inline" id="One-shot_learning:58">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>θ</mi>
+    <mo>*</mo>
+   </msup>
+   <mo>=</mo>
+   <msup>
+    <mi>θ</mi>
+    <mrow>
+     <mi>M</mi>
+     <mi>L</mi>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>θ</ci>
+     <times></times>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>θ</ci>
+     <apply>
+      <times></times>
+      <ci>M</ci>
+      <ci>L</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta^{*}=\theta^{ML}
+  </annotation>
+ </semantics>
+</math>
+
+
+) or <a href="Maximum_A_Posteriori" title="wikilink">Maximum A Posteriori</a> (
+
+<math display="inline" id="One-shot_learning:59">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>θ</mi>
+    <mo>*</mo>
+   </msup>
+   <mo>=</mo>
+   <msup>
+    <mi>θ</mi>
+    <mrow>
+     <mi>M</mi>
+     <mi>A</mi>
+     <mi>P</mi>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>θ</ci>
+     <times></times>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>θ</ci>
+     <apply>
+      <times></times>
+      <ci>M</ci>
+      <ci>A</ci>
+      <ci>P</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta^{*}=\theta^{MAP}
+  </annotation>
+ </semantics>
+</math>
+
+) procedure. However, because in one-shot learning, few training examples are used, the distribution will not be well-peaked, as is assumed in a 
+
+<math display="inline" id="One-shot_learning:60">
+ <semantics>
+  <mi>δ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>δ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \delta
+  </annotation>
+ </semantics>
+</math>
+
+function approximation. Thus instead of this traditional approximation, the Bayesian one-shot learning algorithm seeks to "find a parametric form of 
+
+<math display="inline" id="One-shot_learning:61">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>θ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta)
+  </annotation>
+ </semantics>
+</math>
+
+ such that the learning of 
+
+<math display="inline" id="One-shot_learning:62">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>X</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>A</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>f</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>A</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|X_{t},A_{t},O_{fg})
+  </annotation>
+ </semantics>
+</math>
+
+ is feasible." The algorithm employs a <a href="Normal_distribution" title="wikilink">Normal</a>-<a href="Wishart_distribution" title="wikilink">Wishart distribution</a> as the <a href="conjugate_prior" title="wikilink">conjugate prior</a> of 
+
+<math display="inline" id="One-shot_learning:63">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>X</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>A</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>f</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>A</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|X_{t},A_{t},O_{fg})
+  </annotation>
+ </semantics>
+</math>
+
+
+, and in the learning phase, <a href="variational_Bayesian_methods" title="wikilink">variational Bayesian methods</a> with the same computational complexity as maximum likelihood methods are used to learn the <a href="hyperparameter" title="wikilink">hyperparameters</a> of the distribution. Then, since 
+
+<math display="inline" id="One-shot_learning:64">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>X</mi>
+    <mo>,</mo>
+    <mi>A</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(X,A|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+ is a product of Gaussians, as chosen in the object category model, the integral reduces to a <a href="multivariate_Student_distribution" title="wikilink">multivariate Student's T distribution</a>, which can be evaluated.<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a></p>
+<h2 id="implementation">Implementation</h2>
+<h3 id="feature-detection-and-representation">Feature detection and representation</h3>
+
+<p>To detect features in an image so that it can be represented by a constellation model, the <a href="Kadir_brady_saliency_detector" title="wikilink">Kadir Brady feature detector</a> is used on grey-scale images, finding salient regions of the image. These regions are then clustered, yielding a number of features (the clusters) and the shape parameter 
+
+<math display="inline" id="One-shot_learning:65">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+, composed of the cluster centers. The Kadir Brady detector was chosen because it produces fewer, more salient regions, as opposed to feature detectors like multiscale Harris, which produces numerous, less significant regions. Feature detection is illustrated to the right.</p>
+
+<p>The regions are then taken from the image and rescaled to a small patch of 11 by 11 pixels, allowing each patch to be represented in 121-dimensional space. This dimensionality is reduced using <a href="principal_component_analysis" title="wikilink">principal component analysis</a>, and 
+
+<math display="inline" id="One-shot_learning:66">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+, the appearance parameter, is then formed from the first 10 principal components of each patch.<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a></p>
+<h3 id="learning">Learning</h3>
+
+<p>To obtain shape and appearance priors, three categories(spotted cats, faces, and airplanes) are learned using maximum likelihood estimation. These object category model parameters are then used to estimate the hyper-parameters of the desired priors.</p>
+
+<p>Given a set of training examples, the algorithm runs the feature detector on these images, and determines model parameters from the salient regions. The hypothesis index <strong>h</strong> assigning features to parts prevents a closed-form solution of the linear model, so the posterior 
+
+<math display="inline" id="One-shot_learning:67">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>X</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>A</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>f</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>A</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|X_{t},A_{t},O_{fg})
+  </annotation>
+ </semantics>
+</math>
+
+ is estimated by variational Bayesian expectation-maximization, which is run until parameter convergence after ~ 100 iterations. Learning a category in this fashion takes under a minute on a 2.8 GHz machine with a 4-part model and <a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006, Section 4, Section 5.2</a></p>
+<h2 id="experimental-results">Experimental results</h2>
+<h3 id="motorbike-example">Motorbike example</h3>
+
+<p>To learn the motorbike category:</p>
+<ul>
+<li>Six training images are selected from the motorbike category of the Caltech 4 Data Set and the Kadir Brady detector is applied, giving 
+
+<math display="inline" id="One-shot_learning:68">
+ <semantics>
+  <msub>
+   <mi>X</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>X</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{t}
+  </annotation>
+ </semantics>
+</math>
+
+
+ and through <a href="principal_component_analysis" title="wikilink">PCA</a>, 
+
+<math display="inline" id="One-shot_learning:69">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{t}
+  </annotation>
+ </semantics>
+</math>
+
+. Examples are shown below.</li>
+</ul>
+<ul>
+<li>Next, the prior model parameters are computed from 30 models 
+
+<math display="inline" id="One-shot_learning:70">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{t}
+  </annotation>
+ </semantics>
+</math>
+
+, 10 from each of the three learnt categories: spotted cats, faces, and airplanes. This prior encodes the knowledge that "models lacking visual consistency [ie background clutter] occupy a different part of the parameter space [from] coherent models."</li>
+</ul>
+<ul>
+<li>In learning, which is performed next, the prior biases the posterior 
+
+<math display="inline" id="One-shot_learning:71">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>X</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>A</mi>
+     <mi>t</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>O</mi>
+     <mrow>
+      <mi>f</mi>
+      <mi>g</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>A</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>O</ci>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <ci>g</ci>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|X_{t},A_{t},O_{fg})
+  </annotation>
+ </semantics>
+</math>
+
+ towards parts of the parameter space corresponding to coherent models. Only one mixture component is used, letting 
+
+<math display="inline" id="One-shot_learning:72">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Ω</mi>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>normal-Ω</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Omega=1
+  </annotation>
+ </semantics>
+</math>
+
+. The estimation of the posterior is shown below.</li>
+</ul>
+<ul>
+<li>Finally, the figures below show the learned motorbike model with shape and appearance of parts, and the corresponding features.</li>
+</ul>
+<ul>
+<li>For recognition tests, the model above is applied to 50 images which contain motorbikes and 50 which do not. The image below shows an ROC curve, measuring the probability of detection over the probability of false detection, as well as some recognized examples.</li>
+</ul>
+<h3 id="comparison-with-maximum-likelihood-and-map-methods">Comparison with maximum likelihood and MAP methods</h3>
+
+<p>As shown in the figure to the right, the Bayesian One-Shot Learning algorithm significantly outperforms a maximum likelihood procedure on a small number of training images.</p>
+
+<p>However, the authors believe that more dramatic improvement could be achieved with more than three initial training categories or a stronger model. Such a model might include 6 or 7 parts, several mixture components, representations for curve contours, or ability to handle occlusions. They determined, however, that a large strength of the model lies in the choice of prior. In all, the algorithm performs with accuracy from 70-95 percent. In addition, a large advantage of this algorithm is that the categories used to set the priors (here, spotted cats, faces, and airplanes) do not need to be similar to the categories to be learned from few training examples, as demonstrated by their success on learning categories from the Caltech101 dataset.<a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a></p>
+<h2 id="learning-from-one-example-through-shared-densities-on-transforms">Learning from one example through shared densities on transforms</h2>
+
+<p>An alternative to the Bayesian One-Shot Learning algorithm, the algorithm presented by Erik Miller, Nicholas Matsakis, and Paul Viola at ICCV 2000 uses knowledge transfer by model parameters to learn a new object category which is similar in appearance to previously learnt categories. In their paper, an image is represented as either a <em>texture</em> and <em>shape</em>, or as a <em>latent image</em> which has been transformed, denoted by 
+
+<math display="inline" id="One-shot_learning:73">
+ <semantics>
+  <mrow>
+   <mi>I</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>T</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>I</mi>
+      <mi>L</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>I</ci>
+    <apply>
+     <times></times>
+     <ci>T</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>I</ci>
+      <ci>L</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I=T(I_{L})
+  </annotation>
+ </semantics>
+</math>
+
+
+.</p>
+<h3 id="congealing">Congealing</h3>
+
+<p>Whereas the term <em>vectorization</em> denotes the process of bringing one image into correspondence with another, the authors of this paper have coined the term <em>congealing</em> to be "the simultaneous vectorization of each of a set of images to each other." For a set of training images of a certain category, congealing iteratively transforms each image to minimize the images' joint pixelwise entropies E, where</p>
+
+<p>
+
+<math display="block" id="One-shot_learning:74">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>E</mi>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>p</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>P</mi>
+     </munderover>
+     <mrow>
+      <mi>H</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>ν</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>p</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>E</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>p</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>P</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>H</ci>
+      <apply>
+       <times></times>
+       <ci>ν</ci>
+       <ci>p</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E=\sum_{p=1}^{P}H(\nu(p)),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>"where 
+
+<math display="inline" id="One-shot_learning:75">
+ <semantics>
+  <mrow>
+   <mi>ν</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>p</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>ν</ci>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nu(p)
+  </annotation>
+ </semantics>
+</math>
+
+ is the binary random variable defined by the values of a particular pixel p across all of the images, 
+
+<math display="inline" id="One-shot_learning:76">
+ <semantics>
+  <mrow>
+   <mi>H</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>H</ci>
+    <list></list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H()
+  </annotation>
+ </semantics>
+</math>
+
+ is the discrete entropy function of that variable, and 
+
+<math display="inline" id="One-shot_learning:77">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>≤</mo>
+   <mi>p</mi>
+   <mo>≤</mo>
+   <mi>P</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <leq></leq>
+     <cn type="integer">1</cn>
+     <ci>p</ci>
+    </apply>
+    <apply>
+     <leq></leq>
+     <share href="#.cmml">
+     </share>
+     <ci>P</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1\leq p\leq P
+  </annotation>
+ </semantics>
+</math>
+
+ is the set of pixel indices for the image."</p>
+
+<p>The congealing algorithm begins with a set of images 
+
+<math display="inline" id="One-shot_learning:78">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{i}
+  </annotation>
+ </semantics>
+</math>
+
+
+ and a corresponding transform matrix 
+
+<math display="inline" id="One-shot_learning:79">
+ <semantics>
+  <msub>
+   <mi>U</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>U</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U_{i}
+  </annotation>
+ </semantics>
+</math>
+
+, which at the end of the algorithm will represent the transformation of 
+
+<math display="inline" id="One-shot_learning:80">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ into its latent image 
+
+<math display="inline" id="One-shot_learning:81">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <msub>
+    <mi>L</mi>
+    <mi>i</mi>
+   </msub>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>L</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{L_{i}}
+  </annotation>
+ </semantics>
+</math>
+
+. These latent images 
+
+<math display="inline" id="One-shot_learning:82">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <msub>
+    <mi>L</mi>
+    <mi>i</mi>
+   </msub>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>L</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{L_{i}}
+  </annotation>
+ </semantics>
+</math>
+
+ minimize the joint pixel-wise entropies. Thus the task of the congealing algorithm is to estimate the transformations 
+
+<math display="inline" id="One-shot_learning:83">
+ <semantics>
+  <msub>
+   <mi>U</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>U</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U_{i}
+  </annotation>
+ </semantics>
+</math>
+
+
+.</p>
+
+<p>Sketch of algorithm:</p>
+<ul>
+<li>Initialize 
+
+<math display="inline" id="One-shot_learning:84">
+ <semantics>
+  <msub>
+   <mi>U</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>U</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U_{I}
+  </annotation>
+ </semantics>
+</math>
+
+'s to the identity.</li>
+</ul>
+<ul>
+<li>Compute the joint pixelwise entropies of the current set of images.</li>
+</ul>
+<ul>
+<li>For each image 
+
+<math display="inline" id="One-shot_learning:85">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{i}
+  </annotation>
+ </semantics>
+</math>
+
+, iterate through all possible affine transformations 
+
+<math display="inline" id="One-shot_learning:86">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ (rotation, x-translation, y-translation, x-scale, y-scale, x-shear, y-shear) and test if 
+
+<math display="inline" id="One-shot_learning:87">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <msub>
+    <mi>U</mi>
+    <mi>i</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>A</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>U</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   AU_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ decreases the joint pixelwise entropies. If so, set 
+
+<math display="inline" id="One-shot_learning:88">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>U</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>A</mi>
+    <msub>
+     <mi>U</mi>
+     <mi>i</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>U</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>U</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U_{i}=AU_{i}
+  </annotation>
+ </semantics>
+</math>
+
+
+.</li>
+</ul>
+<ul>
+<li>Repeat previous step until convergence.</li>
+</ul>
+
+<p>At the end of the algorithm, 
+
+<math display="inline" id="One-shot_learning:89">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>U</mi>
+     <mi>i</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>I</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mi>I</mi>
+    <msub>
+     <mi>L</mi>
+     <mi>i</mi>
+    </msub>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>U</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>I</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>I</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>L</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U_{i}(I)=I_{L_{i}}
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="One-shot_learning:90">
+ <semantics>
+  <mrow>
+   <mi>T</mi>
+   <mo>=</mo>
+   <msubsup>
+    <mi>U</mi>
+    <mi>i</mi>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msubsup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>T</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>U</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T=U_{i}^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+ transforms the latent image back into the originally observed image. Congealing applied to a set of 0's and a set of 2's is shown on the right.<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a></p>
+<h3 id="classification">Classification</h3>
+
+<p>To use this model for classification, we must estimate the model with the maximum posterior probability given an observed image 
+
+<math display="inline" id="One-shot_learning:91">
+ <semantics>
+  <mi>I</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>I</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I
+  </annotation>
+ </semantics>
+</math>
+
+. An application of Bayes' rule to 
+
+<math display="inline" id="One-shot_learning:92">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>c</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <mi>I</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>c</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">I</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(c_{j}|I)
+  </annotation>
+ </semantics>
+</math>
+
+ and parametrization by the transformation 
+
+<math display="inline" id="One-shot_learning:93">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T
+  </annotation>
+ </semantics>
+</math>
+
+
+ gives a difficult integral which the authors approximate, and then seek the best transform 
+
+<math display="inline" id="One-shot_learning:94">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T
+  </annotation>
+ </semantics>
+</math>
+
+. That is, the transformation which maps the test image to its latent image. Once this transformation is found, the test image can be transformed into its latent image, and a <a href="nearest_neighbor_algorithm" title="wikilink">nearest neighbor classifier</a> based on <a href="Hausdorff_distance" title="wikilink">Hausdorff distance</a> between images is used to classify the latent image (and thus the test image) as belonging to a particular class 
+
+<math display="inline" id="One-shot_learning:95">
+ <semantics>
+  <msub>
+   <mi>c</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>c</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c_{j}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>To find this optimal 
+
+<math display="inline" id="One-shot_learning:96">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T
+  </annotation>
+ </semantics>
+</math>
+
+, the authors propose to insert the test image I into the training ensemble for the congealing process. Since we assume that the test image is drawn from one of the classes 
+
+<math display="inline" id="One-shot_learning:97">
+ <semantics>
+  <msub>
+   <mi>c</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>c</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c_{j}
+  </annotation>
+ </semantics>
+</math>
+
+, congealing will provide a corresponding 
+
+<math display="inline" id="One-shot_learning:98">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mtext>test</mtext>
+   </msub>
+   <mo>=</mo>
+   <msubsup>
+    <mi>U</mi>
+    <mtext>test</mtext>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msubsup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <mtext>test</mtext>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>U</ci>
+      <mtext>test</mtext>
+     </apply>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{\text{test}}=U_{\text{test}}^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+
+ which maps I to its latent image. The latent image can now be classified.<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a></p>
+<h3 id="single-example-classification">Single-example classification</h3>
+
+<p>Given a set of transformations 
+
+<math display="inline" id="One-shot_learning:99">
+ <semantics>
+  <msub>
+   <mi>B</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>B</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ obtained from congealing many images of a certain category, the authors extend their classifier to the case where only one training 
+
+<math display="inline" id="One-shot_learning:100">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{t}
+  </annotation>
+ </semantics>
+</math>
+
+ example of a new category 
+
+<math display="inline" id="One-shot_learning:101">
+ <semantics>
+  <mi>c</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>c</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c
+  </annotation>
+ </semantics>
+</math>
+
+ is allowed. Applying all the transformations 
+
+<math display="inline" id="One-shot_learning:102">
+ <semantics>
+  <msub>
+   <mi>B</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>B</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ sequentially to 
+
+<math display="inline" id="One-shot_learning:103">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>t</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{t}
+  </annotation>
+ </semantics>
+</math>
+
+
+, we create an artificial data training set for 
+
+<math display="inline" id="One-shot_learning:104">
+ <semantics>
+  <mi>c</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>c</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c
+  </annotation>
+ </semantics>
+</math>
+
+. This artificial data set can be made larger by borrowing transformations from not only one, but many already known categories. Once this data set is obtained, 
+
+<math display="inline" id="One-shot_learning:105">
+ <semantics>
+  <mi>I</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>I</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I
+  </annotation>
+ </semantics>
+</math>
+
+, a test instance of 
+
+<math display="inline" id="One-shot_learning:106">
+ <semantics>
+  <mi>c</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>c</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c
+  </annotation>
+ </semantics>
+</math>
+
+, can be classified as in the normal classification procedure. The key assumption here is that categories are similar enough that the transforms from one can be applied to another.<a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a></p>
+<h2 id="citations">Citations</h2>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Variational_Bayesian_methods" title="wikilink">Variational Bayesian methods</a></li>
+<li><a href="Variational_message_passing" title="wikilink">Variational message passing</a></li>
+<li><a href="Expectation-maximization_algorithm" title="wikilink">Expectation-maximization algorithm</a></li>
+<li><a href="Bayesian_inference" title="wikilink">Bayesian inference</a></li>
+<li><a href="Feature_detection" title="wikilink">Feature detection</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Learning_in_computer_vision" title="wikilink">Category:Learning in computer vision</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#Reference-idFeiFei2002" title="wikilink">F.F. Li et al., 2002</a><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#Reference-thorpe1996" title="wikilink">S. Thorpe et al., 1996</a><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#Reference-biederman" title="wikilink">Biederman et al., 1987.</a><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei Fei et al., 2006, Section 1</a><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#Reference-idFeiFeiICDL2006" title="wikilink">L. Fei-Fei, <em>Knowledge transfer</em>, 2006</a>, Section 1<a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006, Section 2</a><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#Reference-fink" title="wikilink">M. Fink, 2004</a><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#Reference-bart" title="wikilink">Bart and Ullman, 2005</a><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#Reference-murphy" title="wikilink">K. Murphy et al., 2004</a><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#Reference-hoiem" title="wikilink">D. Hoiem et al., 2005</a><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#Reference-feifeiknow" title="wikilink">Knowledge Transfer, Section 2</a><a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#Reference-burl" title="wikilink">Burl et al., 1996.</a><a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#Reference-attias" title="wikilink">Attias, 1999.</a><a href="#fnref13">↩</a></li>
+<li id="fn14"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006</a><a href="#fnref14">↩</a></li>
+<li id="fn15"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006, Section 3.1</a><a href="#fnref15">↩</a></li>
+<li id="fn16"><a href="#Reference-burl1996" title="wikilink">Burl et al., 1996</a><a href="#fnref16">↩</a></li>
+<li id="fn17"><a href="#Reference-weber2000" title="wikilink">M. Weber et al., 2000</a><a href="#fnref17">↩</a></li>
+<li id="fn18"><a href="#Reference-fergus2005" title="wikilink">R. Fergus et al., 2005</a><a href="#fnref18">↩</a></li>
+<li id="fn19"><a href="#Reference-kadir2001" title="wikilink">T. Kadir and M. Brady, 2001</a><a href="#fnref19">↩</a></li>
+<li id="fn20"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006, Section 3.2</a><a href="#fnref20">↩</a></li>
+<li id="fn21"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006, Section 3.2.1</a><a href="#fnref21">↩</a></li>
+<li id="fn22"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006, Section 3.2.1</a><a href="#fnref22">↩</a></li>
+<li id="fn23"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006, Section 3.4.3</a><a href="#fnref23">↩</a></li>
+<li id="fn24"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006, Section 5.1</a><a href="#fnref24">↩</a></li>
+<li id="fn25"><a href="#Reference-feifeipami2006" title="wikilink">L. Fei-Fei et al., 2006, Section 3, Section 6</a><a href="#fnref25">↩</a></li>
+<li id="fn26"><a href="#Reference-miller2000" title="wikilink">Miller et al., 2000, Section 3</a><a href="#fnref26">↩</a></li>
+<li id="fn27"><a href="#Reference-miller2000" title="wikilink">Miller et al., 2000, Section 4</a><a href="#fnref27">↩</a></li>
+<li id="fn28"><a href="#Reference-miller2000" title="wikilink">Miller et al., 2000, Section 7</a><a href="#fnref28">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

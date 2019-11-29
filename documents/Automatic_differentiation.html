@@ -1,0 +1,5267 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="509">Automatic differentiation</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Automatic differentiation</h1>
+<hr>In [[mathematics]] and [[computer algebra]], '''automatic differentiation''' ('''AD'''), also called '''algorith
+<p>mic differentiation''' or <strong>computational differentiation</strong>,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> is a set of techniques to numerically evaluate the <a class="uri" href="derivative" title="wikilink">derivative</a> of a function specified by a computer program. AD exploits the fact that every computer program, no matter how complicated, executes a sequence of elementary arithmetic operations (addition, subtraction, multiplication, division, etc.) and elementary functions (exp, log, sin, cos, etc.). By applying the <a href="chain_rule" title="wikilink">chain rule</a> repeatedly to these operations, derivatives of arbitrary order can be computed automatically, accurately to working precision, and using at most a small constant factor more arithmetic operations than the original program.</p>
+
+<p>Automatic differentiation is not: </p>
+<ul>
+<li><a href="Symbolic_differentiation" title="wikilink">Symbolic differentiation</a>, nor</li>
+<li><a href="Numerical_differentiation" title="wikilink">Numerical differentiation</a> (the method of finite differences).</li>
+</ul>
+
+<p>These classical methods run into problems: symbolic differentiation leads to inefficient code (unless carefully done) and faces the difficulty of converting a computer program into a single expression, while numerical differentiation can introduce <a href="round-off_error" title="wikilink">round-off errors</a> in the <a class="uri" href="discretization" title="wikilink">discretization</a> process and cancellation. Both classical methods have problems with calculating higher derivatives, where the complexity and errors increase. Finally, both classical methods are slow at computing the partial derivatives of a function with respect to <em>many</em> inputs, as is needed for <a href="gradient_descent" title="wikilink">gradient</a>-based <a href="Optimization_(mathematics)" title="wikilink">optimization</a> algorithms. Automatic differentiation solves all of these problems.</p>
+<h2 id="the-chain-rule-forward-and-reverse-accumulation">The chain rule, forward and reverse accumulation</h2>
+
+<p>Fundamental to AD is the decomposition of differentials provided by the <a href="chain_rule" title="wikilink">chain rule</a>. For the simple composition 
+
+<math display="inline" id="Automatic_differentiation:0">
+ <semantics>
+  <mrow>
+   <mi>y</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>g</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>h</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>g</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>w</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>y</ci>
+     <apply>
+      <times></times>
+      <ci>g</ci>
+      <apply>
+       <times></times>
+       <ci>h</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <ci>g</ci>
+      <ci>w</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y=g(h(x))=g(w)
+  </annotation>
+ </semantics>
+</math>
+
+ the chain rule gives</p>
+
+<p>
+
+<math display="block" id="Automatic_differentiation:1">
+ <semantics>
+  <mrow>
+   <mfrac>
+    <mrow>
+     <mi>d</mi>
+     <mi>y</mi>
+    </mrow>
+    <mrow>
+     <mi>d</mi>
+     <mi>x</mi>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mi>d</mi>
+      <mi>y</mi>
+     </mrow>
+     <mrow>
+      <mi>d</mi>
+      <mi>w</mi>
+     </mrow>
+    </mfrac>
+    <mfrac>
+     <mrow>
+      <mi>d</mi>
+      <mi>w</mi>
+     </mrow>
+     <mrow>
+      <mi>d</mi>
+      <mi>x</mi>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>d</ci>
+      <ci>y</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>d</ci>
+      <ci>x</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <ci>d</ci>
+       <ci>y</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>d</ci>
+       <ci>w</ci>
+      </apply>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <ci>d</ci>
+       <ci>w</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>d</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{dy}{dx}=\frac{dy}{dw}\frac{dw}{dx}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Usually, two distinct modes of AD are presented, <strong>forward accumulation</strong> (or <strong>forward mode</strong>) and <strong>reverse accumulation</strong> (or <strong>reverse mode</strong>). Forward accumulation specifies that one traverses the chain rule from inside to outside (that is, first one computes 
+
+<math display="inline" id="Automatic_differentiation:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>d</mi>
+     <mi>w</mi>
+    </mrow>
+    <mo>/</mo>
+    <mi>d</mi>
+   </mrow>
+   <mi>x</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>d</ci>
+      <ci>w</ci>
+     </apply>
+     <ci>d</ci>
+    </apply>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   dw/dx
+  </annotation>
+ </semantics>
+</math>
+
+ and then 
+
+<math display="inline" id="Automatic_differentiation:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>d</mi>
+     <mi>y</mi>
+    </mrow>
+    <mo>/</mo>
+    <mi>d</mi>
+   </mrow>
+   <mi>w</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>d</ci>
+      <ci>y</ci>
+     </apply>
+     <ci>d</ci>
+    </apply>
+    <ci>w</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   dy/dw
+  </annotation>
+ </semantics>
+</math>
+
+, while reverse accumulation has the traversal from outside to inside.</p>
+<h3 id="forward-accumulation">Forward accumulation</h3>
+<figure><b>(Figure)</b>
+<figcaption>Figure 2: Example of forward accumulation with computational graph</figcaption>
+</figure>
+
+<p>In forward accumulation AD, one first fixes the <em>independent variable</em> to which differentiation is performed and computes the derivative <em>of</em> each sub-<a href="expression_(mathematics)" title="wikilink">expression</a> recursively. In a pen-and-paper calculation, one can do so by repeatedly substituting the derivative of the <em>inner</em> functions in the chain rule:</p>
+
+<p>
+
+<math display="block" id="Automatic_differentiation:4">
+ <semantics>
+  <mrow>
+   <mfrac>
+    <mrow>
+     <mo>∂</mo>
+     <mi>y</mi>
+    </mrow>
+    <mrow>
+     <mo>∂</mo>
+     <mi>x</mi>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <mi>y</mi>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>w</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+    </mfrac>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>w</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <mi>x</mi>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <mi>y</mi>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>w</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+    </mfrac>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mfrac>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+      </mfrac>
+      <mfrac>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo>∂</mo>
+        <mi>x</mi>
+       </mrow>
+      </mfrac>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <mi>y</mi>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>w</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+    </mfrac>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mfrac>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+      </mfrac>
+      <mrow>
+       <mo>(</mo>
+       <mrow>
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>w</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>w</mi>
+           <mn>3</mn>
+          </msub>
+         </mrow>
+        </mfrac>
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>w</mi>
+           <mn>3</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <mi>x</mi>
+         </mrow>
+        </mfrac>
+       </mrow>
+       <mo>)</mo>
+      </mrow>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mi mathvariant="normal">⋯</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <divide></divide>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>y</ci>
+      </apply>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>x</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>y</ci>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>x</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>y</ci>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <divide></divide>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <partialdiff></partialdiff>
+         <ci>x</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>y</ci>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <apply>
+          <partialdiff></partialdiff>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>w</ci>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <partialdiff></partialdiff>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>w</ci>
+           <cn type="integer">3</cn>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <divide></divide>
+         <apply>
+          <partialdiff></partialdiff>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>w</ci>
+           <cn type="integer">3</cn>
+          </apply>
+         </apply>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>x</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <ci>normal-⋯</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\partial y}{\partial x}=\frac{\partial y}{\partial w_{1}}\frac{\partial w%
+_{1}}{\partial x}=\frac{\partial y}{\partial w_{1}}\left(\frac{\partial w_{1}}%
+{\partial w_{2}}\frac{\partial w_{2}}{\partial x}\right)=\frac{\partial y}{%
+\partial w_{1}}\left(\frac{\partial w_{1}}{\partial w_{2}}\left(\frac{\partial
+w%
+_{2}}{\partial w_{3}}\frac{\partial w_{3}}{\partial x}\right)\right)=\cdots
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This can be generalized to multiple variables as a matrix product of <a href="Jacobian_matrix_and_determinant" title="wikilink">Jacobians</a>.</p>
+
+<p>Compared to reverse accumulation, forward accumulation is very natural and easy to implement as the flow of derivative information coincides with the order of evaluation. One simply augments each variable 
+
+<math display="inline" id="Automatic_differentiation:5">
+ <semantics>
+  <mi>w</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>w</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w
+  </annotation>
+ </semantics>
+</math>
+
+ with its derivative 
+
+<math display="inline" id="Automatic_differentiation:6">
+ <semantics>
+  <mi>ẇ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ẇ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ẇ
+  </annotation>
+ </semantics>
+</math>
+
+ (stored as a numerical value, not a symbolic expression),</p>
+
+<p>
+
+<math display="block" id="Automatic_differentiation:7">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>w</mi>
+    <mo>˙</mo>
+   </mover>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mo>∂</mo>
+     <mi>w</mi>
+    </mrow>
+    <mrow>
+     <mo>∂</mo>
+     <mi>x</mi>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-˙</ci>
+     <ci>w</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <partialdiff></partialdiff>
+      <ci>w</ci>
+     </apply>
+     <apply>
+      <partialdiff></partialdiff>
+      <ci>x</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dot{w}=\frac{\partial w}{\partial x}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>as denoted by the dot. The derivatives are then computed in sync with the evaluation steps and combined with other derivatives via the chain rule.</p>
+
+<p>As an example, consider the function:</p>
+
+<p>
+
+<math display="inline" id="Automatic_differentiation:8">
+ <semantics>
+  <mtable>
+   <mtr>
+    <mtd columnalign="right">
+     <mi>z</mi>
+    </mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <mi></mi>
+      <mo>=</mo>
+      <mrow>
+       <mi>f</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>x</mi>
+         <mn>1</mn>
+        </msub>
+        <mo>,</mo>
+        <msub>
+         <mi>x</mi>
+         <mn>2</mn>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd></mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <mi></mi>
+      <mo>=</mo>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>x</mi>
+         <mn>1</mn>
+        </msub>
+        <msub>
+         <mi>x</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mi>sin</mi>
+        <msub>
+         <mi>x</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd></mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <mi></mi>
+      <mo>=</mo>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>w</mi>
+         <mn>1</mn>
+        </msub>
+        <msub>
+         <mi>w</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mi>sin</mi>
+        <msub>
+         <mi>w</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd></mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <mi></mi>
+      <mo>=</mo>
+      <mrow>
+       <msub>
+        <mi>w</mi>
+        <mn>3</mn>
+       </msub>
+       <mo>+</mo>
+       <msub>
+        <mi>w</mi>
+        <mn>4</mn>
+       </msub>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd></mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <mi></mi>
+      <mo>=</mo>
+      <msub>
+       <mi>w</mi>
+       <mn>5</mn>
+      </msub>
+     </mrow>
+    </mtd>
+   </mtr>
+  </mtable>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <ci>z</ci>
+     <apply>
+      <eq></eq>
+      <csymbol cd="latexml">absent</csymbol>
+      <apply>
+       <times></times>
+       <ci>f</ci>
+       <interval closure="open">
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </interval>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <cerror>
+      <csymbol cd="ambiguous">missing-subexpression</csymbol>
+     </cerror>
+     <apply>
+      <eq></eq>
+      <csymbol cd="latexml">absent</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <sin></sin>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <cerror>
+      <csymbol cd="ambiguous">missing-subexpression</csymbol>
+     </cerror>
+     <apply>
+      <eq></eq>
+      <csymbol cd="latexml">absent</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <sin></sin>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <cerror>
+      <csymbol cd="ambiguous">missing-subexpression</csymbol>
+     </cerror>
+     <apply>
+      <eq></eq>
+      <csymbol cd="latexml">absent</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>w</ci>
+        <cn type="integer">3</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>w</ci>
+        <cn type="integer">4</cn>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <cerror>
+      <csymbol cd="ambiguous">missing-subexpression</csymbol>
+     </cerror>
+     <apply>
+      <eq></eq>
+      <csymbol cd="latexml">absent</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>w</ci>
+       <cn type="integer">5</cn>
+      </apply>
+     </apply>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{aligned}\displaystyle z&\displaystyle=f(x_{1},x_{2})\\
+&\displaystyle=x_{1}x_{2}+\sin x_{1}\\
+&\displaystyle=w_{1}w_{2}+\sin w_{1}\\
+&\displaystyle=w_{3}+w_{4}\\
+&\displaystyle=w_{5}\end{aligned}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>For clarity, the individual sub-expressions have been labeled with the variables <mtpl></mtpl>.</p>
+
+<p>The choice of the independent variable to which differentiation is performed affects the <em>seed</em> values <mtpl></mtpl> and <mtpl></mtpl>. Suppose one is interested in the derivative of this function with respect to <mtpl></mtpl>. In this case, the seed values should be set to:</p>
+
+<p>
+
+<math display="inline" id="Automatic_differentiation:9">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo>˙</mo>
+    </mover>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <mstyle displaystyle="true">
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>x</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>x</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+    </mfrac>
+   </mstyle>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-˙</ci>
+       <ci>w</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <partialdiff></partialdiff>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <partialdiff></partialdiff>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\dot{w}_{1}=\frac{\partial x_{1}}{\partial x_{1}}=1
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>With the seed values set, one may then propagate the values using the chain rule as shown in both the table below. Figure 2 shows a pictorial depiction of this process as a computational graph.</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Operations to compute value</p></th>
+<th style="text-align: left;">
+<p>Operations to compute derivative</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:10">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>w</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>x</mi>
+    <mn>1</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>w</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{1}=x_{1}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:11">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo>˙</mo>
+    </mover>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-˙</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dot{w}_{1}=1
+  </annotation>
+ </semantics>
+</math>
+
+ (seed)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:12">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>w</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>x</mi>
+    <mn>2</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>w</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{2}=x_{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:13">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo>˙</mo>
+    </mover>
+    <mn>2</mn>
+   </msub>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-˙</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">2</cn>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dot{w}_{2}=0
+  </annotation>
+ </semantics>
+</math>
+
+ (seed)</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:14">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>w</mi>
+    <mn>3</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>w</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>⋅</mo>
+    <msub>
+     <mi>w</mi>
+     <mn>2</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>w</ci>
+     <cn type="integer">3</cn>
+    </apply>
+    <apply>
+     <ci>normal-⋅</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{3}=w_{1}\cdot w_{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:15">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo>˙</mo>
+    </mover>
+    <mn>3</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>w</mi>
+      <mn>2</mn>
+     </msub>
+     <mo>⋅</mo>
+     <msub>
+      <mover accent="true">
+       <mi>w</mi>
+       <mo>˙</mo>
+      </mover>
+      <mn>1</mn>
+     </msub>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mi>w</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>⋅</mo>
+     <msub>
+      <mover accent="true">
+       <mi>w</mi>
+       <mo>˙</mo>
+      </mover>
+      <mn>2</mn>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-˙</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">3</cn>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>w</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-˙</ci>
+        <ci>w</ci>
+       </apply>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>w</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-˙</ci>
+        <ci>w</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dot{w}_{3}=w_{2}\cdot\dot{w}_{1}+w_{1}\cdot\dot{w}_{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:16">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>w</mi>
+    <mn>4</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>sin</mi>
+    <msub>
+     <mi>w</mi>
+     <mn>1</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>w</ci>
+     <cn type="integer">4</cn>
+    </apply>
+    <apply>
+     <sin></sin>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{4}=\sin w_{1}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:17">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo>˙</mo>
+    </mover>
+    <mn>4</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>cos</mi>
+    <mrow>
+     <msub>
+      <mi>w</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>⋅</mo>
+     <msub>
+      <mover accent="true">
+       <mi>w</mi>
+       <mo>˙</mo>
+      </mover>
+      <mn>1</mn>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-˙</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">4</cn>
+    </apply>
+    <apply>
+     <cos></cos>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>w</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-˙</ci>
+        <ci>w</ci>
+       </apply>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dot{w}_{4}=\cos w_{1}\cdot\dot{w}_{1}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:18">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>w</mi>
+    <mn>5</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>w</mi>
+     <mn>3</mn>
+    </msub>
+    <mo>+</mo>
+    <msub>
+     <mi>w</mi>
+     <mn>4</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>w</ci>
+     <cn type="integer">5</cn>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <cn type="integer">3</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <cn type="integer">4</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{5}=w_{3}+w_{4}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:19">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo>˙</mo>
+    </mover>
+    <mn>5</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mover accent="true">
+      <mi>w</mi>
+      <mo>˙</mo>
+     </mover>
+     <mn>3</mn>
+    </msub>
+    <mo>+</mo>
+    <msub>
+     <mover accent="true">
+      <mi>w</mi>
+      <mo>˙</mo>
+     </mover>
+     <mn>4</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-˙</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">5</cn>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-˙</ci>
+       <ci>w</ci>
+      </apply>
+      <cn type="integer">3</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-˙</ci>
+       <ci>w</ci>
+      </apply>
+      <cn type="integer">4</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dot{w}_{5}=\dot{w}_{3}+\dot{w}_{4}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>To compute the <a class="uri" href="gradient" title="wikilink">gradient</a> of this example function, which requires the derivatives of 
+
+<math display="inline" id="Automatic_differentiation:20">
+ <semantics>
+  <mi>f</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>f</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f
+  </annotation>
+ </semantics>
+</math>
+
+ with respect to not only <mtpl></mtpl> but also <mtpl></mtpl>, one must perform an <em>additional</em> sweep over the computational graph using the seed values 
+
+<math display="inline" id="Automatic_differentiation:21">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mover accent="true">
+      <mi>w</mi>
+      <mo>˙</mo>
+     </mover>
+     <mn>1</mn>
+    </msub>
+    <mo>=</mo>
+    <mn>0</mn>
+   </mrow>
+   <mo>;</mo>
+   <mrow>
+    <msub>
+     <mover accent="true">
+      <mi>w</mi>
+      <mo>˙</mo>
+     </mover>
+     <mn>2</mn>
+    </msub>
+    <mo>=</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-˙</ci>
+       <ci>w</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+     <cn type="integer">0</cn>
+    </apply>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-˙</ci>
+       <ci>w</ci>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dot{w}_{1}=0;\dot{w}_{2}=1
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The <a href="Computational_complexity_theory" title="wikilink">computational complexity</a> of one sweep of forward accumulation is proportional to the complexity of the original code.</p>
+
+<p>Forward accumulation is more efficient than reverse accumulation for functions <mtpl></mtpl> with 
+
+<math display="inline" id="Automatic_differentiation:22">
+ <semantics>
+  <mrow>
+   <mi>m</mi>
+   <mi mathvariant="normal">≫</mi>
+   <mi>n</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>m</ci>
+    <ci>normal-≫</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m≫n
+  </annotation>
+ </semantics>
+</math>
+
+ as only 
+
+<math display="inline" id="Automatic_differentiation:23">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ sweeps are necessary, compared to 
+
+<math display="inline" id="Automatic_differentiation:24">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+ sweeps for reverse accumulation.</p>
+<h3 id="reverse-accumulation">Reverse accumulation</h3>
+<figure><b>(Figure)</b>
+<figcaption>Figure 3: Example of reverse accumulation with computational graph</figcaption>
+</figure>
+
+<p>In reverse accumulation AD, one first fixes the <em>dependent variable</em> to be differentiated and computes the derivative <em>with respect to</em> each sub-<a href="expression_(mathematics)" title="wikilink">expression</a> recursively. In a pen-and-paper calculation, one can perform the equivalent by repeatedly substituting the derivative of the <em>outer</em> functions in the chain rule:</p>
+
+<p>
+
+<math display="block" id="Automatic_differentiation:25">
+ <semantics>
+  <mrow>
+   <mfrac>
+    <mrow>
+     <mo>∂</mo>
+     <mi>y</mi>
+    </mrow>
+    <mrow>
+     <mo>∂</mo>
+     <mi>x</mi>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <mi>y</mi>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>w</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+    </mfrac>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>w</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <mi>x</mi>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mfrac>
+       <mrow>
+        <mo>∂</mo>
+        <mi>y</mi>
+       </mrow>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+      </mfrac>
+      <mfrac>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+      </mfrac>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>w</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <mi>x</mi>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mrow>
+       <mo>(</mo>
+       <mrow>
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <mi>y</mi>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>w</mi>
+           <mn>3</mn>
+          </msub>
+         </mrow>
+        </mfrac>
+        <mfrac>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>w</mi>
+           <mn>3</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mo>∂</mo>
+          <msub>
+           <mi>w</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+        </mfrac>
+       </mrow>
+       <mo>)</mo>
+      </mrow>
+      <mfrac>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo>∂</mo>
+        <msub>
+         <mi>w</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+      </mfrac>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+    <mfrac>
+     <mrow>
+      <mo>∂</mo>
+      <msub>
+       <mi>w</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+     <mrow>
+      <mo>∂</mo>
+      <mi>x</mi>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mi mathvariant="normal">⋯</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <divide></divide>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>y</ci>
+      </apply>
+      <apply>
+       <partialdiff></partialdiff>
+       <ci>x</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>y</ci>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>x</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <partialdiff></partialdiff>
+         <ci>y</ci>
+        </apply>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <divide></divide>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>x</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <times></times>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <apply>
+          <partialdiff></partialdiff>
+          <ci>y</ci>
+         </apply>
+         <apply>
+          <partialdiff></partialdiff>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>w</ci>
+           <cn type="integer">3</cn>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <divide></divide>
+         <apply>
+          <partialdiff></partialdiff>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>w</ci>
+           <cn type="integer">3</cn>
+          </apply>
+         </apply>
+         <apply>
+          <partialdiff></partialdiff>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>w</ci>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <divide></divide>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <partialdiff></partialdiff>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>w</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <partialdiff></partialdiff>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>w</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <partialdiff></partialdiff>
+        <ci>x</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <ci>normal-⋯</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{\partial y}{\partial x}=\frac{\partial y}{\partial w_{1}}\frac{\partial w%
+_{1}}{\partial x}=\left(\frac{\partial y}{\partial w_{2}}\frac{\partial w_{2}}%
+{\partial w_{1}}\right)\frac{\partial w_{1}}{\partial x}=\left(\left(\frac{%
+\partial y}{\partial w_{3}}\frac{\partial w_{3}}{\partial w_{2}}\right)\frac{%
+\partial w_{2}}{\partial w_{1}}\right)\frac{\partial w_{1}}{\partial x}=\cdots
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>In reverse accumulation, the quantity of interest is the <em>adjoint</em>, denoted with a bar (
+
+<math display="inline" id="Automatic_differentiation:26">
+ <semantics>
+  <mi>w̄</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>w̄</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w̄
+  </annotation>
+ </semantics>
+</math>
+
+); it is a derivative of a chosen dependent variable with respect to a subexpression 
+
+<math display="inline" id="Automatic_differentiation:27">
+ <semantics>
+  <mi>w</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>w</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="block" id="Automatic_differentiation:28">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>w</mi>
+    <mo stretchy="false">¯</mo>
+   </mover>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mo>∂</mo>
+     <mi>y</mi>
+    </mrow>
+    <mrow>
+     <mo>∂</mo>
+     <mi>w</mi>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-¯</ci>
+     <ci>w</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <partialdiff></partialdiff>
+      <ci>y</ci>
+     </apply>
+     <apply>
+      <partialdiff></partialdiff>
+      <ci>w</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{w}=\frac{\partial y}{\partial w}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Reverse accumulation traverses the chain rule from outside to inside, or in the case of the computational graph in Figure 3, from top to bottom. The example function is real-valued, and thus there is only one seed for the derivative computation, and only one sweep of the computational graph is needed in order to calculate the (two-component) gradient. This is only <a href="time-space_tradeoff" title="wikilink">half the work</a> when compared to forward accumulation, but reverse accumulation requires the storage of the intermediate variables <mtpl></mtpl> as well as the instructions that produced them in a data structure known as a <a href="Wengert_list" title="wikilink">Wengert list</a> (or "tape"),<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> which may represent a significant memory issue if the computational graph is large. This can be mitigated to some extent by storing only a subset of the intermediate variables and then reconstructing the necessary work variables by repeating the evaluations, a technique known as <a href="checkpointing_scheme" title="wikilink">checkpointing</a>.</p>
+
+<p>The operations to compute the derivative using reverse accumulation are shown in the table below (note the reversed order):</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Operations to compute derivative</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:29">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mn>5</mn>
+   </msub>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">5</cn>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{w}_{5}=1
+  </annotation>
+ </semantics>
+</math>
+
+ (seed)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:30">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mn>4</mn>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mn>5</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">4</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">5</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{w}_{4}=\bar{w}_{5}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:31">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mn>3</mn>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mn>5</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">3</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">5</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{w}_{3}=\bar{w}_{5}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:32">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mn>2</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mover accent="true">
+      <mi>w</mi>
+      <mo stretchy="false">¯</mo>
+     </mover>
+     <mn>3</mn>
+    </msub>
+    <mo>⋅</mo>
+    <msub>
+     <mi>w</mi>
+     <mn>1</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <ci>normal-⋅</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <ci>normal-¯</ci>
+       <ci>w</ci>
+      </apply>
+      <cn type="integer">3</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{w}_{2}=\bar{w}_{3}\cdot w_{1}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Automatic_differentiation:33">
+ <semantics>
+  <mrow>
+   <msub>
+    <mover accent="true">
+     <mi>w</mi>
+     <mo stretchy="false">¯</mo>
+    </mover>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mover accent="true">
+       <mi>w</mi>
+       <mo stretchy="false">¯</mo>
+      </mover>
+      <mn>3</mn>
+     </msub>
+     <mo>⋅</mo>
+     <msub>
+      <mi>w</mi>
+      <mn>2</mn>
+     </msub>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mover accent="true">
+       <mi>w</mi>
+       <mo stretchy="false">¯</mo>
+      </mover>
+      <mn>4</mn>
+     </msub>
+     <mo>⋅</mo>
+     <mrow>
+      <mi>cos</mi>
+      <msub>
+       <mi>w</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <ci>normal-¯</ci>
+      <ci>w</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-¯</ci>
+        <ci>w</ci>
+       </apply>
+       <cn type="integer">3</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>w</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <ci>normal-¯</ci>
+        <ci>w</ci>
+       </apply>
+       <cn type="integer">4</cn>
+      </apply>
+      <apply>
+       <cos></cos>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>w</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \bar{w}_{1}=\bar{w}_{3}\cdot w_{2}+\bar{w}_{4}\cdot\cos w_{1}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>The data flow graph of a computation can be manipulated to calculate the gradient of its original calculation. This is done by adding an adjoint node for each primal node, connected by adjoint edges which parallel the primal edges but flow in the opposite direction. The nodes in the adjoint graph represent multiplication by the derivatives of the functions calculated by the nodes in the primal. For instance, addition in the primal causes fanout in the adjoint; fanout in the primal causes addition in the adjoint; a <a href="unary_operation" title="wikilink">unary</a> function 
+
+<math display="inline" id="Automatic_differentiation:34">
+ <semantics>
+  <mrow>
+   <mi>y</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>y</ci>
+    <apply>
+     <times></times>
+     <ci>f</ci>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y=f(x)
+  </annotation>
+ </semantics>
+</math>
+
+ in the primal causes 
+
+<math display="inline" id="Automatic_differentiation:35">
+ <semantics>
+  <mrow>
+   <mi>x̄</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>ȳ</mi>
+    <mi>f</mi>
+    <mi mathvariant="normal">′</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>x̄</ci>
+    <apply>
+     <times></times>
+     <ci>ȳ</ci>
+     <ci>f</ci>
+     <ci>normal-′</ci>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x̄=ȳf′(x)
+  </annotation>
+ </semantics>
+</math>
+
+ in the adjoint; etc.</p>
+
+<p>Reverse accumulation is more efficient than forward accumulation for functions <mtpl></mtpl> with 
+
+<math display="inline" id="Automatic_differentiation:36">
+ <semantics>
+  <mrow>
+   <mi>m</mi>
+   <mi mathvariant="normal">≪</mi>
+   <mi>n</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>m</ci>
+    <ci>normal-≪</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m≪n
+  </annotation>
+ </semantics>
+</math>
+
+ as only 
+
+<math display="inline" id="Automatic_differentiation:37">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+ sweeps are necessary, compared to 
+
+<math display="inline" id="Automatic_differentiation:38">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ sweeps for forward accumulation.</p>
+
+<p><a class="uri" href="Backpropagation" title="wikilink">Backpropagation</a> of errors in multilayer perceptrons, a technique used in <a href="machine_learning" title="wikilink">machine learning</a>, is a special case of reverse mode AD.</p>
+<h3 id="beyond-forward-and-reverse-accumulation">Beyond forward and reverse accumulation</h3>
+
+<p>Forward and reverse accumulation are just two (extreme) ways of traversing the chain rule. The problem of computing a full Jacobian of <mtpl></mtpl> with a minimum number of arithmetic operations is known as the <em>optimal Jacobian accumulation</em> (OJA) problem, which is <a class="uri" href="NP-complete" title="wikilink">NP-complete</a>.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> Central to this proof is the idea that there may exist algebraic dependencies between the local partials that label the edges of the graph. In particular, two or more edge labels may be recognized as equal. The complexity of the problem is still open if it is assumed that all edge labels are unique and algebraically independent.</p>
+<h2 id="automatic-differentiation-using-dual-numbers">Automatic differentiation using dual numbers</h2>
+
+<p>Forward mode automatic differentiation is accomplished by augmenting the <a class="uri" href="algebra" title="wikilink">algebra</a> of <a href="real_numbers" title="wikilink">real numbers</a> and obtaining a new <a class="uri" href="arithmetic" title="wikilink">arithmetic</a>. An additional component is added to every number which will represent the derivative of a function at the number, and all arithmetic operators are extended for the augmented algebra. The augmented algebra is the algebra of <a href="dual_numbers" title="wikilink">dual numbers</a>.</p>
+
+<p>Replace every number 
+
+<math display="inline" id="Automatic_differentiation:39">
+ <semantics>
+  <mpadded lspace="1.7pt" width="+1.7pt">
+   <mi>x</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \,x
+  </annotation>
+ </semantics>
+</math>
+
+ with the number 
+
+<math display="inline" id="Automatic_differentiation:40">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mo>+</mo>
+   <mrow>
+    <msup>
+     <mi>x</mi>
+     <mo>′</mo>
+    </msup>
+    <mi>ε</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <ci>x</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <ci>ε</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x+x^{\prime}\varepsilon
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Automatic_differentiation:41">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mo>′</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <ci>normal-′</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+ is a real number, but 
+
+<math display="inline" id="Automatic_differentiation:42">
+ <semantics>
+  <mi>ε</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ε</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varepsilon
+  </annotation>
+ </semantics>
+</math>
+
+ is an <a href="abstract_number" title="wikilink">abstract number</a> with the property 
+
+<math display="inline" id="Automatic_differentiation:43">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>ε</mi>
+    <mn>2</mn>
+   </msup>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>ε</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varepsilon^{2}=0
+  </annotation>
+ </semantics>
+</math>
+
+ (an <a class="uri" href="infinitesimal" title="wikilink">infinitesimal</a>; see <em><a href="Smooth_infinitesimal_analysis" title="wikilink">Smooth infinitesimal analysis</a></em>). Using only this, we get for the regular arithmetic</p>
+
+<p>
+
+<math display="inline" id="Automatic_differentiation:44">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>+</mo>
+     <mrow>
+      <msup>
+       <mi>x</mi>
+       <mo>′</mo>
+      </msup>
+      <mi>ε</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>+</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>y</mi>
+     <mo>+</mo>
+     <mrow>
+      <msup>
+       <mi>y</mi>
+       <mo>′</mo>
+      </msup>
+      <mi>ε</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <apply>
+     <plus></plus>
+     <ci>x</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>x</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>ε</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>y</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>y</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>ε</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle(x+x^{\prime}\varepsilon)+(y+y^{\prime}\varepsilon)
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>and likewise for subtraction and division.</p>
+
+<p>Now, we may calculate <a class="uri" href="polynomials" title="wikilink">polynomials</a> in this augmented arithmetic. If 
+
+<math display="inline" id="Automatic_differentiation:45">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>P</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>p</mi>
+     <mn>0</mn>
+    </msub>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mi>p</mi>
+      <mn>1</mn>
+     </msub>
+     <mi>x</mi>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mi>p</mi>
+      <mn>2</mn>
+     </msub>
+     <msup>
+      <mi>x</mi>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+    <mo>+</mo>
+    <mi mathvariant="normal">⋯</mi>
+    <mo>+</mo>
+    <mrow>
+     <msub>
+      <mi>p</mi>
+      <mi>n</mi>
+     </msub>
+     <msup>
+      <mi>x</mi>
+      <mi>n</mi>
+     </msup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>P</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>p</ci>
+      <cn type="integer">0</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>x</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <ci>normal-⋯</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>x</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(x)=p_{0}+p_{1}x+p_{2}x^{2}+\cdots+p_{n}x^{n}
+  </annotation>
+ </semantics>
+</math>
+
+, then</p>
+
+<p>
+
+<math display="inline" id="Automatic_differentiation:46">
+ <semantics>
+  <mtable>
+   <mtr>
+    <mtd columnalign="right">
+     <mrow>
+      <mi>P</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>x</mi>
+        <mo>+</mo>
+        <mrow>
+         <msup>
+          <mi>x</mi>
+          <mo>′</mo>
+         </msup>
+         <mi>ε</mi>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <mi></mi>
+      <mo>=</mo>
+      <mrow>
+       <msub>
+        <mi>p</mi>
+        <mn>0</mn>
+       </msub>
+       <mo>+</mo>
+       <mrow>
+        <msub>
+         <mi>p</mi>
+         <mn>1</mn>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>x</mi>
+          <mo>+</mo>
+          <mrow>
+           <msup>
+            <mi>x</mi>
+            <mo>′</mo>
+           </msup>
+           <mi>ε</mi>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>+</mo>
+       <mi mathvariant="normal">⋯</mi>
+       <mo>+</mo>
+       <mrow>
+        <msub>
+         <mi>p</mi>
+         <mi>n</mi>
+        </msub>
+        <msup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mi>x</mi>
+           <mo>+</mo>
+           <mrow>
+            <msup>
+             <mi>x</mi>
+             <mo>′</mo>
+            </msup>
+            <mi>ε</mi>
+           </mrow>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mi>n</mi>
+        </msup>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd></mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <mi></mi>
+      <mo>=</mo>
+      <mrow>
+       <msub>
+        <mi>p</mi>
+        <mn>0</mn>
+       </msub>
+       <mo>+</mo>
+       <mrow>
+        <msub>
+         <mi>p</mi>
+         <mn>1</mn>
+        </msub>
+        <mi>x</mi>
+       </mrow>
+       <mo>+</mo>
+       <mi mathvariant="normal">⋯</mi>
+       <mo>+</mo>
+       <mrow>
+        <msub>
+         <mi>p</mi>
+         <mi>n</mi>
+        </msub>
+        <msup>
+         <mi>x</mi>
+         <mi>n</mi>
+        </msup>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <msub>
+         <mi>p</mi>
+         <mn>1</mn>
+        </msub>
+        <msup>
+         <mi>x</mi>
+         <mo>′</mo>
+        </msup>
+        <mi>ε</mi>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mn>2</mn>
+        <msub>
+         <mi>p</mi>
+         <mn>2</mn>
+        </msub>
+        <mi>x</mi>
+        <msup>
+         <mi>x</mi>
+         <mo>′</mo>
+        </msup>
+        <mi>ε</mi>
+       </mrow>
+       <mo>+</mo>
+       <mi mathvariant="normal">⋯</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi>n</mi>
+        <msub>
+         <mi>p</mi>
+         <mi>n</mi>
+        </msub>
+        <msup>
+         <mi>x</mi>
+         <mrow>
+          <mi>n</mi>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </msup>
+        <msup>
+         <mi>x</mi>
+         <mo>′</mo>
+        </msup>
+        <mi>ε</mi>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd></mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <mi></mi>
+      <mo>=</mo>
+      <mrow>
+       <mrow>
+        <mi>P</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>x</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <msup>
+         <mi>P</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mn>1</mn>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>x</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <msup>
+         <mi>x</mi>
+         <mo>′</mo>
+        </msup>
+        <mi>ε</mi>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+  </mtable>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <apply>
+      <times></times>
+      <ci>P</ci>
+      <apply>
+       <plus></plus>
+       <ci>x</ci>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>ε</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <csymbol cd="latexml">absent</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>p</ci>
+        <cn type="integer">0</cn>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <apply>
+         <plus></plus>
+         <ci>x</ci>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <ci>x</ci>
+           <ci>normal-′</ci>
+          </apply>
+          <ci>ε</ci>
+         </apply>
+        </apply>
+       </apply>
+       <ci>normal-⋯</ci>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <ci>n</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <plus></plus>
+          <ci>x</ci>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <ci>x</ci>
+            <ci>normal-′</ci>
+           </apply>
+           <ci>ε</ci>
+          </apply>
+         </apply>
+         <ci>n</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <cerror>
+      <csymbol cd="ambiguous">missing-subexpression</csymbol>
+     </cerror>
+     <apply>
+      <eq></eq>
+      <csymbol cd="latexml">absent</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>p</ci>
+        <cn type="integer">0</cn>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <ci>x</ci>
+       </apply>
+       <ci>normal-⋯</ci>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <ci>n</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <ci>n</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>ε</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>x</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>ε</ci>
+       </apply>
+       <ci>normal-⋯</ci>
+       <apply>
+        <times></times>
+        <ci>n</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <ci>n</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <apply>
+          <minus></minus>
+          <ci>n</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>ε</ci>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <cerror>
+      <csymbol cd="ambiguous">missing-subexpression</csymbol>
+     </cerror>
+     <apply>
+      <eq></eq>
+      <csymbol cd="latexml">absent</csymbol>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <ci>P</ci>
+        <ci>x</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>P</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <ci>x</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>ε</ci>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{aligned}\displaystyle P(x+x^{\prime}\varepsilon)&\displaystyle=p_{0}+p_%
+{1}(x+x^{\prime}\varepsilon)+\cdots+p_{n}(x+x^{\prime}\varepsilon)^{n}\\
+&\displaystyle=p_{0}+p_{1}x+\cdots+p_{n}x^{n}+p_{1}x^{\prime}\varepsilon+2p_{2%
+}xx^{\prime}\varepsilon+\cdots+np_{n}x^{n-1}x^{\prime}\varepsilon\\
+&\displaystyle=P(x)+P^{(1)}(x)x^{\prime}\varepsilon\end{aligned}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Automatic_differentiation:47">
+ <semantics>
+  <msup>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>P</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P^{(1)}
+  </annotation>
+ </semantics>
+</math>
+
+ denotes the derivative of 
+
+<math display="inline" id="Automatic_differentiation:48">
+ <semantics>
+  <mi>P</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>P</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P
+  </annotation>
+ </semantics>
+</math>
+
+ with respect to its first argument, and 
+
+<math display="inline" id="Automatic_differentiation:49">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mo>′</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <ci>normal-′</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+, called a <em>seed</em>, can be chosen arbitrarily.</p>
+
+<p>The new arithmetic consists of <a href="ordered_pair" title="wikilink">ordered pairs</a>, elements written 
+
+<math display="inline" id="Automatic_differentiation:50">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mi>x</mi>
+   <mo>,</mo>
+   <msup>
+    <mi>x</mi>
+    <mo>′</mo>
+   </msup>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>x</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <ci>normal-′</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle x,x^{\prime}\rangle
+  </annotation>
+ </semantics>
+</math>
+
+, with ordinary arithmetics on the first component, and first order differentiation arithmetic on the second component, as described above. Extending the above results on polynomials to <a href="analytic_functions" title="wikilink">analytic functions</a> we obtain a list of the basic arithmetic and some standard functions for the new arithmetic:</p>
+
+<p>
+
+<math display="inline" id="Automatic_differentiation:51">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>⟨</mo>
+    <mi>u</mi>
+    <mo>,</mo>
+    <msup>
+     <mi>u</mi>
+     <mo>′</mo>
+    </msup>
+    <mo>⟩</mo>
+   </mrow>
+   <mo>+</mo>
+   <mrow>
+    <mo>⟨</mo>
+    <mi>v</mi>
+    <mo>,</mo>
+    <msup>
+     <mi>v</mi>
+     <mo>′</mo>
+    </msup>
+    <mo>⟩</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <list>
+     <ci>u</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>u</ci>
+      <ci>normal-′</ci>
+     </apply>
+    </list>
+    <list>
+     <ci>v</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>v</ci>
+      <ci>normal-′</ci>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\left\langle u,u^{\prime}\right\rangle+\left\langle v,v^{\prime}\right\rangle
+  </annotation>
+ </semantics>
+</math>
+
+
+ and in general for the primitive function 
+
+<math display="inline" id="Automatic_differentiation:52">
+ <semantics>
+  <mi>g</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>g</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g
+  </annotation>
+ </semantics>
+</math>
+
+,</p>
+
+<p>
+
+<math display="block" id="Automatic_differentiation:53">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>g</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mo stretchy="false">⟨</mo>
+      <mi>u</mi>
+      <mo>,</mo>
+      <msup>
+       <mi>u</mi>
+       <mo>′</mo>
+      </msup>
+      <mo stretchy="false">⟩</mo>
+     </mrow>
+     <mo>,</mo>
+     <mrow>
+      <mo stretchy="false">⟨</mo>
+      <mi>v</mi>
+      <mo>,</mo>
+      <msup>
+       <mi>v</mi>
+       <mo>′</mo>
+      </msup>
+      <mo stretchy="false">⟩</mo>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">⟨</mo>
+    <mrow>
+     <mi>g</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>u</mi>
+      <mo>,</mo>
+      <mi>v</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mrow>
+      <msub>
+       <mi>g</mi>
+       <mi>u</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>u</mi>
+       <mo>,</mo>
+       <mi>v</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <msup>
+       <mi>u</mi>
+       <mo>′</mo>
+      </msup>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <msub>
+       <mi>g</mi>
+       <mi>v</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>u</mi>
+       <mo>,</mo>
+       <mi>v</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <msup>
+       <mi>v</mi>
+       <mo>′</mo>
+      </msup>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">⟩</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>g</ci>
+     <interval closure="open">
+      <list>
+       <ci>u</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>u</ci>
+        <ci>normal-′</ci>
+       </apply>
+      </list>
+      <list>
+       <ci>v</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>v</ci>
+        <ci>normal-′</ci>
+       </apply>
+      </list>
+     </interval>
+    </apply>
+    <list>
+     <apply>
+      <times></times>
+      <ci>g</ci>
+      <interval closure="open">
+       <ci>u</ci>
+       <ci>v</ci>
+      </interval>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>g</ci>
+        <ci>u</ci>
+       </apply>
+       <interval closure="open">
+        <ci>u</ci>
+        <ci>v</ci>
+       </interval>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>u</ci>
+        <ci>normal-′</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>g</ci>
+        <ci>v</ci>
+       </apply>
+       <interval closure="open">
+        <ci>u</ci>
+        <ci>v</ci>
+       </interval>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>v</ci>
+        <ci>normal-′</ci>
+       </apply>
+      </apply>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g(\langle u,u^{\prime}\rangle,\langle v,v^{\prime}\rangle)=\langle g(u,v),g_{u%
+}(u,v)u^{\prime}+g_{v}(u,v)v^{\prime}\rangle
+  </annotation>
+ </semantics>
+</math>
+
+ where 
+
+<math display="inline" id="Automatic_differentiation:54">
+ <semantics>
+  <msub>
+   <mi>g</mi>
+   <mi>u</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>g</ci>
+    <ci>u</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g_{u}
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="Automatic_differentiation:55">
+ <semantics>
+  <msub>
+   <mi>g</mi>
+   <mi>v</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>g</ci>
+    <ci>v</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g_{v}
+  </annotation>
+ </semantics>
+</math>
+
+ are the derivatives of 
+
+<math display="inline" id="Automatic_differentiation:56">
+ <semantics>
+  <mi>g</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>g</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g
+  </annotation>
+ </semantics>
+</math>
+
+ with respect to its first and second arguments, respectively.</p>
+
+<p>When a binary basic arithmetic operation is applied to mixed arguments—the pair 
+
+<math display="inline" id="Automatic_differentiation:57">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mi>u</mi>
+   <mo>,</mo>
+   <msup>
+    <mi>u</mi>
+    <mo>′</mo>
+   </msup>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>u</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>u</ci>
+     <ci>normal-′</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle u,u^{\prime}\rangle
+  </annotation>
+ </semantics>
+</math>
+
+ and the real number 
+
+<math display="inline" id="Automatic_differentiation:58">
+ <semantics>
+  <mi>c</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>c</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c
+  </annotation>
+ </semantics>
+</math>
+
+—the real number is first lifted to 
+
+<math display="inline" id="Automatic_differentiation:59">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mi>c</mi>
+   <mo>,</mo>
+   <mn>0</mn>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>c</ci>
+    <cn type="integer">0</cn>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle c,0\rangle
+  </annotation>
+ </semantics>
+</math>
+
+
+. The derivative of a function 
+
+<math display="inline" id="Automatic_differentiation:60">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mo>:</mo>
+   <mrow>
+    <mi>ℝ</mi>
+    <mo>→</mo>
+    <mi>ℝ</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <ci>f</ci>
+    <apply>
+     <ci>normal-→</ci>
+     <ci>ℝ</ci>
+     <ci>ℝ</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f:\mathbb{R}\rightarrow\mathbb{R}
+  </annotation>
+ </semantics>
+</math>
+
+ at the point 
+
+<math display="inline" id="Automatic_differentiation:61">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mn>0</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{0}
+  </annotation>
+ </semantics>
+</math>
+
+ is now found by calculating 
+
+<math display="inline" id="Automatic_differentiation:62">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mo stretchy="false">⟨</mo>
+     <msub>
+      <mi>x</mi>
+      <mn>0</mn>
+     </msub>
+     <mo>,</mo>
+     <mn>1</mn>
+     <mo stretchy="false">⟩</mo>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>f</ci>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">0</cn>
+     </apply>
+     <cn type="integer">1</cn>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f(\langle x_{0},1\rangle)
+  </annotation>
+ </semantics>
+</math>
+
+ using the above arithmetic, which gives 
+
+<math display="inline" id="Automatic_differentiation:63">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">⟨</mo>
+   <mrow>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>x</mi>
+      <mn>0</mn>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <msup>
+     <mi>f</mi>
+     <mo>′</mo>
+    </msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>x</mi>
+      <mn>0</mn>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <times></times>
+     <ci>f</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">0</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>f</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">0</cn>
+     </apply>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \langle f(x_{0}),f^{\prime}(x_{0})\rangle
+  </annotation>
+ </semantics>
+</math>
+
+ as the result.</p>
+<h3 id="vector-arguments-and-functions">Vector arguments and functions</h3>
+
+<p>Multivariate functions can be handled with the same efficiency and mechanisms as univariate functions by adopting a directional derivative operator. That is, if it is sufficient to compute 
+
+<math display="inline" id="Automatic_differentiation:64">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>y</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mo>∇</mo>
+      <mi>f</mi>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>⋅</mo>
+    <msup>
+     <mi>x</mi>
+     <mo>′</mo>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <ci>normal-⋅</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <ci>normal-∇</ci>
+       <ci>f</ci>
+      </apply>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <ci>normal-′</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y^{\prime}=\nabla f(x)\cdot x^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+
+, the directional derivative 
+
+<math display="inline" id="Automatic_differentiation:65">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>y</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>∈</mo>
+   <msup>
+    <mi>ℝ</mi>
+    <mi>m</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>ℝ</ci>
+     <ci>m</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y^{\prime}\in\mathbb{R}^{m}
+  </annotation>
+ </semantics>
+</math>
+
+ of 
+
+<math display="inline" id="Automatic_differentiation:66">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mo>:</mo>
+   <mrow>
+    <msup>
+     <mi>ℝ</mi>
+     <mi>n</mi>
+    </msup>
+    <mo>→</mo>
+    <msup>
+     <mi>ℝ</mi>
+     <mi>m</mi>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <ci>f</ci>
+    <apply>
+     <ci>normal-→</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>ℝ</ci>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>ℝ</ci>
+      <ci>m</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f:\mathbb{R}^{n}\rightarrow\mathbb{R}^{m}
+  </annotation>
+ </semantics>
+</math>
+
+ at 
+
+<math display="inline" id="Automatic_differentiation:67">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mo>∈</mo>
+   <msup>
+    <mi>ℝ</mi>
+    <mi>n</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>x</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>ℝ</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x\in\mathbb{R}^{n}
+  </annotation>
+ </semantics>
+</math>
+
+ in the direction 
+
+<math display="inline" id="Automatic_differentiation:68">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>∈</mo>
+   <msup>
+    <mi>ℝ</mi>
+    <mi>n</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>ℝ</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{\prime}\in\mathbb{R}^{n}
+  </annotation>
+ </semantics>
+</math>
+
+, this may be calculated as 
+
+<math display="inline" id="Automatic_differentiation:69">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mo stretchy="false">⟨</mo>
+     <msub>
+      <mi>y</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <msubsup>
+      <mi>y</mi>
+      <mn>1</mn>
+      <mo>′</mo>
+     </msubsup>
+     <mo stretchy="false">⟩</mo>
+    </mrow>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mrow>
+     <mo stretchy="false">⟨</mo>
+     <msub>
+      <mi>y</mi>
+      <mi>m</mi>
+     </msub>
+     <mo>,</mo>
+     <msubsup>
+      <mi>y</mi>
+      <mi>m</mi>
+      <mo>′</mo>
+     </msubsup>
+     <mo stretchy="false">⟩</mo>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mo stretchy="false">⟨</mo>
+      <msub>
+       <mi>x</mi>
+       <mn>1</mn>
+      </msub>
+      <mo>,</mo>
+      <msubsup>
+       <mi>x</mi>
+       <mn>1</mn>
+       <mo>′</mo>
+      </msubsup>
+      <mo stretchy="false">⟩</mo>
+     </mrow>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <mrow>
+      <mo stretchy="false">⟨</mo>
+      <msub>
+       <mi>x</mi>
+       <mi>n</mi>
+      </msub>
+      <mo>,</mo>
+      <msubsup>
+       <mi>x</mi>
+       <mi>n</mi>
+       <mo>′</mo>
+      </msubsup>
+      <mo stretchy="false">⟩</mo>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <vector>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>y</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>y</ci>
+        <ci>normal-′</ci>
+       </apply>
+       <cn type="integer">1</cn>
+      </apply>
+     </list>
+     <ci>normal-…</ci>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>y</ci>
+       <ci>m</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>y</ci>
+        <ci>normal-′</ci>
+       </apply>
+       <ci>m</ci>
+      </apply>
+     </list>
+    </vector>
+    <apply>
+     <times></times>
+     <ci>f</ci>
+     <vector>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+      </list>
+      <ci>normal-…</ci>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <ci>normal-′</ci>
+        </apply>
+        <ci>n</ci>
+       </apply>
+      </list>
+     </vector>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (\langle y_{1},y^{\prime}_{1}\rangle,\ldots,\langle y_{m},y^{\prime}_{m}%
+\rangle)=f(\langle x_{1},x^{\prime}_{1}\rangle,\ldots,\langle x_{n},x^{\prime}%
+_{n}\rangle)
+  </annotation>
+ </semantics>
+</math>
+
+
+ using the same arithmetic as above. If all the elements of 
+
+<math display="inline" id="Automatic_differentiation:70">
+ <semantics>
+  <mrow>
+   <mo>∇</mo>
+   <mi>f</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-∇</ci>
+    <ci>f</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \nabla f
+  </annotation>
+ </semantics>
+</math>
+
+ are desired, then 
+
+<math display="inline" id="Automatic_differentiation:71">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ function evaluations are required. Note that in many optimization applications, the directional derivative is indeed sufficient.</p>
+<h3 id="higher-order-differentials">Higher order differentials</h3>
+
+<p>The above arithmetic can be generalized, in the natural way, to calculate parts of the second order and higher derivatives. However, the arithmetic rules quickly grow very complicated: complexity will be quadratic in the highest derivative degree. Instead, truncated <a href="Taylor_series" title="wikilink">Taylor series</a> arithmetic is used. This is possible because the Taylor summands in a Taylor series of a function are products of known coefficients and derivatives of the function. Currently, there exists efficient <a href="Hessian_automatic_differentiation" title="wikilink">Hessian automatic differentiation</a> methods that calculate the entire Hessian matrix with a single forward and reverse accumulation. There also exist a number of specialized methods for calculating large sparse Hessian matrices.</p>
+<h2 id="implementation">Implementation</h2>
+
+<p>Forward-mode AD is implemented by a <a href="nonstandard_interpretation" title="wikilink">nonstandard interpretation</a> of the program in which real numbers are replaced by dual numbers, constants are lifted to dual numbers with a zero epsilon coefficient, and the numeric primitives are lifted to operate on dual numbers. This nonstandard interpretation is generally implemented using one of two strategies: <em>source code transformation</em> or <em>operator overloading</em>.</p>
+<h3 id="source-code-transformation-sct">Source code transformation (SCT)</h3>
+<figure><b>(Figure)</b>
+<figcaption>Figure 4: Example of how source code transformation could work</figcaption>
+</figure>
+
+<p>The source code for a function is replaced by an automatically generated source code that includes statements for calculating the derivatives interleaved with the original instructions.</p>
+
+<p>Source code transformation can be implemented for all programming languages, and it is also easier for the compiler to do compile time optimizations. However, the implementation of the AD tool itself is more difficult.</p>
+<h3 id="operator-overloading-oo">Operator overloading (OO)</h3>
+
+<p> <a href="Operator_overloading" title="wikilink">Operator overloading</a> is a possibility for source code written in a language supporting it. Objects for real numbers and elementary mathematical operations must be overloaded to cater for the augmented arithmetic depicted above. This requires no change in the form or sequence of operations in the original source code for the function to be differentiated, but often requires changes in basic data types for numbers and vectors to support overloading and often also involves the insertion of special flagging operations.</p>
+
+<p>Operator overloading for forward accumulation is easy to implement, and also possible for reverse accumulation. However, current compilers lag behind in optimizing the code when compared to forward accumulation.</p>
+<h2 id="software">Software</h2>
+<ul>
+<li><strong>C/C++</strong></li>
+</ul>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Package</p></th>
+<th style="text-align: left;">
+<p>License</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>Brief Info</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.vivlabs.com/subpage_adc_v4.php">ADC Version 4.0</a></p></td>
+<td style="text-align: left;">
+<p>nonfree</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www.met.rdg.ac.uk/clouds/adept/">Adept</a></p></td>
+<td style="text-align: left;">
+<p><a href="Apache_License" title="wikilink">Apache</a> 2.0</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>First-order forward and reverse modes. Very fast due to its use of expression templates and an efficient tape structure.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.mcs.anl.gov/adic/">ADIC</a></p></td>
+<td style="text-align: left;">
+<p>free for noncommercial</p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;">
+<p>forward mode</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a class="uri" href="ADMB" title="wikilink">ADMB</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>SCT+OO</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://code.google.com/p/adnumber/">ADNumber</a></p></td>
+<td style="text-align: left;">
+<p>dual license</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>arbitrary order forward/reverse</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www.coin-or.org/projects/ADOL-C.xml">ADOL-C</a></p></td>
+<td style="text-align: left;">
+<p>CPL 1.0 or <a class="uri" href="GPL" title="wikilink">GPL</a> 2.0</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>arbitrary order forward/reverse, part of <a class="uri" href="COIN-OR" title="wikilink">COIN-OR</a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a class="uri" href="AMPL" title="wikilink">AMPL</a></p></td>
+<td style="text-align: left;">
+<p>free for students</p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www.fadbad.com/">FADBAD++</a></p></td>
+<td style="text-align: left;">
+<p>free for<br/>
+noncommercial</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>uses operator new</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.casadi.org/">CasADi</a></p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="LGPL" title="wikilink">LGPL</a></p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;">
+<p>Forward/reverse modes, matrix-valued atomic operations.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://ceres-solver.org">ceres-solver</a></p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="BSD" title="wikilink">BSD</a></p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>A portable C++ library that allows for modeling and solving large complicated nonlinear least squares problems</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.coin-or.org/CppAD">CppAD</a></p></td>
+<td style="text-align: left;">
+<p><a href="Eclipse_Public_License" title="wikilink">EPL</a> 1.0 or <a class="uri" href="GPL" title="wikilink">GPL</a> 3.0</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>arbitrary order forward/reverse, AD<base/> for arbitrary Base including AD<other_base>, part of <a class="uri" href="COIN-OR" title="wikilink">COIN-OR</a>; can also be used to produce C source code using the <a href="https://github.com/joaoleal/CppADCodeGen">CppADCodeGen</a> library.</other_base></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://eigen.tuxfamily.org/dox/unsupported/group__AutoDiff__Module.html">Eigen Auto Diff</a></p></td>
+<td style="text-align: left;">
+<p><a href="Mozilla_Public_License" title="wikilink">MPL2</a></p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.mcs.anl.gov/OpenAD/">OpenAD</a></p></td>
+<td style="text-align: left;">
+<p>depends on components</p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://trilinos.sandia.gov/packages/">Sacado</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>A part of the <a href="http://trilinos.sandia.gov/">Trilinos</a> collection, forward/reverse modes.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="Stan_(software)" title="wikilink">Stan (software)</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>forward- and reverse-mode automatic differentiation with library of special functions, probability functions, matrix operators, and linear algebra solvers</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www-sop.inria.fr/tropics/">TAPENADE</a></p></td>
+<td style="text-align: left;">
+<p>Free for noncommercial</p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="https://ctaylor.codeplex.com/">CTaylor</a></p></td>
+<td style="text-align: left;">
+<p>free</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>truncated taylor series, multi variable, high performance, calculating and storing only potentially nonzero derivatives, calculates higher order derivatives, order of derivatives increases when using matching operations until maximum order (parameter) is reached, example source code and executable available for testing performance</p></td>
+</tr>
+</tbody>
+</table>
+
+<p></p>
+</dd>
+</dl>
+<ul>
+<li><strong>Fortran</strong></li>
+</ul>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Package</p></th>
+<th style="text-align: left;">
+<p>License</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>Brief Info</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.vivlabs.com/subpage_adf_v4.php">ADF Version 4.0</a></p></td>
+<td style="text-align: left;">
+<p>nonfree</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www-unix.mcs.anl.gov/autodiff/ADIFOR/">ADIFOR</a></p></td>
+<td style="text-align: left;">
+<p><a href="http://www.mcs.anl.gov/research/projects/adifor/AdiforPublicLicense.html">&gt;&gt;&gt;</a><br/>
+(free for non-commercial)</p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://cpc.cs.qub.ac.uk/summaries/ADLS">AUTO_DERIV</a></p></td>
+<td style="text-align: left;">
+<p>free for non-commercial</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www.mcs.anl.gov/OpenAD/">OpenAD</a></p></td>
+<td style="text-align: left;">
+<p>depends on components</p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://tapenade.inria.fr:8080/tapenade/index.jsp">TAPENADE</a></p></td>
+<td style="text-align: left;">
+<p>Free for noncommercial</p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="https://raullaasner.github.io/gadfit">GADfit</a></p></td>
+<td style="text-align: left;">
+<p>Free (<a class="uri" href="GPL" title="wikilink">GPL</a> 3)</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>First (forward, reverse) and second (forward) order, principal use is nonlinear curve fitting, includes the differentiation of integrals</p></td>
+</tr>
+</tbody>
+</table>
+
+<p></p>
+</dd>
+</dl>
+<ul>
+<li><strong>Matlab</strong></li>
+</ul>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Package</p></th>
+<th style="text-align: left;">
+<p>License</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>Brief Info</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.mathworks.com/matlabcentral/fileexchange/15235">AD for MATLAB</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Forward (1st &amp; 2nd derivative, Uses MEX files &amp; Windows DLLs)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www.mathworks.com/matlabcentral/fileexchange/26807-automatic-differentiation-with-matlab-objects">Adiff</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Forward (1st derivative)</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://matlabad.com/">MAD</a></p></td>
+<td style="text-align: left;">
+<p>Proprietary</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www.adimat.de/">ADiMat</a></p></td>
+<td style="text-align: left;">
+<p>Proprietary</p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;">
+<p>Forward (1st &amp; 2nd derivative) &amp; Reverse (1st), proprietary server side transform</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="https://github.com/gaika/madiff">MADiff</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Reverse</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+<ul>
+<li><strong>Python</strong></li>
+</ul>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Package</p></th>
+<th style="text-align: left;">
+<p>License</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>Brief Info</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="https://pypi.python.org/pypi/ad/">ad</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>first and second-order, reverse accumulation, transparent on-the-fly calculations, basic <a class="uri" href="NumPy" title="wikilink">NumPy</a> support, written in pure python</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a class="uri" href="FuncDesigner" title="wikilink">FuncDesigner</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>uses <a class="uri" href="NumPy" title="wikilink">NumPy</a> arrays and <a class="uri" href="SciPy" title="wikilink">SciPy</a> sparse matrices,<br/>
+also allows to solve linear/non-linear/ODE systems and<br/>
+ to perform numerical optimizations by <a class="uri" href="OpenOpt" title="wikilink">OpenOpt</a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://dirac.cnrs-orleans.fr/ScientificPython/">ScientificPython</a></p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="CeCILL" title="wikilink">CeCILL</a></p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>see modules Scientific.Functions.FirstDerivatives and<br/>
+Scientific.Functions.Derivatives</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www.seanet.com/~bradbell/pycppad/index.htm">pycppad</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>arbitrary order forward/reverse, implemented as wrapper for CppAD including AD<double> and AD &gt;.</double></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="https://github.com/b45ch1/pyadolc">pyadolc</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>wrapper for ADOL-C, hence arbitrary order derivatives in the (combined) forward/reverse mode of AD, supports sparsity pattern propagation and sparse derivative computations</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://packages.python.org/uncertainties/">uncertainties</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>first-order derivatives, reverse mode, transparent calculations</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="https://pypi.python.org/pypi/algopy">algopy</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>same approach as pyadolc and thus compatible, support to differentiate through numerical linear algebra functions like the matrix-matrix product, solution of linear systems, QR and Cholesky decomposition, etc.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="https://github.com/forrestv/pyderiv">pyderiv</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>automatic differentiation and (co)variance calculation</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.casadi.org/">CasADi</a></p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="LGPL" title="wikilink">LGPL</a></p></td>
+<td style="text-align: left;">
+<p>SCT</p></td>
+<td style="text-align: left;">
+<p>Python front-end to CasADi. Forward/reverse modes, matrix-valued atomic operations.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://deeplearning.net/software/theano/">Theano</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p><a href="Theano_(software)" title="wikilink">Theano</a> is a Python library that allows you to define, optimize, and evaluate mathematical expressions involving multi-dimensional arrays both on CPU and GPU efficiently.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="https://github.com/hips/autograd">Autograd</a></p></td>
+<td style="text-align: left;">
+<p><a href="MIT_License" title="wikilink">MIT</a></p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Autograd can reverse-mode differentiate native Python and Numpy code. It can handle a large subset of Python's features, including loops, ifs, recursion and closures. It is closed under its own operation and hence can compute derivatives of any order.</p></td>
+</tr>
+</tbody>
+</table>
+
+<p></p>
+</dd>
+</dl>
+<ul>
+<li><strong>Lua</strong></li>
+</ul>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Package</p></th>
+<th style="text-align: left;">
+<p>License</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>Brief Info</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://torch.ch">Torch</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p><a href="Torch_(machine_learning)" title="wikilink">Torch</a> is a <a class="uri" href="LuaJIT" title="wikilink">LuaJIT</a> library used for <a href="Deep_Learning" title="wikilink">Deep Learning</a>. Its <a href="Torch_(machine_learning)#nn" title="wikilink">nn</a> package is divided into modular objects that share a common <code>Module</code> interface. Modules have a <code>forward</code> and <code>backward</code> function that allow them to <a href="Feedforward_neural_network" title="wikilink">feedforward</a> and <a href="backpropagation" title="wikilink">backpropagate</a> (first-order derivatives). Modules can be joined together using module <a href="Composite_pattern" title="wikilink">composites</a> to create complex task-tailored graphs.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www.scilua.org">SciLua</a></p></td>
+<td style="text-align: left;">
+<p><a href="MIT_License" title="wikilink">MIT</a></p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>SciLua, a framework for general purpose scientific computing in <a class="uri" href="LuaJIT" title="wikilink">LuaJIT</a>, features <a href="http://www.scilua.org/sci_diff.html">complete and transparent support</a> for forward-mode automatic differentiation.</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+<ul>
+<li><strong>.NET</strong></li>
+</ul>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Package</p></th>
+<th style="text-align: left;">
+<p>License</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>Brief Info</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://autodiff.codeplex.com/">AutoDiff</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Automatic differentiation with C# operator overloading.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://funclib.codeplex.com/">FuncLib</a></p></td>
+<td style="text-align: left;">
+<p><a href="MIT_License" title="wikilink">MIT</a></p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Automatic differentiation and numerical optimization, operator overloading, unlimited order of differentiation, compilation to IL code for very fast evaluation.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://diffsharp.github.io/DiffSharp/">DiffSharp</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>An automatic differentiation library implemented in the <a href="F_Sharp_(programming_language)" title="wikilink">F#</a> language. It supports <a href="C_Sharp_(programming_language)" title="wikilink">C#</a> and the other CLI languages. The library provides gradients, Hessians, Jacobians, directional derivatives, and matrix-free Hessian- and Jacobian-vector products, which can be incorporated with minimal change into existing algorithms. Operations can be nested to any level, meaning that you can compute exact higher-order derivatives and differentiate functions that are internally making use of differentiation.</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+<ul>
+<li><strong>Haskell</strong></li>
+</ul>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Package</p></th>
+<th style="text-align: left;">
+<p>License</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>Brief Info</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://hackage.haskell.org/package/ad">ad</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Forward Mode (1st derivative or arbitrary order derivatives via lazy lists and sparse tries)<br/>
+Reverse Mode<br/>
+Combined forward-on-reverse Hessians.<br/>
+ Uses Quantification to allow the implementation automatically choose appropriate modes.<br/>
+ Quantification prevents perturbation/sensitivity confusion at compile time.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://hackage.haskell.org/package/fad">fad</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Forward Mode (lazy list). Quantification prevents perturbation confusion at compile time.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://hackage.haskell.org/package/rad">rad</a></p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Reverse Mode. (Subsumed by 'ad').<br/>
+ Quantification prevents sensitivity confusion at compile time.</p></td>
+</tr>
+</tbody>
+</table>
+
+<p></p>
+</dd>
+</dl>
+<ul>
+<li><strong>Java</strong></li>
+</ul>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Package</p></th>
+<th style="text-align: left;">
+<p>License</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>Brief Info</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="https://github.com/uniker9/JAutoDiff">JAutoDiff</a></p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="-" title="wikilink">-</a></p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>Provides a framework to compute derivatives of functions on arbitrary types of field using generics. Coded in 100% pure Java.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://commons.apache.org/proper/commons-math">Apache Commons Math</a></p></td>
+<td style="text-align: left;">
+<p><a href="Apache_License" title="wikilink">Apache License</a> v2</p></td>
+<td style="text-align: left;">
+<p>OO</p></td>
+<td style="text-align: left;">
+<p>This class is an implementation of the extension to Rall's numbers described in Dan Kalman's paper<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="https://github.com/lambder/Deriva">Deriva</a></p></td>
+<td style="text-align: left;">
+<p><a href="Eclipse_Public_License" title="wikilink">Eclipse Public License</a> v1.0</p></td>
+<td style="text-align: left;">
+<p>DSL+Code Generation</p></td>
+<td style="text-align: left;">
+<p>Deriva automates algorithmic differentiation in Java and Clojure projects. It defines DSL for building extended arithmetic expressions (the extension being support for conditionals, allowing to express non analytic functions). The DSL is used to generate flat byte-code at runtime, providing implementation without overhead of function calls.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://link.springer.com/chapter/10.1007/978-3-642-30023-3_22">Jap</a></p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="Public" title="wikilink">Public</a></p></td>
+<td style="text-align: left;">
+<p>OO/SCT</p></td>
+<td style="text-align: left;">
+<p>Jap is a tools using Virtual Operator Overloading for java class. Jap was developed in the <a href="http://hal.archives-ouvertes.fr/docs/00/65/66/25/PDF/pham-quang_these.pdf">thesis</a> of Phuong PHAM-QUANG 2008-2011.</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+<ul>
+<li><strong>Clojure</strong></li>
+</ul>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Package</p></th>
+<th style="text-align: left;">
+<p>License</p></th>
+<th style="text-align: left;">
+<p>Approach</p></th>
+<th style="text-align: left;">
+<p>Brief Info</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="https://github.com/lambder/Deriva">Deriva</a></p></td>
+<td style="text-align: left;">
+<p><a href="Eclipse_Public_License" title="wikilink">Eclipse Public License</a> v1.0</p></td>
+<td style="text-align: left;">
+<p>DSL+Code Generation</p></td>
+<td style="text-align: left;">
+<p>Deriva automates algorithmic differentiation in Java and Clojure projects. It defines DSL for building extended arithmetic expressions (the extension being support for conditionals, allowing to express non analytic functions). The DSL is used to generate flat byte-code at runtime, providing implementation without overhead of function calls.</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+<h2 id="references">References</h2>
+<h2 id="literature">Literature</h2>
+<ul>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.autodiff.org/">www.autodiff.org</a>, An "entry site to everything you want to know about automatic differentiation"</li>
+<li>[<a class="uri" href="http://www.autodiff.org/?module=Applications&amp;application">http://www.autodiff.org/?module=Applications&amp;application;</a>;=HC1 Automatic Differentiation of Parallel OpenMP Programs]</li>
+<li><a href="http://homepage.mac.com/sigfpe/paper.pdf">Automatic Differentiation, C++ Templates and Photogrammetry</a></li>
+<li><a href="http://www.vivlabs.com/subpage_ad.php">Automatic Differentiation, Operator Overloading Approach</a></li>
+<li><a href="http://tapenade.inria.fr:8080/tapenade/index.jsp">Compute analytic derivatives of any Fortran77, Fortran95, or C program through a web-based interface</a> Automatic Differentiation of Fortran programs</li>
+<li><a href="http://www.win-vector.com/dfiles/AutomaticDifferentiationWithScala.pdf">Description and example code for forward Automatic Differentiation in Scala</a></li>
+<li><a href="http://developers.opengamma.com/quantitative-research/Adjoint-Algorithmic-Differentiation-OpenGamma.pdf">Adjoint Algorithmic Differentiation: Calibration and Implicit Function Theorem</a></li>
+<li><a href="http://www.nag.co.uk/doc/techrep/pdf/tr5_10.pdf">1</a>, Exact First- and Second-Order Greeks by Algorithmic Differentiation</li>
+<li><a href="http://www.nag.co.uk/Market/articles/adjoint-algorithmic-differentiation-of-gpu-accelerated-app.pdf">2</a>, Adjoint Algorithmic Differentiation of a GPU Accelerated Application</li>
+<li><a href="http://www.nag.co.uk/Market/seminars/Uwe_AD_Slides_July13.pdf">3</a>, Adjoint Methods in Computational Finance Software Tool Support for Algorithmic Differentiation</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Differential_calculus" title="wikilink">Category:Differential calculus</a> <a href="Category:Computer_algebra" title="wikilink">Category:Computer algebra</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a class="uri" href="http://www.ec-securehost.com/SIAM/SE24.html">http://www.ec-securehost.com/SIAM/SE24.html</a><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+</ol>
+</section>
+</hr></body>
+</html>

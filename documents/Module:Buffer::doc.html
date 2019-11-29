@@ -1,0 +1,1021 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1630">Module:Buffer/doc</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Module:Buffer/doc</h1>
+<hr/>
+
+<p>This was originally developed to optimize string concatenation as a helper method within <a class="uri" href="Module:Asbox" title="wikilink">Module:Asbox</a>, but has been generalized for all modules.</p>
+
+<p>The interface for <a href="#Buffer_object" title="wikilink">Module:Buffer objects</a> is similar to that of  objects in that you may build complex strings with independent child nodes. In most cases, you may use Buffer objects like a normal string, including using  operator (though  has the same role, but potentially <a href="#performance" title="wikilink">over 10 times faster than </a>). See also: <a href="#String,_mw.ustring,_and_mw.text_libraries" title="wikilink">#String, mw.ustring, and mw.text libraries</a></p>
+
+<p>Additionally, there are several specialized forms and extended objects, described further in their respective sections:</p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><div style="margin:0; column-width: 15em; -moz-column-width: 15em; -webkit-column-width: 15em; width:49em">
+<ul>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li><a href="#_G_object" title="wikilink">_G (callable)</a></li>
+</ul></div></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>Last but not least, this module has an ordered <a href="#require'Module:Buffer'._pairs" title="wikilink">__pairs</a> which can be more thorough than  and . (Even reads nil keys!) The <span title="This is a bad Star Trek joke">logical uniqueness</span> of this iterator may be reason enough to  Module:Buffer.</p>
+<h2 id="usage">Usage</h2>
+<h3 id="requiremodulebuffer">require'Module:Buffer'</h3>
+
+<p>Creates a new Module:Buffer object when the module returned by  is called as a function{{--}}i.e., there is no 'main'.</p>
+
+<p>Because <span title="i.e. never accept arguments"></span> are a <a href="pet_peeve" title="wikilink">pet peeve</a> of this developer, this forwards arguments to ; if that op is not desired, you may chain a Buffer object function directly to the module and the self-action will be redirected to a new Buffer object{{--}} i.e <a href="#Buffer:_inHTML" title="wikilink"></a> is equivalent to .<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p>The global variable  is "magic" when passed as the first arg. Such enables the <a href="#Global_functions" title="wikilink">global functions</a> and, if followed by a <code>name<code> string, will declare the new Buffer with that name in the global scope. If the argument following ''name'' is a table with no metatable, 
+it and any other {{luaref|varargs|y}} are forwarded to {{luaself|:_all}}; otherwise, as long as the first vararg is not nil or false, this passes them to {{luaself|:_}}.<ref group="note">
+Passing arguments after ''name'' is primary used when {{luaself|:_in}} is indirectly called by {{luaself|:_all}} or {{luaself|pre=Element-|:_add}}. For example:<br/>
+{{code|1=require'Module:Buffer'(_G,'arg'):_all({'arg',arg and {' was saved:' ,_in={_G, 't', ' awesome'}{{))}}, true):_(t and {t(), t..'r', t..'st'})|lang=lua}}<br/>
+produces: {{code|arg was saved: awesome awesomer awesomest|lang=lua}}</ref> The _G passed may also gain a __call {{luaref|Metatables|metamethod|y}} (details at [[#G object|_G object]]).
+
+{{anchor|recycling}}
+As a final note, if you {{luaref|require|plain=y}} text from a module which returns a Buffer object, it may be more efficient to create a new Buffer via chaining {{luaself|Buffer|:_in|:_in|args=()}} 
+after a require statement for the other module and use {{luaself|:_parent|args=()}} at the point where you would append the required text. (Best add {{code|lang=lua|1=--:_in == indirect require Module:Buffer}} 
+so future editors won't hunt for {{code|lang=lua|function ...:_in}} at the other module)
+
+===Basic functions===
+{{anchor|Buffer}}
+====Buffer object====
+
+{{luaself|\|args=sep, i, j}}
+:''See also {{luaself|:_str|plain=y}} for advanced string conversion.
+
+Get a Buffer as a {{luaref|string|y}} via a function call on the Buffer ''object'' (as opposed to [[#require'Module:Buffer'|a call on the ''module'']]). 
+This is basically shorthand for {{luaref|table.concat|args=Buffer, sep, i, j}}, or, with no args, {{luaref|tostring|args=Buffer}}. 
+However, if this Buffer is in [[#raw|raw mode]]<ref group="note" name="raw"></ref>  or contains at least one {{luaref|sequence|non-sequential|y}} index,
+this reconstructs the Buffer by creating a new table, coercing it contents to strings and appending them sequentially to the temporary "buffer" via 
+<code>new-{{luaself|:_all|plain=yes|args=Buffer}}</code> (or a similar process).</code></code></p>
+
+<p>Unconventionally, any -type position passed as <code>i</code> or <code>j<code> are treated as ''relative to length''; 
+that is, {{luaself|\|args='-', -1, '-3'}} is equivalent to {{luaself|\|args='-', -1, #Buffer - 3}} (which obviates the need to {{luaref|Local variable declarations|declare a local|y}} ''Buffer''
+just to use the {{luaref|Length operator|length operator|y}}). Moreover, unlike table.concat, this automatically adjusts numerical<ref group="note">
+Later sections may describe values as being ''numerical'' or ''numeric''. Though perfect synonyms in normal usage, these adjectives are not interchangeable here.
+For the purposes of documenting Module:Buffer, ''numerical'' includes both actual number values and string values which {{luaref|tonumber|args=value}} does not return nil 
+(and often involves Buffer-style length relativity); ''numeric'' describes values of number type only.</ref> positions to be within the range of the lowest and greatest indicies.
+
+Note you may append a Buffer object without tostring coercion to an {{luaref|HTML library|mw.html|y}} object via {{luaref|mw.html:node}} (though not mw.html:wikitext because of type checking).
+
+=====Buffer.last_concat=====
+
+When strung without a ([[#valid|valid]]) <code>sep</code>, the result is cached at <code>Buffer.last_concat</code>. Until purged, future calls to return that Buffer as a string will return this index instead.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></code></code></p>
+
+<p>This should clear automatically whenever a Buffer object function changes the contents of a Buffer. You may manually purge the cache by setting this key to nil, as well as by passing nothing to .</p>
+<h4 id="buffer_">Buffer:_</h4>
+<dl>
+<dd>''See also  for a faster, simpler version of this op.
+</dd>
+</dl>
+
+<p>Appends a value to the Buffer. In rough terms,  is the same as . (It may help to imagine  as a  that has stood up and is now casting a shadow.) </p>
+
+<p>If passed an <em>invalid</em>  listed below, this is a no-op:</p>
+<ul>
+<li></li>
+<li></li>
+<li>empty , or any table such that  returns an empty string (or nil/false)</li>
+<li>
+
+<p>without a __tostring metamethod and which  is nil or false</p></li>
+</ul>
+
+<p>A table with no __tostring will pass through  before insertion. An  may be thrown if the table would cause table.concat to error. (Use  instead for such tables.)</p>
+
+<p>When passed  of type , the argument is identical to <em>pos</em> for . In fact, assuming a <a href="#valid" title="wikilink">valid value</a>,  is exactly the same as .</p>
+
+<p>Just like with the position arguments of <a href="#Buffer" title="wikilink">Buffer()</a>, any <em>pos</em> of type  would be treated as relative to length. </p>
+
+<p>Set  to true to force append a <em>value</em> without tostring coercion, including <a href="#no-op" title="wikilink">invalid</a> values.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> If given only two (non-self) arguments with the second being a boolean, then the second is read as <em>raw</em> instead.</p>
+<h4 id="buffer_nil">Buffer:_nil</h4>
+
+<p>Removes the value buffered at . As with , a string <em>pos</em> string is treated as .</p>
+
+<p>If a non-boolean  is provided, then it will replace the value indexed at <em>pos</em>. Passing a boolean as the second argument is a no-op.</p>
+
+<p>When <em>replacement</em> is nil, the op is basically . As with the positional arguments of other Buffer methods, any numerical string <em>pos</em> is added to length, such that  removes the last item. Note the only type check on replacement is a direct comparison to both booleans (nil is implied). Any other type, including strings, sets the Buffer to <a href="#raw" title="wikilink">raw mode</a>.</p>
+
+<p>A <em>pos</em> that is omitted, nil, or false has the same effect as though <code>'0'</code> (or ) were passed. Given only one non-numerical argument which evaluates true but  would return it as nil, this treats it as though it were passed as the second. If passed a non-numerical <em>pos</em> with any other argument, including nil, this is effectively a no op (though may still purge the <a href="#Buffer.last_concat" title="wikilink">cache</a>).</p>
+<h4 id="buffer_all">Buffer:_all</h4>
+
+<p>Takes a table , iterates through all number keys , appending each <a href="#valid" title="wikilink">valid</a> value to the end of the Buffer. In contrast to , this starts at the most negative key (down to ) and ends at the most positive index, continuing through any nil keys and includes <a href="Double-precision_floating-point_format" title="wikilink">non-integer number keys</a>. (Note: despite more thorough iteration, the runtime of Module:Buffer.__pairs is almost statisically indistinguishable from that of ipairs in most cases. Details at <a href="#Performance" title="wikilink">Performance</a> and <a href="#MBpairs" title="wikilink">require'Module:Buffer'.__pairs</a>.)</p>
+
+<p>A table <em>value</em> that has no metatable will have its contents iterated by this function before moving on to the next value. All other data types are processed by . </p>
+
+<p>By default, this ignores non-number keys unless  evaluates true. If so, non-number keys are processed after number keys. Keep in mind such keys are iterated in  order, though an order may be imposed by wrapping each pair in a table indexed at a number key.</p>
+
+<p>If given a <code>''value'' = ''pos''</code> pair, defined as a number or number string indexed at a non-number key, then they will be passed as the  and  arguments for . Thus,</p>
+<dl>
+<dd>
+
+<p>,true)}}</p>
+</dd>
+</dl>
+
+<p>produces the same result as:</p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>{{#tag:syntaxhighlight|Buffer:_(1):_(2):_(3) if variable then</p>
+
+<p><code>   Buffer:_(4)</code></p>
+
+<p>else</p>
+
+<p><code>   Buffer:_'four':_('zero',1)--vs :_all{four='1',zero=1}; less redundant would be</code></p>
+
+<p>end -- :_all{'four',zero=1}, but that doesn't demo string numbers Buffer:_'... done' --returns "1234... done" if variable evaluates true or "zero123four... done" if false|lang=lua}}</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>If a non-number key points to a value that cannot be coerced into a  then the pair may be treated as <code>''functionName'' = ''args''</code>, when <em>functionName</em> matches a Buffer object function and <em>args</em> is not boolean. If <em>args</em> is such that  evaluates true, then this will pass the return of  to the named function; otherwise, the value is passed as is. <a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<h4 id="buffer_in">Buffer:_in</h4>
+
+<p>Passes any arguments to <a href="#require'Module:Buffer'" title="wikilink">Module:Buffer</a> to create a new Buffer object, sets an external reference to the parent Buffer and returns the child.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+
+<p>This does <u>not</u> append the child to the parent. (See )</p>
+
+<p>Also, be aware that Buffer parent references are . Thus, if you were to (re-)set a local variable that is currently set to the parent, such could trigger immediate garbage collection on the parent.</p>
+<h4 id="buffer_out">Buffer:_out</h4>
+
+<p><a href="#Buffer_object" title="wikilink">Joins a Buffer</a> with  and appends result to its parent, which is returned. If no parent is found, this is a no-op and returns the same Buffer.</p>
+
+<p>When given two or more arguments, this reads the first as {{--}}the number of :_out() operations to perform.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> This applies the first <em>sep</em> in  for the current Buffer, the second for its parent, the third for its grandparent, and so on.</p>
+
+<p>If the last item is a , then any <em>nil</em> in <em>sep-list</em> default to <code>''table''[1]</code>; any <em>false</em> mean "no-sep".<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> The table may be the second arg (i.e. <em>sep-list</em> may be omitted). If it has other keys, then <em>table[n]</em> would apply instead of <em>table[1]</em>, making these synonymous:<br/>
+ and .</p>
+
+<p>The number  is "magic" when passed as the first arg (even by itself), joining and appending to the same Buffer <em>after</em> it has been . This is the only method by which a Buffer in <a href="#raw" title="wikilink">raw mode</a> may lose that status. Parent references are preserved.</p>
+<h4 id="buffer_str">Buffer:_str</h4>
+
+<p>Joins a Buffer with  and returns the string.</p>
+
+<p>This uses the same helper method as  to handle multiple arguments, with which, if provided, this creates a new temporary Buffer to which this appends the results of the number of generations specified by <code>ops</code>, with each ancestor in front of its descendants. This then performs one additional concat op using the <em>sep</em> at  and returns the result. If a parent-less Buffer is reached before <em>ops</em>, then the sep that follows its op number will separate the generations.</p>
+
+<p>When no <a href="#valid" title="wikilink">valid</a> <em>sep</em> is given, this returns a string identical to what would append to the next ancestor, if those arguments were passed to Buffer:_out instead and one additional :_out() op performed.</p>
+
+<p>However, because this does not actually append child Buffers to their parent, the result may differ where this would insert the sep at <em>ops + 1</em> and Buffer:_out would place the parent's sep between it and its child instead.</p>
+<h4 id="buffer_cc">Buffer:_cc</h4>
+
+<p>Nils all keys of the table referenced by  and unsets its metatable. If <em>clear</em> evaluates false, this simply purges the cache at .</p>
+
+<p>If given a table to , this will duplicate all key-value pairs of <em>copy</em> into <em>clear</em>, cloning any table value recursively via . This returns the Buffer unless passed the number  as <em>clear</em>, which causes this to create a new table and return that instead. Passing  as <em>copy</em> is equivalent to passing the Buffer itself. If <em>copy</em> is not a table, then it will be set as the first item in <em>clear</em> as long as it is not <em>false</em>.</p>
+
+<p>While this may resemble , there are several differences, namely that this:</p>
+<ul>
+<li>Gives <em>clear</em> the same metatable as <em>copy</em> (or sets <code>meta</code>, if given) as opposed to a "clone" of the metatable.</li>
+<li>Conserves  attribute (though empty strings may replace some nil keys<ref group="note"></ref></li>
+</ul>
+
+<p>For example, given  as <em>copy</em>,  makes  equal <code>2</code>, whereas  equals <code>0</code> (as of March 2015). This replicates length by filling clear halfway to the length of copy (the minimum needed to 'trick' Lua) and then setting nil every key that would not trigger recalculation. As a result, keys that would resize <em>clear</em> when set nil are left as empty strings. Such should be fairly rare; given tables representing every possible way to position a single nil key for all lengths between 2 and 32 (inclusive), only 8.39 percent of such tables would have its nil copied as an empty string instead. Also note that tables returned from  have length declared on creation instead, and thus won't have extra strings attached. The odds can be estimated using 
+
+<math display="inline" id="Module:Buffer::doc:0">
+ <semantics>
+  <mo>=</mo>
+  <annotation-xml encoding="MathML-Content">
+   <eq></eq>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   =
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Module:Buffer::doc:2">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ is the upper limit that an arbitrary nil key from <em>copy</em> of length ranging from 1 to 
+
+<math display="inline" id="Module:Buffer::doc:3">
+ <semantics>
+  <mo>=</mo>
+  <annotation-xml encoding="MathML-Content">
+   <eq></eq>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   =
+  </annotation>
+ </semantics>
+</math>
+
+
+ is imaged as an empty string.)</p>
+<ul>
+<li>
+
+<p>s values and iterates without invoking any __pairs .</p></li>
+<li>Includes Buffer parent and <a href="#raw" title="wikilink">raw</a> attributes (stored externally)</li>
+</ul>
+
+<p>To obtain the key-value pairs left as empty strings in the previous copy op in a table, simply call this again such with value such that <code>rawequal(clear, copy)</code> is true; call :getParent() on this table returns <em>clear</em> (useful after leeaving the local scope which referenced <em>clear</em>).</p>
+<h4 id="buffer_parent">Buffer:_parent</h4>
+<dl>
+<dd>''To skip generations without breaking the Buffer chain, see <a href="#global_functions" title="wikilink">#global functions</a>.
+</dd>
+</dl>
+
+<p>Resembling the reverse of , this calls  on the Buffer's parent with the arguments given and appends the strung ancestor(s) to the current Buffer, which is returned.</p>
+
+<p>The parent is unaffected by this operation and may still be retrieved via  or re-appended again with this function.</p>
+<h4 id="buffergetparent">Buffer:getParent</h4>
+<dl>
+<dd>''Note that there is no 'getChild' method<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a>
+</dd>
+</dl>
+
+<p>Returns parent Buffer, or, if none exists, creates a new Buffer and returns it as the adopted parent. As with , this does not automatically append the adoptive child to the new parent.</p>
+
+<p>Pass a non-false <code>value</code> and this performs an op on the parent object.</p>
+
+<p>If passed anything other than <em>value</em> (including nil), this requires that <em>value</em> names a function available to the parent object, which this calls and forwards the additional .</p>
+
+<p>Pass only a table <em>value</em> which has no metatable and this forwards <em>value</em> to the parent which calls .</p>
+
+<p>Given only a string starting with  and naming a parent function, this calls it on the parent without arguments. Any other <a href="#valid" title="wikilink">valid</a> singular argument <a href="#Buffer:" title="wikilink">appends</a> to the end of the parent Buffer.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+<h4 id="bufferkillparent">Buffer:killParent</h4>
+
+<p>Unsets Buffer parent reference.</p>
+
+<p>If passed any args, they are forwarded to the current parent, if one exists, via Buffer:getParent as a "parting gift". In either case, returns the current Buffer.</p>
+
+<p>This is not necessary for  since Buffer parent references are weak. Rather, use this when it is desirable to assign a new parent via Buffer:getParent or, for example, to prevent the inclusion of an ancestor when passing  as <em>ops</em> for functions such as  (more useful when <a href="#recycling" title="wikilink">recycling Module:Buffer</a> from another Module).</p>
+<h3 id="stream-mode">Stream mode</h3>
+<h4 id="bufferstream">Buffer:stream</h4>
+
+<p>Switches a Buffer to <a href="#Stream-Buffer" title="wikilink">stream mode</a>. While streaming, the __call metamethod will append values to the end of the Buffer instead of the <a href="#Buffer_object" title="wikilink">usual op</a>.</p>
+
+<p>Aside from that, there is only one other function: . Any args passed to Buffer:stream are forwarded to that function for a reason that should be evident when you finish reading this very short section.</p>
+
+<p>No special action is needed to exit this mode. The normal call to string op is restored upon the use of any regular Buffer function or any operation which coerces the Buffer into a string (e.g. the <code>..</code> operator).</p>
+<h4 id="stream-buffer-object">Stream-Buffer object</h4>
+
+<p>Stream-Buffer objects accept only one argument which they append if <a href="#valid" title="wikilink">valid</a>. That is, the op is a streamlined version of  sans the <em>pos</em> and <em>raw</em> args, improving <a href="#performance" title="wikilink">performance</a> by about 50 percent (or, in one test versus <code>..</code>, over 2000 percent).</p>
+
+<p>This also exploits  to append a series of string literals (and tables) with nothing between them (or only  if desired).</p>
+
+<p>For example, both A and B will produce identical strings:</p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>{{#tag:syntaxhighlight|local A = require'Module:Buffer':stream'A string of text may flow''with nothing between each string' 'or perhaps only a space'</p>
+
+<p><code>   'or even tab and line-break characters</code><em><code>and</code> <code>continue</code> <code>to</code> <code>append</code> <code>individually</code></em><code>for use with a joiner'</code></p>
+
+<p>local B = require'Module:Buffer':_'A string of text may flow':_'with nothing between each string' :_ 'or perhaps only a space'</p>
+
+<p><code>   :_'or even tab and line-break characters':_'and continue to append individually':_'for use with a joiner'</code></p>
+
+<p>mw.log(A==B, A:_str' ') true A string of text may flow with nothing between each string or perhaps only a space or even tab and line-break characters and continue to append individually for use with a joiner</p></td>
+<td style="text-align: left;">
+<p>lang=lua}}</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+<h4 id="stream-buffereach">Stream-Buffer:each</h4>
+
+<p>Appends an undetermined number of <a href="#valid" title="wikilink">valid</a> values to the Buffer object.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>If the above line gives you <a href="Déjà_vu" title="wikilink">Déjà vu</a>, that is because it is drawn from . However, unlike mw.html:wikitext, this does <em>not</em> stop at the first <em>nil</em> value.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+
+<p>Also, despite a more nuanced handling of non-string objects, this is <a href="#performance" title="wikilink">over twice as fast</a> as its mw.html analog and should be preferred for appending multiple strings to (Stream-)<a href="#Element-Buffer" title="wikilink">Element-Buffers</a>.</p>
+<h2 id="html-library-extension">HTML library extension</h2>
+
+<p>Upon the first call to , Module:Buffer clones the , adding Module:Buffer's __eq and __concat metamethods along with a few additional functions.</p>
+
+<p>Objects with this modified metatable are referred to as <strong>Buffer-HTML objects</strong>. Yet, though dressed in bells and whistles, they are only named with <em>Buffer</em> as an adverb since they lack most Buffer object functions.</p>
+
+<p>In contrast, the <strong>Element-Buffer</strong> (returned by <a href="#Buffer-HTML" title="wikilink">the function call on a Buffer-HTML object</a>) is a true Buffer object with specialized "tricks" allowing complex structures to be built via both mw.html and Buffer object methods as well as through a <a href="#Element-Buffer:_add" title="wikilink">builder that perhaps marries the best of both worlds</a>.</p>
+<h3 id="buffer-functions-for-html">Buffer functions for HTML</h3>
+<h4 id="buffer_inhtml">Buffer:_inHTML</h4>
+
+<p>Accepts the same parameters as  to create and return a <a href="#Buffer-HTML" title="wikilink">modified mw.html object</a>. As with , this does <em>not</em> append the child object to the parent Buffer and instead sets a Buffer-style parent reference.</p>
+
+<p>An exception to the above is when chaining this to an <a href="#Element-Buffer" title="wikilink"><em>Element-</em>Buffer</a> and such produces a <em>selfClosing</em> tag; when both conditions are met, this appends the tag and returns to the same Buffer.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+
+<p>Unlike mw.html.create, if  has keys other than <code>args.parent</code> and <code>args.selfClosing</code>, it will pass for further processing through  (a cousin of  that handles mw.html functions). Moreover, if passed a table where mw.html.create expects <em>tagName</em>, this treats it as <em>args</em> instead.</p>
+
+<p>Finally, this does not automatically set the <code>mw.html.parent</code> reference, making this an alternative to mw.html:tag</p>
+<h4 id="buffergethtml">Buffer:getHTML</h4>
+
+<p>Available only after  is used the first time. </p>
+
+<p>Accepts the same arguments as , however this instead return the last Buffer-HTML object ("lastHTML") created, or, if available, the lastHTML passed to any of the following functions:</p>
+<ul>
+<li></li>
+<li></li>
+<li>
+
+<p>(except when passed )</p></li>
+</ul>
+<h4 id="buffer_html">Buffer:_html</h4>
+
+<p>Available only after  is used the first time.</p>
+
+<p>This (re-)appends the <a href="#lastHTML" title="wikilink">last Buffer-HTML object</a> to the current Buffer object. The <code>raw</code> and <code>pos</code> args are generally the same as those in .</p>
+
+<p>When called with no arguments on an <em>Element-</em>Buffer, this appends lastHTML without <a href="#raw" title="wikilink">string coercion</a>. Be warned however that if the Element-Buffer belongs to lastHTML or one of its tags, such will cause an <a href="infinite_loop" title="wikilink">infinite loop</a>, which can be avoided by passing an explicit nil to append lastHTML as a string.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h3 id="html-object-functions">HTML object functions</h3>
+
+<p>Buffer-HTML objects may be used like any mw.html object. (In fact, merely replacing  with  in an existing Module should produce the same output.)</p>
+
+<p>Most mw.html functions are unchanged, except , , and  are embedded in a wrapper function that checks whether they return a normal mw.html object. If so, switches the metatable to convert it to a Buffer-HTML object and sets a parent reference. <a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a></p>
+
+<p>As a side bonus, the  may be used on Buffer-mw.html objects directly (no  needed).</p>
+<h4 id="buffer-html-object">Buffer-HTML object</h4>
+
+<p>Call this object as a function to return its  index<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a>, which this converts to an  object, granting it the same metatable as regular Module:Buffer objects (as well as several additional "tricks") and assigning the Buffer-HTML as its parent Buffer.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a></p>
+
+<p>This takes one argument which is forwarded to its Element-Buffer. Tables pass to the specialized HTML builder . All other <a class="uri" href="#valid" title="wikilink">#valid</a> values are appended to its Element-Buffer via .</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"></td>
+</tr>
+</tbody>
+</table>
+
+<p>You cannot chain call regular Buffer functions on a Buffer-HTML object; however, since mw.html functions cannot read Buffer-style parent references, modified versions of methods that return <a href="#Buffer:_inHTML" title="wikilink">the parent Buffer</a> are available to Buffer-HTML without having to call into the Element-Buffer. For convenience,  is called automatically prior to the op, though after the <code>lastHTML</code> reference has been set for .<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><div style="margin:0; column-width: 15em; -moz-column-width: 15em; -webkit-column-width: 15em; width:49em">
+<ul>
+<li></li>
+<li></li>
+<li>
+
+<p></p></li>
+<li>
+
+<p></p></li>
+<li>
+
+<p></p></li>
+</ul>
+</div>
+<div style="font-size:smaller">
+
+<p><mtpl>{{note label|html-0-out</mtpl></p></div></td>
+<td style="text-align: left;">
+<p>|{{note label|html-0-str|0</p></td>
+<td style="text-align: left;">
+<p> if passed  as the first argument, these do not redirect the self-action via <code>:allDone()</code>, however, these always return a Buffer-HTML object (think <code>{{luaself|pre=Element-|:done|args=(0)|plain=y}}</code>). {{note label|html-0-out-perm</p></td>
+<td style="text-align: left;">
+<p>|For :_out only, the "magic" number zero <em>permanently</em> consolidates <code>Buffer-HTML.nodes</code> (whether or not converted)}} just like <code>:_out(0)</code> on a normal Buffer except it would not unset raw mode on an Element-Buffer.}}}}  </p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>In addition to the above, <a href="#gfuncs" title="wikilink">global functions</a> may be available to Buffer-HTML if enabled; these functions are the same for all Module:Buffer objects{{--}}i.e. the self action is never redirected.</p>
+<h3 id="element-buffer-functions">Element-Buffer functions</h3>
+<h4 id="element-buffer-object">Element-Buffer object</h4>
+
+<p>Sharing the same metatable as with regular Buffer objects, Element-Buffers concatenate the same way when <a href="#Buffer_object" title="wikilink">called</a> to produce a string analogous to the <a class="uri" href="JavaScript" title="wikilink">JavaScript</a> DOM <a href="http://www.w3schools.com/jsref/prop_html_innerhtml.asp">"innerHTML"</a> property. In other words, when strung, it is generally the contents of the Buffer-HTML object without the "outerHTML" or tag.</p>
+
+<p>There are exceptions to this "innerHTML" behavior. For instance, as appended to another object via , an Element-Buffer and its Buffer-HTML are interchangeable (though appending the former via  only includes the inner result).</p>
+
+<p>Also, using the concatenation operator  on an Element-Buffer includes its tag in a manner depending on if it is selfClosing:</p>
+<ul>
+<li>For most tags, the conjoined string is placed inside the tag, e.g.  returns <mtpl></mtpl>.</li>
+<li>For selfClosers, the  op redirects to its Buffer-HTML, e.g. insert <a href="#Element-Buffer:_add" title="wikilink"></a> in the above example before  to produce <mtpl></mtpl>.</li>
+</ul>
+<dl>
+<dd>
+</dd>
+</dl>
+
+<p>You may use most Buffer object functions normally, however if there is a <a href="#HTML_version" title="wikilink">Buffer-HTML version</a>, it instead behaves as though chained on the <a href="#Buffer-HTML" title="wikilink">outer HTML object</a>.<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> You may also chain any mw.html object function. Unless otherwise indicated, such returns a <a href="#wrapper" title="wikilink">wrapper</a> method that merely redirects the self-action to the outside Buffer-HTML.<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a></p>
+
+<p>As a final note, Element-Buffers are in permanent <a href="#raw" title="wikilink">raw mode</a> since it is expected that some mw.html method (e.g. :tag and :node) may or will append non-string elements.<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a></p>
+<h4 id="element-bufferdone">Element-Buffer:done</h4>
+
+<p>When passed nothing, this should behave just like  as called the "outer" HTML object{{--}}returning <code>Buffer-HTML.parent</code>, if available, or Buffer-HTML if not.</p>
+
+<p>However, this has been re-designed to accept , the number of :done() operations to perform. Thus,  is equivalent to .</p>
+
+<p>Pass  (zero) as <em>dones</em> to return to the Element-Buffer's direct HTML container.</p>
+
+<p>Finally, keep in mind that Buffer-HTML objects use the original mw.html:done (albeit in a light <a href="#wrapper" title="wikilink">wrapper</a>).</p>
+<h4 id="element-buffertag">Element-Buffer:tag</h4>
+
+<p>This uses the same helper method as  to handle arguments and produce new Buffer-HTML objects, selectively passing <em>args</em> to  when it contains keys not used by .</p>
+
+<p>As may be expected, this differs from Buffer:_inHTML in that this actually appends the tag and will set a mw.html-style parent reference. This also lacks the other function's "auto-done" feature for selfClosing tags.</p>
+
+<p>As with the other Element-Buffer remake of an mw.html method, the features described here do not apply to the version used by Buffer-HTML objects.</p>
+<h4 id="element-buffer_add">Element-Buffer:_add</h4>
+
+<p>Takes a table as its only argument. This then thoroughly iterates all number keys from lowest<sup><a href="#endnote_skip1" title="wikilink">†</a></sup> to highest using <a href="#MBpairs" title="wikilink">this module's custom __pairs</a> method. Most values append as wikitext if <a href="#valid" title="wikilink">valid</a>. If a table is indexed at a number key, this <a href="Recursion_(computer_science)" title="wikilink">recursively</a> iterates the table before moving on to the next key.</p>
+
+<p>After processing all number key-value pairs, this then iterates the other (non-number) keys. For those naming a <a href="#Basic_functions" title="wikilink">core Buffer object function</a>, this selectively unpacks  in a manner described at  when that function is passed the <em>nanKey</em> parameter (excepting that this does not read numbers as <em>pos</em>, i.e. treats them the same way as strings).</p>
+
+<p>This also accepts keys naming <a href="#HTML_object_functions" title="wikilink">HTML</a> and <a href="#Global_functions" title="wikilink">global functions</a> as well as mw.html arguments. Thus,  appends a BR tag <em>after</em> the text and  appends the BR before the text. Note however that how this handles <em>args</em> for such keys depends on the particular function or argument named:</p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><h6 id="args.argname">args.<em>argName</em></h6>
+
+<p><br/>
+The effect of passing <em>args</em> with keys such as <code>args.selfClosing</code> and <code>args.parent</code> is the same as though <em>args</em> were passed to . This also takes one additional <em>arg</em>, i.e. <code>args.tagName</code>, which value replaces the original <em>tagName</em> of the HTML object (or, if false, removes the tag). Note that these are the only keys for which a boolean <em>arg</em> would result in an op. (For Buffer object functions that do not no-op when passed only a boolean, place the boolean in an <em>args</em> table for unpacking.)</p>
+<h6 id="args.cssname">args.<em>cssName</em></h6>
+
+<p><br/>
+A non-number <em>key</em> and <em>value</em> pair may default as the <code>cssName</code> and <code>cssValue</code> parameters for  when the key matches none of the three <a href="#args.argsName" title="wikilink">argName</a> keys nor the name of any available function for Buffer and mw.html objects. This sends non-boolean <em>cssValue</em> though  prior to forwarding it to mw.html:css. Because this is the default, any typoed key goes to mw.html:css as <em>cssName</em>. Names of functions not yet <a href="#loadable" title="wikilink">loaded</a> also end up there. For convenience, any <code>_</code> character in the key string is automatically substituted with the <code>-</code> character; thus  is equivalent to . The form  also works if sacrificing performance to reduce ambiguity is your thing (or to clear a previously set value; see example at <a href="#args.htmlFunction" title="wikilink">args.htmlFunction</a> for more details). </p>
+<h6 id="args.tag">args.tag<sup><a href="#endnote_skip1" title="wikilink">†</a></sup></h6>
+
+<p><br/>
+<br/>
+Set the key <code>args.tag</code> to a string and this calls  with it as the <em>tagName</em> argument. This then raw inserts the returned mw.html object ("tag"), emulating the effect of  minus parent references, which are unnecessary. Pair the <em>args.tag</em> key with a table value and this calls mw.html.create with  as <em>tagName</em> (or nil if <a class="uri" href="#invalid" title="wikilink">#invalid</a>), appending it as described above for string values, but also pointing <code>tag.parent</code> to the <a href="#Buffer-HTML" title="wikilink">Element-Buffer's parent</a> as well as temporarily setting the tag as the parent Buffer of <code>tag.nodes</code>. This then treats tag.nodes as a <em><a class="uri" href="pseudo" title="wikilink">pseudo</a>-</em>Element-Buffer, <a href="Recursion_(computer_science)" title="wikilink">recursing</a> tag.nodes as "self" and the table as <em>args</em>, though only iterating keys not equal to  (or less).<a href="#endnote_skip1-tag" title="wikilink"><sup>[*]</sup></a> Note this appends normal mw.html objects. That said, most Buffer functions named in <em>args-list</em> should still work as though the tag and <code>tag.nodes</code> were Buffer objects.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a> Upon completing a recursive iteration for args.tag, this checks if the tag is selfClosing, in which case, this saves memory (which can improve performance) by setting tag.nodes to nil. Likewise, if its tagName property evaluates false, this nils tag.styles and tag.attributes. Such presumes those properties will not be modified afterwards, so use mw.html:tag outside of Element-Buffer:_add if such is not the case. </p>
+<h6 id="args.done">args.done<sup><a href="#endnote_skip1" title="wikilink">†</a></sup></h6>
+
+<p><br/>
+<br/>
+Similar to args.tag, this treats the first index of the table as the <em>ops</em> argument of . After calling that function, this then iterates all subsequent keys in a recursive call on the Element-Buffer of the Buffer-HTML object returned.</p>
+<h6 id="args.alldone">args.allDone</h6>
+
+<p><br/>
+<br/>
+Similar to the previous two, except that the first index is not used as an argument; thus, the entire table is iterated. </p>
+<h6 id="args.globalfunction">args.<em>globalFunction</em><sup><a href="#endnote_skip2" title="wikilink">‡</a></sup></h6>
+
+<p><br/>
+<br/>
+<br/>
+If the <a href="#gfuncs" title="wikilink">global functions</a> have been loaded and a key matches one, this calls the function with the first two arguments ed from the paired <em>args-list</em> table. This then recursively iterates the list, excluding keys less than or equal to , with whatever object is returned as <em>self</em>. However, if the returned object has a metatable and <code>object.nodes</code> exists, the <em>self</em> will be object.nodes instead. Because  takes only one argument, args._B only unpacks the first index and starts the iteration after that key. If neither of the first two keys evaluate true, this assumes the paired value is a string for use as the <em>name</em> argument for the function matching its key.<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a> In that case, the current call stack's <em>self</em> (an Element-Buffer or <a href="#args.tag" title="wikilink">tag.nodes</a> if this was called indirectly) is ''self' for the global function.</p>
+<h6 id="args.htmlfunction">args.<em>htmlFunction</em></h6>
+
+<p><br/>
+<br/>
+If args.<em>key</em> matches an  that does not have its own args section, this checks if the associated <em>object</em> is table. If not a table, or if <code>object.nodes</code> evaluates true, this calls the mw.html function with the object as the only argument. For table objects without an object.nodes, this iterates the table (non-recursively), repeatedly calling the named mw.html function with one or two arguments depending on key's type in each loop. Non-number key-value pairs are both passed as arguments. For numeric indices, only the value is passed. Boolean values are a no-op. Unlike with most implementions of <a href="#MBpairs" title="wikilink">Module:Buffer's __pairs</a>, this first loops through <em>non-</em>number keys, followed by number keys (still ordered from lowest to highest). Thus, something like  is equivalent to , setting then unsetting the width attribute and returning the Element-Buffer for a net no-op (though the practical purpose of such is a mystery for this developer). For <code>args.css</code> only, this auto-replaces underscores with hypens for string keys{{--}}i.e., you may save four keystrokes/pair by typing <code>css_property =</code> instead of <code>["css-property"] =</code>. This does not apply to strings indexed at number keys.</p>
+<div style="font-size:smaller">
+<hr/>
+
+<p>{{note label|skip1|†</p></div></td>
+<td style="text-align: left;">
+<p> Unlike with tables passed directly, <a href="Recursion_(computer_science)" title="wikilink">recursive</a> iterations for functions marked with <sup>†</sup> start at the smallest number greater than  instead of negative infinity. Such was decided for performance and coding simplicity on the reasoning that any practical purpose for indexing at a key less than one may be accomplished by instead indexing it at any of the trillion or so <a href="floating_point" title="wikilink">floating point</a> values between one and two{{--}}e.g. .}} </p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+<h2 id="loadable-convenience-extensions">Loadable convenience extensions</h2>
+
+<p>The methods here are loaded on demand or depend on subroutines which need initialization.</p>
+
+<p>Whereas most Module:Buffer methods are built for performance, these methods perform tasks which generally require less CPU usage if handled outside of Module:Buffer (i.e. via local variable declarations). That said, they can greatly simplify the structure of the modules which employ them by doing, in a fluent manner, many tasks which may otherwise force an awkward interruption in Buffer call chains.</p>
+<h3 id="global-functions">Global functions</h3>
+
+<p>Methods such as  and  traverse a node tree in only one direction. While fine for returning to an ancestor, they do not provide navigation to a non-ancestor (often necessary for templates with co-dependent parameters). Yet, repeated breaks in call chains to set local variables for several nodes of the same branch can look choppy if not confusing for nodes many generations removed from its declaration statement.<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a></p>
+
+<p>Templates with several conditionally-appended nodes with similar, but not identical, parts may present another conundrum for coders who must decide between having awkward call chain interruptions to store potentially repeated components as local variables or constructing a somewhat redundant module that is more susceptible to maintenance errors by future editors who may patch one code segment but miss the sibling buried within a convoluted nesting of .</p>
+
+<p>This module's global functions and added <a href="syntactic_sugar" title="wikilink">syntactic sugar</a> for the <a href="#G_object" title="wikilink">_G object</a> were formulated to simplify such node trees with multi-conditional or repeating structures by providing concise in-chain variable declaration. The extension is enabled by passing your global table to the module{{--}}either in the initial call to <a href="#initialize" title="wikilink">require'Module:Buffer'</a> (more instructions in that section) or to  which forwards arguments to Module:Buffer.<ref group="note"> Global function are not enabled by default for various reasons:</ref></p>
+<ul>
+<li>Most templates are one-dimensional (i.e. contain few if any nested conditional statements) and thus would not benefit from these methods.</li>
+<li>Loading them to the Module:Buffer meta index means more items that must be sifted through each time a specific function has to be retrieved.</li>
+<li>Lua checks the global scope last; thus retrieving values from that scope takes longer than it would if they were stored in the local scope.</li>
+<li>Excess use may clutter the global scope enough to slow access to basic Lua functions (e.g.  or ) even after Buffer methods are no longer used.</li>
+</ul>
+
+<p>It should be mentioned however that variable retrieval even even in a relatively cluttered global scope is fairly trivial. In fact, early versions of Module:Buffer used globals extensively (and actually had no locals declared before the final return, or rather the entire module was just one long return statement). In contrast, the current version nests many  blocks to limit scope size. Yet, , a core function which has changed little, is only a modest 10 percent faster than itself in the last unscoped version (not published); then again, perhaps the benefit of scope dieting has been masked by much greater total number of variables required by new features?</p>
+<h4 id="buffer_g">Buffer:_G</h4>
+
+<p>Pass <code>name</code> and <code>save</code> to assign the object passed as <em>save</em> to a global variable via .<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a></p>
+
+<p>Pass only <em>name</em> and this substitutes <em>self</em> for <em>save</em> to assign the Buffer object to <code>_G[name]</code> instead. Give an explicit nil as <em>save</em> to unset a global. This returns the Buffer object as well as any argument given after <em>name</em>.</p>
+
+<p>This is a no-op when <em>name</em> is nil or a boolean, or, when <em>save</em> (eventually) evaluates true and  also returns true. </p>
+
+<p>If the named global already exists, this "backs up" the old value by moving it to the meta __index of the global table, setting a new metatable if none exists.<a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a> Retrieving the old value requires unsetting the new one via  (more details in that section). If overwritten a third time, the first value is discarded and the second takes its place in the back up.</p>
+
+<p>If a metaglobal variable exists but the global is nil, this sets the global without unsetting the metaglobal (i.e. does not back up a nil global). An exception is when this is given an explicit nil as <em>save</em> and only the metaglobal exists; thus, passing nil twice for the same <em>name</em>, unsets the key in both the global table and its metaindex.</p>
+<h4 id="buffer_r">Buffer:_R</h4>
+
+<p>This  with the global table as the first argument and <code>name</code> and <code>save</code> as the second and third, respectively, returning the Buffer object for call chaining.<ref group="example"> The following demonstates how, by combining Buffer:_R and Buffer:_G, the global variable <em>v</em> can be declared, backed-up and replaced, replaced without back-up, restored from back-up, and removed completely:</ref></p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>{{#tag:syntaxhighlight|require'Module:Buffer'</p>
+
+<p><code>  (_G,'v')           -- call module with global functions enabled and declare new buffer as v</code><br/>
+<code>  :_'A'              -- append 'A' to the returned buffer</code><br/>
+<code>  :_G('v', 1):_(v)   -- _G.v = 1, shift old value (the buffer) to metaglobal.__index</code><br/>
+<code>  :_R('v', 2):_(v)   -- _G.v = 2, discard old value (1) without back-up</code><br/>
+<code>  :_R'v':_(v)        -- unset _G.v, which now defaults to metaglobal.__index.v (the buffer)</code><br/>
+<code>  :_G('v', nil)", "  -- remove back-up and join the buffer with a separator</code></p>
+
+<p>..' and '..tostring(v)-- returns 'A, 1, 2, A12 and nil'|lang=lua}}</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p> This is a no-op if <em>name</em> is nil or a boolean. </p>
+
+<p>Note that Buffer methods use a local variable <code>new_G</code> as a proxy for the global table _G; though not a global index, the string  is a "magic word" that changes the destination for future <em>save</em> for this and Buffer:_G.</p>
+
+<p>Pass a table as <code>var</code> (same place as <em>save</em>) to set as the <em>new</em> new_G. Any table such that  is treated as a (former) new_G object. This  of former proxies and  with the  __call method on non-new_G tables. Then, this, if third parameter <code>metaindex</code> equals:</p>
+<ul>
+<li>nil {{--}} backs up the current proxy as the metaindex of the next (though this no-ops if <em>var</em> equals new_G to avoid cyclical indexing).</li>
+<li>false {{--}} leaves the metaindex intact (replacing the current proxy without back-up)</li>
+<li>true {{--}} unsets the metaindex of the next proxy</li>
+<li>any other value {{--}} sets that value as the metaindex of the next proxy. (Note new_G._G is not set until it is returned by )</li>
+</ul>
+
+<p>To omit or to pass nil/false as <em>var</em> has the same effect as . Pass true instead and this treats it as though passed as <em>metaindex</em>, creating a new proxy without backing up the incumbent.</p>
+<h4 id="buffer_2">Buffer:_2</h4>
+
+<p>This returns the value indexed at key <code>name</code> in the global table. If it does not exist, this forwards both arguments to  and returns the saved value (which may be itself).</p>
+
+<p>In other words,  is roughly equivalent to .</p>
+
+<p>The string  will return the Module:Buffer local variable <code>[[#new_G|new_G]]</code>, used as a proxy for the global variable _G. Given more than one argument, this forwards arguments to  to assign another proxy global before returning the (newly-deposed) proxy. This then sets <code>new_G._G</code> to the original _G object for call chaining. (See § chain call in <a href="#G_object" title="wikilink">_G object</a>).</p>
+<h4 id="buffer_b">Buffer:_B</h4>
+
+<p>Takes only one argument and returns that argument.</p>
+
+<p>Assuming the only <em>X</em> declared is  and new_G equals _G, then  and  are equivalent.<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a></p>
+
+<p>When passed a variable that does not exist, this returns the Buffer nil object:</p>
+<h5 id="buffer-nil-object">Buffer-nil object</h5>
+
+<p><br/>
+</p>
+
+<p>The Buffer-nil object is unique. Calling this as a function returns nothing (in contrast, calling an empty Buffer object returns an empty string). This does however have the Module:Buffer __concat metamethod, which treats this the same way as any <a href="#invalid" title="wikilink">invalid</a> object (i.e. ignores it).</p>
+
+<p>Appending this via  or  has the same effect as appending nil. Passing this to  returns nil instead of the string 'nil'.</p>
+
+<p>The only real Buffer method in its meta __index is , however, any non-numerical key string retrieves a function that only returns the Buffer nil object for call chaining. In a sense, you can think of  as an  block around the following chain that ends in the next :_B().</p>
+
+<p>If , the clone will be a normal Buffer object.</p>
+<h4 id="g-object">_G object</h4>
+
+<p>The first _G variable <a href="#initialize" title="wikilink">passed to this module</a> is given a __call metamethod that self-s and returns in a manner that depends on whether it was called directly or from a chain.<ref group="example">Saving a new_G object globally via a chain call can prevent conflict. The follow example has a hypothetical "Module:X" that may overwrite globals declared by your module or unwittingly discard your new_G when it passes _G to Module:Buffer (passing _G to this module resets new_G to the global table even when the global functions are already enabled):</ref></p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>{{#tag:syntaxhighlight| return require'Module:Buffer'(_G)--Return before require to show intent to return a Buffer object; chain cannot be broken</p>
+
+<p><code>   :_R(frame.args.title and     --store values outside global scope if invoked with title parameter</code><br/>
+<code>       'new_G')</code><br/>
+<code>   :_G'myBuff'                  --save current Buffer in new_G</code><br/>
+<code>       :_2'new_G'               --retrieve new_G</code><br/>
+<code>           :_G'my_G'            --save new_G as global my_G</code><br/>
+<code>           :_G('t',             --save title object as my_G.t for later re-use</code><br/>
+<code>               mw.title.new(frame.args.title or frame.args.page)</code><br/>
+<code>           ).myBuff             --go to my_G.myBuff (my_G lacks the Buffer:_2 method, but doesn't need it)</code><br/>
+<code>   :stream(my_G.t.exists        --just arbitrary code to show how in-line storage may be used without breaking the chain</code><br/>
+<code>           or warning(my_G.t),  --local function warning() declared before return</code><br/>
+<code>       require'Module:X'.main(my_G.t),</code><br/>
+<code>       my_G.t.isSubpage and subpage(my_G.t),</code><br/>
+<code>       ... )</code><br/>
+<code>   :_R('new_G', my_G)           --set my_G as new_G again and have the new_G from Module:X as its metaindex</code><br/>
+<code>   :_(frame.args.detail and </code><br/>
+<code>       my_G.info</code><br/>
+<code>           :_(frame.args.detail)--append Buffer object from Module:X's new_G.info if args.details and it exists; append detail param to result</code><br/>
+<code>       or my_G.summary)         --just append summary from Module:X if not invoked with detail param.</code><br/>
+<code>   :_B(t and                    --use global t as a shorthand for "if not frame.args.title then" (t only declared a global in line 2 if no title given)</code><br/>
+<code>       myBuff</code><br/>
+<code>           :stream(frame.args.page,</code><br/>
+<code>               frame.args.details2,</code><br/>
+<code>               mw.html.create'br',</code><br/>
+<code>               require'Module:Y'.main(frame))</code><br/>
+<code>       or my_G.myBuff           --place results in a table if invoked with title param (alternative chain call branches within Buffer:_B)</code><br/>
+<code>           :_inHTML'table'(_addArgs)</code><br/>
+<code>           :_parent()</code><br/>
+<code>   )</code></p></td>
+<td style="text-align: left;">
+<p>lang=lua}}</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p> This module conserves any pre-existing metatable and alters no metamethod other than __call.</p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><h5 id="direct-call">direct call</h5>
+
+<p><code>_G( k, v )</code><br/>
+<code>_G'string'</code> When called, the _G object self-sets any string passed as <code>k</code> with whatever is passed as <code>v</code>. This returns <em>v</em>, or nil if omitted (unlike with rawset, an explicit nil is not necessary to unset a variable with direct calls). Note that <em>k</em> must be a string to declare or unset a global in this op. Tables passed as the first argument are treated as though this were executed via a call chain (discussed shortly). Passing <em>k</em> which is not one of those two types will throw an error.</p>
+<h5 id="chain-call">chain call</h5>
+
+<p><code>chained-object:_G( k, v )</code><br/>
+<code>chained-object:_G'string'</code>  When used in a call chain, this rawsets the <em>k</em>ey-<em>v</em>alue pair in the chained object and returns that object. The _G object may chain itself when returning _G is desired for another op instead of <em>v</em>. In contrast to the direct op, the in-chain op will index non-string <em>k</em> values. Moreover, this only unsets object[k] when passed an explicitly nil <em>v</em>. If <em>v</em> is omitted in-chain, this uses the chained object as the missing argument; thus, (chained) <code>object:_G'string'</code> has identical effect and return to <code>_G('string', object)</code>.</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>The same __call method is given to <a href="#new_G" title="wikilink">new_G</a> objects created by Buffer:_R, however the direct call only works if its metaindex is the _G object. Any table such that <code>table._G</code> points to the _G object may chain save to itself regardless of metaindex.</p>
+
+<p>Though the behavior of the chain op when <em>v</em> is omitted may be a <a href="Dead_ringer_(idiom)" title="wikilink">dead ringer</a> to that of <a href="#Buffer:_G" title="wikilink">Buffer:_G</a> when <em>save</em> is omitted and <a href="#new_G" title="wikilink">new_G</a> is the chained object, mind that the Buffer object function sets keys in new_G variable rather than the chained (Buffer) object; in other words, this is unaffected by Buffer:_R reassigning new_G to another table. Also, this does not have the back up behavior of Buffer:_G.</p>
+<h3 id="buffer-variable-object">Buffer-variable object</h3>
+<h4 id="buffer_var">Buffer:_var</h4>
+
+<p>Raw appends a Buffer-variable object, which may appear as a different value each time the object (or its container) is converted to a string.<ref group="example"> The following contrived example demonstrates most features of :</ref></p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>{{#tag:syntaxhighlight|local H, sep = require'Module:Buffer':_inHTML('div',{'Heading ',_var={nil,'odd','even'},color='blue',['text-decoration']='underline'})</p>
+
+<p><code>   :_out():_html(true):_html(true):_html(true)</code></p>
+
+<p>sep = H:_in'This is ':_var():_' - ':_var'A':_var(3,-1):_'\n' return H:_in(H(sep)):_(sep)</p>
+
+<p><code>   :_'math:':_var():_'+ 5 =':_var(true,5):_';':_var():_out(0,' '):_var(false):_' - 1 = ':_var()</code></p>
+
+<p>--<a href='produces:_&lt;div_style="color:blue;text-decoration:underline"&gt;Heading_odd&lt;/div&gt;This_is_odd_-_A3_&lt;div_style="color:blue;text-decoration:underline"&gt;Heading_even&lt;/div&gt;This_is_even_-_B2_&lt;div_style="color:blue;text-decoration:underline"&gt;Heading_odd&lt;/div&gt;This_is_odd_-_C1_&lt;div_style="color:blue;text-decoration:underline"&gt;Heading_even&lt;/div&gt;_This_is_even_-_D0_math:_0_+_5_=_5_;_5_-_1_=_4_--' title="wikilink">produces: <div style="color:blue;text-decoration:underline">Heading odd</div>This is odd - A3 <div style="color:blue;text-decoration:underline">Heading even</div>This is even - B2 <div style="color:blue;text-decoration:underline">Heading odd</div>This is odd - C1 <div style="color:blue;text-decoration:underline">Heading even</div> This is even - D0 math: 0 + 5 = 5 ; 5 - 1 = 4 --</a>|lang=lua}}</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p></p>
+
+<p>Initialize a Buffer-variable object by passing as <code>var</code> a:</p>
+<ul>
+<li>number - which, when strung the first time, appears as that number and reappears as <code>var + change</code> the next time it is strung.</li>
+<li>string - that transforms into the next <a class="uri" href="ASCII" title="wikilink">ASCII</a> character via .</li>
+<li>table - to return the first (non-nil) item, then the second, and so on as determined by , looping back to the first item after reaching the last. (Note the <em>change</em> argument does not apply to table-based Buffer-variables.)</li>
+<li>custom function - to be set as the _build and __tostring method of a variable-object, though instructions for coding such functions are beyond the scope of this manual.</li>
+</ul>
+
+<p>Re-append the same variable object by passing  as the only argument. For non-table-based variables, you may specify <em>change</em> to append a sister object which transforms the value at the rate specified. Changes are cumulative. Thus, if the original is re-strung after a sister, its value will differ from that of its last appearance by the sum of the original and sister rates and vice versa.</p>
+
+<p>Apply a <em>change</em> without appending a new variable object to the Buffer by passing . The shift is effective immediately and may affect previously appended variable objects not yet <a href="#Buffer:_out" title="wikilink">finalized</a>. Pass only false (i.e., omit <em>change</em>) to produce the same effect as stringing the original once. Note that the false-change is the only <em>change</em> table-based Buffer variables will honor.<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a></p>
+
+<p>Pass nothing to append a version which simply repeats the result of the last stringing. While generally identical in effect to the object generated by <code>:_var(true, 0)<code>, the Buffer-variable will return nothing if strung before any of its sisters.
+
+If passed an explicit nil as the first argument, this is no-op. If passed a boolean before any Buffer-variable has been initialized, 
+this is also a no-op. Note that any op disables future caching at {{luaself|.last_concat|plain=y}} for all Buffer objects 
+in your module (and in any module which may require it).
+
+{{anchor|library}}
+===String, mw.ustring, and mw.text libraries===
+
+====Basic usage====
+
+{{code|lang=lua|Buffer:functionName( ... )}}
+
+You may directly chain any function from the following libraries on Buffer objects:
+<dl><dd>
+{|
+|{{collist|3|colstyle=width:49em|
+* {{luaref|String library|string|y}}
+* {{luaref|Text library|mw.text|y}}
+* {{luaref|Ustring library|mw.ustring|y}} }}
+|}
+</dd></dl>
+
+Functions from these libraries added to the Module:Buffer metatable on-demand and placed within a wrapper method 
+that strings the Buffer object for the first argument and then forwards the remaining arguments.
+
+Thus, the following are equivalent: {{code|lang=lua|Buffer:nowiki( ... )}} and {{luaref|mw.text.nowiki|args=tostring(Buffer), ...}}
+
+If a name exists in both the string and mw.ustring libraries, the string version takes precedence. 
+You may [[prefix]] the letter ''u'' on any mw.ustring function{{--}}e.g. Buffer:ulen returns the number of unicode characters
+and Buffer:len returns the number of bytes.
+
+Buffer:gsub and Buffer:ugsub have a slightly different wrapper which substitutes the <code>repl</code> argument of  and  when it evaluates false or is omitted with an empty string (otherwise the originals would throw an error). This saves a few keystrokes when removing characters via  as opposed to . All other arguments are handled the same as with the other on-demand methods.</code></code></p>
+
+<p>Library functions which take a non-string as the first argument are not supported.</p>
+<h4 id="empty-buffer-interface">Empty Buffer interface</h4>
+
+<p>To obtain the first return value as a Buffer object (as opposed to whatever type the original normally returns), simply chain the imported method immediately after creating the new Buffer via <a href="#Buffer:_in" title="wikilink">Buffer:_in</a>. Only empty Buffer objects which have a parent object will append the result of their parent in this manner.</p>
+
+<p>This syntactic sugar allows two things:</p>
+<ul>
+<li>For appending additional objects after the op via Buffer object methods.</li>
+<li>For chaining multiple  methods not chainable to strings{{--}}e.g., this: </li>
+</ul>
+<dl>
+<dd>vs. the following which has the same order of operations albeit harder to see: 
+</dd>
+</dl>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><h5 id="special-case-element-buffer">Special case: Element-Buffer</h5>
+
+<p><br/>
+ The 'empty' behavior is different when chained to empty Element-Buffer or an empty child Buffer of an Element-Buffer. Library methods chained to an empty Buffer which parent is an <a href="#Element-Buffer" title="wikilink">Element-Buffer object</a> will instead string the grandparent <a href="#Buffer-HTML" title="wikilink">Buffer-HTML object</a> for use as the first argument before appending the result to the new Buffer. This interface is provided because Buffer-HTML objects, which are not true Buffer objects, are unable to load these functions, making this the only chainable option for Scribunto methods that includes the outer tag of non-empty Element-Buffers. Chained on an empty Element-Buffer, these methods will string the Buffer object which created its HTML tree via <a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a> and append the result to the Element-Buffer.<ref group="example">Compare the comment and source:</ref></p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>{{#tag:syntaxhighlight|--<a href="--=_Result:_===&gt;_This_is_just_a_quick_example_to_demonstrate_a_neat_concept:_&lt;div&gt;Notice_how_the_same_object_is_strung_which_allows_you_to_recycle_boilerplate_text._&lt;p&gt;3_is_1_added_to_2.&lt;/p&gt;_&lt;span&gt;Though_this_is_not_really_realistic_to_be_fair..._Edit:_not_realistic_at_all&lt;/span&gt;_I_hope_such_is_much_to_your_liking.&lt;/div&gt;_--" title="wikilink">--= Result: ===&gt; This is just a quick example to demonstrate a neat concept: <div>Notice how the same object is strung which allows you to recycle boilerplate text. 
+<p>3 is 1 added to 2.</p> <span>Though this is not really realistic to be fair... Edit: not realistic at all</span> I hope such is much to your liking.</div> --</a>--= Source: ===&gt; require'Module:Buffer'</p>
+
+<p><code>   '%s is %s to %s.'--A</code><br/>
+<code>   :_inHTML'div'():format('Notice how the same object', 'strung which allows you', 'recycle boilerplate text')</code><br/>
+<code>       :tag'p'():format(3, '1 added', 2)</code><br/>
+<code>       :done()</code><br/>
+<code>       :tag'span'():format('Though this', 'not really realistic', 'be fair..')</code><br/>
+<code>           :_in():sub(21, 29)</code><br/>
+<code>               :_('\nEdit:', 1)</code><br/>
+<code>               :_'istic at all'</code><br/>
+<code>           :_out()</code><br/>
+<code>       :done()</code><br/>
+<code>       :_parent()--B</code><br/>
+<code>   :_out'\n'</code><br/>
+<code>   :format('This', 'just a quick example', 'demonstrate a neat trick',--A</code><br/>
+<code>       'I hope such', 'much', 'your liking')--B</code><br/>
+<code>   :gsub('trick.', 'concept:\n')|lang=lua}}</code></p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p></p>
+</td>
+</tr>
+</tbody>
+</table>
+<h2 id="modified-operator">Modified  operator</h2>
+
+<p>All "true" Buffer objects{{--}}e.g., the <a href="#Buffer_object" title="wikilink">regular</a>, <a href="#Stream-Buffer" title="wikilink">stream</a>, and <a href="#Element-Buffer" title="wikilink">element</a> varieties{{--}}share the same . Some Buffer-<em>like</em> classes, namely s and the , also have this same metamethod.</p>
+
+<p>The extended  operator does not append to Buffer objects. In other words, Buffers generally remain the same as before the op excepting those effects that apply whenever Buffers are strung (See , , and ).</p>
+<h3 id="with-non-tables">with non-tables</h3>
+
+<p><br/>
+</p>
+
+<p>Any non-table <code>value</code> may be joined a Buffer object with the concatenation operator  without error.</p>
+
+<p>With the exception of Element-Buffers (which are a special case), the op passes each object, ordered left-to-right, to  which inserts <a href="#valid" title="wikilink">validated</a> items in a new table, which this returns through .</p>
+
+<p>Concatenating an <a href="#valid" title="wikilink">invalid</a> <em>value</em> and a Buffer has generally the same effect as  unless such involves:</p>
+<ul>
+<li>the Buffer-nil object {{--}} which produces an empty string (instead of nil)</li>
+<li>Element-Buffer objects {{--}} which returns the string of the parent Buffer-HTML</li>
+</ul>
+<h3 id="with-tables">with tables</h3>
+
+<p><br/>
+</p>
+
+<p>The same general operation applies for tables as with non-tables{{--}}i.e., <a href="#valid" title="wikilink">validated</a> values are inserted left-to-right into a new table to be joined by table.concat. In fact, tables which have a metatable (including Buffer objects which are not an Element-Buffer) are forwarded to Buffer:_ and processed the same way as non-tables.</p>
+
+<p>Given a <code>table</code> for which  returns nil or false, this instead forwards the table to , which iterates every value indexed at a number key in sequential order, inserting those which are valid in the new table.</p>
+
+<p>As a reminder, Buffer:_ validates tables with metatables that lack a __tostring method through table.concat, which throws an error on sequences containing one or more value that is neither a string nor a number. Such accounts for nearly all cases of breaking errors involving this op.</p>
+
+<p>Note that the <em>valKey</em> parameter of Buffer:_all is not triggered.</p>
+<h3 id="for-element-buffers">for Element-Buffers</h3>
+
+<p><br/>
+<br/>
+</p>
+
+<p>To recap and expand upon <a href="#Element-Buffer" title="wikilink">§ Element-Buffer-object</a>, the behavior of this op depends on whether its parent Buffer-HTML is  or if the other <em>value</em> is also an Element-Buffer. Also, the final result always includes the outer HTML object (i.e., the tag) in some manner.</p>
+
+<p>For Element-Buffers of "open" tags, this op creates a table with a metaindex that references the parent of the Element-Buffer. The table is then effectively a "mirror" of the parent Buffer-HTML object except that it contains an empty table at <code>table.nodes</code>{{--}} the index of the Element-Buffer within its parent. This then populates the mirror's inner table with the string of the Element-Buffer and the other value, validated left-to-right, in a manner not unlike what this does with the temporary table it creates when concatenating non-element Buffers to another value. This then returns the mirror table through the __tostring metamethod of the mw.html library, yielding a string which resembles that of the parent tag but with <em>value</em> inserted in front of or behind the original inner text depending on whether <em>value</em> was to the left or right of the <code>..</code> operator, respectively.</p>
+
+<p>When the selfClosing property of the parent evaluates true, this operates on the parent instead of the Element-Buffer{{--}}i.e., the resulting string will have <em>value</em> on the outside as opposed to within the tag (placing it inside would be pointless since selfClosing tags do not show inner contents).</p>
+
+<p>If both operated objects are Element-Buffers, this mirrors the parent of the first. The inner table of the mirror is then populated by inserting the string of the first Element-Buffer followed by the string the parent Buffer-HMTL of the second. The resulting string would be as though the parent of the second were the last node of the first parent. Note that this Element-to-Element rule does not apply when the first Buffer belongs to a selfClosing tag (in which case, this behaves as though the selfClosing parent were to the left of the operator, returning a string with the selfClosing tag inside the tag of the second Element-Buffer in front the latter's inner contents.)</p>
+
+<p>Finally, this combines an Element-Buffer and a table <em>value</em> which has no metatable by passing the table as <em>args</em> for  with the mirror of the Element-Buffer as the "self". This avoids permanently changing the parent Buffer-HTML by setting a new table at <code>table.attributes</code> or <code>table.styles</code> in the mirror the first time methods such as , , , etc. attempt to access those tables, copying the original's via the recursive form of . Note however that permanent changes may be made to other objects whenever methods such as via  or  are keyed to navigate beyond the mirror or "sandbox".</p>
+<h2 id="requiremodulebuffer.__pairs">require'Module:Buffer'.__pairs</h2>
+
+<p><a href="#MBpairs" title="wikilink"></a></p>
+
+<p>Returns two values: an iterator function and the <code>table</code>. This is intended for use in the  <code>for</code>.</p>
+
+<p>One distinctive feature of this pairs method is that it splits keys into two groups: s and non-numbers. This indexes each group of keys in its own "map" object, traversed by its own iterator function{{--}}i.e, iterating both sets of keys requires two separate for loops. Numeric keys are served in an orderly fashion as with  except that those which are negative, non-consecutive, and non-integer may be included. Moreover, this can find some keys paired with explicitly nil values.<ref group="example"> Take a moment to look at the following tables <em>X</em> and <em>Y</em>:</ref></p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>{{#tag:syntaxhighlight|local X = { [5] = 5 } local Y = { nil, nil, nil, nil, 5 }</p></td>
+<td style="text-align: left;">
+<p>lang=lua}}</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>These tables are indistinguishable to  and  (ipairs iterates nothing and pairs yields only one key-value pair for either table).</p>
+
+<p>While this module's __pairs method also gives only one pair for table <em>X</em>, it loops all five explicitly declared indicies for table <em>Y</em>, as shown in the console input below with Module:Buffer as <em>p</em>:</p>
+<dl>
+<dd>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>{{#tag:syntaxhighlight|for k, v in p.__pairs{ [5] <span class="LaTeX">$=$</span> 5 } do mw.log(k, v) end 5 5 for k, v in p.__pairs{ nil, nil, nil, nil, 5 } do mw.log(k, v) end 1 nil 2 nil 3 nil 4 nil 5 5|lang=lua}}</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>Detecting nil values is actually a side effect of trying to improve performance by avoiding type checking on some keys when sorting them (see stage one of <a href="#mapping" title="wikilink">§ Mapping process</a>), but, if pressed for a practical use, let's just say this can be a means to force the inclusion of keys from the table's meta __index or to allow keys to be unset without excluding them from the iteration.</p>
+
+<p>The <code>flag</code> argument selects the iterator method returned for that loop. When <em>flag</em> is an explicit nil or omitted, this returns an iterator for number keys. If given any non-nil <em>flag</em> (i.e., false or any value that evaluates true), this returns a method for looping non-numeric keys. Because both sets are mapped at the same time, you may avoid a redundant mapping op in a subsequent loop by passing an explicit nil or false as <em>flag</em>{{--}}i.e., omitting <em>flag</em> or passing true indicate that re-mapping is desired.</p>
+
+<p>This automatically selects certain tables for "mapless" iteration. Typically, mapless differs from mapped only in that it uses fewer server resources, though, as explained in the next section on mapping, it may "miss" keys in some cases.</p>
+
+<p>Mapping behavior may be modified or extended by <code>ext</code>. To disable mapless iteration for the table, you may pass false as <em>ext</em>. If not nil or false, <em>ext</em> must be a pairs method that takes the table as its only argument and returns a function that may iterate its keys for mapping purposes. Note that re-mapping avoidance via <em>flag</em> does not apply if <em>ext</em> is explicitly given, though a nil <em>ext</em> does not disqualify a table from mapless iteration. </p>
+<h3 id="mapping-process">Mapping process</h3>
+
+<p>Tables are mapped in two stages.</p>
+
+<p>The initial stage is a  which inserts integers between  and  in the number key map. Because nothing is checked in this step, this may map keys which the <a href="#Iterators" title="wikilink">numeric map iterator</a> would pair with nil values or with values from the table's .</p>
+
+<p>The second stage explores the table's keys with an  and  as the default <em>expression-list</em>, or, if <em>ext</em> evaluates true, the expression returned by . This ignores keys already mapped in the first stage and checks if any unmapped key is a number before indexing it in the appropriate map group. Upon completion, if any new number key were found in the second stage, this runs the numeric map through . No order is imposed on the non-numeric map.</p>
+
+<p>Alternatively, a table may qualify for "mapless" iteration if  is not nil, and  returns nil. If either <em>flag</em> or <em>ext</em> are not nil, or if the table was previously mapped, such permanently disqualifies a table for mapless processing.<a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a></p>
+
+<p>As a side note, if mapless numeric iteration occurs, this returns . In other words, you may use  to confirm that the table qualifies for mapless iteration when it has a third explicit return (for debugging).</p>
+<h3 id="iterators">Iterators</h3>
+
+<p>One of four functions may be provided in the <em></em> returned by this pairs method, depending on which group of keys (numeric or non-numeric) and which iteration process (map-based or mapless) is indicated.</p>
+
+<p>When <code>key</code> is nil or unspecified, map iterators will return the key object referenced by the first index of the relevant map along with the value it indexes. If passed the first mapped key, these iterators then return the second index mapped, which if passed in turn may retrieve the third and so on until the last mapped key has been served.</p>
+
+<p>For numeric iteration, the mapless method returns  when <em>key</em> is unspecified. If a <em>key</em> is given, it returns  unless <em>key</em> is greater or equal to the length of the table, upon which it returns nil. For non-numeric keys, the mapless "iterator" is actually a no-op (empty) function which takes nothing, does nothing, and returns nothing{{--}}provided only to prevent an error when the for loop expects a function.</p>
+
+<p>As mentioned (using different words), key-value pairs are served independently of whether or not  exists and retrieved without using .</p>
+
+<p>For example, take a look at table <em>x</em> as declared in the following statement: . Table <em>x</em> has a length equal to 8. With ipairs, the for loop stops after the first pair. In contrast, this module's __pairs method will loop all 8 keys declared{{--}}i.e., (1, 1), (2, nil), ... (7, nil), (8, 8). That said, this only iterates two keys if table <em>x</em> were declared as  instead even though such is indistinguishable to Finally, the loop would continue to include any keys set to nil after the mapping process.</p>
+
+<p>You may assign these iterators to a local variable to use them directly. If an unmapped table is given to a map iterator, it will forward the table to this pairs method for immediate mapping. Though no map table is produced for the mapless iteration, the pairs method does cache the length of the table at a map reference, which the iterator compares against <em>key</em> to determine when to stop. Unlike the map methods, the mapless iterator does not call the pairs method when such has been bypassed and instead compares <em>key</em> to the value returned by the , which may be unstable if the loop includes code that sets or unsets indicies within the table. Also, the mapless method will throw an error if given a table that has been mapped (when it attempts to compare <em>key</em> to a map object).</p>
+<h2 id="appendix">Appendix</h2>
+<h3 id="tips-and-style-recommendations">Tips and style recommendations</h3>
+<ul>
+<li>If <a href="#Buffer" title="wikilink">joining Buffer</a> with a string immediately after <code>:_'<i>text</i>'</code>, place a space between 'string' and the <a href="#Buffer" title="wikilink">separator</a> and use double/single quote marks to . (i.e. <code>:_'<i>text</i>' " "</code> instead of <code>:_'<i>text</i>'{{`}} '</code> or <code>:_'<i>text</i>'(' ')</code>)</li>
+<li>Saving Module:Buffer locally, e.g. <code>local Buffer = {{luaref|require|args='Module:Buffer'|plain=y}}</code>, though fine, is often unnecessary since all Buffer objects can create new buffers via .</li>
+</ul>
+
+<p><strong>For </strong></p>
+<ul>
+<li>Treat  as though it were a  op. Wrapping strings with unnecessary  is akin to .</li>
+<li>Most uses of  can be avoided through careful planning with the  argument. That said, the performance decrease from <em>raw</em> is unlikely to be significant for modules transcluded on less 100,000 pages. In short, reduction in server load from avoiding <em>raw</em> may not be worth it if such makes the code harder to maintain.</li>
+<li>To insert an empty string as a placeholder for a <a href="#Buffer" title="wikilink">separator</a> without setting , pass a table containing only an empty string, like so: .</li>
+<li>Raw appending a non-table is pointless since no other Scribunto type can tostring differently afterwards. However, this developer believes you are smart enough that  is a waste of server resources. (Such checks are why  takes twice as much time to append a list of strings as  despite their near-identical roles in an Element-Stream-Buffer).</li>
+</ul>
+
+<p><strong>For  and </strong></p>
+<ul>
+<li>Something like  will use variable <code>A</code> as the parent's separator, or <code>B</code> instead if <em>A</em> is nil, or <code>C</code> if both A and B are nil.</li>
+</ul>
+
+<p><strong>For </strong></p>
+<ul>
+<li>Appending values in multiple locations is one of the primary reasons why the <a href="#nanKeys" title="wikilink">nanKeys</a> argument exists. While passing a boolean directly will cause an error, you can do something like...</li>
+</ul>
+<dl>
+<dd><dl>
+<dd>this:}, true)|lang=lua}}
+</dd>
+<dd>versus: .
+</dd>
+</dl>
+</dd>
+</dl>
+
+<p><strong>For </strong></p>
+<ul>
+<li>If the table reference passed as  was appended <a href="#raw" title="wikilink">raw</a> in multiple positions, this is akin to performing  at all positions simultaneously. (May be easier than trying to come up with a  pattern)</li>
+<li>Inserting a <a href="#Buffer:_G" title="wikilink">named</a> empty table is raw as a placeholder to be populated later via this function may be easier than calculating <em>pos</em> argument of .</li>
+</ul>
+
+<p>'''For  '''</p>
+<ul>
+<li>When appending simple HTML structures, something like  is roughly 6 times more efficient than <code>{{luaself|:_inHTML|plain=y}}<syntaxhighlight enclose="none" lang="lua">'br':_out()</syntaxhighlight></code>, at least in terms of server CPU usage. (Though <mtpl></mtpl> is 25 and 4 times more efficient than both examples, respectively.)</li>
+</ul>
+<dl>
+<dd>Buffer:_inHTML is slower on the first run due to initialization. After the first run, the efficiency of Buffer:_inHTML improves by a factor of 4 (though not quite as fast as the other two).
+</dd>
+</dl>
+<h3 id="performance">Performance</h3>
+<h3 id="examples">Examples</h3>
+<h3 id="notes">Notes</h3>
+
+<p>Non-literal interpretations of the source code (that is, more opinion than fact) are provided here to offer additional clarity. Overly technical details may be found here as well when including such caveats appears more likely to confuse than help those advanced-but-not-quite-fluent in Lua.</p>
+
+<p>Though commentary was deemed unnecessary for the , Scribunto methods are "safe" for beginners and offer extensive in-code help in the form of  messages. In contrast, Module:Buffer methods, intended for intermediate-advanced coders, are built with "safeties off"{{--}}i.e., minimal type filtering and custom error warnings{{--}}to maximize performance (though the rare  may be found in methods which seldom need to be used more than once and where the default error message seemed exceptionally vague or difficult to trace).</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a class="uri" href="Module:Escape" title="wikilink">Module:Escape</a>, a lightweight metamodule for customized string character escaping</li>
+</ul>
+
+<p><includeonly>{{#ifeq:|sandbox | |</includeonly></p>
+
+<p>}}"</p>
+
+<p><a href="Category:Lua_metamodules" title="wikilink">Category:Lua metamodules</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">For your convience, the self operator  and  are interchangeable when used on the Module directly, though the self-op is required for nearly all other interactions with objects created by the Module.<a href="#fnref1">↩</a></li>
+<li id="fn2">Using  prevents future caching on all Buffers, though Buffers which already unmodified Buffers will continue to return their cached version<a href="#fnref2">↩</a></li>
+<li id="fn3">Appending a value "raw"{{--}}i.e. without string type coercion{{--}} sets "raw mode", which incurs a <a href="#performance" title="wikilink">performance</a> penalty because future tostring ops would have to <a href="#valid" title="wikilink">re-validate</a> every value in the Buffer via  to insert them in a new table before passing that to table.concat (vs. passing itself directly). That said, re-stringing a raw Buffer is still usually several times faster than using the  op to join an equivalent number of strings. (See <a class="uri" href="#Tips" title="wikilink">#Tips</a> for ways to avoid using raw)<a href="#fnref3">↩</a></li>
+<li id="fn4">In other words, if <em>args</em> is a string or a table without [1] set, it will be passed as the only argument. Further note it is not possible to pass a <code>''functionName'' = ''args''</code> pair where <em>args</em> is numerical since such would be read as <code>''value'' = ''pos''</code>. Finally, passing a function type as <em>args</em> will throw an error message.<a href="#fnref4">↩</a></li>
+<li id="fn5">There is no 'getChild' method. If a child needed after returning to the parent, set it  or use  prior to returning or it may become irretrievable. (No,  did not get lazy. Rather, this allows  on children with no further purpose.)<a href="#fnref5">↩</a></li>
+<li id="fn6">For <a class="uri" href="#performance" title="wikilink">#performance</a>, the first arg is not type checked but read as <em>ops</em> only when multiple args are present (or if it is the number 0); i.e., <code>Buffer:_out(2)</code> uses <code>2</code> as a separator. To append to the <em>N</em>th ancestor with no separator, use <code>Buffer:_outs(''N'', nil)</code>.<a href="#fnref6">↩</a></li>
+<li id="fn7">Empty strings would produce the same output as false, however, Lua string literals create objects that take up memory until garbage collected.<a href="#fnref7">↩</a></li>
+<li id="fn8"></li>
+<li id="fn9">In other words,  is shorthand for , however,  simply appends "match" to the parent. Note that you may still call  on a parent via .<a href="#fnref9">↩</a></li>
+<li id="fn10">This is no different than calling the Stream-Buffer object directly with each item in the ; however, after noting how numbers and variables (too shy to <a href="skinny_dip" title="wikilink">skinny dip</a> without parenthesis) could look rather odd swimming fully clothed in a stream of naked strings, this was made for those whose aesthetics prefer  over . As a side note, it is best practice to pass number <em>strings</em> instead of number literals (i.e.  instead of ) as such improves performance and is perhaps more aesthetically pleasing in this mode.<a href="#fnref10">↩</a></li>
+<li id="fn11">If you want something like  such that <em>varName</em> is shorthand for an  statement that appends <em>varName</em> and 'string2' when the former is not nil, use  instead.<a href="#fnref11">↩</a></li>
+<li id="fn12">That is, Element-Buffer may be shorthand for  when planning to continue using Buffer object functions. This "auto-done and back" for selfClosing tags does not apply to non-element Buffers in order not to encourage the use of Buffer:_inHTML for simple tags as per <a href="#Tips_and_style_recommendations" title="wikilink">#Tips and style recommendations</a>.<a href="#fnref12">↩</a></li>
+<li id="fn13"> serves a similar role, but appends Buffer objects rather than HTML objects. Also Buffer-HTML:_parent only appends the string form of its ancestor object(s).<a href="#fnref13">↩</a></li>
+<li id="fn14">Buffer(-HTML) objects reference their parent differently from mw.html objects. Passing a normal mw.html object to Buffer:_inHTML as  and then calling  the object created, followed by  on the adopted parent, may return the "child." This is a feature rather than a bug.<a href="#fnref14">↩</a></li>
+<li id="fn15">{{--}}the internal table which holds elements appended via , , and <a href="#fnref15">↩</a></li>
+<li id="fn16">Passing arguments for  via the <em>args</em> parameter of  and  during the creation of a new Buffer-HTML object is the only way to use most Buffer object functions on the new HTML object without converting its <code>.nodes</code> into an Element-Buffer.<a href="#fnref16">↩</a></li>
+<li id="fn17">That is, Buffer:getHTML may be used to return to the child node, though the trade off is that you may still need to call mw.html:allDone before using these methods in order to append the full HTML tree via <a href="#Buffer:_html" title="wikilink">Buffer:_html</a>.<a href="#fnref17">↩</a></li>
+<li id="fn18">While Buffer-HTML objects may use <a href="#global_functions" title="wikilink">#global functions</a>, there is no separate Buffer-HTML version. In other words, the self-action of a global function on an Element-Buffer is <u>not</u> redirected.<a href="#fnref18">↩</a></li>
+<li id="fn19"> is doubly wrapped for Element-Buffers, with the other wrapper setting a Buffer parent reference as described at . Furthermore,  and  do not call their mw.html namesakes at all, as detailed in their respective sections.<a href="#fnref19">↩</a></li>
+<li id="fn20">However, since the mw.html __tostring method never calls the Element-Buffer as a function, raw mode is not expected to reduce performance when appending the Buffer-HTML (or Element-Buffer via mw.html:node) to another object.<a href="#fnref20">↩</a></li>
+<li id="fn21">However, some Buffer methods may not work properly after appending objects via mw.html functions to the pseudo-Buffer.<br/>
+For example,  could produce a div with each <em>foo</em> as <a href="Bullet_(typography)" title="wikilink">bulleted</a> item. But, if <em>foo1</em> were , then  may fail when appending  with the non-string/number element. A workaround is to add the pair  to set <a href="#raw" title="wikilink">raw mode</a> on the div's tag.nodes; another is to replace <em>foo1</em> with , which appends in string form.<a href="#fnref21">↩</a></li>
+<li id="fn22">A caveat of this unconventional type checking is that pairing an args.globalFunction with a number value will throw an error (which shouldn't be a problem since numbers make poor names for global variables).<a href="#fnref22">↩</a></li>
+<li id="fn23">i.e., does <em>x</em>, in the following, reference the TD or some other node hidden within an <a class="uri" href="ellipsis" title="wikilink">ellipsis</a>?: <a href="#fnref23">↩</a></li>
+<li id="fn24">Actually, the first argument to rawset is a local variable <code>[[#new_G|new_G]]</code> which generally equals _G but not always, to be detailed in a later section.<a href="#fnref24">↩</a></li>
+<li id="fn25">If the meta global has an __index which is a function (as is the case after requiring <a href="Module:No_globals" title="wikilink">Module:No globals</a>), the back-up op aborts without throwing an error.<a href="#fnref25">↩</a></li>
+<li id="fn26">Dubbing this a "global function" is bit of a misnomer since this never retrieves anything from the global table. While designed for in-chain navigation to Buffer objects that were <a href="#Buffer:_G" title="wikilink">self-declared as globals</a>, this returns any local reference or literal passed as well (allowing  to execute Buffer methods on non-Buffer objects <code>[[#args.globalFunction|args._B]]</code>).<a href="#fnref26">↩</a></li>
+<li id="fn27">False cycles tables based on  instead of , which may diverge or error if the table contains nil items.<a href="#fnref27">↩</a></li>
+<li id="fn28">Though this strings the same object returned by , that function is not used to avoid setting a "lastHTML" reference.<a href="#fnref28">↩</a></li>
+<li id="fn29">Mapless iteration is intended to improve performance for tables which were constructed sequentially and which have only numeric indicies (e.g., any Buffer-object built without using the <em>pos</em> argument of methods such as ; note that  may be temporarily uset when the Buffer is strung in a way that would involve this method to avoid disqualification from mapless iteration due to non-sequential indexing). Though "trick" tables have been made to qualify for but yet contain keys not covered by mapless iteration, such involved both intent and an exceptional understanding of lua table, making it difficult to imagine that mis-qualified tables may arrise accidentally.<a href="#fnref29">↩</a></li>
+</ol>
+</section>
+</dd></dl></body>
+</html>

@@ -1,0 +1,620 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1505">Fibonacci heap</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Fibonacci heap</h1>
+<hr/>
+
+<p>In <a href="computer_science" title="wikilink">computer science</a>, a <strong>Fibonacci heap</strong> is a <a href="Heap_(data_structure)" title="wikilink">heap data structure</a> consisting of a collection of <a href="Tree_(data_structure)" title="wikilink">trees</a>. It has a better <a href="amortized_analysis" title="wikilink">amortized</a> running time than a <a href="binomial_heap" title="wikilink">binomial heap</a>. Fibonacci heaps were developed by <a href="Michael_Fredman" title="wikilink">Michael L. Fredman</a> and <a href="Robert_Tarjan" title="wikilink">Robert E. Tarjan</a> in 1984 and first published in a scientific journal in 1987. The name of Fibonacci heap comes from <a href="Fibonacci_number" title="wikilink">Fibonacci numbers</a> which are used in the running time analysis.</p>
+
+<p>Find-minimum is <em><a href="Big_O_notation" title="wikilink">O</a></em>(1) amortized time.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Operations insert, decrease key, and merge (union) work in constant amortized time.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> Operations delete and delete minimum work in <em>O</em>(log <em>n</em>) amortized time.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> This means that starting from an empty data structure, any sequence of <em>a</em> operations from the first group and <em>b</em> operations from the second group would take <em>O</em>(<em>a</em> + <em>b</em> log <em>n</em>) time. In a <a href="binomial_heap" title="wikilink">binomial heap</a> such a sequence of operations would take <em>O</em>((<em>a</em> + <em>b</em>) log <em>n</em>) time. A Fibonacci heap is thus better than a binomial heap when <em>b</em> is <a href="asymptotic_analysis" title="wikilink">asymptotically</a> smaller than <em>a</em>.</p>
+
+<p>Using Fibonacci heaps for <a href="priority_queue" title="wikilink">priority queues</a> improves the asymptotic running time of important algorithms, such as <a href="Dijkstra's_algorithm" title="wikilink">Dijkstra's algorithm</a> for computing the <a href="shortest_path" title="wikilink">shortest path</a> between two nodes in a graph.</p>
+<h2 id="structure">Structure</h2>
+
+<p> A Fibonacci heap is a collection of <a href="tree_data_structure" title="wikilink">trees</a> satisfying the <a href="minimum-heap_property" title="wikilink">minimum-heap property</a>, that is, the key of a child is always greater than or equal to the key of the parent. This implies that the minimum key is always at the root of one of the trees. Compared with binomial heaps, the structure of a Fibonacci heap is more flexible. The trees do not have a prescribed shape and in the extreme case the heap can have every element in a separate tree. This flexibility allows some operations to be executed in a "lazy" manner, postponing the work for later operations. For example merging heaps is done simply by concatenating the two lists of trees, and operation <em>decrease key</em> sometimes cuts a node from its parent and forms a new tree.</p>
+
+<p>However at some point some order needs to be introduced to the heap to achieve the desired running time. In particular, degrees of nodes (here degree means the number of children) are kept quite low: every node has degree at most <em>O</em>(log <em>n</em>) and the size of a subtree rooted in a node of degree <em>k</em> is at least <em>F</em><sub><em>k</em>+2</sub>, where <em>F<sub>k</sub></em> is the <em>k</em>th <a href="Fibonacci_number" title="wikilink">Fibonacci number</a>. This is achieved by the rule that we can cut at most one child of each non-root node. When a second child is cut, the node itself needs to be cut from its parent and becomes the root of a new tree (see Proof of degree bounds, below). The number of trees is decreased in the operation <em>delete minimum</em>, where trees are linked together.</p>
+
+<p>As a result of a relaxed structure, some operations can take a long time while others are done very quickly. For the <a href="amortized_analysis" title="wikilink">amortized running time</a> analysis we use the <a href="potential_method" title="wikilink">potential method</a>, in that we pretend that very fast operations take a little bit longer than they actually do. This additional time is then later combined and subtracted from the actual running time of slow operations. The amount of time saved for later use is measured at any given moment by a potential function. The potential of a Fibonacci heap is given by</p>
+<dl>
+<dd>Potential = <em>t</em> + 2<em>m</em>
+</dd>
+</dl>
+
+<p>where <em>t</em> is the number of trees in the Fibonacci heap, and <em>m</em> is the number of marked nodes. A node is marked if at least one of its children was cut since this node was made a child of another node (all roots are unmarked). The amortized time for an operation is given by the sum of the actual time and <em>c</em> times the difference in potential, where <em>c</em> is a constant (chosen to match the constant factors in the <em>O</em> notation for the actual time).</p>
+
+<p>Thus, the root of each tree in a heap has one unit of time stored. This unit of time can be used later to link this tree with another tree at amortized time 0. Also, each marked node has two units of time stored. One can be used to cut the node from its parent. If this happens, the node becomes a root and the second unit of time will remain stored in it as in any other root.</p>
+<h2 id="implementation-of-operations">Implementation of operations</h2>
+
+<p>To allow fast deletion and concatenation, the roots of all trees are linked using a circular, <a href="doubly_linked_list" title="wikilink">doubly linked list</a>. The children of each node are also linked using such a list. For each node, we maintain its number of children and whether the node is marked. Moreover we maintain a pointer to the root containing the minimum key.</p>
+
+<p>Operation <strong>find minimum</strong> is now trivial because we keep the pointer to the node containing it. It does not change the potential of the heap, therefore both actual and amortized cost are constant.</p>
+
+<p>As mentioned above, <strong>merge</strong> is implemented simply by concatenating the lists of tree roots of the two heaps. This can be done in constant time and the potential does not change, leading again to constant amortized time.</p>
+
+<p>Operation <strong>insert</strong> works by creating a new heap with one element and doing merge. This takes constant time, and the potential increases by one, because the number of trees increases. The amortized cost is thus still constant.</p>
+
+<p> Operation <strong>extract minimum</strong> (same as <em>delete minimum</em>) operates in three phases. First we take the root containing the minimum element and remove it. Its children will become roots of new trees. If the number of children was <em>d</em>, it takes time <em>O</em>(<em>d</em>) to process all new roots and the potential increases by <em>d</em>−1. Therefore the amortized running time of this phase is <em>O</em>(<em>d</em>) = <em>O</em>(log <em>n</em>).</p>
+
+<p> However to complete the extract minimum operation, we need to update the pointer to the root with minimum key. Unfortunately there may be up to <em>n</em> roots we need to check. In the second phase we therefore decrease the number of roots by successively linking together roots of the same degree. When two roots <em>u</em> and <em>v</em> have the same degree, we make one of them a child of the other so that the one with the smaller key remains the root. Its degree will increase by one. This is repeated until every root has a different degree. To find trees of the same degree efficiently we use an array of length <em>O</em>(log <em>n</em>) in which we keep a pointer to one root of each degree. When a second root is found of the same degree, the two are linked and the array is updated. The actual running time is <em>O</em>(log <em>n</em> + <em>m</em>) where <em>m</em> is the number of roots at the beginning of the second phase. At the end we will have at most <em>O</em>(log <em>n</em>) roots (because each has a different degree). Therefore the difference in the potential function from before this phase to after it is: <em>O</em>(log <em>n</em>) − <em>m</em>, and the amortized running time is then at most <em>O</em>(log <em>n</em> + <em>m</em>) + <em>c</em>(<em>O</em>(log <em>n</em>) − <em>m</em>). With a sufficiently large choice of <em>c</em>, this simplifies to <em>O</em>(log <em>n</em>).</p>
+
+<p>In the third phase we check each of the remaining roots and find the minimum. This takes <em>O</em>(log <em>n</em>) time and the potential does not change. The overall amortized running time of extract minimum is therefore <em>O</em>(log <em>n</em>).</p>
+
+<p> Operation <strong>decrease key</strong> will take the node, decrease the key and if the heap property becomes violated (the new key is smaller than the key of the parent), the node is cut from its parent. If the parent is not a root, it is marked. If it has been marked already, it is cut as well and its parent is marked. We continue upwards until we reach either the root or an unmarked node. Now we set the minimum pointer to the decreased value if it is the new minimum. In the process we create some number, say <em>k</em>, of new trees. Each of these new trees except possibly the first one was marked originally but as a root it will become unmarked. One node can become marked. Therefore the number of marked nodes changes by −(<em>k</em> − 1) + 1 = − <em>k</em> + 2. Combining these 2 changes, the potential changes by 2(−<em>k</em> + 2) + <em>k</em> = −<em>k</em> + 4. The actual time to perform the cutting was <em>O</em>(<em>k</em>), therefore (again with a sufficiently large choice of <em>c</em>) the amortized running time is constant.</p>
+
+<p>Finally, operation <strong>delete</strong> can be implemented simply by decreasing the key of the element to be deleted to minus infinity, thus turning it into the minimum of the whole heap. Then we call extract minimum to remove it. The amortized running time of this operation is <em>O</em>(log <em>n</em>).</p>
+<h2 id="proof-of-degree-bounds">Proof of degree bounds</h2>
+
+<p>The amortized performance of a Fibonacci heap depends on the degree (number of children) of any tree root being <em>O</em>(log <em>n</em>), where <em>n</em> is the size of the heap. Here we show that the size of the (sub)tree rooted at any node <em>x</em> of degree <em>d</em> in the heap must have size at least <em>F<sub>d</sub></em><sub>+2</sub>, where <em>F<sub>k</sub></em> is the <em>k</em>th <a href="Fibonacci_number" title="wikilink">Fibonacci number</a>. The degree bound follows from this and the fact (easily proved by induction) that 
+
+<math display="inline" id="Fibonacci_heap:0">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>F</mi>
+    <mrow>
+     <mi>d</mi>
+     <mo>+</mo>
+     <mn>2</mn>
+    </mrow>
+   </msub>
+   <mo>≥</mo>
+   <msup>
+    <mi>φ</mi>
+    <mi>d</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <geq></geq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>F</ci>
+     <apply>
+      <plus></plus>
+      <ci>d</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>φ</ci>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F_{d+2}\geq\varphi^{d}
+  </annotation>
+ </semantics>
+</math>
+
+ for all integers 
+
+<math display="inline" id="Fibonacci_heap:1">
+ <semantics>
+  <mrow>
+   <mi>d</mi>
+   <mo>≥</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <geq></geq>
+    <ci>d</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d\geq 0
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Fibonacci_heap:2">
+ <semantics>
+  <mrow>
+   <mi>φ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mn>1</mn>
+      <mo>+</mo>
+      <msqrt>
+       <mn>5</mn>
+      </msqrt>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>/</mo>
+    <mn>2</mn>
+   </mrow>
+   <mo>≐</mo>
+   <mn>1.618</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>φ</ci>
+     <apply>
+      <divide></divide>
+      <apply>
+       <plus></plus>
+       <cn type="integer">1</cn>
+       <apply>
+        <root></root>
+        <cn type="integer">5</cn>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">approaches-limit</csymbol>
+     <share href="#.cmml">
+     </share>
+     <cn type="float">1.618</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varphi=(1+\sqrt{5})/2\doteq 1.618
+  </annotation>
+ </semantics>
+</math>
+
+. (We then have 
+
+<math display="inline" id="Fibonacci_heap:3">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>≥</mo>
+   <msub>
+    <mi>F</mi>
+    <mrow>
+     <mi>d</mi>
+     <mo>+</mo>
+     <mn>2</mn>
+    </mrow>
+   </msub>
+   <mo>≥</mo>
+   <msup>
+    <mi>φ</mi>
+    <mi>d</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <geq></geq>
+     <ci>n</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>F</ci>
+      <apply>
+       <plus></plus>
+       <ci>d</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <geq></geq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>φ</ci>
+      <ci>d</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n\geq F_{d+2}\geq\varphi^{d}
+  </annotation>
+ </semantics>
+</math>
+
+
+, and taking the log to base 
+
+<math display="inline" id="Fibonacci_heap:4">
+ <semantics>
+  <mi>φ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>φ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varphi
+  </annotation>
+ </semantics>
+</math>
+
+ of both sides gives 
+
+<math display="inline" id="Fibonacci_heap:5">
+ <semantics>
+  <mrow>
+   <mi>d</mi>
+   <mo>≤</mo>
+   <mrow>
+    <msub>
+     <mi>log</mi>
+     <mi>φ</mi>
+    </msub>
+    <mi>n</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <ci>d</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <ci>φ</ci>
+     </apply>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d\leq\log_{\varphi}n
+  </annotation>
+ </semantics>
+</math>
+
+ as required.)</p>
+
+<p>Consider any node <em>x</em> somewhere in the heap (<em>x</em> need not be the root of one of the main trees). Define <strong>size</strong>(<em>x</em>) to be the size of the tree rooted at <em>x</em> (the number of descendants of <em>x</em>, including <em>x</em> itself). We prove by induction on the height of <em>x</em> (the length of a longest simple path from <em>x</em> to a descendant leaf), that <strong>size</strong>(<em>x</em>) ≥ <em>F<sub>d</sub></em><sub>+2</sub>, where <em>d</em> is the degree of <em>x</em>.</p>
+
+<p><strong>Base case:</strong> If <em>x</em> has height 0, then <em>d</em> = 0, and <strong>size</strong>(<em>x</em>) = 1 = <em>F</em><sub>2</sub>.</p>
+
+<p><strong>Inductive case:</strong> Suppose <em>x</em> has positive height and degree <em>d</em>&gt;0. Let <em>y</em><sub>1</sub>, <em>y</em><sub>2</sub>, ..., <em>y<sub>d</sub></em> be the children of <em>x</em>, indexed in order of the times they were most recently made children of <em>x</em> (<em>y</em><sub>1</sub> being the earliest and <em>y<sub>d</sub></em> the latest), and let <em>c</em><sub>1</sub>, <em>c</em><sub>2</sub>, ..., <em>c<sub>d</sub></em> be their respective degrees. We <strong>claim</strong> that <em>c<sub>i</sub></em> ≥ <em>i</em>-2 for each <em>i</em> with 2≤<em>i</em>≤<em>d</em>: Just before <em>y<sub>i</sub></em> was made a child of <em>x</em>, <em>y</em><sub>1</sub>,...,<em>y<sub>i</sub></em><sub>−1</sub> were already children of <em>x</em>, and so <em>x</em> had degree at least <em>i</em>−1 at that time. Since trees are combined only when the degrees of their roots are equal, it must have been that <em>y<sub>i</sub></em> also had degree at least <em>i</em>-1 at the time it became a child of <em>x</em>. From that time to the present, <em>y<sub>i</sub></em> can only have lost at most one child (as guaranteed by the marking process), and so its current degree <em>c<sub>i</sub></em> is at least <em>i</em>−2. This proves the <strong>claim</strong>.</p>
+
+<p>Since the heights of all the <em>y<sub>i</sub></em> are strictly less than that of <em>x</em>, we can apply the inductive hypothesis to them to get <strong>size</strong>(<em>y<sub>i</sub></em>) ≥ <em>F<sub>c<sub>i</sub></sub></em><sub>+2</sub> ≥ <em>F</em><sub>(<em>i</em>−2)+2</sub> = <em>F<sub>i</sub></em>. The nodes <em>x</em> and <em>y</em><sub>1</sub> each contribute at least 1 to <strong>size</strong>(<em>x</em>), and so we have</p>
+
+<p>
+
+<math display="inline" id="Fibonacci_heap:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mtext>𝐬𝐢𝐳𝐞</mtext>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>≥</mo>
+    <mrow>
+     <mn>2</mn>
+     <mo>+</mo>
+     <mrow>
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>2</mn>
+       </mrow>
+       <mi>d</mi>
+      </msubsup>
+      <mrow>
+       <mtext>𝐬𝐢𝐳𝐞</mtext>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>y</mi>
+         <mi>i</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>≥</mo>
+    <mrow>
+     <mn>2</mn>
+     <mo>+</mo>
+     <mrow>
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>2</mn>
+       </mrow>
+       <mi>d</mi>
+      </msubsup>
+      <msub>
+       <mi>F</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mo>+</mo>
+     <mrow>
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>0</mn>
+       </mrow>
+       <mi>d</mi>
+      </msubsup>
+      <msub>
+       <mi>F</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <geq></geq>
+     <apply>
+      <times></times>
+      <mtext>size</mtext>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <cn type="integer">2</cn>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <ci>d</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <mtext>size</mtext>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>y</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <geq></geq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <plus></plus>
+      <cn type="integer">2</cn>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <ci>d</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>F</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <plus></plus>
+      <cn type="integer">1</cn>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">0</cn>
+         </apply>
+        </apply>
+        <ci>d</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>F</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \textbf{size}(x)\geq 2+\sum_{i=2}^{d}\textbf{size}(y_{i})\geq 2+\sum_{i=2}^{d}%
+F_{i}=1+\sum_{i=0}^{d}F_{i}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>A routine induction proves that 
+
+<math display="inline" id="Fibonacci_heap:7">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mn>1</mn>
+    <mo>+</mo>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mi>d</mi>
+     </msubsup>
+     <msub>
+      <mi>F</mi>
+      <mi>i</mi>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mi>F</mi>
+    <mrow>
+     <mi>d</mi>
+     <mo>+</mo>
+     <mn>2</mn>
+    </mrow>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <cn type="integer">1</cn>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <ci>d</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>F</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>F</ci>
+     <apply>
+      <plus></plus>
+      <ci>d</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1+\sum_{i=0}^{d}F_{i}=F_{d+2}
+  </annotation>
+ </semantics>
+</math>
+
+ for any 
+
+<math display="inline" id="Fibonacci_heap:8">
+ <semantics>
+  <mrow>
+   <mi>d</mi>
+   <mo>≥</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <geq></geq>
+    <ci>d</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d\geq 0
+  </annotation>
+ </semantics>
+</math>
+
+
+, which gives the desired lower bound on <strong>size</strong>(<em>x</em>).</p>
+<h2 id="worst-case">Worst case</h2>
+
+<p>Although the total running time of a sequence of operations starting with an empty structure is bounded by the bounds given above, some (very few) operations in the sequence can take very long to complete (in particular delete and delete minimum have linear running time in the worst case). For this reason Fibonacci heaps and other amortized data structures may not be appropriate for <a href="real-time_computing" title="wikilink">real-time systems</a>. It is possible to create a data structure which has the same worst-case performance as the Fibonacci heap has amortized performance.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> One such structure, the <a href="Brodal_queue" title="wikilink">Brodal queue</a>, is, in the words of the creator, "quite complicated" and "[not] applicable in practice." Created in 2012, the strict Fibonacci heap is a simpler (compared to Brodal's) structure with the same worst-case bounds. It is unknown whether the strict Fibonacci heap is efficient in practice. The run-relaxed heaps of Driscoll et al. give good worst-case performance for all Fibonacci heap operations except merge.</p>
+<h2 id="summary-of-running-times">Summary of running times</h2>
+<h2 id="practical-considerations">Practical considerations</h2>
+
+<p>Fibonacci heaps have a reputation for being slow in practice<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> due to large memory consumption per node and high constant factors on all operations.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.cs.yorku.ca/~aaw/Jason/FibonacciHeapAnimation.html">Java applet simulation of a Fibonacci heap</a></li>
+<li><a href="http://www.mathworks.com/matlabcentral/fileexchange/30072-fibonacci-heap">MATLAB implementation of Fibonacci heap</a></li>
+<li><a href="http://www.labri.fr/perso/pelegrin/code/#fibonacci">De-recursived and memory efficient C implementation of Fibonacci heap</a> (free/libre software, <a href="http://www.cecill.info/licences/Licence_CeCILL-B_V1-en.html">CeCILL-B license</a>)</li>
+<li><a href="http://github.com/evansenter/f_heap">Ruby implementation of the Fibonacci heap (with tests)</a></li>
+<li><a href="http://www.cs.princeton.edu/~wayne/cs423/fibonacci/FibonacciHeapAlgorithm.html">Pseudocode of the Fibonacci heap algorithm</a></li>
+<li><a href="http://stackoverflow.com/q/6273833/194609">Various Java Implementations for Fibonacci heap</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Fibonacci_numbers" title="wikilink">Category:Fibonacci numbers</a> <a href="Category:Heaps_(data_structures)" title="wikilink">Category:Heaps (data structures)</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="Thomas_H._Cormen" title="wikilink">Thomas H. Cormen</a>, <a href="Charles_E._Leiserson" title="wikilink">Charles E. Leiserson</a>, <a href="Ronald_L._Rivest" title="wikilink">Ronald L. Rivest</a>, and <a href="Clifford_Stein" title="wikilink">Clifford Stein</a>. <em><a href="Introduction_to_Algorithms" title="wikilink">Introduction to Algorithms</a></em>, Second Edition. <a href="MIT_Press" title="wikilink">MIT Press</a> and McGraw-Hill, 2001. ISBN 0-262-03293-7. Chapter 20: Fibonacci Heaps, pp.476–497. Third edition p518.<a href="#fnref1">↩</a></li>
+<li id="fn2"></li>
+<li id="fn3"></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a class="uri" href="http://www.cs.princeton.edu/~wayne/kleinberg-tardos/pdf/FibonacciHeaps.pdf">http://www.cs.princeton.edu/~wayne/kleinberg-tardos/pdf/FibonacciHeaps.pdf</a>, p. 79<a href="#fnref6">↩</a></li>
+<li id="fn7"><a class="uri" href="http://web.stanford.edu/class/cs166/lectures/07/Small07.pdf">http://web.stanford.edu/class/cs166/lectures/07/Small07.pdf</a>, p. 72<a href="#fnref7">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

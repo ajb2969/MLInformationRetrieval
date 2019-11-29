@@ -1,0 +1,262 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="370">Quotient filter</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Quotient filter</h1>
+<hr/>
+
+<p>A <strong>quotient filter</strong>, introduced by Bender <em>et al.</em> in 2011,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> is a space-efficient <a class="uri" href="probabilistic" title="wikilink">probabilistic</a> <a href="data_structure" title="wikilink">data structure</a> used to test whether an <a href="element_(mathematics)" title="wikilink">element</a> is a member of a <a href="set_(computer_science)" title="wikilink">set</a> (an <a href="approximate_member_query" title="wikilink">approximate member query</a> filter, AMQ). A query will elicit a reply specifying either that the element is definitely not in the set or that the element is probably in the set. The former result is definitive; <em>i.e.</em>, the test does not generate <a href="Type_I_and_type_II_errors" title="wikilink">false negatives</a>. But with the latter result there is some probability, ε, of the test returning "element is in the set" when in fact the element is not present in the set (<em>i.e.</em>, a <a href="Type_I_and_type_II_errors" title="wikilink">false positive</a>). There is a tradeoff between ε, the false positive rate, and storage size; increasing the filter's storage size reduces ε. Other AMQ operations include "insert" and "optionally delete". The more elements are added to the set, the larger the probability of false positives.</p>
+<figure><b>(Figure)</b>
+<figcaption> An approximate member query (AMQ) filter used to speed up answers in a key-value storage system. Key-value pairs are stored on a disk which has slow access times. AMQ filter decisions are much faster. However some unnecessary disk accesses are made when the filter reports a positive (in order to weed out the false positives). Overall answer speed is better with the AMQ filter than without it. Use of an AMQ filter for this purpose, however, does increase memory usage.</figcaption>
+</figure>
+
+<p>A typical application for quotient filters, and other AMQ filters, is to serve as a proxy for the keys in a <a class="uri" href="database" title="wikilink">database</a> on disk. As keys are added to or removed from the database, the filter is updated to reflect this. Any lookup will first consult the fast quotient filter, then look in the (presumably much slower) database only if the quotient filter reported the presence of the key. If the filter returns absence, the key is known not to be in the database without any disk accesses having been performed.</p>
+
+<p>A quotient filter has the usual AMQ operations of insert and query. In addition it can also be merged and re-sized without having to re-hash the original keys (thereby avoiding the need to access those keys from secondary storage). This property benefits certain kinds of <a href="log-structured_merge-tree" title="wikilink">log-structured merge-trees</a>.</p>
+<h2 id="algorithm-description">Algorithm description</h2>
+
+<p>The quotient filter is a <em>compact</em> <a href="hash_table" title="wikilink">hash table</a>. Cleary<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> defines a compact hash table as one in which the table entries contain only a portion of the key plus some additional meta-data bits. These bits are used to deal with the case when distinct keys happen to hash to the same table entry. By way of contrast, other types of hash tables that deal with such collisions by linking to overflow areas are not compact because the overhead due to linkage can exceed the storage used to store the key.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> In a quotient filter a <a href="hash_function" title="wikilink">hash function</a> generates a <em>p</em>-bit fingerprint. The <em>r</em> least significant bits is called the remainder while the <em>q</em> = <em>p</em> - <em>r</em> most significant bits is called the quotient, hence the name <em>quotienting</em> (coined by <a href="Donald_Knuth" title="wikilink">Knuth</a>.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a>) The hash table has 2<sup>q</sup> slots.</p>
+
+<p>For some key <em>d</em> which hashes to the fingerprint <em>d<sub>H</sub></em>, let its quotient be <em>d<sub>Q</sub></em> and the remainder be <em>d<sub>R</sub></em>. QF will try to store the remainder in slot d<sub>Q</sub>, which is known as the <em>canonical slot</em>. However the canonical slot might already be occupied because multiple keys can hash to the same fingerprint—a <em>hard collision</em>—or because even when the keys' fingerprints are distinct they can have the same quotient—a <em>soft collision</em>. If the canonical slot is occupied then the remainder is stored in some slot to the right.</p>
+
+<p>As described below, the insertion algorithm ensures that all fingerprints having the same quotient are stored in contiguous slots. Such a set of fingerprints is defined as a <em>run</em>.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Note that a run's first fingerprint might not occupy its canonical slot if the run has been forced right by some run to the left.</p>
+
+<p>However a run whose first fingerprint occupies its canonical slot indicates the start of a <em>cluster</em>.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> The initial run and all subsequent runs comprise the cluster, which terminates at an unoccupied slot or the start of another cluster.</p>
+
+<p>The three additional bits are used to reconstruct a slot's fingerprint. They have the following function:</p>
+<ul>
+<li><strong>is_occupied</strong> is set when a slot is the canonical slot for some key stored (somewhere) in the ﬁlter (but not necessarily in this slot).</li>
+<li><strong>is_continuation</strong> is set when a slot is occupied but not by the first remainder in a run.</li>
+<li><strong>is_shifted</strong> is set when the remainder in a slot is not in its canonical slot.</li>
+</ul>
+
+<p>The various combinations have the following meaning:</p>
+
+<p><code>is_occupied</code><br/>
+<code>  is_continuation</code><br/>
+<code>    is_shifted</code><br/>
+<code>0 0 0 : Empty Slot</code><br/>
+<code>0 0 1 : Slot is holding start of run that has been shifted from its canonical slot.</code><br/>
+<code>0 1 0 : not used.</code><br/>
+<code>0 1 1 : Slot is holding continuation of run that has been shifted from its canonical slot.</code><br/>
+<code>1 0 0 : Slot is holding start of run that is in its canonical slot.</code><br/>
+<code>1 0 1 : Slot is holding start of run that has been shifted from its canonical slot.</code><br/>
+<code>        Also the run for which this is the canonical slot exists but is shifted right.</code><br/>
+<code>1 1 0 : not used.</code><br/>
+<code>1 1 1 : Slot is holding continuation of run that has been shifted from its canonical slot.</code><br/>
+<code>        Also the run for which this is the canonical slot exists but is shifted right.</code></p>
+<h3 id="lookup">Lookup</h3>
+
+<p>We can test if a quotient filter contains some key, d, as follows.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+
+<p>We hash the key to produce its fingerprint, d<sub>H</sub>, which we then partition into its high-order q bits, d<sub>Q</sub>, which comprise its quotient, and its low-order r bits, d<sub>R</sub>, which comprise its remainder. Slot d<sub>Q</sub> is the key's canonical slot. That slot is empty if its three meta-data bits are false. In that case the filter does not contain the key.</p>
+
+<p>If the canonical slot is occupied then we must locate the quotient's run. The set of slots that hold remainders belonging to the same quotient are stored contiguously and these comprise the quotient's run. The first slot in the run might be the canonical slot but it is also possible that the entire run has been shifted to the right by the encroachment from the left of another run.</p>
+
+<p>To locate the quotient's run we must first locate the start of the cluster. The cluster consists of a contiguous set of runs. Starting with the quotient's canonical slot we can scan left to locate the start of the cluster, then scan right to locate the quotient's run.</p>
+
+<p>We scan left looking for a slot with <em>is_shifted</em> is false. This indicates the start of the cluster. Then we scan right keeping a running count of the number of runs we must skip over. Each slot to the left of the canonical slot having <em>is_occupied</em> <strong>set</strong> indicates another run to be skipped, so we increment the running count. Each slot having <em>is_continuation</em> <strong>clear</strong> indicates the start of another run, thus the end of the previous run, so we decrement the running count. When the running count reaches zero, we are scanning the quotient's run. We can compare the remainder in each slot in the run with d<sub>R</sub>. If found, we report that the key is (probably) in the filter otherwise we report that the key is definitely not in the filter.</p>
+<h3 id="lookup-example">Lookup example</h3>
+
+<p> Take, for example, looking up element <em>e</em>. See state 3 in the figure. We would compute <em>hash(e)</em>, partition it into its remainder, e<sub>R</sub> and its quotient e<sub>Q</sub>, which is 4. Scanning left from slot 4 we encounter three <em>is_occupied</em> slots, at indexes 4, 2 and 1, indicating e<sub>Q</sub>'s run is the 3rd run in the cluster. The scan stops at slot 1, which we detect as the cluster's start because it is not empty and not shifted. Now we must scan right to the 3rd run. The start of a run is indicated by <em>is_continuation</em> being false. The 1st run is found at index 1, the 2nd at 4 and the 3rd at 5. We compare the remainder held in each slot in the run that starts at index 5. There is only one slot in that run but, in our example, its remainder equals e<sub>R</sub>, indicating that <em>e</em> is indeed a member of the filter, with probability 1 - ε.</p>
+<h3 id="insertion">Insertion</h3>
+
+<p>Insertion follows a path similar to lookup until we ascertain that the key is definitely not in the filter.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> At that point we insert the remainder in a slot in the current run, a slot chosen to keep the run in sorted order. We shift forward the remainders in any slots in the cluster at or after the chosen slot and update the slot bits.</p>
+<ul>
+<li>Shifting a slot's remainder does not affect the slot's <em>is_occupied</em> bit because it pertains to the slot, not the remainder contained in the slot.</li>
+</ul>
+<ul>
+<li>If we insert a remainder at the start of an existing run, the previous remainder is shifted and becomes a continuation slot, so we set its <em>is_continuation</em> bit.</li>
+</ul>
+<ul>
+<li>We set the <em>is_shifted</em> bit of any remainder that we shift.</li>
+</ul>
+<h3 id="insertion-example">Insertion example</h3>
+
+<p>The figure shows a quotient filter proceeding through a series of states as elements are added. In state 1 three elements have been added. The slot each one occupies forms a one-slot run which is also a distinct cluster.</p>
+
+<p>In state 2 elements <em>c</em> and <em>d</em> have been added. Element <em>c</em> has a quotient of 1, the same as <em>b</em>. We assume b<sub>R</sub> R so c<sub>R</sub> is shifted into slot 2, and is marked as both a <em>continuation</em> and <em>shifted</em>. Element <em>d</em> has a quotient of 2. Since its canonical slot is in use, it is shifted into slot 3, and is marked as <em>shifted</em>. In addition its canonical slot is marked as <em>occupied</em>. The runs for quotients 1 and 2 now comprise a cluster.</p>
+
+<p>In state 3 element <em>a</em> has been added. Its quotient is 1. We assume a<sub>R</sub> R so the remainders in slots 1 through 4 must be shifted. Slot 2 receives b<sub>R</sub> and is marked as a <em>continuation</em> and <em>shifted</em>. Slot 5 receives e<sub>R</sub> and is marked as <em>shifted</em>. The runs for quotients 1, 2 and 4 now comprise a cluster, and the presence of those three runs in the cluster is indicated by having slots 1, 2 and 4 being marked as <em>occupied</em>.</p>
+<h2 id="costperformance">Cost/performance</h2>
+<h3 id="cluster-length">Cluster length</h3>
+
+<p>Bender<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> argues that clusters are small. This is important because lookups and inserts require locating the start and length of an entire cluster. If the hash function generates uniformly distributed fingerprints then the length of most runs is <em>O</em>(1) and it is highly likely that <em>all</em> runs have length <em>O</em>(log <em>m</em>) where <em>m</em> is the number of slots in the table.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+<h3 id="probability-of-false-positives">Probability of false positives</h3>
+
+<p>Bender<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> calculates the probability of a false positive (i.e. when the hash of two keys results in the same fingerprint) in terms of the hash table's remainder size and load factor. Recall that a <em>p</em> bit fingerprint is partitioned into a <em>q</em> bit quotient, which determines the table size of <em>m</em> = 2<sup>q</sup> slots, and a <em>r</em> bit remainder. The load factor 
+
+<math display="inline" id="Quotient_filter:0">
+ <semantics>
+  <mi>α</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha
+  </annotation>
+ </semantics>
+</math>
+
+ is the proportion of occupied slots <em>n</em> to total slots <em>m</em>
+
+<math display="block" id="Quotient_filter:1">
+ <semantics>
+  <mrow>
+   <mi>α</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>n</mi>
+    <mo>/</mo>
+    <mi>m</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>α</ci>
+    <apply>
+     <divide></divide>
+     <ci>n</ci>
+     <ci>m</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha=n/m
+  </annotation>
+ </semantics>
+</math>
+
+. Then, for a good hash function, 
+
+<math display="inline" id="Quotient_filter:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mn>1</mn>
+    <mo>-</mo>
+    <msup>
+     <mi>e</mi>
+     <mrow>
+      <mo>-</mo>
+      <mrow>
+       <mi>α</mi>
+       <mo>/</mo>
+       <msup>
+        <mn>2</mn>
+        <mi>r</mi>
+       </msup>
+      </mrow>
+     </mrow>
+    </msup>
+   </mrow>
+   <mo>≤</mo>
+   <msup>
+    <mn>2</mn>
+    <mrow>
+     <mo>-</mo>
+     <mi>r</mi>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>e</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <divide></divide>
+        <ci>α</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <cn type="integer">2</cn>
+         <ci>r</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cn type="integer">2</cn>
+     <apply>
+      <minus></minus>
+      <ci>r</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1-e^{-\alpha/2^{r}}\leq 2^{-r}
+  </annotation>
+ </semantics>
+</math>
+
+ is approximately the probability of a hard collision.</p>
+<h3 id="spaceperformance">Space/performance</h3>
+
+<p>A quotient filter requires 10–25% more space than a comparable Bloom filter but is faster because each access requires evaluating only a single hash function.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h2 id="application">Application</h2>
+
+<p>Quotient filters are AMQs and, as such, provide many of the same benefits as <a href="Bloom_filter" title="wikilink">Bloom filters</a>. A large database, such as Webtable<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> may be composed of smaller sub-tables each of which has an associated filter. Each query is distributed concurrently to all sub-tables. If a sub-table does not contain the requested element, its filter can quickly complete the request without incurring any I/O.</p>
+
+<p>Quotient filters offer two benefits in some applications.</p>
+<ol>
+<li>Two quotient filters can be efficiently merged without affecting their false positive rates. This is not possible with Bloom filters.</li>
+<li>A few duplicates can be tolerated efficiently and can be deleted.</li>
+</ol>
+
+<p>The space used by quotient filters is comparable to that of Bloom filters. However quotient filters can be efficiently merged within memory without having to re-insert the original keys.</p>
+
+<p>This is particularly important in some log structured storage systems that use the <a href="log-structured_merge-tree" title="wikilink">log-structured merge-tree</a> or LSM-tree.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> The LSM-tree is actually a collection of trees but which is treated as a single key-value store. One variation of the LSM-Tree is the <a href="Sorted_Array_Merge_Tree" title="wikilink">Sorted Array Merge Tree</a> or SAMT.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a> In this variation, a SAMT's component trees are called <a href="Wanna-B-tree" title="wikilink">Wanna-B-trees</a>. Each Wanna-<em>B</em>-tree has an associated quotient filter. A query on the SAMT is directed at only select Wanna-<em>B</em>-trees as evidenced by their quotient filters.</p>
+
+<p>The storage system in its normal operation compacts the SAMT's Wanna-<em>B</em>-trees, merging smaller Wanna-<em>B</em>-trees into larger ones and merging their quotient filters. An essential property of quotient filters is that they can be efficiently merged without having to re-insert the original keys. Given that for large data sets the Wanna-<em>B</em>-trees may not be in memory, accessing them to retrieve the original keys would incur many I/Os.</p>
+
+<p>By construction the values in a quotient filter are stored in sorted order. Each run is associated with a specific quotient value, which provides the most significant portion of the fingerprint, the runs are stored in order and each slot in the run provides the least significant portion of the fingerprint.</p>
+
+<p>So, by working from left to right, one can reconstruct all the fingerprints and the resulting list of integers will be in sorted order. Merging two quotient filters is then a simple matter of converting each quotient filter into such a list, merging the two lists and using it to populate a new larger quotient filter. Similarly, we can halve or double the size of a quotient filter without rehashing the keys since the fingerprints can be recomputed using just the quotients and remainders.<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a class="uri" href="MinHash" title="wikilink">MinHash</a></li>
+<li><a href="Bloom_filter" title="wikilink">Bloom filter</a></li>
+</ul>
+<h2 id="notes">Notes</h2>
+
+<p>"</p>
+
+<p><a class="uri" href="Category:Hashing" title="wikilink">Category:Hashing</a> <a href="Category:Probabilistic_data_structures" title="wikilink">Category:Probabilistic data structures</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"></li>
+<li id="fn7"></li>
+<li id="fn8"></li>
+<li id="fn9"></li>
+<li id="fn10"></li>
+<li id="fn11"></li>
+<li id="fn12"></li>
+<li id="fn13"></li>
+<li id="fn14"><a href="#fnref14">↩</a></li>
+<li id="fn15"><a href="#fnref15">↩</a></li>
+<li id="fn16"><a href="#fnref16">↩</a></li>
+<li id="fn17"></li>
+</ol>
+</section>
+</body>
+</html>

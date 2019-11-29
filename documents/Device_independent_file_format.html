@@ -1,0 +1,136 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="889">Device independent file format</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Device independent file format</h1>
+<hr/>
+
+<p>The <strong>device independent file format</strong> (<strong>DVI</strong>) is the output <a href="file_format" title="wikilink">file format</a> of the <a class="uri" href="TeX" title="wikilink">TeX</a> <a class="uri" href="typesetting" title="wikilink">typesetting</a> program, designed by David R. Fuchs and implemented by <a href="Donald_E._Knuth" title="wikilink">Donald E. Knuth</a> in 1982.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Unlike the TeX markup files used to generate them, DVI files are not intended to be <a class="uri" href="human-readable" title="wikilink">human-readable</a>; they consist of <a href="binary_file" title="wikilink">binary data</a> describing the visual layout of a document in a manner not reliant on any specific <a href="image_format" title="wikilink">image format</a>, <a href="computer_monitor" title="wikilink">display hardware</a> or <a href="computer_printer" title="wikilink">printer</a>. DVI files are typically used as input to a second program (called a DVI <em>driver</em>) which translates DVI files to graphical data. For example, most TeX software packages include a program for previewing DVI files on a user's computer display; this program is a driver. Drivers are also used to convert from DVI to popular <a href="page_description_language" title="wikilink">page description languages</a> (e.g. <a class="uri" href="PostScript" title="wikilink">PostScript</a>, <a href="portable_document_format" title="wikilink">PDF</a>) and for printing.</p>
+
+<p>DVI is not a <a href="encryption" title="wikilink">document encryption</a> format, and TeX markup may be at least partially <a href="reverse-engineer" title="wikilink">reverse-engineered</a> from DVI files, although this process is unlikely to produce high-level constructs identical to those present in the original markup, especially if the original markup used high-level TeX extensions (e.g. <a class="uri" href="LaTeX" title="wikilink">LaTeX</a>).</p>
+
+<p>DVI differs from <a class="uri" href="PostScript" title="wikilink">PostScript</a> and <a class="uri" href="PDF" title="wikilink">PDF</a> in that it does not support any form of font embedding. (Both PostScript and PDF formats can either embed their fonts inside the documents, or reference external ones.) For a DVI file to be printed or even properly previewed, the fonts it references must be already installed. Also, unlike PostScript (but like PDF), DVI is not a full, <a href="Turing_completeness" title="wikilink">Turing-complete</a> programming language, though it does use a limited sort of machine language.</p>
+<h2 id="specification">Specification</h2>
+
+<p>The DVI format was designed to be compact and easily machine-readable. Toward this end, a DVI file is a sequence of commands which form "a <a href="machine_language" title="wikilink">machine-like language</a>", in <a href="Donald_Knuth" title="wikilink">Knuth</a>'s words.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> Each command begins with an eight-bit <a class="uri" href="opcode" title="wikilink">opcode</a>, followed by zero or more bytes of parameters. For example, an opcode from the group <code>0x00</code> through <code>0x7F</code> (decimal 127), <code>set_char_''i''</code>, typesets a single character and moves the implicit cursor right by that character's width. In contrast, opcode <code>0xF7</code> (decimal 247), <code>pre</code> (the preamble, which must be the first opcode in the DVI file), takes at least fourteen bytes of parameters, plus an optional comment of up to 255 bytes.</p>
+
+<p>In a broader sense, a DVI file consists of a preamble, one or more pages, and a postamble. Six state variables are maintained as a tuple of signed, 32-bit integers
+
+<math display="block" id="Device_independent_file_format:0">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mi>h</mi>
+   <mo>,</mo>
+   <mi>v</mi>
+   <mo>,</mo>
+   <mi>w</mi>
+   <mo>,</mo>
+   <mi>x</mi>
+   <mo>,</mo>
+   <mi>y</mi>
+   <mo>,</mo>
+   <mi>z</mi>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <vector>
+    <ci>h</ci>
+    <ci>v</ci>
+    <ci>w</ci>
+    <ci>x</ci>
+    <ci>y</ci>
+    <ci>z</ci>
+   </vector>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (h,v,w,x,y,z)
+  </annotation>
+ </semantics>
+</math>
+
+. <em>h</em> and <em>v</em> are the current horizontal and vertical offsets from the upper-left corner (increasing <em>v</em> moves down the page), <em>w</em> and <em>x</em> hold horizontal space values, <em>y</em> and <em>z</em>, vertical.</p>
+
+<p>These variables can be pushed to or popped from the <a href="stack_(data_structure)" title="wikilink">stack</a>. In addition, the current font <em>f</em> is held as an integer value, but is not pushed and popped with the rest of the state variables when the opcodes <code>push</code> or <code>pop</code> are encountered. Font spacing information is loaded from <a href="TeX_font_metric" title="wikilink">TFM</a> files. The fonts themselves are not embedded in the DVI file, only referenced by an integer value defined in the relevant <code>fnt_def''i''</code> op. (This is done exactly twice for each loaded font: once before it is referenced, and once in the postamble.) <em>f</em> contains an integer value of up to four bytes in length, though in practice, <a class="uri" href="TeX" title="wikilink">TeX</a> only ever outputs font numbers in the range 0 through 255.</p>
+
+<p>Similarly, the DVI format supports character codes up to four bytes in length, even though only the 0–255 range is commonly seen, as the <a href="TeX_font_metric" title="wikilink">TFM</a> format is limited to that range. Character codes in DVI files refer to the <a href="character_encoding" title="wikilink">character encoding</a> of the current font rather than that of the system processing it. This means, for instance, that an <a class="uri" href="EBCDIC" title="wikilink">EBCDIC</a>-based system can process a DVI file that was generated by an <a class="uri" href="ASCII" title="wikilink">ASCII</a>-based system, so long as it has the same fonts installed.</p>
+<h2 id="graphics-as-specials">Graphics as specials</h2>
+
+<p>The DVI format does not have support for <a class="uri" href="graphics" title="wikilink">graphics</a> except for the most basic black-and-white boxes. Instead DVI has a general escape/extension mechanism, known as <strong>specials</strong> (expressed by the <code>\special</code> command in TeX), which defers graphics (and color) to post-processing filters. There are numerous DVI specials, the most notable of which are <a class="uri" href="PostScript" title="wikilink">PostScript</a> specials, but other programs like <a class="uri" href="tpic" title="wikilink">tpic</a> have their own.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+<h2 id="dvi-versions">DVI versions</h2>
+<h2 id="dvi-related-software">DVI related software</h2>
+
+<p>DVI files are often converted into PDF, PostScript, or <a href="Printer_Command_Language" title="wikilink">PCL</a> format for reading and printing. They can be also viewed directly by using DVI viewers.</p>
+<ul>
+<li>DVI viewers: <a href="Yet_Another_Previewer" title="wikilink">YAP</a> (included in <a class="uri" href="MiKTeX" title="wikilink">MiKTeX</a>), <a class="uri" href="xdvi" title="wikilink">xdvi</a>, <a href="http://www.ctan.org/tex-archive/obsolete/systems/win32/fptex/">windvi</a>, <a class="uri" href="Evince" title="wikilink">Evince</a>, <a href="http://developer.kde.org/~kdvi/">KDVI</a>, <a class="uri" href="Okular" title="wikilink">Okular</a>, <a href="http://akagi.ms.u-tokyo.ac.jp/dviout-ftp.html">dviout</a>, <a href="http://dviwin.keystone.gr/">dviwin</a>, DView (included in the commercial BaKoMa TeX distribution), <a href="http://www.ctan.org/tex-archive/dviware/javadvi/">javaDVI</a>, <a href="http://mdvi.sourceforge.net/">MDVI</a>, and DVIWindo (of the now defunct commercial Y&amp;Y; TeX, which has been open-sourced).<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></li>
+<li>DVI to human-readable format: dvitype (disassembler of sorts)</li>
+<li>DVI-to-PDF converters: dvipdf, dvipdfm, dvipdfmx</li>
+<li>DVI-to-PS converters: <a class="uri" href="dvips" title="wikilink">dvips</a> is the de facto standard. <a class="uri" href="CTAN" title="wikilink">CTAN</a> includes some older ones like dvitops (and DVIPSONE<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a>) with a note they've lost their market share a long time ago.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></li>
+<li>DVI-to-bitmap converters: <a class="uri" href="dvipng" title="wikilink">dvipng</a> (generates GIF or PNG), or use <a class="uri" href="dvips" title="wikilink">dvips</a> and <a class="uri" href="Ghostscript" title="wikilink">Ghostscript</a></li>
+<li>DVI-to-SVG converters: <a href="http://dvisvg.sourceforge.net/">dvisvg</a>,<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> <a href="http://dvisvgm.sourceforge.net/">dvisvgm</a>,<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> dvi2svg;<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a><a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a>  the only one included in <a class="uri" href="CTAN" title="wikilink">CTAN</a> and actively maintained is dvisvgm.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></li>
+</ul>
+
+<p>The first DVI previewers capable of on-screen previewing and modification of LaTeX documents ran on <a href="Amiga" title="wikilink">Amigas</a>.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a><a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h3 id="dvi-to-pdf-converters">DVI-to-PDF converters</h3>
+
+<p><strong>dvipdf</strong> is a tool to translate DVI files (generated by <a class="uri" href="TeX" title="wikilink">TeX</a>) to <a class="uri" href="PDF" title="wikilink">PDF</a> files. In current Linux distributions like <a href="Ubuntu_(operating_system)" title="wikilink">Ubuntu</a>, it is a thin wrapper around dvips and <a class="uri" href="ghostscript" title="wikilink">ghostscript</a>, and copyrighted to Artifex Software (the makers of ghostscript).<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> A possibly different program with the same name—described as a modified version of dvips—was announced in the late 1990s by Sergey Lesenko,<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a><a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a><a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a> however it was apparently <a href="vaporware" title="wikilink">never released</a>.<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a><a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a></p>
+
+<p><strong>dvipdfm</strong> is a DVI-to-PDF translator developed by Mark A. Wicks. The early documentation of dvipdfm specifically mentions the limited availability of Lesenko's dvipdf as a reason for creating dvipdfm.<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a> dvipdfm supports most of the newer special functions of the PDF format, including <a href="bookmark" title="wikilink">bookmarks</a>, <a href="annotation" title="wikilink">annotations</a>, <a class="uri" href="thumbnails" title="wikilink">thumbnails</a>, and dvips specials—a feature making possible the inclusion of <a href="Encapsulated_PostScript" title="wikilink">Encapsulated PostScript</a> (.eps) files like <a class="uri" href="METAPOST" title="wikilink">METAPOST</a> output—as well inclusion of <a class="uri" href="JPEG" title="wikilink">JPEG</a> and <a href="Portable_Network_Graphics" title="wikilink">PNG</a> images; other features of dvipdfm include partial <a href="font_embedding" title="wikilink">font embedding</a> (reducing file size) and balancing the internal PDF document trees to speed up rendering of large documents.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a> Many of these features (except for the direct support for .eps files<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a>) are also present in <a class="uri" href="pdfTeX" title="wikilink">pdfTeX</a>, which typesets TeX directly to PDF. The 2004, 4th edition of the <em>Guide to LaTeX</em> compares them in the following way:<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a> </p>
+
+<p><strong>dvipdfmx</strong> is an extended version of the dvipdfm DVI-to-PDF translator, included current TeX distributions like <a href="TeX_Live" title="wikilink">TeX Live</a> 2014<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a> and <a class="uri" href="MiKTeX" title="wikilink">MiKTeX</a> 2.9.<a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a> The primary goal of the dvipdfmx project is to support multi-byte character encodings and <a class="uri" href="CJK" title="wikilink">CJK</a> character sets for East Asian languages.<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a> dvipdfmx is also included (in a somewhat modified form) in <a class="uri" href="XeTeX" title="wikilink">XeTeX</a>.<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a></p>
+
+<p>The 2nd, 2008 edition of the <em>LaTeX Graphics Companion</em> makes the following workflow suggestion:<a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a> </p>
+<h2 id="references-and-notes">References and notes</h2>
+<ul>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://web.archive.org/web/20070403030353/http://www.math.umd.edu/~asnowden/comp-cont/dvi.html">(Unofficial) description of the DVI file format</a></li>
+<li><a href="http://www.macrotex.net/dvii/">TeX DVI file Information utility</a></li>
+<li><a class="uri" href="http://www.ctan.org/tex-archive/dviware/">http://www.ctan.org/tex-archive/dviware/</a></li>
+<li><a class="uri" href="http://tex.stackexchange.com/questions/38145/why-does-pdflatex-produce-bigger-output-files-than-latexdvipdfm">http://tex.stackexchange.com/questions/38145/why-does-pdflatex-produce-bigger-output-files-than-latexdvipdfm</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Page_description_languages" title="wikilink">Category:Page description languages</a> <a href="Category:Computer_file_formats" title="wikilink">Category:Computer file formats</a> <a href="Category:Open_formats" title="wikilink">Category:Open formats</a> <a class="uri" href="Category:TeX" title="wikilink">Category:TeX</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a class="uri" href="https://www.tug.org/yandy/dviwindo.htm">https://www.tug.org/yandy/dviwindo.htm</a><a href="#fnref4">↩</a></li>
+<li id="fn5"><a class="uri" href="https://www.tug.org/yandy/dvipsone.htm">https://www.tug.org/yandy/dvipsone.htm</a><a href="#fnref5">↩</a></li>
+<li id="fn6"><a class="uri" href="http://www.ctan.org/tex-archive/dviware/dvitops">http://www.ctan.org/tex-archive/dviware/dvitops</a><a href="#fnref6">↩</a></li>
+<li id="fn7"></li>
+<li id="fn8"></li>
+<li id="fn9"></li>
+<li id="fn10"><a class="uri" href="https://www.tug.org/TUGboat/tb27-2/tb87frischauf.pdf">https://www.tug.org/TUGboat/tb27-2/tb87frischauf.pdf</a><a href="#fnref10">↩</a></li>
+<li id="fn11"><a class="uri" href="http://www.ctan.org/tex-archive/dviware/">http://www.ctan.org/tex-archive/dviware/</a><a href="#fnref11">↩</a></li>
+<li id="fn12">In 1986 <a href="Tomas_Rokicki" title="wikilink">Tomas Rokicki</a> printed his first page with dvisw, an early DVI printer driver for the Amiga, on a QMS <a class="uri" href="SmartWriter" title="wikilink">SmartWriter</a> using <a class="uri" href="AmigaTeX" title="wikilink">AmigaTeX</a> by <a href="Radical_Eye_Software" title="wikilink">Radical Eye Software</a>. A link to a relic info about milestones of LaTeX history is available <a href="http://www.xent.com/FoRK-archive/feb98/0307.html">at this external site</a>.<a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+<li id="fn14"><a class="uri" href="http://manpages.ubuntu.com/manpages/intrepid/man1/dvipdf.1.html">http://manpages.ubuntu.com/manpages/intrepid/man1/dvipdf.1.html</a><a href="#fnref14">↩</a></li>
+<li id="fn15"><a class="uri" href="https://www.tug.org/TUGboat/tb17-3/tb52lese.pdf">https://www.tug.org/TUGboat/tb17-3/tb52lese.pdf</a><a href="#fnref15">↩</a></li>
+<li id="fn16"><a class="uri" href="https://www.tug.org/TUGboat/tb18-3/tb56lese.pdf">https://www.tug.org/TUGboat/tb18-3/tb56lese.pdf</a><a href="#fnref16">↩</a></li>
+<li id="fn17"><a class="uri" href="http://tex.loria.fr/general/eurotex98/eurotex98-lesenko.ps.gz">http://tex.loria.fr/general/eurotex98/eurotex98-lesenko.ps.gz</a><a href="#fnref17">↩</a></li>
+<li id="fn18"><a href="#fnref18">↩</a></li>
+<li id="fn19"><a class="uri" href="http://compgroups.net/comp.text.tex/where-art-dvipdf/1912300">http://compgroups.net/comp.text.tex/where-art-dvipdf/1912300</a><a href="#fnref19">↩</a></li>
+<li id="fn20">Mark A. Wicks, <a href="http://gaspra.kettering.edu/dvipdfm/dvipdfm-0.12.4.pdf">Dvipdfm User’s Manual</a>, Version 0.12.4 September 19, 1999, page 2<a href="#fnref20">↩</a></li>
+<li id="fn21"></li>
+<li id="fn22"><a class="uri" href="http://www.tex.ac.uk/cgi-bin/texfaq2html?label=dvipdfmgraphics">http://www.tex.ac.uk/cgi-bin/texfaq2html?label=dvipdfmgraphics</a><a href="#fnref22">↩</a></li>
+<li id="fn23"><a href="#fnref23">↩</a></li>
+<li id="fn24"><a class="uri" href="https://packages.debian.org/sid/texlive-base">https://packages.debian.org/sid/texlive-base</a><a href="#fnref24">↩</a></li>
+<li id="fn25"><a class="uri" href="http://miktex.org/pkg/az">http://miktex.org/pkg/az</a><a href="#fnref25">↩</a></li>
+<li id="fn26"><a href="http://project.ktug.or.kr/dvipdfmx/">The Dvipdfmx Project</a><a href="#fnref26">↩</a></li>
+<li id="fn27"></li>
+<li id="fn28"></li>
+</ol>
+</section>
+</body>
+</html>

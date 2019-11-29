@@ -1,0 +1,7441 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1392">Harris affine region detector</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Harris affine region detector</h1>
+<hr/>
+
+<p>In the fields of <a href="computer_vision" title="wikilink">computer vision</a> and <a href="image_analysis" title="wikilink">image analysis</a>, the <strong>Harris affine region detector</strong> belongs to the category of <a href="Feature_detection_(computer_vision)" title="wikilink">feature detection</a>. Feature detection is a preprocessing step of several algorithms that rely on identifying characteristic points or <a href="Interest_point_detection" title="wikilink">interest points</a> so to make correspondences between images, recognize textures, categorize objects or build panoramas.</p>
+<h2 id="overview">Overview</h2>
+
+<p>The Harris affine detector can identify similar regions between images that are related through <a href="affine_transformations" title="wikilink">affine transformations</a> and have different illuminations. These <em>affine-invariant</em> detectors should be capable of identifying similar regions in images taken from different viewpoints that are related by a simple geometric transformation: scaling, rotation and shearing. These detected regions have been called both <em>invariant</em> and <em>covariant</em>. On one hand, the regions are detected <em>invariant</em> of the image transformation but the regions <em>covariantly</em> change with image transformation.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Do not dwell too much on these two naming conventions; the important thing to understand is that the design of these interest points will make them compatible across images taken from several viewpoints. Other detectors that are affine-invariant include <a href="Hessian_affine_region_detector" title="wikilink">Hessian affine region detector</a>, <a href="Maximally_stable_extremal_regions" title="wikilink">Maximally stable extremal regions</a>, <a href="Kadir–Brady_saliency_detector" title="wikilink">Kadir–Brady saliency detector</a>, edge-based regions (EBR) and intensity-extrema-based regions (IBR).</p>
+
+<p>Mikolajczyk and Schmid (2002) first described the Harris affine detector as it is used today in [<a class="uri" href="https://hal.inria.fr/inria-00548252/document">https://hal.inria.fr/inria-00548252/document</a><em>An Affine Invariant Interest Point Detector</em>].<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> Earlier works in this direction include use of <a href="affine_shape_adaptation" title="wikilink">affine shape adaptation</a> by Lindeberg and Garding for computing affine invariant image descriptors and in this way reducing the influence of perspective image deformations,<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> the use affine adapted feature points for wide baseline matching by Baumberg<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> and the first use of scale invariant feature points by Lindeberg;<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a><a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> see also <a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> for an overview of the theoretical background. The Harris affine detector relies on the combination of corner points detected thorough <a href="Corner_detection#The_Harris_.26_Stephens_.2F_Plessey_corner_detection_algorithm" title="wikilink">Harris corner detection</a>, multi-scale analysis through <a href="Scale_space" title="wikilink">Gaussian scale space</a> and affine normalization using an iterative <a href="affine_shape_adaptation" title="wikilink">affine shape adaptation</a> algorithm. The recursive and iterative algorithm follows an iterative approach to detecting these regions:</p>
+<ol>
+<li>Identify initial region points using scale-invariant <strong>Harris-Laplace Detector</strong>.</li>
+<li>For each initial point, normalize the region to be affine invariant using <a href="affine_shape_adaptation" title="wikilink">affine shape adaptation</a>.</li>
+<li>Iteratively estimate the affine region: selection of proper integration scale, differentiation scale and spatially localize interest points..</li>
+<li>Update the affine region using these scales and spatial localizations.</li>
+<li>Repeat step 3 if the stopping criterion is not met.</li>
+</ol>
+<h2 id="algorithm-description">Algorithm description</h2>
+<h3 id="harrislaplace-detector-initial-region-points">Harris–Laplace detector (initial region points)</h3>
+
+<p>The Harris affine detector relies heavily on both the Harris measure and a Gaussian <a href="scale_space_representation" title="wikilink">scale space representation</a>. Therefore, a brief examination of both follow. For a more exhaustive derivations see <a href="corner_detection" title="wikilink">corner detection</a> and <a href="scale_space" title="wikilink">Gaussian scale space</a> or their associated papers.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a><a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+<h4 id="harris-corner-measure">Harris corner measure</h4>
+
+<p>The Harris corner detector algorithm relies on a central principle: at a corner, the image intensity will change largely in multiple directions. This can alternatively be formulated by examining the changes of intensity due to shifts in a local window. Around a corner point, the image intensity will change greatly when the window is shifted in an arbitrary direction. Following this intuition and through a clever decomposition, the Harris detector uses the <a href="Structure_tensor" title="wikilink">second moment matrix</a> as the basis of its corner decisions. (See <a href="corner_detection" title="wikilink">corner detection</a> for more complete derivation). The matrix 
+
+<math display="inline" id="Harris_affine_region_detector:0">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+, has also been called the autocorrelation matrix and has values closely related to the <a href="Image_Derivatives" title="wikilink">derivatives of image intensity</a>.</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>A</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munder>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>p</mi>
+      <mo>,</mo>
+      <mi>q</mi>
+     </mrow>
+    </munder>
+    <mrow>
+     <mi>w</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>p</mi>
+      <mo>,</mo>
+      <mi>q</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mrow>
+      <mo>[</mo>
+      <mtable displaystyle="true">
+       <mtr>
+        <mtd columnalign="center">
+         <mrow>
+          <msubsup>
+           <mi>I</mi>
+           <mi>x</mi>
+           <mn>2</mn>
+          </msubsup>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>𝐱</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mtd>
+        <mtd columnalign="center">
+         <mrow>
+          <msub>
+           <mi>I</mi>
+           <mi>x</mi>
+          </msub>
+          <msub>
+           <mi>I</mi>
+           <mi>y</mi>
+          </msub>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>𝐱</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mtd>
+       </mtr>
+       <mtr>
+        <mtd columnalign="center">
+         <mrow>
+          <msub>
+           <mi>I</mi>
+           <mi>x</mi>
+          </msub>
+          <msub>
+           <mi>I</mi>
+           <mi>y</mi>
+          </msub>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>𝐱</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mtd>
+        <mtd columnalign="center">
+         <mrow>
+          <msubsup>
+           <mi>I</mi>
+           <mi>y</mi>
+           <mn>2</mn>
+          </msubsup>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>𝐱</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mtd>
+       </mtr>
+      </mtable>
+      <mo>]</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <ci>𝐱</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <list>
+       <ci>p</ci>
+       <ci>q</ci>
+      </list>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>w</ci>
+      <interval closure="open">
+       <ci>p</ci>
+       <ci>q</ci>
+      </interval>
+      <matrix>
+       <matrixrow>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>I</ci>
+           <ci>x</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>𝐱</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>I</ci>
+          <ci>x</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>I</ci>
+          <ci>y</ci>
+         </apply>
+         <ci>𝐱</ci>
+        </apply>
+       </matrixrow>
+       <matrixrow>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>I</ci>
+          <ci>x</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>I</ci>
+          <ci>y</ci>
+         </apply>
+         <ci>𝐱</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>I</ci>
+           <ci>y</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>𝐱</ci>
+        </apply>
+       </matrixrow>
+      </matrix>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A(\mathbf{x})=\sum_{p,q}w(p,q)\begin{bmatrix}I_{x}^{2}(\mathbf{x})&I_{x}I_{y}(%
+\mathbf{x})\\
+I_{x}I_{y}(\mathbf{x})&I_{y}^{2}(\mathbf{x})\\
+\end{bmatrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:2">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>x</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{x}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:3">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>y</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{y}
+  </annotation>
+ </semantics>
+</math>
+
+ are the respective <a href="Image_Derivatives" title="wikilink">derivatives</a> (of pixel intensity) in the 
+
+<math display="inline" id="Harris_affine_region_detector:4">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:5">
+ <semantics>
+  <mi>y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y
+  </annotation>
+ </semantics>
+</math>
+
+ direction at point 
+
+<math display="inline" id="Harris_affine_region_detector:6">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:7">
+ <semantics>
+  <mi>p</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>p</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:8">
+ <semantics>
+  <mi>q</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>q</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   q
+  </annotation>
+ </semantics>
+</math>
+
+ are the values of the weighting function. The off-diagonal entries are the product of 
+
+<math display="inline" id="Harris_affine_region_detector:9">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>x</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{x}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:10">
+ <semantics>
+  <msub>
+   <mi>I</mi>
+   <mi>y</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>I</ci>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{y}
+  </annotation>
+ </semantics>
+</math>
+
+, while the diagonal entries are squares of the respective <a href="Image_Derivatives" title="wikilink">derivatives</a>. The weighting function 
+
+<math display="inline" id="Harris_affine_region_detector:11">
+ <semantics>
+  <mrow>
+   <mi>w</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>y</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>w</ci>
+    <interval closure="open">
+     <ci>x</ci>
+     <ci>y</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w(x,y)
+  </annotation>
+ </semantics>
+</math>
+
+ can be uniform, but is more typically an isotropic, circular Gaussian,</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:12">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>w</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>y</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>g</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>y</mi>
+     <mo>,</mo>
+     <mi>σ</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mrow>
+      <mn>2</mn>
+      <mi>π</mi>
+      <msup>
+       <mi>σ</mi>
+       <mn>2</mn>
+      </msup>
+     </mrow>
+    </mfrac>
+    <msup>
+     <mi>e</mi>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <mo>-</mo>
+       <mfrac>
+        <mrow>
+         <msup>
+          <mi>x</mi>
+          <mn>2</mn>
+         </msup>
+         <mo>+</mo>
+         <msup>
+          <mi>y</mi>
+          <mn>2</mn>
+         </msup>
+        </mrow>
+        <mrow>
+         <mn>2</mn>
+         <msup>
+          <mi>σ</mi>
+          <mn>2</mn>
+         </msup>
+        </mrow>
+       </mfrac>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>w</ci>
+      <interval closure="open">
+       <ci>x</ci>
+       <ci>y</ci>
+      </interval>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>g</ci>
+      <vector>
+       <ci>x</ci>
+       <ci>y</ci>
+       <ci>σ</ci>
+      </vector>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <ci>π</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>σ</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>e</ci>
+       <apply>
+        <minus></minus>
+        <apply>
+         <divide></divide>
+         <apply>
+          <plus></plus>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <ci>x</ci>
+           <cn type="integer">2</cn>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <ci>y</ci>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <ci>σ</ci>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w(x,y)=g(x,y,\sigma)=\frac{1}{2\pi\sigma^{2}}e^{\left(-\frac{x^{2}+y^{2}}{2%
+\sigma^{2}}\right)}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>that acts to average in a local region while weighting those values near the center more heavily.</p>
+
+<p>As it turns out, this 
+
+<math display="inline" id="Harris_affine_region_detector:13">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ matrix describes the shape of the autocorrelation measure as due to shifts in window location. Thus, if we let 
+
+<math display="inline" id="Harris_affine_region_detector:14">
+ <semantics>
+  <msub>
+   <mi>λ</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>λ</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:15">
+ <semantics>
+  <msub>
+   <mi>λ</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>λ</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ be the eigenvalues of 
+
+<math display="inline" id="Harris_affine_region_detector:16">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+, then these values will provide a quantitative description of how the autocorrelation measure changes in space: its principal curvatures. As Harris and Stephens (1988) point out, the 
+
+<math display="inline" id="Harris_affine_region_detector:17">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ matrix centered on corner points will have two large, positive eigenvalues.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> Rather than extracting these eigenvalues using methods like singular value decomposition, the Harris measure based on the trace and determinant is used:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:18">
+ <semantics>
+  <mrow>
+   <mi>R</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo movablelimits="false">det</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>A</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mi>α</mi>
+     <mrow>
+      <msup>
+       <mo>trace</mo>
+       <mn>2</mn>
+      </msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>A</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>λ</mi>
+      <mn>1</mn>
+     </msub>
+     <msub>
+      <mi>λ</mi>
+      <mn>2</mn>
+     </msub>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mi>α</mi>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msub>
+         <mi>λ</mi>
+         <mn>1</mn>
+        </msub>
+        <mo>+</mo>
+        <msub>
+         <mi>λ</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>R</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <determinant></determinant>
+       <ci>A</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>α</ci>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>trace</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>A</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>λ</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>λ</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>α</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <plus></plus>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>λ</ci>
+          <cn type="integer">1</cn>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>λ</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R=\det(A)-\alpha\operatorname{trace}^{2}(A)=\lambda_{1}\lambda_{2}-\alpha(%
+\lambda_{1}+\lambda_{2})^{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:19">
+ <semantics>
+  <mi>α</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha
+  </annotation>
+ </semantics>
+</math>
+
+ is a constant. Corner points have large, positive eigenvalues and would thus have a large Harris measure. Thus, corner points are identified as local maxima of the Harris measure that are above a specified threshold.</p>
+
+<p>
+
+<math display="inline" id="Harris_affine_region_detector:20">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">{</mo>
+     <msub>
+      <mi>x</mi>
+      <mi>c</mi>
+     </msub>
+     <mo stretchy="false">}</mo>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mo maxsize="120%" minsize="120%">{</mo>
+     <msub>
+      <mi>x</mi>
+      <mi>c</mi>
+     </msub>
+     <mo stretchy="false">|</mo>
+     <mrow>
+      <mrow>
+       <mrow>
+        <mi>R</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msub>
+          <mi>x</mi>
+          <mi>c</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>></mo>
+       <mrow>
+        <mi>R</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msub>
+          <mi>x</mi>
+          <mi>i</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>,</mo>
+      <mrow>
+       <mrow>
+        <mo>∀</mo>
+        <msub>
+         <mi>x</mi>
+         <mi>i</mi>
+        </msub>
+       </mrow>
+       <mo>∈</mo>
+       <mrow>
+        <mi>W</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msub>
+          <mi>x</mi>
+          <mi>c</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo maxsize="120%" minsize="120%">}</mo>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <set>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>c</ci>
+     </apply>
+    </set>
+    <apply>
+     <csymbol cd="latexml">conditional-set</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>c</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">formulae-sequence</csymbol>
+      <apply>
+       <gt></gt>
+       <apply>
+        <times></times>
+        <ci>R</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>c</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>R</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <in></in>
+       <apply>
+        <csymbol cd="latexml">for-all</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>W</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <ci>c</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\{x_{c}\}=\big\{x_{c}|R(x_{c})>R(x_{i}),\forall x_{i}\in W(x_{c})%
+\big\},
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:21">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <msub>
+    <mi>x</mi>
+    <mi>c</mi>
+   </msub>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>c</ci>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{x_{c}\}
+  </annotation>
+ </semantics>
+</math>
+
+ are the set of all corner points, 
+
+<math display="inline" id="Harris_affine_region_detector:22">
+ <semantics>
+  <mrow>
+   <mi>R</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>R</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R(x)
+  </annotation>
+ </semantics>
+</math>
+
+ is the Harris measure calculated at 
+
+<math display="inline" id="Harris_affine_region_detector:23">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Harris_affine_region_detector:24">
+ <semantics>
+  <mrow>
+   <mi>W</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>c</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>W</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>c</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W(x_{c})
+  </annotation>
+ </semantics>
+</math>
+
+ is an 8-neighbor set centered around 
+
+<math display="inline" id="Harris_affine_region_detector:25">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>c</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>c</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{c}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:26">
+ <semantics>
+  <msub>
+   <mi>t</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+    <mi>r</mi>
+    <mi>e</mi>
+    <mi>s</mi>
+    <mi>h</mi>
+    <mi>o</mi>
+    <mi>l</mi>
+    <mi>d</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>t</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+     <ci>r</ci>
+     <ci>e</ci>
+     <ci>s</ci>
+     <ci>h</ci>
+     <ci>o</ci>
+     <ci>l</ci>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{threshold}
+  </annotation>
+ </semantics>
+</math>
+
+ is a specified threshold. </p>
+<h4 id="gaussian-scale-space">Gaussian scale-space</h4>
+
+<p>A Gaussian <a href="scale_space_representation" title="wikilink">scale space representation</a> of an image is the set of images that result from convolving a Gaussian kernel of various sizes with the original image. In general, the representation can be formulated as:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:27">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <mi>s</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mi>G</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>s</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>⊗</mo>
+     <mi>I</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <interval closure="open">
+      <ci>𝐱</ci>
+      <ci>s</ci>
+     </interval>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="latexml">tensor-product</csymbol>
+      <apply>
+       <times></times>
+       <ci>G</ci>
+       <ci>s</ci>
+      </apply>
+      <ci>I</ci>
+     </apply>
+     <ci>𝐱</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(\mathbf{x},s)=G(s)\otimes I(\mathbf{x})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:28">
+ <semantics>
+  <mrow>
+   <mi>G</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>G</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G(s)
+  </annotation>
+ </semantics>
+</math>
+
+ is an isotropic, circular Gaussian kernel as defined above. The convolution with a Gaussian kernel smooths the image using a window the size of the kernel. A larger scale, 
+
+<math display="inline" id="Harris_affine_region_detector:29">
+ <semantics>
+  <mi>s</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>s</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s
+  </annotation>
+ </semantics>
+</math>
+
+, corresponds to a smoother resultant image. Mikolajczyk and Schmid (2001) point out that derivatives and other measurements must be normalized across scales.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> A derivative of order 
+
+<math display="inline" id="Harris_affine_region_detector:30">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Harris_affine_region_detector:31">
+ <semantics>
+  <msub>
+   <mi>D</mi>
+   <mrow>
+    <msub>
+     <mi>i</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mrow>
+     <mi mathvariant="normal">…</mi>
+     <msub>
+      <mi>i</mi>
+      <mi>m</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>D</ci>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>i</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>i</ci>
+       <ci>m</ci>
+      </apply>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D_{i_{1},...i_{m}}
+  </annotation>
+ </semantics>
+</math>
+
+, must be normalized by a factor 
+
+<math display="inline" id="Harris_affine_region_detector:32">
+ <semantics>
+  <msup>
+   <mi>s</mi>
+   <mi>m</mi>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>s</ci>
+    <ci>m</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s^{m}
+  </annotation>
+ </semantics>
+</math>
+
+ in the following manner:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:33">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>D</mi>
+     <mrow>
+      <msub>
+       <mi>i</mi>
+       <mn>1</mn>
+      </msub>
+      <mo>,</mo>
+      <mi mathvariant="normal">…</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>i</mi>
+       <mi>m</mi>
+      </msub>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <mi>s</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>s</mi>
+     <mi>m</mi>
+    </msup>
+    <msub>
+     <mi>L</mi>
+     <mrow>
+      <msub>
+       <mi>i</mi>
+       <mn>1</mn>
+      </msub>
+      <mo>,</mo>
+      <mi mathvariant="normal">…</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>i</mi>
+       <mi>m</mi>
+      </msub>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <mi>s</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>D</ci>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-…</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <ci>m</ci>
+       </apply>
+      </list>
+     </apply>
+     <interval closure="open">
+      <ci>𝐱</ci>
+      <ci>s</ci>
+     </interval>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>s</ci>
+      <ci>m</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>L</ci>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-…</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <ci>m</ci>
+       </apply>
+      </list>
+     </apply>
+     <interval closure="open">
+      <ci>𝐱</ci>
+      <ci>s</ci>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D_{i_{1},\dots,i_{m}}(\mathbf{x},s)=s^{m}L_{i_{1},\dots,i_{m}}(\mathbf{x},s)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>These derivatives, or any arbitrary measure, can be adapted to a <a href="scale_space_representation" title="wikilink">scale space representation</a> by calculating this measure using a set of scales recursively where the 
+
+<math display="inline" id="Harris_affine_region_detector:34">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mi>t</mi>
+   <mi>h</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>n</ci>
+    <ci>t</ci>
+    <ci>h</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   nth
+  </annotation>
+ </semantics>
+</math>
+
+ scale is 
+
+<math display="inline" id="Harris_affine_region_detector:35">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>k</mi>
+     <mi>n</mi>
+    </msup>
+    <msub>
+     <mi>s</mi>
+     <mn>0</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>k</ci>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <cn type="integer">0</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{n}=k^{n}s_{0}
+  </annotation>
+ </semantics>
+</math>
+
+. See <a href="scale_space" title="wikilink">scale space</a> for a more complete description.</p>
+<h4 id="combining-harris-detector-across-gaussian-scale-space">Combining Harris detector across Gaussian scale-space</h4>
+
+<p>The <strong>Harris-Laplace</strong> detector combines the traditional 2D Harris corner detector with the idea of a Gaussian <a href="scale_space_representation" title="wikilink">scale space representation</a> in order to create a scale-invariant detector. Harris-corner points are good starting points because they have been shown to have good rotational and illumination invariance in addition to identifying the interesting points of the image.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> However, the points are not scale invariant and thus the second-moment matrix must be modified to reflect a scale-invariant property. Let us denote, 
+
+<math display="inline" id="Harris_affine_region_detector:36">
+ <semantics>
+  <mrow>
+   <mi>M</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>μ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>σ</mi>
+      <mi>I</mi>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>σ</mi>
+      <mi>D</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>M</ci>
+    <apply>
+     <times></times>
+     <ci>μ</ci>
+     <vector>
+      <ci>𝐱</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>I</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>D</ci>
+      </apply>
+     </vector>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M=\mu(\mathbf{x},\sigma_{\mathit{I}},\sigma_{\mathit{D}})
+  </annotation>
+ </semantics>
+</math>
+
+ as the scale adapted second-moment matrix used in the Harris-Laplace detector.</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:37">
+ <semantics>
+  <mrow>
+   <mi>M</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>μ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>σ</mi>
+      <mi>I</mi>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>σ</mi>
+      <mi>D</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msubsup>
+      <mi>σ</mi>
+      <mi>D</mi>
+      <mn>2</mn>
+     </msubsup>
+     <mi>g</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>σ</mi>
+       <mi>I</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>⊗</mo>
+    <mrow>
+     <mo>[</mo>
+     <mtable displaystyle="true">
+      <mtr>
+       <mtd columnalign="center">
+        <mrow>
+         <msubsup>
+          <mi>L</mi>
+          <mi>x</mi>
+          <mn>2</mn>
+         </msubsup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>𝐱</mi>
+          <mo>,</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>D</mi>
+          </msub>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mtd>
+       <mtd columnalign="center">
+        <mrow>
+         <msub>
+          <mi>L</mi>
+          <mi>x</mi>
+         </msub>
+         <msub>
+          <mi>L</mi>
+          <mi>y</mi>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>𝐱</mi>
+          <mo>,</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>D</mi>
+          </msub>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mtd>
+      </mtr>
+      <mtr>
+       <mtd columnalign="center">
+        <mrow>
+         <msub>
+          <mi>L</mi>
+          <mi>x</mi>
+         </msub>
+         <msub>
+          <mi>L</mi>
+          <mi>y</mi>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>𝐱</mi>
+          <mo>,</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>D</mi>
+          </msub>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mtd>
+       <mtd columnalign="center">
+        <mrow>
+         <msubsup>
+          <mi>L</mi>
+          <mi>y</mi>
+          <mn>2</mn>
+         </msubsup>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>𝐱</mi>
+          <mo>,</mo>
+          <msub>
+           <mi>σ</mi>
+           <mi>D</mi>
+          </msub>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mtd>
+      </mtr>
+     </mtable>
+     <mo>]</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>M</ci>
+     <apply>
+      <times></times>
+      <ci>μ</ci>
+      <vector>
+       <ci>𝐱</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>I</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>D</ci>
+       </apply>
+      </vector>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <csymbol cd="latexml">tensor-product</csymbol>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>D</ci>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+       <ci>g</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>I</ci>
+       </apply>
+      </apply>
+      <matrix>
+       <matrixrow>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>L</ci>
+           <ci>x</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+         <interval closure="open">
+          <ci>𝐱</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>D</ci>
+          </apply>
+         </interval>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>L</ci>
+          <ci>x</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>L</ci>
+          <ci>y</ci>
+         </apply>
+         <interval closure="open">
+          <ci>𝐱</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>D</ci>
+          </apply>
+         </interval>
+        </apply>
+       </matrixrow>
+       <matrixrow>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>L</ci>
+          <ci>x</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>L</ci>
+          <ci>y</ci>
+         </apply>
+         <interval closure="open">
+          <ci>𝐱</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>D</ci>
+          </apply>
+         </interval>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>L</ci>
+           <ci>y</ci>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+         <interval closure="open">
+          <ci>𝐱</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>D</ci>
+          </apply>
+         </interval>
+        </apply>
+       </matrixrow>
+      </matrix>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M=\mu(\mathbf{x},\sigma_{\mathit{I}},\sigma_{\mathit{D}})=\sigma_{D}^{2}g(%
+\sigma_{I})\otimes\begin{bmatrix}L_{x}^{2}(\mathbf{x},\sigma_{D})&L_{x}L_{y}(%
+\mathbf{x},\sigma_{D})\\
+L_{x}L_{y}(\mathbf{x},\sigma_{D})&L_{y}^{2}(\mathbf{x},\sigma_{D})\end{bmatrix}
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:38">
+ <semantics>
+  <mrow>
+   <mi>g</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>σ</mi>
+     <mi>I</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>g</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>I</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g(\sigma_{I})
+  </annotation>
+ </semantics>
+</math>
+
+ is the Gaussian kernel of scale 
+
+<math display="inline" id="Harris_affine_region_detector:39">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:40">
+ <semantics>
+  <mrow>
+   <mi>𝐱</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>y</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐱</ci>
+    <interval closure="open">
+     <ci>x</ci>
+     <ci>y</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}=(x,y)
+  </annotation>
+ </semantics>
+</math>
+
+. Similar to the Gaussian-scale space, 
+
+<math display="inline" id="Harris_affine_region_detector:41">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>L</ci>
+    <ci>𝐱</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(\mathbf{x})
+  </annotation>
+ </semantics>
+</math>
+
+ is the Gaussian-smoothed image. The 
+
+<math display="inline" id="Harris_affine_region_detector:42">
+ <semantics>
+  <mo>⊗</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">tensor-product</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\otimes}
+  </annotation>
+ </semantics>
+</math>
+
+ operator denotes convolution. 
+
+<math display="inline" id="Harris_affine_region_detector:43">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>L</mi>
+    <mi>x</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>σ</mi>
+     <mi>D</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>L</ci>
+     <ci>x</ci>
+    </apply>
+    <interval closure="open">
+     <ci>𝐱</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>D</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L_{x}(\mathbf{x},\sigma_{D})
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:44">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>L</mi>
+    <mi>y</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>σ</mi>
+     <mi>D</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>L</ci>
+     <ci>y</ci>
+    </apply>
+    <interval closure="open">
+     <ci>𝐱</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>D</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L_{y}(\mathbf{x},\sigma_{D})
+  </annotation>
+ </semantics>
+</math>
+
+ are the derivatives in their respective direction applied to the smoothed image and calculated using a Gaussian kernel with scale 
+
+<math display="inline" id="Harris_affine_region_detector:45">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>D</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{D}
+  </annotation>
+ </semantics>
+</math>
+
+. In terms of our Gaussian scale-space framework, the 
+
+<math display="inline" id="Harris_affine_region_detector:46">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+ parameter determines the current scale at which the Harris corner points are detected.</p>
+
+<p>Building upon this scale-adapted second-moment matrix, the <strong>Harris-Laplace</strong> detector is a twofold process: applying the Harris corner detector at multiple scales and automatically choosing the <em>characteristic scale</em>.</p>
+<h4 id="multi-scale-harris-corner-points">Multi-scale Harris corner points</h4>
+
+<p>The algorithm searches over a fixed number of predefined scales. This set of scales is defined as:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:47">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>σ</mi>
+     <mn>1</mn>
+    </msub>
+    <mi mathvariant="normal">…</mi>
+    <msub>
+     <mi>σ</mi>
+     <mi>n</mi>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>k</mi>
+     <mn>1</mn>
+    </msup>
+    <msub>
+     <mi>σ</mi>
+     <mn>0</mn>
+    </msub>
+    <mi mathvariant="normal">…</mi>
+    <msup>
+     <mi>k</mi>
+     <mi>n</mi>
+    </msup>
+    <msub>
+     <mi>σ</mi>
+     <mn>0</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <cn type="integer">0</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>k</ci>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <cn type="integer">0</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\sigma_{1}\dots\sigma_{n}}={k^{1}\sigma_{0}\dots k^{n}\sigma_{0}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Mikolajczyk and Schmid (2004) use 
+
+<math display="inline" id="Harris_affine_region_detector:48">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>=</mo>
+   <mn>1.4</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>k</ci>
+    <cn type="float">1.4</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k=1.4
+  </annotation>
+ </semantics>
+</math>
+
+. For each integration scale, 
+
+<math display="inline" id="Harris_affine_region_detector:49">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+, chosen from this set, the appropriate differentiation scale is chosen to be a constant factor of the integration scale
+
+<math display="block" id="Harris_affine_region_detector:50">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>σ</mi>
+    <mi>D</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>s</mi>
+    <msub>
+     <mi>σ</mi>
+     <mi>I</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>D</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>I</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{D}=s\sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+. Mikolajczyk and Schmid (2004) used 
+
+<math display="inline" id="Harris_affine_region_detector:51">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mo>=</mo>
+   <mn>0.7</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>s</ci>
+    <cn type="float">0.7</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s=0.7
+  </annotation>
+ </semantics>
+</math>
+
+.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> Using these scales, the interest points are detected using a Harris measure on the 
+
+<math display="inline" id="Harris_affine_region_detector:52">
+ <semantics>
+  <mrow>
+   <mi>μ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>σ</mi>
+     <mi>I</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>σ</mi>
+     <mi>D</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>μ</ci>
+    <vector>
+     <ci>𝐱</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>I</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>D</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu(\mathbf{x},\sigma_{\mathit{I}},\sigma_{\mathit{D}})
+  </annotation>
+ </semantics>
+</math>
+
+ matrix. The <em>cornerness,</em> like the typical Harris measure, is defined as:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:53">
+ <semantics>
+  <mrow>
+   <mi>𝑐𝑜𝑟𝑛𝑒𝑟𝑛𝑒𝑠𝑠</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo movablelimits="false">det</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>μ</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>𝐱</mi>
+        <mo>,</mo>
+        <msub>
+         <mi>σ</mi>
+         <mi>I</mi>
+        </msub>
+        <mo>,</mo>
+        <msub>
+         <mi>σ</mi>
+         <mi>D</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mi>α</mi>
+     <mrow>
+      <msup>
+       <mo>trace</mo>
+       <mn>2</mn>
+      </msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>μ</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>𝐱</mi>
+         <mo>,</mo>
+         <msub>
+          <mi>σ</mi>
+          <mi>I</mi>
+         </msub>
+         <mo>,</mo>
+         <msub>
+          <mi>σ</mi>
+          <mi>D</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝑐𝑜𝑟𝑛𝑒𝑟𝑛𝑒𝑠𝑠</ci>
+    <apply>
+     <minus></minus>
+     <apply>
+      <determinant></determinant>
+      <apply>
+       <times></times>
+       <ci>μ</ci>
+       <vector>
+        <ci>𝐱</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>I</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>D</ci>
+        </apply>
+       </vector>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>α</ci>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>trace</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>μ</ci>
+        <vector>
+         <ci>𝐱</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>σ</ci>
+          <ci>I</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>σ</ci>
+          <ci>D</ci>
+         </apply>
+        </vector>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathit{cornerness}=\det(\mu(\mathbf{x},\sigma_{\mathit{I}},\sigma_{\mathit{D}%
+}))-\alpha\operatorname{trace}^{2}(\mu(\mathbf{x},\sigma_{\mathit{I}},\sigma_{%
+\mathit{D}}))
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Like the traditional Harris detector, corner points are those local (8 point neighborhood) maxima of the <em>cornerness</em> that are above a specified threshold.</p>
+<h4 id="characteristic-scale-identification">Characteristic scale identification</h4>
+
+<p>An iterative algorithm based on Lindeberg (1998) both spatially localizes the corner points and selects the <em>characteristic scale</em>.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> The iterative search has three key steps, that are carried for each point 
+
+<math display="inline" id="Harris_affine_region_detector:54">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+ that were initially detected at scale 
+
+<math display="inline" id="Harris_affine_region_detector:55">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+ by the multi-scale Harris detector (
+
+<math display="inline" id="Harris_affine_region_detector:56">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ indicates the 
+
+<math display="inline" id="Harris_affine_region_detector:57">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mi>t</mi>
+   <mi>h</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>k</ci>
+    <ci>t</ci>
+    <ci>h</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   kth
+  </annotation>
+ </semantics>
+</math>
+
+ iteration):</p>
+<ul>
+<li><strong>Choose the scale 
+
+<math display="inline" id="Harris_affine_region_detector:58">
+ <semantics>
+  <msubsup>
+   <mi>σ</mi>
+   <mi>I</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>I</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>k</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}^{(k+1)}
+  </annotation>
+ </semantics>
+</math>
+
+ that maximizes the Laplacian-of-Gaussians (LoG) over a predefined range of neighboring scales.</strong> The neighboring scales are typically chosen from a range that is within a <em>two scale-space</em> neighborhood. That is, if the original points were detected using a scaling factor of 
+
+<math display="inline" id="Harris_affine_region_detector:59">
+ <semantics>
+  <mn>1.4</mn>
+  <annotation-xml encoding="MathML-Content">
+   <cn type="float">1.4</cn>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1.4
+  </annotation>
+ </semantics>
+</math>
+
+ between successive scales, a <em>two scale-space</em> neighborhood is the range 
+
+<math display="inline" id="Harris_affine_region_detector:60">
+ <semantics>
+  <mrow>
+   <mi>t</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>0.7</mn>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mn>1.4</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>t</ci>
+    <list>
+     <cn type="float">0.7</cn>
+     <ci>normal-…</ci>
+     <cn type="float">1.4</cn>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t\in[0.7,\dots,1.4]
+  </annotation>
+ </semantics>
+</math>
+
+. Thus the Gaussian scales examined are
+
+<math display="block" id="Harris_affine_region_detector:61">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>σ</mi>
+    <mi>I</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <mi>t</mi>
+    <msubsup>
+     <mi>σ</mi>
+     <mi>I</mi>
+     <mi>k</mi>
+    </msubsup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>I</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>I</ci>
+      </apply>
+      <ci>k</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}^{(k+1)}=t\sigma_{I}^{k}
+  </annotation>
+ </semantics>
+</math>
+
+. The LoG measurement is defined as:</li>
+</ul>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:62">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo movablelimits="false">det</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>L</mi>
+      <mi>o</mi>
+      <mi>G</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝐱</mi>
+       <mo>,</mo>
+       <msub>
+        <mi>σ</mi>
+        <mi>I</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mi>σ</mi>
+     <mi>I</mi>
+     <mn>2</mn>
+    </msubsup>
+    <mrow>
+     <mo movablelimits="false">det</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>L</mi>
+         <mrow>
+          <mi>x</mi>
+          <mi>x</mi>
+         </mrow>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>𝐱</mi>
+         <mo>,</mo>
+         <msub>
+          <mi>σ</mi>
+          <mi>I</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <msub>
+         <mi>L</mi>
+         <mrow>
+          <mi>y</mi>
+          <mi>y</mi>
+         </mrow>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>𝐱</mi>
+         <mo>,</mo>
+         <msub>
+          <mi>σ</mi>
+          <mi>I</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <determinant></determinant>
+     <apply>
+      <times></times>
+      <ci>L</ci>
+      <ci>o</ci>
+      <ci>G</ci>
+      <interval closure="open">
+       <ci>𝐱</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>I</ci>
+       </apply>
+      </interval>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>I</ci>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <determinant></determinant>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>L</ci>
+         <apply>
+          <times></times>
+          <ci>x</ci>
+          <ci>x</ci>
+         </apply>
+        </apply>
+        <interval closure="open">
+         <ci>𝐱</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>σ</ci>
+          <ci>I</ci>
+         </apply>
+        </interval>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>L</ci>
+         <apply>
+          <times></times>
+          <ci>y</ci>
+          <ci>y</ci>
+         </apply>
+        </apply>
+        <interval closure="open">
+         <ci>𝐱</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>σ</ci>
+          <ci>I</ci>
+         </apply>
+        </interval>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \det(LoG(\mathbf{x},\sigma_{I}))=\sigma_{I}^{2}\det(L_{xx}(\mathbf{x},\sigma_{%
+I})+L_{yy}(\mathbf{x},\sigma_{I}))
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<dl>
+<dd>where 
+
+<math display="inline" id="Harris_affine_region_detector:63">
+ <semantics>
+  <msub>
+   <mi>L</mi>
+   <mrow>
+    <mi>x</mi>
+    <mi>x</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>L</ci>
+    <apply>
+     <times></times>
+     <ci>x</ci>
+     <ci>x</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L_{xx}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:64">
+ <semantics>
+  <msub>
+   <mi>L</mi>
+   <mrow>
+    <mi>y</mi>
+    <mi>y</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>L</ci>
+    <apply>
+     <times></times>
+     <ci>y</ci>
+     <ci>y</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L_{yy}
+  </annotation>
+ </semantics>
+</math>
+
+ are the second derivatives in their respective directions.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a> The 
+
+<math display="inline" id="Harris_affine_region_detector:65">
+ <semantics>
+  <msubsup>
+   <mi>σ</mi>
+   <mi>I</mi>
+   <mn>2</mn>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>I</ci>
+    </apply>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}^{2}
+  </annotation>
+ </semantics>
+</math>
+
+ factor (as discussed above in Gaussian scale-space) is used to normalize the LoG across scales and make these measures comparable, thus making a maximum relevant. Mikolajczyk and Schmid (2001) demonstrate that the LoG measure attains the highest percentage of correctly detected corner points in comparison to other scale-selection measures.<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a> The scale which maximizes this LoG measure in the <em>two scale-space</em> neighborhood is deemed the <strong><em>characteristic scale,</em></strong> 
+
+<math display="inline" id="Harris_affine_region_detector:66">
+ <semantics>
+  <msubsup>
+   <mi>σ</mi>
+   <mi>I</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>I</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>k</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}^{(k+1)}
+  </annotation>
+ </semantics>
+</math>
+
+, and used in subsequent iterations. If no extrema, or maxima of the LoG is found, this point is discarded from future searches.
+</dd>
+</dl>
+<ul>
+<li><strong>Using the characteristic scale, the points are spatially localized.</strong> That is to say, the point 
+
+<math display="inline" id="Harris_affine_region_detector:67">
+ <semantics>
+  <msup>
+   <mi>𝐱</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>𝐱</ci>
+    <apply>
+     <plus></plus>
+     <ci>k</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}^{(k+1)}
+  </annotation>
+ </semantics>
+</math>
+
+ is chosen such that it maximizes the Harris corner measure (<em>cornerness</em> as defined above) within an 8×8 local neighborhood.</li>
+</ul>
+<ul>
+<li><strong>Stopping criterion</strong>
+
+<math display="block" id="Harris_affine_region_detector:68">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>σ</mi>
+    <mi>I</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mo>=</mo>
+   <msubsup>
+    <mi>σ</mi>
+    <mi>I</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>I</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <eq></eq>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>I</ci>
+     </apply>
+     <ci>k</ci>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}^{(k+1)}==\sigma_{I}^{(k)}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:69">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>𝐱</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mo>=</mo>
+   <msup>
+    <mi>𝐱</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>𝐱</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <eq></eq>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>𝐱</ci>
+     <ci>k</ci>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}^{(k+1)}==\mathbf{x}^{(k)}
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+</ul>
+
+<p>If the stopping criterion is not met, then the algorithm repeats from step 1 using the new 
+
+<math display="inline" id="Harris_affine_region_detector:70">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <ci>k</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k+1
+  </annotation>
+ </semantics>
+</math>
+
+ points and scale. When the stopping criterion is met, the found points represent those that maximize the LoG across scales (scale selection) and maximize the Harris corner measure in a local neighborhood (spatial selection).</p>
+<h3 id="affine-invariant-points">Affine-invariant points</h3>
+<h4 id="mathematical-theory">Mathematical theory</h4>
+
+<p>The Harris-Laplace detected points are scale invariant and work well for isotropic regions that are viewed from the same viewing angle. In order to be invariant to arbitrary affine transformations (and viewpoints), the mathematical framework must be revisited. The second-moment matrix 
+
+<math display="inline" id="Harris_affine_region_detector:71">
+ <semantics>
+  <mi>μ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>μ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{\mu}
+  </annotation>
+ </semantics>
+</math>
+
+ is defined more generally for anisotropic regions:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:72">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>μ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Σ</mi>
+      <mi>I</mi>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Σ</mi>
+      <mi>D</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo movablelimits="false">det</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi mathvariant="normal">Σ</mi>
+        <mi>D</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mi>g</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi mathvariant="normal">Σ</mi>
+        <mi>I</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>*</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mrow>
+        <mo>∇</mo>
+        <mi>L</mi>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>𝐱</mi>
+        <mo>,</mo>
+        <msub>
+         <mi mathvariant="normal">Σ</mi>
+         <mi>D</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mrow>
+        <mo>∇</mo>
+        <mi>L</mi>
+       </mrow>
+       <msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>𝐱</mi>
+         <mo>,</mo>
+         <msub>
+          <mi mathvariant="normal">Σ</mi>
+          <mi>D</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mi>T</mi>
+       </msup>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>μ</ci>
+     <vector>
+      <ci>𝐱</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Σ</ci>
+       <ci>I</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Σ</ci>
+       <ci>D</ci>
+      </apply>
+     </vector>
+    </apply>
+    <apply>
+     <determinant></determinant>
+     <apply>
+      <times></times>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>normal-Σ</ci>
+        <ci>D</ci>
+       </apply>
+       <ci>g</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>normal-Σ</ci>
+        <ci>I</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <ci>normal-∇</ci>
+        <ci>L</ci>
+       </apply>
+       <interval closure="open">
+        <ci>𝐱</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Σ</ci>
+         <ci>D</ci>
+        </apply>
+       </interval>
+       <apply>
+        <ci>normal-∇</ci>
+        <ci>L</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <interval closure="open">
+         <ci>𝐱</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>normal-Σ</ci>
+          <ci>D</ci>
+         </apply>
+        </interval>
+        <ci>T</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu(\mathbf{x},\Sigma_{I},\Sigma_{D})=\det(\Sigma_{D})g(\Sigma_{I})*(\nabla L(%
+\mathbf{x},\Sigma_{D})\nabla L(\mathbf{x},\Sigma_{D})^{T})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:73">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Σ</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Σ</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:74">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Σ</mi>
+   <mi>D</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Σ</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma_{D}
+  </annotation>
+ </semantics>
+</math>
+
+ are covariance matrices defining the differentiation and the integration Gaussian kernel scales. Although this may look significantly different from the second-moment matrix in the Harris-Laplace detector; it is in fact, identical. The earlier 
+
+<math display="inline" id="Harris_affine_region_detector:75">
+ <semantics>
+  <mi>μ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>μ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu
+  </annotation>
+ </semantics>
+</math>
+
+ matrix was the 2D-isotropic version in which the covariance matrices 
+
+<math display="inline" id="Harris_affine_region_detector:76">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Σ</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Σ</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:77">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Σ</mi>
+   <mi>D</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Σ</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma_{D}
+  </annotation>
+ </semantics>
+</math>
+
+ were 2x2 identity matrices multiplied by factors 
+
+<math display="inline" id="Harris_affine_region_detector:78">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:79">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>D</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{D}
+  </annotation>
+ </semantics>
+</math>
+
+, respectively. In the new formulation, one can think of Gaussian kernels as a <a href="Multivariate_normal_distribution" title="wikilink">multivariate Gaussian distributions</a> as opposed to a uniform Gaussian kernel. A uniform Gaussian kernel can be thought of as an isotropic, circular region. Similarly, a more general Gaussian kernel defines an ellipsoid. In fact, the eigenvectors and eigenvalues of the covariance matrix define the rotation and size of the ellipsoid. Thus we can easily see that this representation allows us to completely define an arbitrary elliptical affine region over which we want to integrate or differentiate.</p>
+
+<p>The goal of the affine invariant detector is to identify regions in images that are related through affine transformations. We thus consider a point 
+
+<math display="inline" id="Harris_affine_region_detector:80">
+ <semantics>
+  <msub>
+   <mi>𝐱</mi>
+   <mi>L</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐱</ci>
+    <ci>L</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{L}
+  </annotation>
+ </semantics>
+</math>
+
+ and the transformed point 
+
+<math display="inline" id="Harris_affine_region_detector:81">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>𝐱</mi>
+    <mi>R</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>A</mi>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>L</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐱</ci>
+     <ci>R</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>L</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{R}=A\mathbf{x}_{L}
+  </annotation>
+ </semantics>
+</math>
+
+, where A is an affine transformation. In the case of images, both 
+
+<math display="inline" id="Harris_affine_region_detector:82">
+ <semantics>
+  <msub>
+   <mi>𝐱</mi>
+   <mi>R</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐱</ci>
+    <ci>R</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{R}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:83">
+ <semantics>
+  <msub>
+   <mi>𝐱</mi>
+   <mi>L</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐱</ci>
+    <ci>L</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{L}
+  </annotation>
+ </semantics>
+</math>
+
+ live in 
+
+<math display="inline" id="Harris_affine_region_detector:84">
+ <semantics>
+  <msup>
+   <mi>R</mi>
+   <mn>2</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>R</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R^{2}
+  </annotation>
+ </semantics>
+</math>
+
+ space. The second-moment matrices are related in the following manner:<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a></p>
+
+<p>
+
+<math display="inline" id="Harris_affine_region_detector:85">
+ <semantics>
+  <mrow>
+   <mi>μ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>L</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Σ</mi>
+     <mrow>
+      <mi>I</mi>
+      <mo>,</mo>
+      <mi>L</mi>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Σ</mi>
+     <mrow>
+      <mi>D</mi>
+      <mo>,</mo>
+      <mi>L</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>μ</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>L</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <list>
+       <ci>I</ci>
+       <ci>L</ci>
+      </list>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <list>
+       <ci>D</ci>
+       <ci>L</ci>
+      </list>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\mu(\mathbf{x}_{L},\Sigma_{I,L},\Sigma_{D,L})
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:86">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Σ</mi>
+   <mrow>
+    <mi>I</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Σ</ci>
+    <list>
+     <ci>I</ci>
+     <ci>b</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma_{I,b}
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:87">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Σ</mi>
+   <mrow>
+    <mi>D</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Σ</ci>
+    <list>
+     <ci>D</ci>
+     <ci>b</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma_{D,b}
+  </annotation>
+ </semantics>
+</math>
+
+ are the covariance matrices for the 
+
+<math display="inline" id="Harris_affine_region_detector:88">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+ reference frame. If we continue with this formulation and enforce that</p>
+
+<p>
+
+<math display="inline" id="Harris_affine_region_detector:89">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi mathvariant="normal">Σ</mi>
+    <mrow>
+     <mi>I</mi>
+     <mo>,</mo>
+     <mi>L</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>σ</mi>
+     <mi>I</mi>
+    </msub>
+    <msubsup>
+     <mi>M</mi>
+     <mi>L</mi>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msubsup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-Σ</ci>
+     <list>
+      <ci>I</ci>
+      <ci>L</ci>
+     </list>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>I</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>M</ci>
+       <ci>L</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\Sigma_{I,L}=\sigma_{I}M_{L}^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:90">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:91">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>D</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{D}
+  </annotation>
+ </semantics>
+</math>
+
+ are scalar factors, one can show that the covariance matrices for the related point are similarly related:</p>
+
+<p>
+
+<math display="inline" id="Harris_affine_region_detector:92">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi mathvariant="normal">Σ</mi>
+    <mrow>
+     <mi>I</mi>
+     <mo>,</mo>
+     <mi>R</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>σ</mi>
+     <mi>I</mi>
+    </msub>
+    <msubsup>
+     <mi>M</mi>
+     <mi>R</mi>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msubsup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-Σ</ci>
+     <list>
+      <ci>I</ci>
+      <ci>R</ci>
+     </list>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>I</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>M</ci>
+       <ci>R</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\Sigma_{I,R}=\sigma_{I}M_{R}^{-1}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>By requiring the covariance matrices to satisfy these conditions, several nice properties arise. One of these properties is that the square root of the second-moment matrix, 
+
+<math display="inline" id="Harris_affine_region_detector:93">
+ <semantics>
+  <msup>
+   <mi>M</mi>
+   <mstyle scriptlevel="-1">
+    <mfrac>
+     <mn>1</mn>
+     <mn>2</mn>
+    </mfrac>
+   </mstyle>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>M</ci>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M^{\tfrac{1}{2}}
+  </annotation>
+ </semantics>
+</math>
+
+ will transform the original anisotropic region into isotropic regions that are related simply through a pure rotation matrix 
+
+<math display="inline" id="Harris_affine_region_detector:94">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+. These new isotropic regions can be thought of as a normalized reference frame. The following equations formulate the relation between the normalized points 
+
+<math display="inline" id="Harris_affine_region_detector:95">
+ <semantics>
+  <msubsup>
+   <mi>x</mi>
+   <mi>R</mi>
+   <msup>
+    <mi></mi>
+    <mo>′</mo>
+   </msup>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>R</ci>
+    </apply>
+    <apply>
+     <ci>normal-′</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{R}^{^{\prime}}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:96">
+ <semantics>
+  <msubsup>
+   <mi>x</mi>
+   <mi>L</mi>
+   <msup>
+    <mi></mi>
+    <mo>′</mo>
+   </msup>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>L</ci>
+    </apply>
+    <apply>
+     <ci>normal-′</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{L}^{^{\prime}}
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="inline" id="Harris_affine_region_detector:97">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mi>M</mi>
+     <mi>R</mi>
+     <mrow>
+      <mo>-</mo>
+      <mstyle scriptlevel="-1">
+       <mfrac>
+        <mn>1</mn>
+        <mn>2</mn>
+       </mfrac>
+      </mstyle>
+     </mrow>
+    </msubsup>
+    <mi>R</mi>
+    <msubsup>
+     <mi>M</mi>
+     <mi>L</mi>
+     <mstyle scriptlevel="-1">
+      <mfrac>
+       <mn>1</mn>
+       <mn>2</mn>
+      </mfrac>
+     </mstyle>
+    </msubsup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>A</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>M</ci>
+       <ci>R</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <ci>R</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>M</ci>
+       <ci>L</ci>
+      </apply>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle A=M_{R}^{-\tfrac{1}{2}}RM_{L}^{\tfrac{1}{2}}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>The rotation matrix can be recovered using gradient methods likes those in the <a href="Scale-invariant_feature_transform" title="wikilink">SIFT</a> descriptor. As discussed with the Harris detector, the eigenvalues and eigenvectors of the second-moment matrix, 
+
+<math display="inline" id="Harris_affine_region_detector:98">
+ <semantics>
+  <mrow>
+   <mi>M</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>μ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Σ</mi>
+      <mi>I</mi>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi mathvariant="normal">Σ</mi>
+      <mi>D</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>M</ci>
+    <apply>
+     <times></times>
+     <ci>μ</ci>
+     <vector>
+      <ci>𝐱</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Σ</ci>
+       <ci>I</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Σ</ci>
+       <ci>D</ci>
+      </apply>
+     </vector>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M=\mu(\mathbf{x},\Sigma_{I},\Sigma_{D})
+  </annotation>
+ </semantics>
+</math>
+
+ characterize the curvature and shape of the pixel intensities. That is, the eigenvector associated with the largest eigenvalue indicates the direction of largest change and the eigenvector associated with the smallest eigenvalue defines the direction of least change. In the 2D case, the eigenvectors and eigenvalues define an ellipse. For an isotropic region, the region should be circular in shape and not elliptical. This is the case when the eigenvalues have the same magnitude. Thus a measure of the isotropy around a local region is defined as the following:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:99">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒬</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msub>
+      <mi>λ</mi>
+      <mi>min</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>M</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <msub>
+      <mi>λ</mi>
+      <mi>max</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>M</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝒬</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>λ</ci>
+       <min></min>
+      </apply>
+      <ci>M</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>λ</ci>
+       <max></max>
+      </apply>
+      <ci>M</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{Q}=\frac{\lambda_{\min}(M)}{\lambda_{\max}(M)}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:100">
+ <semantics>
+  <mi>λ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>λ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda
+  </annotation>
+ </semantics>
+</math>
+
+ denote eigenvalues. This measure has the range 
+
+<math display="inline" id="Harris_affine_region_detector:101">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">[</mo>
+   <mrow>
+    <mn>0</mn>
+    <mi mathvariant="normal">…</mi>
+    <mn>1</mn>
+   </mrow>
+   <mo stretchy="false">]</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">delimited-[]</csymbol>
+    <apply>
+     <times></times>
+     <cn type="integer">0</cn>
+     <ci>normal-…</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [0\dots 1]
+  </annotation>
+ </semantics>
+</math>
+
+. A value of 
+
+<math display="inline" id="Harris_affine_region_detector:102">
+ <semantics>
+  <mn>1</mn>
+  <annotation-xml encoding="MathML-Content">
+   <cn type="integer">1</cn>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1
+  </annotation>
+ </semantics>
+</math>
+
+ corresponds to perfect isotropy.</p>
+<h4 id="iterative-algorithm">Iterative algorithm</h4>
+
+<p>Using this mathematical framework, the Harris affine detector algorithm iteratively discovers the second-moment matrix that transforms the anisotropic region into a normalized region in which the isotropic measure is sufficiently close to one. The algorithm uses this <em>shape adaptation matrix</em>, 
+
+<math display="inline" id="Harris_affine_region_detector:103">
+ <semantics>
+  <mi>U</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>U</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U
+  </annotation>
+ </semantics>
+</math>
+
+, to transform the image into a normalized reference frame. In this normalized space, the interest points' parameters (spatial location, integration scale and differentiation scale) are refined using methods similar to the Harris-Laplace detector. The second-moment matrix is computed in this normalized reference frame and should have an isotropic measure close to one at the final iteration. At every 
+
+<math display="inline" id="Harris_affine_region_detector:104">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+th iteration, each interest region is defined by several parameters that the algorithm must discover: the 
+
+<math display="inline" id="Harris_affine_region_detector:105">
+ <semantics>
+  <msup>
+   <mi>U</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>U</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U^{(k)}
+  </annotation>
+ </semantics>
+</math>
+
+ matrix, position 
+
+<math display="inline" id="Harris_affine_region_detector:106">
+ <semantics>
+  <msup>
+   <mi>𝐱</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>𝐱</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}^{(k)}
+  </annotation>
+ </semantics>
+</math>
+
+, integration scale 
+
+<math display="inline" id="Harris_affine_region_detector:107">
+ <semantics>
+  <msubsup>
+   <mi>σ</mi>
+   <mi>I</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>I</ci>
+    </apply>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}^{(k)}
+  </annotation>
+ </semantics>
+</math>
+
+ and differentiation scale 
+
+<math display="inline" id="Harris_affine_region_detector:108">
+ <semantics>
+  <msubsup>
+   <mi>σ</mi>
+   <mi>D</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>D</ci>
+    </apply>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{D}^{(k)}
+  </annotation>
+ </semantics>
+</math>
+
+. Because the detector computes the second-moment matrix in the transformed domain, it's convenient to denote this transformed position as 
+
+<math display="inline" id="Harris_affine_region_detector:109">
+ <semantics>
+  <msubsup>
+   <mi>𝐱</mi>
+   <mi>w</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐱</ci>
+     <ci>w</ci>
+    </apply>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{w}^{(k)}
+  </annotation>
+ </semantics>
+</math>
+
+ where 
+
+<math display="inline" id="Harris_affine_region_detector:110">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>U</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>k</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <msubsup>
+     <mi>𝐱</mi>
+     <mi>w</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>k</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+   </mrow>
+   <mo>=</mo>
+   <msup>
+    <mi>𝐱</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝐤</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>U</ci>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐱</ci>
+       <ci>w</ci>
+      </apply>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>𝐱</ci>
+     <ci>𝐤</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U^{(k)}\mathbf{x}_{w}^{(k)}=\mathbf{x^{(k)}}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>{\operatorname{argmax}} \, \sigma_I^2 \det(L_{xx}(\mathbf{x}, \sigma_I) + L_{yy}(\mathbf{x},\sigma_I)) </p>
+
+<p>It's important to note that the integration scale in the 
+
+<math display="inline" id="Harris_affine_region_detector:111">
+ <semantics>
+  <mrow>
+   <mi>U</mi>
+   <mo>-</mo>
+   <mrow>
+    <mi>n</mi>
+    <mi>o</mi>
+    <mi>r</mi>
+    <mi>m</mi>
+    <mi>a</mi>
+    <mi>l</mi>
+    <mi>i</mi>
+    <mi>z</mi>
+    <mi>e</mi>
+    <mi>d</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <ci>U</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <ci>o</ci>
+     <ci>r</ci>
+     <ci>m</ci>
+     <ci>a</ci>
+     <ci>l</ci>
+     <ci>i</ci>
+     <ci>z</ci>
+     <ci>e</ci>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U-normalized
+  </annotation>
+ </semantics>
+</math>
+
+ space differs significantly than the non-normalized space. Therefore, it is necessary to search for the integration scale as opposed to using the scale in the non-normalized space. |4= <strong>Select the differentiation scale</strong>, 
+
+<math display="inline" id="Harris_affine_region_detector:112">
+ <semantics>
+  <msubsup>
+   <mi>σ</mi>
+   <mi>D</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <ci>D</ci>
+    </apply>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{D}^{(k)}
+  </annotation>
+ </semantics>
+</math>
+
+. In order to reduce the search space and degrees of freedom, the differentiation scale is taken to be related to the integration scale through a constant factor
+
+<math display="block" id="Harris_affine_region_detector:113">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>σ</mi>
+    <mi>D</mi>
+    <mi>k</mi>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <mi>s</mi>
+    <msubsup>
+     <mi>σ</mi>
+     <mi>I</mi>
+     <mi>k</mi>
+    </msubsup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>D</ci>
+     </apply>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>I</ci>
+      </apply>
+      <ci>k</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{D}^{k}=s\sigma_{I}^{k}
+  </annotation>
+ </semantics>
+</math>
+
+. For obvious reasons, the constant factor is less than one. Mikolajczyk and Schmid (2001) note that a too small factor will make smoothing (integration) too significant in comparison to differentiation and a factor that's too large will not allow for the integration to average the covariance matrix.<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a> It is common to choose 
+
+<math display="inline" id="Harris_affine_region_detector:114">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>0.5</mn>
+    <mo>,</mo>
+    <mn>0.75</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>s</ci>
+    <interval closure="closed">
+     <cn type="float">0.5</cn>
+     <cn type="float">0.75</cn>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s\in[0.5,0.75]
+  </annotation>
+ </semantics>
+</math>
+
+. From this set, the chosen scale will maximize the isotropic measure 
+
+<math display="inline" id="Harris_affine_region_detector:115">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒬</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msub>
+      <mi>λ</mi>
+      <mrow>
+       <mi>m</mi>
+       <mi>i</mi>
+       <mi>n</mi>
+      </mrow>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>μ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <msub>
+      <mi>λ</mi>
+      <mrow>
+       <mi>m</mi>
+       <mi>a</mi>
+       <mi>x</mi>
+      </mrow>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>μ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝒬</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>λ</ci>
+       <apply>
+        <times></times>
+        <ci>m</ci>
+        <ci>i</ci>
+        <ci>n</ci>
+       </apply>
+      </apply>
+      <ci>μ</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>λ</ci>
+       <apply>
+        <times></times>
+        <ci>m</ci>
+        <ci>a</ci>
+        <ci>x</ci>
+       </apply>
+      </apply>
+      <ci>μ</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{Q}=\frac{\lambda_{min}(\mu)}{\lambda_{max}(\mu)}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:116">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>σ</mi>
+    <mi>D</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <munder accentunder="true">
+      <mo>argmax</mo>
+      <mrow>
+       <mrow>
+        <msub>
+         <mi>σ</mi>
+         <mi>D</mi>
+        </msub>
+        <mo>=</mo>
+        <mrow>
+         <mi>s</mi>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>I</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>k</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </msubsup>
+        </mrow>
+       </mrow>
+       <mo rspace="5.3pt">,</mo>
+       <mrow>
+        <mi>s</mi>
+        <mo>∈</mo>
+        <mrow>
+         <mo stretchy="false">[</mo>
+         <mn>0.5</mn>
+         <mo>,</mo>
+         <mi mathvariant="normal">…</mi>
+         <mo>,</mo>
+         <mn>0.75</mn>
+         <mo stretchy="false">]</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+     </munder>
+    </mpadded>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mi>λ</mi>
+       <mi>min</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>μ</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msubsup>
+          <mi>𝐱</mi>
+          <mi>w</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>k</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </msubsup>
+         <mo>,</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>I</mi>
+          <mi>k</mi>
+         </msubsup>
+         <mo>,</mo>
+         <msub>
+          <mi>σ</mi>
+          <mi>D</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msub>
+       <mi>λ</mi>
+       <mi>max</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>μ</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msubsup>
+          <mi>𝐱</mi>
+          <mi>w</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>k</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </msubsup>
+         <mo>,</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>I</mi>
+          <mi>k</mi>
+         </msubsup>
+         <mo>,</mo>
+         <msub>
+          <mi>σ</mi>
+          <mi>D</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>D</ci>
+     </apply>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">formulae-sequence</csymbol>
+       <apply>
+        <eq></eq>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>σ</ci>
+         <ci>D</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>s</ci>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>I</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <in></in>
+        <ci>s</ci>
+        <list>
+         <cn type="float">0.5</cn>
+         <ci>normal-…</ci>
+         <cn type="float">0.75</cn>
+        </list>
+       </apply>
+      </apply>
+      <ci>argmax</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>λ</ci>
+        <min></min>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>μ</ci>
+        <vector>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝐱</ci>
+           <ci>w</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>I</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>σ</ci>
+          <ci>D</ci>
+         </apply>
+        </vector>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>λ</ci>
+        <max></max>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>μ</ci>
+        <vector>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝐱</ci>
+           <ci>w</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>I</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>σ</ci>
+          <ci>D</ci>
+         </apply>
+        </vector>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{D}^{(k)}=\underset{\sigma_{D}=s\sigma_{I}^{(k)},\;s\in[0.5,\dots,0.75]%
+}{\operatorname{argmax}}\,\frac{\lambda_{\min}(\mu(\mathbf{x}_{w}^{(k)},\sigma%
+_{I}^{k},\sigma_{D}))}{\lambda_{\max}(\mu(\mathbf{x}_{w}^{(k)},\sigma_{I}^{k},%
+\sigma_{D}))}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:117">
+ <semantics>
+  <mrow>
+   <mi>μ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msubsup>
+     <mi>𝐱</mi>
+     <mi>w</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>k</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+    <mo>,</mo>
+    <msubsup>
+     <mi>σ</mi>
+     <mi>I</mi>
+     <mi>k</mi>
+    </msubsup>
+    <mo>,</mo>
+    <msub>
+     <mi>σ</mi>
+     <mi>D</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>μ</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝐱</ci>
+       <ci>w</ci>
+      </apply>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>I</ci>
+      </apply>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>D</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu(\mathbf{x}_{w}^{(k)},\sigma_{I}^{k},\sigma_{D})
+  </annotation>
+ </semantics>
+</math>
+
+ is the second-moment matrix evaluated in the normalized reference frame. This maximization processes causes the eigenvalues to converge to the same value. |5= <strong>Spatial Localization:</strong> Select the point 
+
+<math display="inline" id="Harris_affine_region_detector:118">
+ <semantics>
+  <msubsup>
+   <mi>𝐱</mi>
+   <mi>w</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐱</ci>
+     <ci>w</ci>
+    </apply>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{w}^{(k)}
+  </annotation>
+ </semantics>
+</math>
+
+ that maximizes the Harris corner measure (
+
+<math display="inline" id="Harris_affine_region_detector:119">
+ <semantics>
+  <mi>𝑐𝑜𝑟𝑛𝑒𝑟𝑛𝑒𝑠𝑠</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝑐𝑜𝑟𝑛𝑒𝑟𝑛𝑒𝑠𝑠</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathit{cornerness}
+  </annotation>
+ </semantics>
+</math>
+
+) within an 8-point neighborhood around the previous 
+
+<math display="inline" id="Harris_affine_region_detector:120">
+ <semantics>
+  <msubsup>
+   <mi>𝐱</mi>
+   <mi>w</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝐱</ci>
+     <ci>w</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>k</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{w}^{(k-1)}
+  </annotation>
+ </semantics>
+</math>
+
+ point.</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:121">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>𝐱</mi>
+    <mi>w</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mpadded width="+1.7pt">
+      <munder accentunder="true">
+       <mo>argmax</mo>
+       <mrow>
+        <msub>
+         <mi>𝐱</mi>
+         <mi>w</mi>
+        </msub>
+        <mo>∈</mo>
+        <mrow>
+         <mi>W</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <msubsup>
+           <mi>𝐱</mi>
+           <mi>w</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mi>k</mi>
+             <mo>-</mo>
+             <mn>1</mn>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </msubsup>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mrow>
+      </munder>
+     </mpadded>
+     <mrow>
+      <mo movablelimits="false">det</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>μ</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msub>
+          <mi>𝐱</mi>
+          <mi>w</mi>
+         </msub>
+         <mo>,</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>I</mi>
+          <mi>k</mi>
+         </msubsup>
+         <mo>,</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>D</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>k</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </msubsup>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mi>α</mi>
+     <mrow>
+      <msup>
+       <mo>trace</mo>
+       <mn>2</mn>
+      </msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>μ</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msub>
+          <mi>𝐱</mi>
+          <mi>w</mi>
+         </msub>
+         <mo>,</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>I</mi>
+          <mi>k</mi>
+         </msubsup>
+         <mo>,</mo>
+         <msubsup>
+          <mi>σ</mi>
+          <mi>D</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>k</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </msubsup>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>w</ci>
+     </apply>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <apply>
+       <apply>
+        <in></in>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>w</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>W</ci>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝐱</ci>
+           <ci>w</ci>
+          </apply>
+          <apply>
+           <minus></minus>
+           <ci>k</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <ci>argmax</ci>
+      </apply>
+      <apply>
+       <determinant></determinant>
+       <apply>
+        <times></times>
+        <ci>μ</ci>
+        <vector>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>w</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>I</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>D</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+        </vector>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>α</ci>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>trace</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>μ</ci>
+        <vector>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>w</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>I</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>σ</ci>
+           <ci>D</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+        </vector>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}_{w}^{(k)}=\underset{\mathbf{x}_{w}\in W(\mathbf{x}_{w}^{(k-1)})}{%
+\operatorname{argmax}}\,\det(\mu(\mathbf{x}_{w},\sigma_{I}^{k},\sigma_{D}^{(k)%
+}))-\alpha\operatorname{trace}^{2}(\mu(\mathbf{x}_{w},\sigma_{I}^{k},\sigma_{D%
+}^{(k)}))
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:122">
+ <semantics>
+  <mi>μ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>μ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu
+  </annotation>
+ </semantics>
+</math>
+
+ is the second-moment matrix as defined above. The window 
+
+<math display="inline" id="Harris_affine_region_detector:123">
+ <semantics>
+  <mrow>
+   <mi>W</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msubsup>
+     <mi>𝐱</mi>
+     <mi>w</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>W</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>w</ci>
+     </apply>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W(\mathbf{x}_{w}^{(k-1)})
+  </annotation>
+ </semantics>
+</math>
+
+ is the set of 8-nearest neighbors of the previous iteration's point in the normalized reference frame.</p>
+
+<p>Because our spatial localization was done in the 
+
+<math display="inline" id="Harris_affine_region_detector:124">
+ <semantics>
+  <mi>U</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>U</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U
+  </annotation>
+ </semantics>
+</math>
+
+-normalized reference frame, the newly chosen point must be transformed back to the original reference frame. This is achieved by transforming a displacement vector and adding this to the previous point:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:125">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>𝐱</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>𝐱</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mi>U</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>k</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msup>
+     <mo>⋅</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <msubsup>
+        <mi>𝐱</mi>
+        <mi>w</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>k</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+       <mo>-</mo>
+       <msubsup>
+        <mi>𝐱</mi>
+        <mi>w</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>k</mi>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>𝐱</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝐱</ci>
+      <apply>
+       <minus></minus>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>U</ci>
+       <apply>
+        <minus></minus>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>w</ci>
+        </apply>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>w</ci>
+        </apply>
+        <apply>
+         <minus></minus>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}^{(k)}=\mathbf{x}^{(k-1)}+U^{(k-1)}\cdot(\mathbf{x}_{w}^{(k)}-%
+\mathbf{x}_{w}^{(k-1)})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>|6= As mentioned above, the square-root of the second-moment matrix defines the transformation matrix that generates the normalized reference frame. We thus need to save this matrix
+
+<math display="block" id="Harris_affine_region_detector:126">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>μ</mi>
+    <mi>i</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>μ</mi>
+     <mrow>
+      <mo>-</mo>
+      <mstyle scriptlevel="-1">
+       <mfrac>
+        <mn>1</mn>
+        <mn>2</mn>
+       </mfrac>
+      </mstyle>
+     </mrow>
+    </msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msubsup>
+      <mi>𝐱</mi>
+      <mi>w</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>k</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+     <mo>,</mo>
+     <msubsup>
+      <mi>σ</mi>
+      <mi>I</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>k</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+     <mo>,</mo>
+     <msubsup>
+      <mi>σ</mi>
+      <mi>D</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>k</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>μ</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>μ</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <vector>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <ci>w</ci>
+       </apply>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>I</ci>
+       </apply>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>σ</ci>
+        <ci>D</ci>
+       </apply>
+       <ci>k</ci>
+      </apply>
+     </vector>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu_{i}^{(k)}=\mu^{-\tfrac{1}{2}}(\mathbf{x}_{w}^{(k)},\sigma_{I}^{(k)},\sigma%
+_{D}^{(k)})
+  </annotation>
+ </semantics>
+</math>
+
+. The transformation matrix 
+
+<math display="inline" id="Harris_affine_region_detector:127">
+ <semantics>
+  <mi>U</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>U</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U
+  </annotation>
+ </semantics>
+</math>
+
+ is updated
+
+<math display="block" id="Harris_affine_region_detector:128">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>U</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mi>μ</mi>
+     <mi>i</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>k</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+    <mo>⋅</mo>
+    <msup>
+     <mi>U</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>U</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <ci>normal-⋅</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>μ</ci>
+       <ci>i</ci>
+      </apply>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>U</ci>
+      <apply>
+       <minus></minus>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U^{(k)}=\mu_{i}^{(k)}\cdot U^{(k-1)}
+  </annotation>
+ </semantics>
+</math>
+
+. In order to ensure that the image gets sampled correctly and we are expanding the image in the direction of the least change (smallest eigenvalue), we fix the maximum eigenvalue
+
+<math display="block" id="Harris_affine_region_detector:129">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>λ</mi>
+     <mrow>
+      <mi>m</mi>
+      <mi>a</mi>
+      <mi>x</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msup>
+      <mi>U</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>k</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>λ</ci>
+      <apply>
+       <times></times>
+       <ci>m</ci>
+       <ci>a</ci>
+       <ci>x</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>U</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda_{max}(U^{(k)})=1
+  </annotation>
+ </semantics>
+</math>
+
+. Using this updating method, one can easily see that the final 
+
+<math display="inline" id="Harris_affine_region_detector:130">
+ <semantics>
+  <mi>U</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>U</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U
+  </annotation>
+ </semantics>
+</math>
+
+ matrix takes the following form:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:131">
+ <semantics>
+  <mrow>
+   <mi>U</mi>
+   <mo>=</mo>
+   <mrow>
+    <munder>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mi>k</mi>
+    </munder>
+    <mrow>
+     <msubsup>
+      <mi>μ</mi>
+      <mi>i</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>k</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+     <mo>⋅</mo>
+     <msup>
+      <mi>U</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mn>0</mn>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msup>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munder>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mi>k</mi>
+    </munder>
+    <mrow>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msup>
+        <mi>μ</mi>
+        <mrow>
+         <mo>-</mo>
+         <mstyle scriptlevel="-1">
+          <mfrac>
+           <mn>1</mn>
+           <mn>2</mn>
+          </mfrac>
+         </mstyle>
+        </mrow>
+       </msup>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>k</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msup>
+     <mo>⋅</mo>
+     <msup>
+      <mi>U</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mn>0</mn>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>U</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <ci>normal-⋅</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>μ</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>U</ci>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <ci>normal-⋅</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>μ</ci>
+         <apply>
+          <minus></minus>
+          <apply>
+           <divide></divide>
+           <cn type="integer">1</cn>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>U</ci>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U=\prod_{k}\mu_{i}^{(k)}\cdot U^{(0)}=\prod_{k}(\mu^{-\tfrac{1}{2}})^{(k)}%
+\cdot U^{(0)}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>|7= If the <strong>stopping criterion</strong> is not met, continue to the next iteration at step 2. Because the algorithm iteratively solves for the 
+
+<math display="inline" id="Harris_affine_region_detector:132">
+ <semantics>
+  <mrow>
+   <mi>U</mi>
+   <mo>-</mo>
+   <mrow>
+    <mi>n</mi>
+    <mi>o</mi>
+    <mi>r</mi>
+    <mi>m</mi>
+    <mi>a</mi>
+    <mi>l</mi>
+    <mi>i</mi>
+    <mi>z</mi>
+    <mi>a</mi>
+    <mi>t</mi>
+    <mi>i</mi>
+    <mi>o</mi>
+    <mi>n</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <ci>U</ci>
+    <apply>
+     <times></times>
+     <ci>n</ci>
+     <ci>o</ci>
+     <ci>r</ci>
+     <ci>m</ci>
+     <ci>a</ci>
+     <ci>l</ci>
+     <ci>i</ci>
+     <ci>z</ci>
+     <ci>a</ci>
+     <ci>t</ci>
+     <ci>i</ci>
+     <ci>o</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U-normalization
+  </annotation>
+ </semantics>
+</math>
+
+ matrix that transforms an anisotropic region into an isotropic region, it makes sense to stop when the isotropic measure, 
+
+<math display="inline" id="Harris_affine_region_detector:133">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒬</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msub>
+      <mi>λ</mi>
+      <mi>min</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>μ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <msub>
+      <mi>λ</mi>
+      <mi>max</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>μ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝒬</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>λ</ci>
+       <min></min>
+      </apply>
+      <ci>μ</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>λ</ci>
+       <max></max>
+      </apply>
+      <ci>μ</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{Q}=\frac{\lambda_{\min}(\mu)}{\lambda_{\max}(\mu)}
+  </annotation>
+ </semantics>
+</math>
+
+, is sufficiently close to its maximum value 1. <em>Sufficiently close</em> implies the following <strong>stopping condition</strong>:</p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:134">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mn>1</mn>
+    <mo>-</mo>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mi>λ</mi>
+       <mi>min</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msubsup>
+        <mi>μ</mi>
+        <mi>i</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>k</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msub>
+       <mi>λ</mi>
+       <mi>max</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msubsup>
+        <mi>μ</mi>
+        <mi>i</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>k</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo><</mo>
+   <msub>
+    <mi>ε</mi>
+    <mi>C</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <lt></lt>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>λ</ci>
+        <min></min>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>μ</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>k</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>λ</ci>
+        <max></max>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>μ</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>k</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>ε</ci>
+     <ci>C</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1-\frac{\lambda_{\min}(\mu_{i}^{(k)})}{\lambda_{\max}(\mu_{i}^{(k)})}<%
+\varepsilon_{C}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Mikolajczyk and Schmid (2004) had good success with 
+
+<math display="inline" id="Harris_affine_region_detector:135">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>ϵ</mi>
+    <mi>C</mi>
+   </msub>
+   <mo>=</mo>
+   <mn>0.05</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>ϵ</ci>
+     <ci>C</ci>
+    </apply>
+    <cn type="float">0.05</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon_{C}=0.05
+  </annotation>
+ </semantics>
+</math>
+
+. }}</p>
+<h2 id="computation-and-implementation">Computation and implementation</h2>
+
+<p>The computational complexity of the Harris-Affine detector is broken into two parts: initial point detection and affine region normalization. The initial point detection algorithm, Harris-Laplace, has complexity 
+
+<math display="inline" id="Harris_affine_region_detector:136">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒪</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>𝒪</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{O}(n)
+  </annotation>
+ </semantics>
+</math>
+
+ where 
+
+<math display="inline" id="Harris_affine_region_detector:137">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ is the number of pixels in the image. The affine region normalization algorithm automatically detects the scale and estimates the <em>shape adaptation matrix</em>, 
+
+<math display="inline" id="Harris_affine_region_detector:138">
+ <semantics>
+  <mi>U</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>U</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U
+  </annotation>
+ </semantics>
+</math>
+
+. This process has complexity 
+
+<math display="inline" id="Harris_affine_region_detector:139">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒪</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>m</mi>
+       <mo>+</mo>
+       <mi>k</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>𝒪</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <plus></plus>
+      <ci>m</ci>
+      <ci>k</ci>
+     </apply>
+     <ci>p</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{O}((m+k)p)
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Harris_affine_region_detector:140">
+ <semantics>
+  <mi>p</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>p</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p
+  </annotation>
+ </semantics>
+</math>
+
+ is the number of initial points, 
+
+<math display="inline" id="Harris_affine_region_detector:141">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+ is the size of the search space for the automatic scale selection and 
+
+<math display="inline" id="Harris_affine_region_detector:142">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ is the number of iterations required to compute the 
+
+<math display="inline" id="Harris_affine_region_detector:143">
+ <semantics>
+  <mi>U</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>U</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U
+  </annotation>
+ </semantics>
+</math>
+
+ matrix.<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a></p>
+
+<p>Some methods exist to reduce the complexity of the algorithm at the expense of accuracy. One method is to eliminate the search in the differentiation scale step. Rather than choose a factor 
+
+<math display="inline" id="Harris_affine_region_detector:144">
+ <semantics>
+  <mi>s</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>s</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s
+  </annotation>
+ </semantics>
+</math>
+
+ from a set of factors, the sped-up algorithm chooses the scale to be constant across iterations and points
+
+<math display="block" id="Harris_affine_region_detector:145">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>σ</mi>
+     <mi>D</mi>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <mi>s</mi>
+     <msub>
+      <mi>σ</mi>
+      <mi>I</mi>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo rspace="5.3pt">,</mo>
+   <mrow>
+    <mi>s</mi>
+    <mo>=</mo>
+    <mrow>
+     <mi>c</mi>
+     <mi>o</mi>
+     <mi>n</mi>
+     <mi>s</mi>
+     <mi>t</mi>
+     <mi>a</mi>
+     <mi>n</mi>
+     <mi>t</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>D</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>s</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>I</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <ci>s</ci>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <ci>o</ci>
+      <ci>n</ci>
+      <ci>s</ci>
+      <ci>t</ci>
+      <ci>a</ci>
+      <ci>n</ci>
+      <ci>t</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{D}=s\sigma_{I},\;s=constant
+  </annotation>
+ </semantics>
+</math>
+
+. Although this reduction in search space might decrease the complexity, this change can severely effect the convergence of the 
+
+<math display="inline" id="Harris_affine_region_detector:146">
+ <semantics>
+  <mi>U</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>U</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U
+  </annotation>
+ </semantics>
+</math>
+
+ matrix.</p>
+<h2 id="analysis">Analysis</h2>
+<h3 id="convergence">Convergence</h3>
+
+<p>One can imagine that this algorithm might identify duplicate interest points at multiple scales. Because the Harris affine algorithm looks at each initial point given by the Harris-Laplace detector independently, there is no discrimination between identical points. In practice, it has been shown that these points will ultimately all converge to the same interest point. After finishing identifying all interest points, the algorithm accounts for duplicates by comparing the spatial coordinates (
+
+<math display="inline" id="Harris_affine_region_detector:147">
+ <semantics>
+  <mi>𝐱</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐱</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}
+  </annotation>
+ </semantics>
+</math>
+
+), the integration scale 
+
+<math display="inline" id="Harris_affine_region_detector:148">
+ <semantics>
+  <msub>
+   <mi>σ</mi>
+   <mi>I</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>σ</ci>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{I}
+  </annotation>
+ </semantics>
+</math>
+
+, the isotropic measure 
+
+<math display="inline" id="Harris_affine_region_detector:149">
+ <semantics>
+  <mfrac>
+   <mrow>
+    <msub>
+     <mi>λ</mi>
+     <mi>min</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>U</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mrow>
+    <msub>
+     <mi>λ</mi>
+     <mi>max</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>U</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mfrac>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>λ</ci>
+      <min></min>
+     </apply>
+     <ci>U</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>λ</ci>
+      <max></max>
+     </apply>
+     <ci>U</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tfrac{\lambda_{\min}(U)}{\lambda_{\max}(U)}
+  </annotation>
+ </semantics>
+</math>
+
+ and skew.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a> If these interest point parameters are similar within a specified threshold, then they are labeled duplicates. The algorithm discards all these duplicate points except for the interest point that's closest to the average of the duplicates. Typically 30% of the Harris affine points are distinct and dissimilar enough to not be discarded.<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a></p>
+
+<p>Mikolajczyk and Schmid (2004) showed that often the initial points (40%) do not converge. The algorithm detects this divergence by stopping the iterative algorithm if the inverse of the isotropic measure is larger than a specified threshold
+
+<math display="block" id="Harris_affine_region_detector:150">
+ <semantics>
+  <mrow>
+   <mstyle displaystyle="false">
+    <mfrac>
+     <mrow>
+      <msub>
+       <mi>λ</mi>
+       <mi>max</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>U</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msub>
+       <mi>λ</mi>
+       <mi>min</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>U</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mstyle>
+   <mo>></mo>
+   <msub>
+    <mi>t</mi>
+    <mtext>diverge</mtext>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>λ</ci>
+       <max></max>
+      </apply>
+      <ci>U</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>λ</ci>
+       <min></min>
+      </apply>
+      <ci>U</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>t</ci>
+     <mtext>diverge</mtext>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tfrac{\lambda_{\max}(U)}{\lambda_{\min}(U)}>t_{\text{diverge}}
+  </annotation>
+ </semantics>
+</math>
+
+. Mikolajczyk and Schmid (2004) use 
+
+<math display="inline" id="Harris_affine_region_detector:151">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>t</mi>
+    <mrow>
+     <mi>d</mi>
+     <mi>i</mi>
+     <mi>v</mi>
+     <mi>e</mi>
+     <mi>r</mi>
+     <mi>g</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mn>6</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>t</ci>
+     <apply>
+      <times></times>
+      <ci>d</ci>
+      <ci>i</ci>
+      <ci>v</ci>
+      <ci>e</ci>
+      <ci>r</ci>
+      <ci>g</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <cn type="integer">6</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t_{diverge}=6
+  </annotation>
+ </semantics>
+</math>
+
+. Of those that did converge, the typical number of required iterations was 10.<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a></p>
+<h3 id="quantitative-measure">Quantitative measure</h3>
+
+<p>Quantitative analysis of affine region detectors take into account both the accuracy of point locations and the overlap of regions across two images. Mioklajcyzk and Schmid (2004) extend the <strong>repeatability measure</strong> of Schmid et al. (1998) as the ratio of point correspondences to minimum detected points of the two images.<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a><a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a></p>
+
+<p>
+
+<math display="block" id="Harris_affine_region_detector:152">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>R</mi>
+    <mtext>score</mtext>
+   </msub>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mi>C</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>A</mi>
+      <mo>,</mo>
+      <mi>B</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mi>min</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>n</mi>
+       <mi>A</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>n</mi>
+       <mi>B</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>R</ci>
+     <mtext>score</mtext>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>C</ci>
+      <interval closure="open">
+       <ci>A</ci>
+       <ci>B</ci>
+      </interval>
+     </apply>
+     <apply>
+      <min></min>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <ci>A</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <ci>B</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R_{\text{score}}=\frac{C(A,B)}{\min(n_{A},n_{B})}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Harris_affine_region_detector:153">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>A</mi>
+    <mo>,</mo>
+    <mi>B</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>C</ci>
+    <interval closure="open">
+     <ci>A</ci>
+     <ci>B</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C(A,B)
+  </annotation>
+ </semantics>
+</math>
+
+ are the number of corresponding points in images 
+
+<math display="inline" id="Harris_affine_region_detector:154">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:155">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+. 
+
+<math display="inline" id="Harris_affine_region_detector:156">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>B</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{B}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:157">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>A</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>A</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{A}
+  </annotation>
+ </semantics>
+</math>
+
+ are the number of detected points in the respective images. Because each image represents 3D space, it might be the case that the one image contains objects that are not in the second image and thus whose interest points have no chance of corresponding. In order to make the repeatability measure valid, one remove these points and must only consider points that lie in both images; 
+
+<math display="inline" id="Harris_affine_region_detector:158">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>A</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>A</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{A}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:159">
+ <semantics>
+  <msub>
+   <mi>n</mi>
+   <mi>B</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>n</ci>
+    <ci>B</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{B}
+  </annotation>
+ </semantics>
+</math>
+
+ only count those points such that 
+
+<math display="inline" id="Harris_affine_region_detector:160">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>x</mi>
+    <mi>A</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>H</mi>
+    <mo>⋅</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>B</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>A</ci>
+    </apply>
+    <apply>
+     <ci>normal-⋅</ci>
+     <ci>H</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>B</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{A}=H\cdot x_{B}
+  </annotation>
+ </semantics>
+</math>
+
+. For a pair of two images related through a <a href="homography_(computer_vision)" title="wikilink">homography</a> matrix 
+
+<math display="inline" id="Harris_affine_region_detector:161">
+ <semantics>
+  <mi>H</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>H</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H
+  </annotation>
+ </semantics>
+</math>
+
+, two points, 
+
+<math display="inline" id="Harris_affine_region_detector:162">
+ <semantics>
+  <msub>
+   <mi>𝐱</mi>
+   <mi>𝐚</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐱</ci>
+    <ci>𝐚</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x_{a}}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Harris_affine_region_detector:163">
+ <semantics>
+  <msub>
+   <mi>𝐱</mi>
+   <mi>𝐛</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝐱</ci>
+    <ci>𝐛</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x_{b}}
+  </annotation>
+ </semantics>
+</math>
+
+ are said to correspond if:</p>
+<h3 id="robustness-to-affine-and-other-transformations">Robustness to affine and other transformations</h3>
+
+<p>Mikolajczyk et al. (2005) have done a thorough analysis of several state-of-the-art affine region detectors: Harris affine, <a href="Hessian_affine" title="wikilink">Hessian affine</a>, <a class="uri" href="MSER" title="wikilink">MSER</a>,<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a> IBR &amp; EBR<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a> and <a href="Kadir_brady_saliency_detector" title="wikilink">salient</a><a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a> detectors.<a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a> Mikolajczyk et al. analyzed both structured images and textured images in their evaluation. Linux binaries of the detectors and their test images are freely available at their <a href="http://www.robots.ox.ac.uk/~vgg/research/affine/index.html">webpage</a>. A brief summary of the results of Mikolajczyk et al. (2005) follow; see <a href="http://www.robots.ox.ac.uk/~vgg/research/affine/det_eval_files/vibes_ijcv2004.pdf"><em>A comparison of affine region detectors</em></a> for a more quantitative analysis.</p>
+<ul>
+<li><strong>Viewpoint Angle Change:</strong> The Harris affine detector has reasonable (average) robustness to these types of changes. The detector maintains a repeatability score of above 50% up until a viewpoint angle of above 40 degrees. The detector tends to detect a high number of repeatable and matchable regions even under a large viewpoint change.</li>
+<li><strong>Scale Change:</strong> The Harris affine detector remains very consistent under scale changes. Although the number of points declines considerably at large scale changes (above 2.8), the repeatability (50-60%) and matching scores (25-30%) remain very constant especially with textured images. This is consistent with the high-performance of the automatic scale selection iterative algorithm.</li>
+<li><strong>Blurred Images:</strong> The Harris affine detector remains very stable under image blurring. Because the detector does not rely on image segmentation or region boundaries, the repeatability and matching scores remain constant.</li>
+<li><strong>JPEG Artifacts:</strong> The Harris affine detector degrades similar to other affine detectors: repeatability and matching scores drop significantly above 80% compression.</li>
+<li><strong>Illumination Changes:</strong> The Harris affine detector, like other affine detectors, is very robust to illumination changes: repeatability and matching scores remain constant under decreasing light. This should be expected because the detectors rely heavily on relative intensities (derivatives) and not absolute intensities.</li>
+</ul>
+<h3 id="general-trends">General trends</h3>
+<ul>
+<li>Harris affine region points tend to be small and numerous. Both the Harris-Affine detector and <a class="uri" href="Hessian-Affine" title="wikilink">Hessian-Affine</a> consistently identify double the number repeatable points as other affine detectors: ~1000 regions for an 800x640 image.<a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a> Small regions are less likely to be occluded but have a smaller chance of overlapping neighboring regions.</li>
+<li>The Harris affine detector responds well to textured scenes in which there are a lot of corner-like parts. However, for some structured scenes, like buildings, the Harris-Affine detector performs very well. This is complementary to MSER that tends to do better with well structured (segmentable) scenes.</li>
+<li>Overall the Harris affine detector performs very well, but still behind MSER and Hessian-Affine in all cases but blurred images.</li>
+<li>Harris-Affine and Hessian-Affine detectors are less accurate than others: their repeatability score increases as the overlap threshold is increased.</li>
+<li>The detected affine-invariant regions may still differ in their rotation and illumination. Any descriptor that uses these regions must account for the invariance when using the regions for matching or other comparisons.</li>
+</ul>
+<h2 id="applications">Applications</h2>
+<ul>
+<li><a href="CBIR" title="wikilink">Content-based image retrieval</a><a class="footnoteRef" href="#fn31" id="fnref31"><sup>31</sup></a><a class="footnoteRef" href="#fn32" id="fnref32"><sup>32</sup></a></li>
+<li>Model-based recognition</li>
+<li>Object retrieval in video<a class="footnoteRef" href="#fn33" id="fnref33"><sup>33</sup></a></li>
+<li>Visual data mining: identifying important objects, characters and scenes in videos<a class="footnoteRef" href="#fn34" id="fnref34"><sup>34</sup></a></li>
+<li>Object recognition and categorization<a class="footnoteRef" href="#fn35" id="fnref35"><sup>35</sup></a></li>
+<li>Remotely sensed image analysis: Object detection from remotely sensed images <a class="footnoteRef" href="#fn36" id="fnref36"><sup>36</sup></a></li>
+</ul>
+<h2 id="software-packages">Software packages</h2>
+<ul>
+<li><a href="http://www.robots.ox.ac.uk/~vgg/research/affine/">Affine Covariant Features</a>: K. Mikolajczyk maintains a web page that contains Linux binaries of the Harris-Affine detector in addition to other detectors and descriptors. Matlab code is also available that can be used to illustrate and compute the repeatability of various detectors. Code and images are also available to duplicate the results found in the Mikolajczyk et al. (2005) paper.</li>
+<li><a href="https://code.google.com/p/lip-vireo/">lip-vireo</a> - binary code for Linux, Windows and SunOS from VIREO research group. See more from the <a href="http://pami.xmu.edu.cn/~wlzhao/lip-vireo.htm">homepage</a></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://vasc.ri.cmu.edu/~hebert/04workshop/presentations/schmid_sicily04.ppt">1</a> - Presentation slides from Mikolajczyk et al. on their 2005 paper.</li>
+<li><a href="http://lear.inrialpes.fr/software">2</a> - Cordelia Schmid's Computer Vision Lab</li>
+<li><a href="http://www.robots.ox.ac.uk/~vgg/research/affine/">3</a> - Code, test Images, bibliography of Affine Covariant Features maintained by Krystian Mikolajczyk and the <a href="http://www.robots.ox.ac.uk/~vgg/">Visual Geometry Group</a> from the Robotics group at the University of Oxford.</li>
+<li><a href="http://iris.usc.edu/Vision-Notes/bibliography/twod275.html">4</a> - Bibliography of feature (and blob) detectors maintained by USC Institute for Robotics and Intelligent Systems</li>
+<li><a href="http://homepages.inf.ed.ac.uk/rbf/HIPR2/log.htm">5</a> - Digital implementation of Laplacian of Gaussian</li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a class="uri" href="Hessian-affine" title="wikilink">Hessian-affine</a></li>
+<li><a class="uri" href="MSER" title="wikilink">MSER</a></li>
+<li><a href="Kadir_brady_saliency_detector" title="wikilink">Kadir brady saliency detector</a></li>
+<li><a href="Scale_space" title="wikilink">Scale space</a></li>
+<li><a class="uri" href="Isotropy" title="wikilink">Isotropy</a></li>
+<li><a href="Corner_detection" title="wikilink">Corner detection</a></li>
+<li><a href="Interest_point_detection" title="wikilink">Interest point detection</a></li>
+<li><a href="Affine_shape_adaptation" title="wikilink">Affine shape adaptation</a></li>
+<li><a href="Image_Derivatives" title="wikilink">Image derivatives</a></li>
+<li><a href="Computer_vision" title="wikilink">Computer vision</a></li>
+<li><a href="http://mw.cmla.ens-cachan.fr/megawave/algo/asift/">ASIFT -&gt; Affine-Sift</a> (A fully affine invariant image matching algorithm)</li>
+</ul>
+<h2 id="references">References</h2>
+
+<p><a class="footnoteRef" href="#fn37" id="fnref37"><sup>37</sup></a></p>
+<references>
+</references>
+
+<p>"</p>
+
+<p><a href="Category:Feature_detection_(computer_vision)" title="wikilink">Category:Feature detection (computer vision)</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"></li>
+<li id="fn2"><a href="http://vasc.ri.cmu.edu/~hebert/04AP/mikolajc_ECCV2002.pdf">Mikolajcyk, K. and Schmid, C. 2002. An affine invariant interest point detector. In <em>Proceedings of the 8th International Conference on Computer Vision</em>, Vancouver, Canada.</a><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="http://www.nada.kth.se/~tony/abstracts/LG94-ECCV.html">T. Lindeberg and J. Garding (1997). "Shape-adapted smoothing in estimation of 3-{D} depth cues from affine distortions of local 2-{D} structure". Image and Vision Computing 15: pp 415—434.</a><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="http://citeseer.ist.psu.edu/baumberg00reliable.html">A. Baumberg (2000). "Reliable feature matching across widely separated views". Proceedings of IEEE Conference on Computer Vision and Pattern Recognition: pages I:1774—1781.</a><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="http://www.nada.kth.se/~tony/book.html">Lindeberg, Tony, Scale-Space Theory in Computer Vision, Kluwer Academic Publishers, 1994</a>, ISBN 0-7923-9418-6<a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="http://www.nada.kth.se/cvap/abstracts/cvap198.html">T. Lindeberg (1998). "Feature detection with automatic scale selection". International Journal of Computer Vision 30 (2): pp 77—116.</a><a href="#fnref6">↩</a></li>
+<li id="fn7">*<a href="#fnref7">↩</a></li>
+<li id="fn8"></li>
+<li id="fn9"><a href="http://www.csse.uwa.edu.au/~pk/research/matlabfns/Spatial/Docs/Harris/A_Combined_Corner_and_Edge_Detector.pdf">C. Harris and M. Stephens (1988). "A combined corner and edge detector". Proceedings of the 4th Alvey Vision Conference: pages 147—151.</a><a href="#fnref9">↩</a></li>
+<li id="fn10"></li>
+<li id="fn11"><a href="http://robotics.caltech.edu/readinggroup/vision/mikolajcICCV2001.pdf">K. Mikolajczyk and C. Schmid. Indexing based on scale invariant interest points. In Proceedings of the 8th International Conference on Computer Vision, Vancouver, Canada, pages 525-531, 2001.</a><a href="#fnref11">↩</a></li>
+<li id="fn12">Schmid, C., Mohr, R., and Bauckhage, C. 2000. Evaluation of interest point detectors. International Journal of Computer Vision, 37(2):151-172.<a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="http://www.robots.ox.ac.uk/~vgg/research/affine/det_eval_files/mikolajczyk_ijcv2004.pdf">Mikolajczyk, K. and Schmid, C. 2004. Scale &amp; affine invariant interest point detectors. <em>International Journal on Computer Vision</em> 60(1):63-86.</a><a href="#fnref13">↩</a></li>
+<li id="fn14"></li>
+<li id="fn15"></li>
+<li id="fn16"><a href="http://www.cee.hw.ac.uk/hipr/html/log.html">Spatial Filters: Laplacian/Laplacian of Gaussian</a><a href="#fnref16">↩</a></li>
+<li id="fn17"></li>
+<li id="fn18"></li>
+<li id="fn19"></li>
+<li id="fn20"></li>
+<li id="fn21"></li>
+<li id="fn22"></li>
+<li id="fn23"></li>
+<li id="fn24"></li>
+<li id="fn25">C. Schmid, R. Mohr, and C. Bauckhage. Comparing and evaluating interest points. In <em>International Conference on Computer Vision</em>, pp. 230-135, 1998.<a href="#fnref25">↩</a></li>
+<li id="fn26"><a href="http://www.robots.ox.ac.uk/~vgg/research/affine/det_eval_files/matas_bmvc2002.pdf">J.Matas, O. Chum, M. Urban, and T. Pajdla, Robust wide baseline stereo from maximally stable extremal regions. In BMVC p. 384-393, 2002.</a><a href="#fnref26">↩</a></li>
+<li id="fn27"><a href="http://www.robots.ox.ac.uk/~vgg/research/affine/det_eval_files/tuytelaars_ijcv2004.pdf">T. Tuytelaars and L. Van Gool, Matching widely separated views based on affine invariant regions. In IJCV 59(1):61-85, 2004.</a><a href="#fnref27">↩</a></li>
+<li id="fn28"><a href="http://www.robots.ox.ac.uk/~vgg/research/affine/det_eval_files/kadir04.pdf">T. Kadir, A. Zisserman, and M. Brady, An affine invariant salient region detector. In ECCV p. 404-416, 2004.</a><a href="#fnref28">↩</a></li>
+<li id="fn29"><a href="http://www.robots.ox.ac.uk/~vgg/research/affine/det_eval_files/vibes_ijcv2004.pdf">K. Mikolajczyk, T. Tuytelaars, C. Schmid, A. Zisserman, J. Matas, F. Schaffalitzky, T. Kadir and L. Van Gool, A comparison of affine region detectors. In IJCV 65(1/2):43-72, 2005</a><a href="#fnref29">↩</a></li>
+<li id="fn30"></li>
+<li id="fn31"><a class="uri" href="http://staff.science.uva.nl/~gevers/pub/overview.pdf">http://staff.science.uva.nl/~gevers/pub/overview.pdf</a><a href="#fnref31">↩</a></li>
+<li id="fn32"><a href="http://www.liacs.nl/home/mlew/mir.survey16b.pdf">R. Datta, J. Li, and J. Z. Wang, “Content-based image retrieval - Approaches and trends of the new age,” In Proc. Int. Workshop on Multimedia Information Retrieval, pp. 253-262, 2005.IEEE Transactions on Multimedia, vol. 7, no. 1, pp. 127-142, 2005.</a><a href="#fnref32">↩</a></li>
+<li id="fn33"><a href="http://www.robots.ox.ac.uk/~vgg/publications/papers/sivic03.pdf">J. Sivic and A. Zisserman. Video google: A text retrieval approach to object matching in videos. In Proceedings of the International Conference on Computer Vision, Nice, France, 2003.</a><a href="#fnref33">↩</a></li>
+<li id="fn34"><a href="http://www.robots.ox.ac.uk/~vgg/publications/papers/sivic04b.pdf">J. Sivic and A. Zisserman. Video data mining using configurations of viewpoint invariant regions. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, Washington DC, USA, pp. 488-495, 2004.</a><a href="#fnref34">↩</a></li>
+<li id="fn35"><a href="http://lear.inrialpes.fr/people/triggs/events/iccv03/cdrom/iccv03/0634_dorko.pdf">G. Dorko and C. Schmid. <em>Selection of scale invariant neighborhoods for object class recognition.</em> In Proceedings of International Conference on Computer Vision, Nice, France, pp. 634-640, 2003.</a><a href="#fnref35">↩</a></li>
+<li id="fn36"></li>
+<li id="fn37"><a href="#fnref37">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

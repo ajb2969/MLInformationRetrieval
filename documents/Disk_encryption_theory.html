@@ -1,0 +1,1893 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="278">Disk encryption theory</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Disk encryption theory</h1>
+<hr/>
+
+<p><strong>Disk encryption</strong> is a special case of <em><a href="Data_at_Rest" title="wikilink">data at rest</a></em> protection when the storage media is a sector-addressable device (e.g., a hard disk). This article presents cryptographic aspects of the problem. For discussion of different software packages and hardware devices devoted to this problem see <a href="disk_encryption_software" title="wikilink">disk encryption software</a> and <a href="disk_encryption_hardware" title="wikilink">disk encryption hardware</a>.</p>
+<h2 id="problem-definition">Problem definition</h2>
+
+<p>Disk encryption methods aim to provide three distinct properties:</p>
+<ol>
+<li>The data on the disk should remain <a href="confidentiality" title="wikilink">confidential</a></li>
+<li><a href="Data_retrieval" title="wikilink">Data retrieval</a> and storage should both be fast operations, no matter where on the disk the data is stored.</li>
+<li>The encryption method should not waste disk space (i.e., the amount of storage used for encrypted data should not be significantly larger than the size of <a class="uri" href="plaintext" title="wikilink">plaintext</a>)</li>
+</ol>
+
+<p>The first property requires defining an <a href="adversary_(cryptography)" title="wikilink">adversary</a> from whom the data is being kept confidential. The strongest adversaries studied in the field of disk encryption have these abilities:</p>
+<ol>
+<li>they can read the raw contents of the disk at any time;</li>
+<li>they can request the disk to encrypt and store arbitrary files of their choosing;</li>
+<li>and they can modify unused sectors on the disk and then request their decryption.</li>
+</ol>
+
+<p>A method provides good confidentiality if the only information such an adversary can determine over time is whether the data in a sector has or has not changed since the last time they looked.</p>
+
+<p>The second property requires dividing the disk into several <em>sectors</em>, usually 512 bytes ( bits) long, which are encrypted and decrypted independently of each other. In turn, if the data is to stay confidential, the encryption method must be <em>tweakable</em>; no two sectors should be processed in exactly the same way. Otherwise, the adversary could decrypt any sector of the disk by copying it to an unused sector of the disk and requesting its decryption.</p>
+
+<p>The third property is generally non-controversial. However, it indirectly prohibits the use of <a href="stream_ciphers" title="wikilink">stream ciphers</a>, since stream ciphers require, for their security, that the same initial state not be used twice (which would be the case if a sector is updated with different data); thus this would require an encryption method to store separate initial states for every sector on disk—seemingly a clear waste of space. The alternative, a <a href="block_cipher" title="wikilink">block cipher</a>, is limited to a certain block size (usually 128 or 256 bits). Because of this, disk encryption chiefly studies <a href="Block_cipher_modes_of_operation" title="wikilink">chaining modes</a>, which expand the encryption block length to cover a whole <a href="disk_sector" title="wikilink">disk sector</a>. The considerations already listed make several well-known chaining modes unsuitable: <a href="Electronic_codebook" title="wikilink">ECB mode</a>, which cannot be tweaked, and modes that turn block ciphers into stream ciphers, such as the <a href="Counter_mode" title="wikilink">CTR mode</a>.</p>
+
+<p>These three properties do not provide any assurance of disk integrity; that is, they don't tell you whether an adversary has been modifying your ciphertext. In part, this is because an absolute assurance of disk integrity is impossible: no matter what, an adversary could always revert the entire disk to a prior state, circumventing any such checks. If some non-absolute level of disk integrity is desired, it can be achieved within the encrypted disk on a file-by-file basis using <a href="message_authentication_codes" title="wikilink">message authentication codes</a>.</p>
+<h2 id="block-cipher-based-modes">Block cipher-based modes</h2>
+
+<p>Like most encryption schemes, block cipher-based disk encryption makes use of <em>modes of operation</em>, which allow encrypting larger amounts of data than the ciphers' block-size (typically 128 bits). Modes are therefore rules on how to repeatedly apply the ciphers' single-block operations.</p>
+<h3 id="cipher-block-chaining-cbc">Cipher-block chaining (CBC)</h3>
+
+<p><em>Cipher block chaining</em> (CBC) is a common chaining mode in which the previous block's ciphertext is <a href="exclusive_or" title="wikilink">xored</a> with the current block's plaintext before encryption:</p>
+
+<p>
+
+<math display="block" id="Disk_encryption_theory:0">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>C</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>K</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msub>
+       <mi>C</mi>
+       <mrow>
+        <mi>i</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+      <mo>⊕</mo>
+      <msub>
+       <mi>P</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>C</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>K</ci>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">direct-sum</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>C</ci>
+       <apply>
+        <minus></minus>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>P</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C_{i}=E_{K}(C_{i-1}\oplus P_{i})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Since there isn't a "previous block's ciphertext" for the first block, an <a href="initialization_vector" title="wikilink">initialization vector</a> (IV) must be used as 
+
+<math display="inline" id="Disk_encryption_theory:1">
+ <semantics>
+  <msub>
+   <mi>C</mi>
+   <mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>C</ci>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle C_{-1}
+  </annotation>
+ </semantics>
+</math>
+
+. This, in turn, makes CBC tweakable in some ways.</p>
+
+<p>CBC suffers from some problems. For example, <strong><em>if</em></strong> the IVs are predictable, then an adversary may leave a "watermark" on the disk, i.e., store a specially created file or combination of files which is identifiable even after encryption. The exact method of constructing the watermark depends on the exact function providing the IVs, but the general recipe is to create two encrypted sectors which have identical first blocks 
+
+<math display="inline" id="Disk_encryption_theory:2">
+ <semantics>
+  <msub>
+   <mi>b</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>b</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle b_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Disk_encryption_theory:3">
+ <semantics>
+  <msub>
+   <mi>b</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>b</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle b_{2}
+  </annotation>
+ </semantics>
+</math>
+
+; these two are then related to each other by 
+
+<math display="inline" id="Disk_encryption_theory:4">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <msub>
+      <mi>b</mi>
+      <mn>1</mn>
+     </msub>
+    </mpadded>
+    <mo rspace="4.2pt">⊕</mo>
+    <mrow>
+     <mi>I</mi>
+     <mpadded width="+2.8pt">
+      <msub>
+       <mi>V</mi>
+       <mn>1</mn>
+      </msub>
+     </mpadded>
+    </mrow>
+   </mrow>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <msub>
+      <mi>b</mi>
+      <mn>2</mn>
+     </msub>
+    </mpadded>
+    <mo rspace="4.2pt">⊕</mo>
+    <mrow>
+     <mi>I</mi>
+     <msub>
+      <mi>V</mi>
+      <mn>2</mn>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>b</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>I</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>V</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>b</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>I</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>V</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle b_{1}\,\oplus\,IV_{1}\;=\;b_{2}\,\oplus\,IV_{2}
+  </annotation>
+ </semantics>
+</math>
+
+. Thus the encryption of 
+
+<math display="inline" id="Disk_encryption_theory:5">
+ <semantics>
+  <msub>
+   <mi>b</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>b</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle b_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ is identical to the encryption of 
+
+<math display="inline" id="Disk_encryption_theory:6">
+ <semantics>
+  <msub>
+   <mi>b</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>b</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle b_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, leaving a watermark on the disk. The exact pattern of "same-different-same-different" on disk can then be altered to make the watermark unique to a given file.</p>
+
+<p>To protect against the watermarking attack, a cipher or a hash function is used to generate the IVs from the key and the current sector number, so that an adversary cannot predict the IVs. In particular, the <a href="#ESSIV" title="wikilink">ESSIV</a> approach uses a block cipher in CTR mode to generate the IVs.</p>
+<h4 id="encrypted-salt-sector-initialization-vector-essiv">Encrypted salt-sector initialization vector (ESSIV)</h4>
+
+<p>ESSIV<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> is a method for generating <a href="initialization_vector" title="wikilink">initialization vectors</a> for <a href="Block_cipher" title="wikilink">block encryption</a> to use in disk encryption. The usual methods for generating IVs are predictable sequences of numbers based on, for example, time stamp or sector number, and permits certain attacks such as a <a href="watermarking_attack" title="wikilink">watermarking attack</a>. ESSIV prevents such attacks by generating IVs from a combination of the sector number SN with the hash of the key. It is the combination with the key in form of a <a href="Cryptographic_hash_function" title="wikilink">hash</a> that makes the IV unpredictable.</p>
+
+<p>
+
+<math display="block" id="Disk_encryption_theory:7">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>I</mi>
+     <mi>V</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mtext>SN</mtext>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>E</mi>
+      <mi>s</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mtext>SN</mtext>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo rspace="12.5pt">,</mo>
+   <mrow>
+    <mrow>
+     <mpadded width="+5.6pt">
+      <mtext>where</mtext>
+     </mpadded>
+     <mi>s</mi>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mtext>hash</mtext>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>K</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>I</ci>
+      <ci>V</ci>
+      <mtext>SN</mtext>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <ci>s</ci>
+      </apply>
+      <mtext>SN</mtext>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <mtext>where</mtext>
+      <ci>s</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <mtext>hash</mtext>
+      <ci>K</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   IV(\textrm{SN})=E_{s}(\textrm{SN}),\quad\textrm{where}\;\;s=\textrm{hash}(K)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>ESSIV was designed by <a href="Clemens_Fruhwirth" title="wikilink">Clemens Fruhwirth</a> and has been integrated into the <a href="Linux_kernel" title="wikilink">Linux kernel</a> since version 2.6.10, though a similar scheme has been used to generate IVs for OpenBSD's swap encryption since 2000.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+
+<p>ESSIV is supported as an option by the <a class="uri" href="dm-crypt" title="wikilink">dm-crypt</a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> and <a class="uri" href="FreeOTFE" title="wikilink">FreeOTFE</a> disk encryption systems.</p>
+<h4 id="malleability-attack">Malleability attack</h4>
+
+<p>While CBC (with or without ESSIV) ensures confidentiality, it does not ensure integrity of the encrypted data. If the plaintext is known to the adversary, it is possible to change every 2nd plaintext block to a value chosen by the attacker, while the blocks in between are changed to random values. This can be used for practical attacks on disk encryption in CBC or CBC-ESSIV mode.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<h3 id="liskov-rivest-and-wagner-lrw">Liskov, Rivest, and Wagner (LRW)</h3>
+
+<p>In order to prevent such elaborate attacks, different modes of operation were introduced: tweakable narrow-block encryption (LRW and XEX) and wide-block encryption (CMC and EME).</p>
+
+<p>Whereas a purpose of a usual block cipher 
+
+<math display="inline" id="Disk_encryption_theory:8">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>K</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>K</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle E_{K}
+  </annotation>
+ </semantics>
+</math>
+
+ is to mimic a random permutation for any secret key 
+
+<math display="inline" id="Disk_encryption_theory:9">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle K
+  </annotation>
+ </semantics>
+</math>
+
+, the purpose of <em>tweakable</em> encryption 
+
+<math display="inline" id="Disk_encryption_theory:10">
+ <semantics>
+  <msubsup>
+   <mi>E</mi>
+   <mi>K</mi>
+   <mi>T</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <ci>K</ci>
+    </apply>
+    <ci>T</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle E_{K}^{T}
+  </annotation>
+ </semantics>
+</math>
+
+is to mimic a random permutation for any secret key 
+
+<math display="inline" id="Disk_encryption_theory:11">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle K
+  </annotation>
+ </semantics>
+</math>
+
+ and any known tweak 
+
+<math display="inline" id="Disk_encryption_theory:12">
+ <semantics>
+  <mi>T</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>T</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle T
+  </annotation>
+ </semantics>
+</math>
+
+. The tweakable narrow-block encryption (LRW) is an instantiation of the mode of operations introduced by Liskov, Rivest, and Wagner (see Theorem 2). This mode uses two keys
+
+<math display="block" id="Disk_encryption_theory:13">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle K
+  </annotation>
+ </semantics>
+</math>
+
+ is the key for the block cipher and 
+
+<math display="inline" id="Disk_encryption_theory:14">
+ <semantics>
+  <mi>F</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>F</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle F
+  </annotation>
+ </semantics>
+</math>
+
+ is an additional key of the same size as block. For example, for AES with a 256-bit key, 
+
+<math display="inline" id="Disk_encryption_theory:15">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle K
+  </annotation>
+ </semantics>
+</math>
+
+ is a 256-bit number and 
+
+<math display="inline" id="Disk_encryption_theory:16">
+ <semantics>
+  <mi>F</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>F</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle F
+  </annotation>
+ </semantics>
+</math>
+
+ is a 128-bit number. Encrypting block 
+
+<math display="inline" id="Disk_encryption_theory:17">
+ <semantics>
+  <mi>P</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>P</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle P
+  </annotation>
+ </semantics>
+</math>
+
+ with logical index (tweak) 
+
+<math display="inline" id="Disk_encryption_theory:18">
+ <semantics>
+  <mi>I</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>I</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle I
+  </annotation>
+ </semantics>
+</math>
+
+ uses the following formula:</p>
+
+<p>
+
+<math display="inline" id="Disk_encryption_theory:19">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle C
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>Here multiplication 
+
+<math display="inline" id="Disk_encryption_theory:20">
+ <semantics>
+  <mo>⊗</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">tensor-product</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\otimes
+  </annotation>
+ </semantics>
+</math>
+
+ and addition 
+
+<math display="inline" id="Disk_encryption_theory:21">
+ <semantics>
+  <mo>⊕</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">direct-sum</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\oplus
+  </annotation>
+ </semantics>
+</math>
+
+ are <a href="Finite_field_arithmetic" title="wikilink">performed</a> in the finite field (
+
+<math display="inline" id="Disk_encryption_theory:22">
+ <semantics>
+  <mrow>
+   <mtext>GF</mtext>
+   <mrow>
+    <mo>(</mo>
+    <msup>
+     <mn>2</mn>
+     <mn>128</mn>
+    </msup>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <mtext>GF</mtext>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cn type="integer">2</cn>
+     <cn type="integer">128</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\text{GF}\left(2^{128}\right)
+  </annotation>
+ </semantics>
+</math>
+
+
+ for AES). With some precomputation, only a single multiplication per sector is required (note that addition in a binary finite field is a simple bitwise addition, also known as xor)
+
+<math display="block" id="Disk_encryption_theory:23">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <mi>F</mi>
+    </mpadded>
+    <mo rspace="4.2pt">⊗</mo>
+    <mpadded width="+2.8pt">
+     <mi>I</mi>
+    </mpadded>
+   </mrow>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <mi>F</mi>
+    </mpadded>
+    <mo rspace="4.2pt">⊗</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mpadded width="+1.7pt">
+       <msub>
+        <mi>I</mi>
+        <mn>0</mn>
+       </msub>
+      </mpadded>
+      <mo rspace="4.2pt">⊕</mo>
+      <mi>δ</mi>
+     </mrow>
+     <mo rspace="5.3pt" stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <mrow>
+     <mpadded width="+1.7pt">
+      <mi>F</mi>
+     </mpadded>
+     <mo rspace="4.2pt">⊗</mo>
+     <mpadded width="+1.7pt">
+      <msub>
+       <mi>I</mi>
+       <mn>0</mn>
+      </msub>
+     </mpadded>
+    </mrow>
+    <mo rspace="4.2pt">⊕</mo>
+    <mrow>
+     <mpadded width="+1.7pt">
+      <mi>F</mi>
+     </mpadded>
+     <mo rspace="4.2pt">⊗</mo>
+     <mi>δ</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="latexml">tensor-product</csymbol>
+      <ci>F</ci>
+      <ci>I</ci>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">tensor-product</csymbol>
+      <ci>F</ci>
+      <apply>
+       <csymbol cd="latexml">direct-sum</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>I</ci>
+        <cn type="integer">0</cn>
+       </apply>
+       <ci>δ</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <csymbol cd="latexml">direct-sum</csymbol>
+      <apply>
+       <csymbol cd="latexml">tensor-product</csymbol>
+       <ci>F</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>I</ci>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="latexml">tensor-product</csymbol>
+       <ci>F</ci>
+       <ci>δ</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle F\,\otimes\,I\;=\;F\,\otimes\,(I_{0}\,\oplus\,\delta)\;=\;F\,%
+\otimes\,I_{0}\,\oplus\,F\,\otimes\,\delta
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Disk_encryption_theory:24">
+ <semantics>
+  <mrow>
+   <mpadded width="+1.7pt">
+    <mi>F</mi>
+   </mpadded>
+   <mo rspace="4.2pt">⊗</mo>
+   <mi>δ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">tensor-product</csymbol>
+    <ci>F</ci>
+    <ci>δ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle F\,\otimes\,\delta
+  </annotation>
+ </semantics>
+</math>
+
+ are precomputed for all possible values of 
+
+<math display="inline" id="Disk_encryption_theory:25">
+ <semantics>
+  <mi>δ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>δ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\delta
+  </annotation>
+ </semantics>
+</math>
+
+. This mode of operation needs only a single encryption per block and protects against all the above attacks except a minor leak: if the user changes a single plaintext block in a sector then only a single ciphertext block changes. (Note that this is not the same leak the ECB mode has: with LRW mode equal plaintexts in different positions are encrypted to different ciphertexts.)</p>
+
+<p>Some <a href="IEEE_P1619#LRW_issue" title="wikilink">security concerns exist with LRW</a>, and this mode of operation has now been replaced by XTS.</p>
+
+<p>LRW is employed by <a class="uri" href="Bestcrypt" title="wikilink">Bestcrypt</a> and supported as an option for <a class="uri" href="dm-crypt" title="wikilink">dm-crypt</a> and <a class="uri" href="FreeOTFE" title="wikilink">FreeOTFE</a> disk encryption systems.</p>
+<h3 id="xor-encrypt-xor-xex">Xor-encrypt-xor (XEX)</h3>
+
+<p>Another tweakable encryption mode XEX (<a class="uri" href="xor-encrypt-xor" title="wikilink">xor-encrypt-xor</a>), was designed by Rogaway<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> to allow efficient processing of consecutive blocks (with respect to the cipher used) within one data unit (e.g., a disk sector). The tweak is represented as a combination of the sector address and index of the block within the sector (the original XEX mode proposed by Rogaway<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> allows several indexes). The ciphertext, 
+
+<math display="inline" id="Disk_encryption_theory:26">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle C
+  </annotation>
+ </semantics>
+</math>
+
+, is obtained using:</p>
+
+<p>
+
+<math display="inline" id="Disk_encryption_theory:27">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle X
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>where:</p>
+<ul>
+<li>
+
+<math display="inline" id="Disk_encryption_theory:28">
+ <semantics>
+  <mi>P</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>P</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle P
+  </annotation>
+ </semantics>
+</math>
+
+ is the plaintext,</li>
+<li>
+
+<math display="inline" id="Disk_encryption_theory:29">
+ <semantics>
+  <mi>I</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>I</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle I
+  </annotation>
+ </semantics>
+</math>
+
+ is the number of the sector,</li>
+<li>
+
+<math display="inline" id="Disk_encryption_theory:30">
+ <semantics>
+  <mi>α</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\alpha
+  </annotation>
+ </semantics>
+</math>
+
+ is the primitive element of 
+
+<math display="inline" id="Disk_encryption_theory:31">
+ <semantics>
+  <mrow>
+   <mtext>GF</mtext>
+   <mrow>
+    <mo>(</mo>
+    <msup>
+     <mn>2</mn>
+     <mn>128</mn>
+    </msup>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <mtext>GF</mtext>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cn type="integer">2</cn>
+     <cn type="integer">128</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle\text{GF}\left(2^{128}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ defined by polynomial 
+
+<math display="inline" id="Disk_encryption_theory:32">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle x
+  </annotation>
+ </semantics>
+</math>
+
+; i.e., the number <em>2</em>,</li>
+<li>
+
+<math display="inline" id="Disk_encryption_theory:33">
+ <semantics>
+  <mi>j</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>j</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle j
+  </annotation>
+ </semantics>
+</math>
+
+ is the number of the block within the sector.</li>
+</ul>
+
+<p>The basic operations of the LRW mode (AES cipher and <a href="Galois_field" title="wikilink">Galois field</a> multiplication) are the same as the ones used in the <a href="Galois/Counter_Mode" title="wikilink">Galois/Counter Mode</a> (GCM) thus permitting a compact implementation of the universal LRW/XEX/GCM hardware.</p>
+<h3 id="xex-based-tweaked-codebook-mode-with-ciphertext-stealing-xts">XEX-based tweaked-codebook mode with ciphertext stealing (XTS)</h3>
+
+<p><a href="Ciphertext_stealing" title="wikilink">Ciphertext stealing</a> provides support for sectors with size not divisible by block size, for example, 520-byte sectors and 16-byte blocks. XTS-AES was standardized on 2007-12-19<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> as <a href="IEEE_P1619" title="wikilink">IEEE P1619</a>.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+<figure><b>(Figure)</b>
+<figcaption>XTS encryption.svg</figcaption>
+</figure>
+
+<p>On January 27, 2010, <a class="uri" href="NIST" title="wikilink">NIST</a> released Special Publication (SP) 800-38E<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> in final form. SP 800-38E is a recommendation for the XTS-AES mode of operation, as standardized by IEEE Std 1619-2007, for cryptographic modules. The publication approves the XTS-AES mode of the AES algorithm by reference to the IEEE Std 1619-2007, subject to one additional requirement, which limits the maximum size of each encrypted data unit (typically a <a href="disk_sector" title="wikilink">sector</a> or <a href="block_(data_storage)" title="wikilink">disk block</a>) to 
+
+<math display="inline" id="Disk_encryption_theory:34">
+ <semantics>
+  <msup>
+   <mn>2</mn>
+   <mn>20</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <cn type="integer">2</cn>
+    <cn type="integer">20</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   2^{20}
+  </annotation>
+ </semantics>
+</math>
+
+ AES blocks. According to SP 800-38E, "In the absence of authentication or access control, XTS-AES provides more protection than the other approved confidentiality-only modes against unauthorized manipulation of the encrypted data."</p>
+
+<p>XTS is supported by <a class="uri" href="BestCrypt" title="wikilink">BestCrypt</a>, <a class="uri" href="dm-crypt" title="wikilink">dm-crypt</a>, <a class="uri" href="FreeOTFE" title="wikilink">FreeOTFE</a>, <a class="uri" href="TrueCrypt" title="wikilink">TrueCrypt</a>, <a class="uri" href="DiskCryptor" title="wikilink">DiskCryptor</a>, <a class="uri" href="FreeBSD" title="wikilink">FreeBSD</a>'s <a href="Geli_(software)" title="wikilink">geli</a>, <a class="uri" href="OpenBSD" title="wikilink">OpenBSD</a> softraid disk encryption software, and <a href="Mac_OS_X_Lion" title="wikilink">Mac OS X Lion</a>'s <a class="uri" href="FileVault" title="wikilink">FileVault</a> 2.</p>
+
+<p>XTS makes use of two different keys, usually generated by splitting the supplied block cipher's key in half, without adding any additional security, but complicating the process.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> According to this source, the reason for this seems to be rooted in a misinterpretation of the original XEX-paper.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> Because of the splitting, users wanting AES 256 and AES 128 encryption will need to choose key sizes of 512 bits and 256 bits respectively.</p>
+<h4 id="xts-weaknesses">XTS weaknesses</h4>
+
+<p>XTS mode is susceptible to data manipulation and tampering, and applications must employ measures to detect modifications of data if manipulation and tampering is a concern: "...since there are no authentication tags then any ciphertext (original or modified by attacker) will be decrypted as some plaintext and there is no built-in mechanism to detect alterations. The best that can be done is to ensure that any alteration of the ciphertext will completely randomize the plaintext, and rely on the application that uses this transform to include sufficient redundancy in its plaintext to detect and discard such random plaintexts." This would require maintaining checksums for all data and metadata on disk, as done in ZFS or BTRFS. However in commonly used file-systems such as ext4 and NTFS only metadata is protected against tampering, while the detection of data tampering is non existent.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+
+<p>The mode is susceptible to traffic analysis, replay and randomization attacks on sectors and 16-byte blocks. As a given sector is rewritten, attackers can collect fine-grained (16 byte) ciphertexts, which can be used for analysis or replay attacks (at a 16 byte granularity). It would be possible to define sector-wide block ciphers, unfortunately with degraded performance (see below).<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h3 id="cbc-mask-cbc-cmc-and-ecb-mask-ecb-eme">CBC-mask-CBC (CMC) and ECB-mask-ECB (EME)</h3>
+
+<p>CMC and EME protect even against the minor leak mentioned above for LRW. Unfortunately, the price is a twofold degradation of performance: each block must be encrypted twice; many consider this to be too high a cost, since the same leak on a sector level is unavoidable anyway.</p>
+
+<p>CMC, introduced by Halevi and Rogaway, stands for CBC-mask-CBC: the whole sector encrypted in CBC mode (with 
+
+<math display="inline" id="Disk_encryption_theory:35">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <msub>
+     <mi>C</mi>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+   </mpadded>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>A</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>I</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>C</ci>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>A</ci>
+     </apply>
+     <ci>I</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle C_{-1}\;=\;E_{A}(I)
+  </annotation>
+ </semantics>
+</math>
+
+), the ciphertext is masked by xoring with 
+
+<math display="inline" id="Disk_encryption_theory:36">
+ <semantics>
+  <mrow>
+   <mn>2</mn>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mpadded width="+1.7pt">
+      <msubsup>
+       <mi>C</mi>
+       <mn>0</mn>
+       <mo>′</mo>
+      </msubsup>
+     </mpadded>
+     <mo rspace="4.2pt">⊕</mo>
+     <msubsup>
+      <mi>C</mi>
+      <mrow>
+       <mi>k</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo>′</mo>
+     </msubsup>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <cn type="integer">2</cn>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>C</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <cn type="integer">0</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>C</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle 2(C^{\prime}_{0}\,\oplus\,C^{\prime}_{k-1})
+  </annotation>
+ </semantics>
+</math>
+
+, and re-encrypted in CBC mode starting from the last block. When the underlying block cipher is a strong <a href="pseudorandom_permutation" title="wikilink">pseudorandom permutation</a> (PRP) then on the sector level the scheme is a tweakable PRP. One problem is that in order to decrypt 
+
+<math display="inline" id="Disk_encryption_theory:37">
+ <semantics>
+  <msub>
+   <mi>P</mi>
+   <mn>0</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>P</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle P_{0}
+  </annotation>
+ </semantics>
+</math>
+
+ one must sequentially pass over all the data twice.</p>
+
+<p>In order to solve this problem, Halevi and Rogaway introduced a parallelizable variant called EME (ECB-mask-ECB). It works in the following way:</p>
+<ul>
+<li>the plaintexts are xored with 
+
+<math display="inline" id="Disk_encryption_theory:38">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <mi>L</mi>
+   </mpadded>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>K</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>0</mn>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>L</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>K</ci>
+     </apply>
+     <cn type="integer">0</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle L\;=\;E_{K}(0)
+  </annotation>
+ </semantics>
+</math>
+
+, shifted by different amount to the left, and are encrypted
+
+<math display="block" id="Disk_encryption_theory:39">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <msubsup>
+     <mi>P</mi>
+     <mi>i</mi>
+     <mo>′</mo>
+    </msubsup>
+   </mpadded>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>K</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mpadded width="+1.7pt">
+       <msub>
+        <mi>P</mi>
+        <mi>i</mi>
+       </msub>
+      </mpadded>
+      <mo>⊕</mo>
+      <mrow>
+       <msup>
+        <mn>2</mn>
+        <mi>i</mi>
+       </msup>
+       <mi>L</mi>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>P</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>K</ci>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">direct-sum</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>P</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <cn type="float">2</cn>
+        <ci>i</ci>
+       </apply>
+       <ci>L</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle P^{\prime}_{i}\;=\;E_{K}(P_{i}\,\oplus\,2^{i}L)
+  </annotation>
+ </semantics>
+</math>
+
+;</li>
+<li>the mask is calculated
+
+<math display="block" id="Disk_encryption_theory:40">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <mi>M</mi>
+   </mpadded>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <msub>
+      <mi>M</mi>
+      <mi>P</mi>
+     </msub>
+    </mpadded>
+    <mo rspace="4.2pt">⊕</mo>
+    <msub>
+     <mi>M</mi>
+     <mi>C</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>M</ci>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <ci>P</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <ci>C</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle M\;=\;M_{P}\,\oplus\,M_{C}
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Disk_encryption_theory:41">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <msub>
+     <mi>M</mi>
+     <mi>P</mi>
+    </msub>
+   </mpadded>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <mi>I</mi>
+    </mpadded>
+    <mo rspace="4.2pt">⊕</mo>
+    <mrow>
+     <mo largeop="true" mathsize="160%" stretchy="false" symmetric="true">⊕</mo>
+     <msubsup>
+      <mi>P</mi>
+      <mi>i</mi>
+      <mo>′</mo>
+     </msubsup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>M</ci>
+     <ci>P</ci>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <ci>I</ci>
+     <apply>
+      <csymbol cd="latexml">direct-sum</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>P</ci>
+        <ci>normal-′</ci>
+       </apply>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle M_{P}\;=\;I\,\oplus\,\bigoplus P^{\prime}_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Disk_encryption_theory:42">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <msub>
+     <mi>M</mi>
+     <mi>C</mi>
+    </msub>
+   </mpadded>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>K</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>M</mi>
+      <mi>P</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>M</ci>
+     <ci>C</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>K</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <ci>P</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle M_{C}\;=\;E_{K}(M_{P})
+  </annotation>
+ </semantics>
+</math>
+
+;</li>
+<li>intermediate ciphertexts are masked
+
+<math display="block" id="Disk_encryption_theory:43">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <msubsup>
+     <mi>C</mi>
+     <mi>i</mi>
+     <mo>′</mo>
+    </msubsup>
+   </mpadded>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <msubsup>
+      <mi>P</mi>
+      <mi>i</mi>
+      <mo>′</mo>
+     </msubsup>
+    </mpadded>
+    <mo>⊕</mo>
+    <mrow>
+     <msup>
+      <mn>2</mn>
+      <mi>i</mi>
+     </msup>
+     <mi>M</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>C</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>P</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="float">2</cn>
+       <ci>i</ci>
+      </apply>
+      <ci>M</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle C^{\prime}_{i}\;=\;P^{\prime}_{i}\,\oplus\,2^{i}M
+  </annotation>
+ </semantics>
+</math>
+
+ for 
+
+<math display="inline" id="Disk_encryption_theory:44">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <mi>i</mi>
+   </mpadded>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo rspace="4.2pt">,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo rspace="4.2pt">,</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>i</ci>
+    <list>
+     <cn type="float">1</cn>
+     <ci>normal-…</ci>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle i\;=\;1,\,\ldots,\,k-1
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Disk_encryption_theory:45">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <msubsup>
+     <mi>C</mi>
+     <mn>0</mn>
+     <mo>′</mo>
+    </msubsup>
+   </mpadded>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <msub>
+      <mi>M</mi>
+      <mi>C</mi>
+     </msub>
+    </mpadded>
+    <mo rspace="4.2pt">⊕</mo>
+    <mpadded width="+1.7pt">
+     <mi>I</mi>
+    </mpadded>
+    <mo rspace="4.2pt">⊕</mo>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" mathsize="160%" stretchy="false" symmetric="true">⊕</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mrow>
+       <mi>k</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+     <msubsup>
+      <mi>C</mi>
+      <mi>i</mi>
+      <mo>′</mo>
+     </msubsup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>C</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <cn type="integer">0</cn>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <ci>C</ci>
+     </apply>
+     <ci>I</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <csymbol cd="latexml">direct-sum</csymbol>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>C</ci>
+        <ci>normal-′</ci>
+       </apply>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle C^{\prime}_{0}\;=\;M_{C}\,\oplus\,I\,\oplus\,\bigoplus_{i=1}^{k-1%
+}C^{\prime}_{i}
+  </annotation>
+ </semantics>
+</math>
+
+;</li>
+<li>the final ciphertexts are calculated
+
+<math display="block" id="Disk_encryption_theory:46">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <msub>
+     <mi>C</mi>
+     <mi>i</mi>
+    </msub>
+   </mpadded>
+   <mo rspace="5.3pt">=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>E</mi>
+      <mi>K</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msubsup>
+       <mi>C</mi>
+       <mi>i</mi>
+       <mo>′</mo>
+      </msubsup>
+      <mo rspace="4.2pt" stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>⊕</mo>
+    <mrow>
+     <msup>
+      <mn>2</mn>
+      <mi>i</mi>
+     </msup>
+     <mi>L</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>C</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">direct-sum</csymbol>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <ci>K</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>C</ci>
+        <ci>normal-′</ci>
+       </apply>
+       <ci>i</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="float">2</cn>
+       <ci>i</ci>
+      </apply>
+      <ci>L</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle C_{i}\;=\;E_{K}(C^{\prime}_{i})\,\oplus\,2^{i}L
+  </annotation>
+ </semantics>
+</math>
+
+ for 
+
+<math display="inline" id="Disk_encryption_theory:47">
+ <semantics>
+  <mrow>
+   <mpadded width="+2.8pt">
+    <mi>i</mi>
+   </mpadded>
+   <mo>=</mo>
+   <mrow>
+    <mn>0</mn>
+    <mo rspace="4.2pt">,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo rspace="4.2pt">,</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>i</ci>
+    <list>
+     <cn type="float">0</cn>
+     <ci>normal-…</ci>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle i\;=\;0,\,\ldots,\,k-1
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+</ul>
+
+<p>Note that unlike LRW and CMC there is only a single key 
+
+<math display="inline" id="Disk_encryption_theory:48">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \scriptstyle K
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>CMC and EME were considered for standardization by <a class="uri" href="SISWG" title="wikilink">SISWG</a>. CMC was rejected for technical considerations. EME is patented, and so is not favored to be a primary supported mode.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Data_remanence" title="wikilink">Data remanence</a></li>
+<li><a href="Cold_boot_attack" title="wikilink">Cold boot attack</a></li>
+<li><a href="Disk_encryption_software" title="wikilink">Disk encryption software</a></li>
+<li><a href="Disk_encryption_hardware" title="wikilink">Disk encryption hardware</a></li>
+<li><a href="Full_disk_encryption" title="wikilink">Full disk encryption</a></li>
+<li><a href="IEEE_P1619" title="wikilink">IEEE P1619</a>, standardization project for encryption of the storage data</li>
+</ul>
+<h2 id="sources">Sources</h2>
+<h3 id="references">References</h3>
+<h3 id="endnotes">Endnotes</h3>
+<ol>
+<li>
+
+<p>Latest SISWG and IEEE P1619 drafts and meeting information are on the P1619 home page <a href="http://siswg.net/">1</a>.</p></li>
+<li>
+
+<p>M. Liskov, R. Rivest, and D. Wagner. <em>Tweakable block ciphers</em> <a href="http://theory.lcs.mit.edu/~rivest/LiskovRivestWagner-TweakableBlockCiphers.pdf">2</a>, CRYPTO '02 (LNCS, volume 2442), 2002.</p></li>
+<li>
+
+<p>P. Rogaway, <em>Block cipher mode of operation for constructing a wide-blocksize block cipher from a conventional block cipher</em>, US Patent Application 20040131182 A1, [<a class="uri" href="http://appft1.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&amp;Sect2">http://appft1.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&amp;Sect2;</a>;=HITOFF&amp;p;=1&amp;u;=%2Fnetahtml%2FPTO%2Fsearch-bool.html&amp;r;=1&amp;f;=G&amp;l;=50&amp;co1;=AND&amp;d;=PG01&amp;s1;=rogaway.IN.&amp;OS;=IN/rogaway]</p></li>
+</ol>
+<h3 id="papers">Papers</h3>
+<ul>
+<li>S. Halevi and P. Rogaway, <em>A Tweakable Enciphering Mode</em>, CRYPTO '03 (LNCS, volume 2729), 2003.</li>
+<li>S. Halevi and P. Rogaway, <em>A Parallelizable Enciphering Mode</em> <a href="http://www.cs.ucdavis.edu/~rogaway/papers/eme.ps">3</a>, 2003.</li>
+<li>Standard Architecture for Encrypted Shared Storage Media, IEEE Project 1619 (P1619), [<a class="uri" href="https://siswg.net/index.php?option=com_content&amp;task">https://siswg.net/index.php?option=com_content&amp;task;</a>;=view&amp;id;=38&amp;Itemid;=73].</li>
+<li>SISWG, <em>Draft Proposal for Key Backup Format</em> <a href="http://www.siswg.org/docs/KeyBackup-10-04-2004.pdf">4</a>, 2004.</li>
+<li>SISWG, <em>Draft Proposal for Tweakable Wide-block Encryption</em> <a href="http://www.siswg.org/docs/EME-AES-03-22-2004.pdf">5</a>, 2004.</li>
+<li>James Hughes, <em>Encrypted Storage — Challenges and Methods</em> <a href="http://www.dtc.umn.edu/resources/hughes1.pdf">6</a></li>
+<li></li>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li>Security in Storage Working Group <a href="http://www.siswg.org/">SISWG</a>.</li>
+<li></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Disk_encryption" title="wikilink"> </a> <a href="Category:Block_cipher_modes_of_operation" title="wikilink">Category:Block cipher modes of operation</a> <a href="Category:Authenticated-encryption_schemes" title="wikilink">Category:Authenticated-encryption schemes</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"></li>
+<li id="fn6"></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10">, <em>On the Use of Two Keys</em>, pp. 1-3.<a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

@@ -1,0 +1,167 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title offset="1310">Shadow mapping</title>
+   <script type="text/javascript"
+      src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js">
+    </script>
+</head>
+<body>
+<h1>Shadow mapping</h1>
+<hr/>
+<p>  <strong>Shadow mapping</strong> or <strong>projective shadowing</strong> is a process by which <a href="shadow" title="wikilink">shadows</a> are added to <a href="3D_computer_graphics" title="wikilink">3D computer graphics</a>. This concept was introduced by <a href="Lance_Williams" title="wikilink">Lance Williams</a> in 1978, in a paper entitled "Casting curved shadows on curved surfaces". Since then, it has been used both in pre-rendered scenes and realtime scenes in many console and PC games.</p>
+<p>Shadows are created by testing whether a <a class="uri" href="pixel" title="wikilink">pixel</a> is visible from the light source, by comparing the pixel to a <a href="z-buffering" title="wikilink">z-buffer</a> or <em>depth</em> image of the light source's view, stored in the form of a <a href="texture_mapping" title="wikilink">texture</a>.</p>
+<h2 id="principle-of-a-shadow-and-a-shadow-map">Principle of a shadow and a shadow map</h2>
+<p>If you looked out from a source of light, all of the objects you can see would appear in light. Anything behind those objects, however, would be in shadow. This is the basic principle used to create a shadow map. The light's view is rendered, storing the depth of every surface it sees (the shadow map). Next, the regular scene is rendered comparing the depth of every point drawn (as if it were being seen by the light, rather than the eye) to this depth map.</p>
+<p>This technique is less accurate than <a href="shadow_volume" title="wikilink">shadow volumes</a>, but the shadow map can be a faster alternative depending on how much fill time is required for either technique in a particular application and therefore may be more suitable to real time applications. In addition, shadow maps do not require the use of an additional <a href="stencil_buffer" title="wikilink">stencil buffer</a>, and can be modified to produce shadows with a soft edge. Unlike shadow volumes, however, the accuracy of a shadow map is limited by its resolution.</p>
+<h2 id="algorithm-overview">Algorithm overview</h2>
+<p>Rendering a shadowed scene involves two major drawing steps. The first produces the shadow map itself, and the second applies it to the scene. Depending on the implementation (and number of lights), this may require two or more drawing passes.</p>
+<h3 id="creating-the-shadow-map">Creating the shadow map</h3>
+<p> </p>
+<p>The first step renders the scene from the light's point of view. For a point light source, the view should be a <a href="perspective_projection" title="wikilink">perspective projection</a> as wide as its desired angle of effect (it will be a sort of square spotlight). For directional light (e.g., that from the <a class="uri" href="Sun" title="wikilink">Sun</a>), an <a href="orthographic_projection" title="wikilink">orthographic projection</a> should be used.</p>
+<p>From this rendering, the depth buffer is extracted and saved. Because only the depth information is relevant, it is common to avoid updating the color buffers and disable all lighting and texture calculations for this rendering, in order to save drawing time. This <a href="depth_map" title="wikilink">depth map</a> is often stored as a texture in graphics memory.</p>
+<p>This depth map must be updated any time there are changes to either the light or the objects in the scene, but can be reused in other situations, such as those where only the viewing camera moves. (If there are multiple lights, a separate depth map must be used for each light.)</p>
+<p>In many implementations it is practical to render only a subset of the objects in the scene to the shadow map in order to save some of the time it takes to redraw the map. Also, a depth offset which shifts the objects away from the light may be applied to the shadow map rendering in an attempt to resolve <a href="Z-fighting" title="wikilink">stitching</a> problems where the depth map value is close to the depth of a surface being drawn (i.e., the shadow casting surface) in the next step. Alternatively, culling front faces and only rendering the back of objects to the shadow map is sometimes used for a similar result.</p>
+<h3 id="shading-the-scene">Shading the scene</h3>
+<p>The second step is to draw the scene from the usual <a href="perspective_projection" title="wikilink">camera</a> viewpoint, applying the shadow map. This process has three major components, the first is to find the coordinates of the object as seen from the light, the second is the test which compares that coordinate against the depth map, and finally, once accomplished, the object must be drawn either in shadow or in light.</p>
+<h4 id="light-space-coordinates">Light space coordinates</h4>
+<figure><b>(Figure)</b>
+<figcaption>Visualization of the depth map projected onto the scene</figcaption>
+</figure>
+<p>In order to test a point against the depth map, its position in the scene coordinates must be transformed into the equivalent position as seen by the light. This is accomplished by a <a href="matrix_multiplication" title="wikilink">matrix multiplication</a>. The location of the object on the screen is determined by the usual <a href="coordinate_transformation" title="wikilink">coordinate transformation</a>, but a second set of coordinates must be generated to locate the object in light space.</p>
+<p>The matrix used to transform the world coordinates into the light's viewing coordinates is the same as the one used to render the shadow map in the first step (under <a class="uri" href="OpenGL" title="wikilink">OpenGL</a> this is the product of the modelview and projection matrices). This will produce a set of <a href="homogeneous_coordinates" title="wikilink">homogeneous coordinates</a> that need a perspective division (<em>see <a href="3D_projection" title="wikilink">3D projection</a></em>) to become <em>normalized device coordinates</em>, in which each component (<em>x</em>, <em>y</em>, or <em>z</em>) falls between −1 and 1 (if it is visible from the light view). Many implementations (such as OpenGL and <a class="uri" href="Direct3D" title="wikilink">Direct3D</a>) require an additional <em>scale and bias</em> matrix multiplication to map those −1 to 1 values to 0 to 1, which are more usual coordinates for depth map (texture map) lookup. This scaling can be done before the perspective division, and is easily folded into the previous transformation calculation by multiplying that matrix with the following:</p>
+<p><span class="LaTeX">$\begin{bmatrix}
+0.5 & 0 & 0 & 0.5 \\
+0 & 0.5 & 0 & 0.5 \\
+0 & 0 & 0.5 & 0.5 \\
+0 & 0 & 0 & 1 \end{bmatrix}$</span></p>
+<p>If done with a <a class="uri" href="shader" title="wikilink">shader</a>, or other graphics hardware extension, this transformation is usually applied at the vertex level, and the generated value is interpolated between other vertices, and passed to the fragment level.</p>
+<h4 id="depth-map-test">Depth map test</h4>
+<figure><b>(Figure)</b>
+<figcaption>Depth map test failures.</figcaption>
+</figure>
+<p>Once the light-space coordinates are found, the <em>x</em> and <em>y</em> values usually correspond to a location in the depth map texture, and the <em>z</em> value corresponds to its associated depth, which can now be tested against the depth map.</p>
+<p>If the <em>z</em> value is greater than the value stored in the depth map at the appropriate (<em>x</em>,<em>y</em>) location, the object is considered to be behind an occluding object, and should be marked as a <em>failure</em>, to be drawn in shadow by the drawing process. Otherwise it should be drawn lit.</p>
+<p>If the (<em>x</em>,<em>y</em>) location falls outside the depth map, the programmer must either decide that the surface should be lit or shadowed by default (usually lit).</p>
+<p>In a <a class="uri" href="shader" title="wikilink">shader</a> implementation, this test would be done at the fragment level. Also, care needs to be taken when selecting the type of texture map storage to be used by the hardware: if interpolation cannot be done, the shadow will appear to have a sharp jagged edge (an effect that can be reduced with greater shadow map resolution).</p>
+<p>It is possible to modify the depth map test to produce shadows with a soft edge by using a range of values (based on the proximity to the edge of the shadow) rather than simply pass or fail.</p>
+<p>The shadow mapping technique can also be modified to draw a texture onto the lit regions, simulating the effect of a <a href="Video_projector" title="wikilink">projector</a>. The picture above, captioned "visualization of the depth map projected onto the scene" is an example of such a process.</p>
+<h4 id="drawing-the-scene">Drawing the scene</h4>
+<figure><b>(Figure)</b>
+<figcaption>Final scene, rendered with ambient shadows.</figcaption>
+</figure>
+<p>Drawing the scene with shadows can be done in several different ways. If programmable <a href="shader" title="wikilink">shaders</a> are available, the depth map test may be performed by a fragment shader which simply draws the object in shadow or lighted depending on the result, drawing the scene in a single pass (after an initial earlier pass to generate the shadow map).</p>
+<p>If shaders are not available, performing the depth map test must usually be implemented by some hardware extension (such as <a href="http://www.opengl.org/registry/specs/ARB/shadow.txt"><em>GL_ARB_shadow</em></a>), which usually do not allow a choice between two lighting models (lit and shadowed), and necessitate more rendering passes:</p>
+<ol>
+<li>Render the entire scene in shadow. For the most common lighting models (<em>see <a href="Phong_reflection_model" title="wikilink">Phong reflection model</a></em>) this should technically be done using only the ambient component of the light, but this is usually adjusted to also include a dim diffuse light to prevent curved surfaces from appearing flat in shadow.</li>
+<li>Enable the depth map test, and render the scene lit. Areas where the depth map test fails will not be overwritten, and remain shadowed.</li>
+<li>An additional pass may be used for each additional light, using additive <a href="Alpha_blending" title="wikilink">blending</a> to combine their effect with the lights already drawn. (Each of these passes requires an additional previous pass to generate the associated shadow map.)</li>
+</ol>
+<p>The example pictures in this article used the <a class="uri" href="OpenGL" title="wikilink">OpenGL</a> extension <a href="http://www.opengl.org/registry/specs/ARB/shadow_ambient.txt"><em>GL_ARB_shadow_ambient</em></a> to accomplish the shadow map process in two passes.</p>
+<h2 id="shadow-map-real-time-implementations">Shadow map real-time implementations</h2>
+<p>One of the key disadvantages of real time shadow mapping is that the size and depth of the shadow map determines the quality of the final shadows. This is usually visible as <a class="uri" href="aliasing" title="wikilink">aliasing</a> or shadow continuity glitches. A simple way to overcome this limitation is to increase the shadow map size, but due to memory, computational or hardware constraints, it is not always possible. Commonly used techniques for real-time shadow mapping have been developed to circumvent this limitation. These include Cascaded Shadow Maps,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Trapezoidal Shadow Maps,<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> Light Space Perspective Shadow maps,<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> or Parallel-Split Shadow maps.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<p>Also notable is that generated shadows, even if <a class="uri" href="aliasing" title="wikilink">aliasing</a> free, have hard edges, which is not always desirable. In order to emulate real world soft shadows, several solutions have been developed, either by doing several lookups on the shadow map, generating geometry meant to emulate the soft edge or creating non standard depth shadow maps. Notable examples of these are Percentage Closer Filtering,<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> Smoothies,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> and Variance Shadow maps.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+<h2 id="shadow-mapping-techniques">Shadow mapping techniques</h2>
+<h3 id="simple">Simple</h3>
+<ul>
+<li>SSM "Simple"</li>
+</ul>
+<h3 id="splitting">Splitting</h3>
+<ul>
+<li>PSSM "Parallel Split" <a href="http://http.developer.nvidia.com/GPUGems3/gpugems3_ch10.html"></a><a class="uri" href="http://http.developer.nvidia.com/GPUGems3/gpugems3_ch10.html">http://http.developer.nvidia.com/GPUGems3/gpugems3_ch10.html</a></li>
+<li>CSM "Cascaded" <a href="http://developer.download.nvidia.com/SDK/10.5/opengl/src/cascaded_shadow_maps/doc/cascaded_shadow_maps.pdf"></a><a class="uri" href="http://developer.download.nvidia.com/SDK/10.5/opengl/src/cascaded_shadow_maps/doc/cascaded_shadow_maps.pdf">http://developer.download.nvidia.com/SDK/10.5/opengl/src/cascaded_shadow_maps/doc/cascaded_shadow_maps.pdf</a></li>
+</ul>
+<h3 id="warping">Warping</h3>
+<ul>
+<li>LiSPSM "Light Space Perspective" <a href="http://www.cg.tuwien.ac.at/~scherzer/files/papers/LispSM_survey.pdf"></a><a class="uri" href="http://www.cg.tuwien.ac.at/~scherzer/files/papers/LispSM_survey.pdf">http://www.cg.tuwien.ac.at/~scherzer/files/papers/LispSM_survey.pdf</a></li>
+<li>TSM "Trapezoid" <a href="http://www.comp.nus.edu.sg/~tants/tsm.html"></a><a class="uri" href="http://www.comp.nus.edu.sg/~tants/tsm.html">http://www.comp.nus.edu.sg/~tants/tsm.html</a></li>
+<li>PSM "Perspective" <a href="http://www-sop.inria.fr/reves/Marc.Stamminger/psm/"></a><a class="uri" href="http://www-sop.inria.fr/reves/Marc.Stamminger/psm/">http://www-sop.inria.fr/reves/Marc.Stamminger/psm/</a></li>
+<li>CSSM "Camera Space" <a href="http://bib.irb.hr/datoteka/570987.12_CSSM.pdf"></a><a class="uri" href="http://bib.irb.hr/datoteka/570987.12_CSSM.pdf">http://bib.irb.hr/datoteka/570987.12_CSSM.pdf</a></li>
+</ul>
+<h3 id="smoothing">Smoothing</h3>
+<ul>
+<li>PCF "Percentage Closer Filtering" <a href="http://http.developer.nvidia.com/GPUGems/gpugems_ch11.html"></a><a class="uri" href="http://http.developer.nvidia.com/GPUGems/gpugems_ch11.html">http://http.developer.nvidia.com/GPUGems/gpugems_ch11.html</a></li>
+</ul>
+<h3 id="filtering">Filtering</h3>
+<ul>
+<li>ESM "Exponential" <a href="http://www.thomasannen.com/pub/gi2008esm.pdf"></a><a class="uri" href="http://www.thomasannen.com/pub/gi2008esm.pdf">http://www.thomasannen.com/pub/gi2008esm.pdf</a></li>
+<li>CSM "Convolution" <a href="http://research.edm.uhasselt.be/~tmertens/slides/csm.ppt"></a><a class="uri" href="http://research.edm.uhasselt.be/~tmertens/slides/csm.ppt">http://research.edm.uhasselt.be/~tmertens/slides/csm.ppt</a></li>
+<li>VSM "Variance" [<a class="uri" href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.104.2569&rep">http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.104.2569&rep</a>;=rep1&type;=pdf <a class="uri" href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.104.2569&rep">http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.104.2569&rep</a>;=rep1&type;=pdf]</li>
+<li>SAVSM "Summed Area Variance" <a href="http://http.developer.nvidia.com/GPUGems3/gpugems3_ch08.html"></a><a class="uri" href="http://http.developer.nvidia.com/GPUGems3/gpugems3_ch08.html">http://http.developer.nvidia.com/GPUGems3/gpugems3_ch08.html</a></li>
+<li>SMSR "Shadow Map Silhouette Revectorization" <a href="http://bondarev.nl/?p=326"></a><a class="uri" href="http://bondarev.nl/?p=326">http://bondarev.nl/?p=326</a></li>
+</ul>
+<h3 id="soft-shadows">Soft Shadows</h3>
+<ul>
+<li>PCSS "Percentage Closer" <a href="http://developer.download.nvidia.com/shaderlibrary/docs/shadow_PCSS.pdf"></a><a class="uri" href="http://developer.download.nvidia.com/shaderlibrary/docs/shadow_PCSS.pdf">http://developer.download.nvidia.com/shaderlibrary/docs/shadow_PCSS.pdf</a></li>
+<li>SSSS "Screen space soft shadows" <a href="http://www.crcnetbase.com/doi/abs/10.1201/b10648-36"></a><a class="uri" href="http://www.crcnetbase.com/doi/abs/10.1201/b10648-36">http://www.crcnetbase.com/doi/abs/10.1201/b10648-36</a></li>
+<li>FIV "Fullsphere Irradiance Vector" <a href="http://getlab.org/publications/FIV/"></a><a class="uri" href="http://getlab.org/publications/FIV/">http://getlab.org/publications/FIV/</a></li>
+</ul>
+<h3 id="assorted">Assorted</h3>
+<ul>
+<li>ASM "Adaptive" <a href="http://www.cs.cornell.edu/~kb/publications/ASM.pdf"></a><a class="uri" href="http://www.cs.cornell.edu/~kb/publications/ASM.pdf">http://www.cs.cornell.edu/~kb/publications/ASM.pdf</a></li>
+<li>AVSM "Adaptive Volumetric" <a href="http://visual-computing.intel-research.net/art/publications/avsm/"></a><a class="uri" href="http://visual-computing.intel-research.net/art/publications/avsm/">http://visual-computing.intel-research.net/art/publications/avsm/</a></li>
+<li>CSSM "Camera Space" <a href="http://free-zg.t-com.hr/cssm/"></a><a class="uri" href="http://free-zg.t-com.hr/cssm/">http://free-zg.t-com.hr/cssm/</a></li>
+<li>DASM "Deep Adaptive"</li>
+<li>DPSM "Dual Paraboloid" <a href="http://sites.google.com/site/osmanbrian2/dpsm.pdf"></a><a class="uri" href="http://sites.google.com/site/osmanbrian2/dpsm.pdf">http://sites.google.com/site/osmanbrian2/dpsm.pdf</a></li>
+<li>DSM "Deep" <a href="http://graphics.pixar.com/library/DeepShadows/paper.pdf"></a><a class="uri" href="http://graphics.pixar.com/library/DeepShadows/paper.pdf">http://graphics.pixar.com/library/DeepShadows/paper.pdf</a></li>
+<li>FSM "Forward" <a href="http://www.cs.unc.edu/~zhangh/technotes/shadow/shadow.ps"></a><a class="uri" href="http://www.cs.unc.edu/~zhangh/technotes/shadow/shadow.ps">http://www.cs.unc.edu/~zhangh/technotes/shadow/shadow.ps</a></li>
+<li>LPSM "Logarithmic" <a href="http://gamma.cs.unc.edu/LOGSM/"></a><a class="uri" href="http://gamma.cs.unc.edu/LOGSM/">http://gamma.cs.unc.edu/LOGSM/</a></li>
+<li>MDSM "Multiple Depth" [<a class="uri" href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.59.3376&rep">http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.59.3376&rep</a>;=rep1&type;=pdf <a class="uri" href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.59.3376&rep">http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.59.3376&rep</a>;=rep1&type;=pdf]</li>
+<li>RTW "Rectilinear" <a href="http://www.cspaul.com/wiki/doku.php?id=publications:rosen.2012.i3d"></a><a class="uri" href="http://www.cspaul.com/wiki/doku.php?id=publications:rosen.2012.i3d">http://www.cspaul.com/wiki/doku.php?id=publications:rosen.2012.i3d</a></li>
+<li>RMSM "Resolution Matched" <a href="http://www.idav.ucdavis.edu/func/return_pdf?pub_id=919"></a><a class="uri" href="http://www.idav.ucdavis.edu/func/return_pdf?pub_id=919">http://www.idav.ucdavis.edu/func/return_pdf?pub_id=919</a></li>
+<li>SDSM "Sample Distribution" <a href="http://visual-computing.intel-research.net/art/publications/sdsm/"></a><a class="uri" href="http://visual-computing.intel-research.net/art/publications/sdsm/">http://visual-computing.intel-research.net/art/publications/sdsm/</a></li>
+<li>SPPSM "Separating Plane Perspective" <a href="http://jgt.akpeters.com/papers/Mikkelsen07/sep_math.pdf"></a><a class="uri" href="http://jgt.akpeters.com/papers/Mikkelsen07/sep_math.pdf">http://jgt.akpeters.com/papers/Mikkelsen07/sep_math.pdf</a></li>
+<li>SSSM "Shadow Silhouette" <a href="http://graphics.stanford.edu/papers/silmap/silmap.pdf"></a><a class="uri" href="http://graphics.stanford.edu/papers/silmap/silmap.pdf">http://graphics.stanford.edu/papers/silmap/silmap.pdf</a></li>
+</ul>
+<h2 id="miscellaneous">Miscellaneous</h2>
+<ul>
+<li>Shadow Depth Maps (SDM)<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></li>
+<li>Perspective shadow maps (PSMs)</li>
+<li>Light Space Perspective Shadow Maps (LSPSMs)</li>
+<li>Cascaded Shadow Maps (CSMs)<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></li>
+<li>Variance Shadow Maps (VSMs)<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Shadow_volume" title="wikilink">Shadow volume</a>, another shadowing technique</li>
+<li><a href="Ray_casting" title="wikilink">Ray casting</a>, a slower technique often used in <a href="Ray_tracing_(graphics)" title="wikilink">ray tracing</a></li>
+<li><a href="Photon_mapping" title="wikilink">Photon mapping</a>, a much slower technique capable of very realistic lighting</li>
+<li><a href="Radiosity_(3D_computer_graphics)" title="wikilink">Radiosity</a>, another very slow but very realistic technique</li>
+</ul>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="http://www.whdeboer.com/papers/smooth_penumbra_trans.pdf">Smooth Penumbra Transitions with Shadow Maps</a> Willem H. de Boer</li>
+<li><a href="http://www.cs.unc.edu/~zhangh/shadow.html">Forward shadow mapping</a> does the shadow test in eye-space rather than light-space to keep texture access more sequential.</li>
+<li><a href="http://www.gamerendering.com/category/shadows/shadow-mapping/">Shadow mapping techniques</a> An overview of different shadow mapping techniques</li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://developer.nvidia.com/attach/8456">Hardware Shadow Mapping</a>, <a href="NVIDIA" title="wikilink">nVidia</a></li>
+<li><a href="http://developer.nvidia.com/attach/6769">Shadow Mapping with Today's OpenGL Hardware</a>, nVidia</li>
+<li><a href="http://www.riemers.net/Tutorials/DirectX/Csharp3/index.php">Riemer's step-by-step tutorial implementing Shadow Mapping with HLSL and DirectX</a></li>
+<li>[<a class="uri" href="http://www.sunandblackcat.com/tipFullView.php?l=eng&topicid">http://www.sunandblackcat.com/tipFullView.php?l=eng&topicid</a>;=35 Improvements for Shadow Mapping using GLSL]</li>
+<li><a href="http://developer.nvidia.com/object/doc_shadows.html">NVIDIA Real-time Shadow Algorithms and Techniques</a></li>
+<li><a href="http://www.embege.com/shadowmapping">Shadow Mapping implementation using Java and OpenGL</a></li>
+</ul>
+<p>"</p>
+<p><a class="uri" href="Category:Shading" title="wikilink">Category:Shading</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a class="uri" href="http://msdn.microsoft.com/en-us/library/windows/desktop/ee416324(v=vs.85).aspx">http://msdn.microsoft.com/en-us/library/windows/desktop/ee416324(v=vs.85).aspx</a><a href="#fnref8">↩</a></li>
+<li id="fn9"><a class="uri" href="http://msdn.microsoft.com/en-us/library/windows/desktop/ee416307(v=vs.85).aspx">http://msdn.microsoft.com/en-us/library/windows/desktop/ee416307(v=vs.85).aspx</a><a href="#fnref9">↩</a></li>
+<li id="fn10"><a class="uri" href="http://dl.acm.org/citation.cfm?doid=1111411.1111440">http://dl.acm.org/citation.cfm?doid=1111411.1111440</a><a href="#fnref10">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

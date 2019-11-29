@@ -1,0 +1,501 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="510">Link/cut tree</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Link/cut tree</h1>
+<hr/>
+
+<p>A <strong>link/cut tree</strong> is a <a href="data_structure" title="wikilink">data structure</a> for representing a <a href="forest_(graph_theory)" title="wikilink">forest</a> (= set of trees).</p>
+
+<p>Our ultimate goal is: given a certain node in the forest, find the root of the tree it belongs to (in order to check whether two nodes belong to the same tree). The represented forest is given and it might be unbalanced, so if we represent the forest as a plain collection of its trees, it might take us a long time to find the root of a given node.</p>
+
+<p>However, if we represent each tree in the forest as a link/cut tree, we can find which tree an element belongs to in O(log(n)) amortized time. Moreover, we can quickly adjust the collection of link/cut trees to changes in the represented forest. In particular, we can adjust it to merge (link) and split (cut) in <a href="big_O_notation" title="wikilink">O</a>(<a href="logarithm" title="wikilink">log</a>(n)) <a href="amortized_analysis" title="wikilink">amortized</a> time.</p>
+
+<p>Link-Cut trees divide each tree in the represented forest into vertex-disjoint paths, where each path is represented by an auxiliary tree (often <a href="splay_trees" title="wikilink">splay trees</a>, though the original paper pre-dates splay trees and thus uses biased binary search trees). The nodes in the auxiliary trees are keyed by their depth in the corresponding represented tree. In one variation, <em>Naive Partitioning</em>, the paths are determined by the most recently accessed paths and nodes, similar to <a href="Tango_Trees" title="wikilink">Tango Trees</a>. In <em>Partitioning by Size</em> paths are determined by the heaviest child (child with the most children) of the given node. This gives a more complicated structure, but reduces the cost of the operations from amortized O(log n) to worst case O(log n). It has uses in solving a variety of network flow problems and to jive data sets.</p>
+
+<p>In the original publication, <a href="Daniel_Sleator" title="wikilink">Sleator</a> and <a href="Robert_Tarjan" title="wikilink">Tarjan</a> referred to link/cut trees as “dynamic trees”, or "dynamic dyno trees".</p>
+<h2 id="structure">Structure</h2>
+
+<p>We take a tree where each node has an arbitrary degree of unordered nodes and split it into paths. We call this the <em>represented tree</em>. These paths are represented internally by auxiliary trees (here we will use splay trees), where the nodes from left to right represent the path from root to the last node on the path. Nodes that are connected in the represented tree that are not on the same preferred path (and therefore not in the same auxiliary tree) are connected via a <em>path-parent pointer</em>. This pointer is stored in the root of the auxiliary tree representing the path.</p>
+<figure><b>(Figure)</b>
+<figcaption>Demonstrating how nodes are stored by depth in the link-cut tree</figcaption>
+</figure>
+<h3 id="preferred-paths">Preferred Paths</h3>
+
+<p>When an access to a node <em>v</em> is made on the <em>represented tree</em>, the path that is taken becomes the <strong>preferred path</strong>. The <strong>preferred child</strong> of a node is the last child that was on the access path, or null if the last access was to <em>v</em> or if no accesses were made to this particular branch of the tree. A <strong>preferred edge</strong> is the edge that connects the <strong>preferred child</strong> to <em>v</em>.</p>
+
+<p>In an alternate version, preferred paths are determined by the heaviest child.</p>
+<figure><b>(Figure)</b>
+<figcaption>Showing how a link cut tree transforms preferred paths into a forest of trees.</figcaption>
+</figure>
+<h2 id="operations">Operations</h2>
+
+<p>The operations we are interested in are FindRoot(Node v), Cut(Node v), Link(Node v, Node w), and Path(Node v). Every operation is implemented using the Access(Node v) subroutine. When we <em>access</em> a vertex <em>v</em>, the preferred path of the represented tree is changed to a path from the root <em>R</em> of the represented tree to the node <em>v</em>. If a node on the access path previously had a preferred child <em>u</em>, and the path now goes to child <em>w</em>, the old <em>preferred edge</em> is deleted (changed to a <em>path-parent pointer</em>), and the new path now goes through <em>u</em>.</p>
+<h3 id="access">Access</h3>
+
+<p>After performing an access to node <em>v</em>, it will no longer have any preferred children, and will be at the end of the path. Since nodes in the auxiliary tree are keyed by depth, this means that any nodes to the right of <em>v</em> in the auxiliary tree must be disconnected. In a splay tree this is a relatively simple procedure; we splay at <em>v</em>, which brings <em>v</em> to the root of the auxiliary tree. We then disconnect the right subtree of <em>v</em>, which is every node that came below it on the previous preferred path. The root of the disconnected tree will have a path-parent pointer, which we point to <em>v</em>.</p>
+
+<p>We now walk up the represented tree to the root <em>R</em>, breaking and resetting the preferred path where necessary. To do this we follow the path-parent pointer from <em>v</em> (since <em>v</em> is now the root, we have direct access to the path-parent pointer). If the path that <em>v</em> is on already contains the root <em>R</em> (since the nodes are keyed by depth, it would be the left most node in the auxiliary tree), the path-parent pointer will be null, and we are done the access. Otherwise we follow the pointer to some node on another path <em>w</em>. We want to break the old preferred path of <em>w</em> and reconnect it to the path <em>v</em> is on. To do this we splay at <em>w</em>, and disconnect its right subtree, setting its path-parent pointer to <em>w</em>. Since all nodes are keyed by depth, and every node in the path of <em>v</em> is deeper than every node in the path of <em>w</em> (since they are children of <em>w</em> in the represented tree), we simply connect the tree of <em>v</em> as the right child of <em>w</em>. We splay at <em>v</em> again, which, since <em>v</em> is a child of the root <em>w</em>, simply rotates <em>v</em> to root. We repeat this entire process until the path-parent pointer of <em>v</em> is null, at which point it is on the same preferred path as the root of the represented tree <em>R</em>.</p>
+<figure><b>(Figure)</b>
+<figcaption>During an access old preferred paths are broken and replaced with path-parent pointers, while the accessed node is splayed to the root of the tree</figcaption>
+</figure>
+<h3 id="findroot">FindRoot</h3>
+
+<p>FindRoot refers to finding the root of the represented tree that contains the node <em>v</em>. Since the <em>access</em> subroutine puts <em>v</em> on the preferred path, we first execute an access. Now the node <em>v</em> is on the same preferred path, and thus the same auxiliary tree as the root <em>R</em>. Since the auxiliary trees are keyed by depth, the root <em>R</em> will be the leftmost node of the auxiliary tree. So we simply choose the left child of <em>v</em> recursively until we can go no further, and this node is the root <em>R</em>. The root may be linearly deep (which is worst case for a splay tree), we therefore splay it so that the next access will be quick.</p>
+<h3 id="cut">Cut</h3>
+
+<p>Here we would like to cut the represented tree at node <em>v</em>. First we access <em>v</em>. This puts all the elements lower than <em>v</em> in the represented tree as the right child of <em>v</em> in the auxiliary tree. All the elements now in the left subtree of <em>v</em> are the nodes higher than <em>v</em> in the represented tree. We therefore disconnect the left child of <em>v</em> (which still maintains an attachment to the original represented tree through its path-parent pointer). Now <em>v</em> is the root of a represented tree. Accessing <em>v</em> breaks the preferred path below <em>v</em> as well, but that subtree maintains its connection to <em>v</em> through its path-parent pointer.</p>
+<h3 id="link">Link</h3>
+
+<p>If <em>v</em> is a tree root and <em>w</em> is a vertex in another tree, link the trees containing <em>v</em> and <em>w</em> by adding the edge(v, w), making <em>w</em> the parent of <em>v</em>. To do this we access both <em>v</em> and <em>w</em> in their respective trees, and make <em>w</em> the left child of <em>v</em>. Since <em>v</em> is the root, and nodes are keyed by depth in the auxiliary tree, accessing <em>v</em> means that <em>v</em> will have no left child in the auxiliary tree (since as root it is the minimum depth). Adding <em>w</em> as a left child effectively makes it the parent of <em>v</em> in the represented tree.</p>
+<h3 id="path">Path</h3>
+
+<p>For this operation we wish to do some aggregate function over all the nodes (or edges) on the path to <em>v</em> (such as "sum" or "min" or "max" or "increase", etc.). To do this we access <em>v</em>, which gives us an auxiliary tree with all the nodes on the path from root <em>R</em> to node <em>v</em>. The data structure can be augmented with data we wish to retrieve, such as min or max values, or the sum of the costs in the subtree, which can then be returned from a given path in constant time.</p>
+<figure><b>(Figure)</b>
+<figcaption>Pseudo-code for link-cut tree operations</figcaption>
+</figure>
+<h2 id="analysis">Analysis</h2>
+
+<p>Cut and link have O(1) cost, plus that of the access. FindRoot has an O(log n) amortized upper bound, plus the cost of the access. The data structure can be augmented with additional information (such as the min or max valued node in its subtrees, or the sum), depending on the implementation. Thus Path can return this information in constant time plus the access bound.</p>
+
+<p>So the it remains to bound the <em>access</em> to find our running time.</p>
+
+<p>Access makes use of splaying, which we know has an O(log n) amortized upper bound. So the remaining analysis deals with the number of times we need to splay. This is equal to the number of preferred child changes (the number of edges changed in the preferred path) as we traverse up the tree.</p>
+
+<p>We bound <em>access</em> by using a technique called <strong>Heavy-Light Decomposition</strong>.</p>
+<h3 id="heavy-light-decomposition">Heavy-Light Decomposition</h3>
+
+<p>This technique calls an edge heavy or light depending on the number of nodes in the subtree. <em>Size(v)</em> represents the number of nodes in the subtree of <em>v</em> in the represented tree. An edge is called <em>heavy</em> if size(v) &gt; 
+
+<math display="inline" id="Link::cut_tree:0">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>/</mo>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <cn type="integer">1</cn>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {1}/{2}
+  </annotation>
+ </semantics>
+</math>
+
+ size(parent(v)). Thus we can see that each node can have at most 1 <em>heavy</em> edge. An edge that is not a <em>heavy</em> edge is referred to as a <em>light</em> edge.</p>
+
+<p>The <em>light-depth</em> refers to the number of light edges on a given path from root to vertex <em>v</em>. <em>Light-depth</em> 
+
+<math display="inline" id="Link::cut_tree:1">
+ <semantics>
+  <mo>≤</mo>
+  <annotation-xml encoding="MathML-Content">
+   <leq></leq>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \leq
+  </annotation>
+ </semantics>
+</math>
+
+ lg <em>n</em> because each time we traverse a light-edge we decrease the number of nodes by at least a factor of 2 (since it can have at most half the nodes of the parent).</p>
+
+<p>So a given edge in the represented tree can be any of four possibilities: <em>heavy-preferred</em>, <em>heavy-unpreferred</em>, <em>light-preferred</em> or <em>light-unpreferred</em>.</p>
+
+<p>First we prove an 
+
+<math display="inline" id="Link::cut_tree:2">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msup>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msup>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <log></log>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log^{2}n)
+  </annotation>
+ </semantics>
+</math>
+
+ upper bound.</p>
+<h4 id="olog-2-n-upper-bound">O(log <sup>2</sup> n) upper bound</h4>
+
+<p>The splay operation of the access gives us log <em>n</em>, so we need to bound the number of accesses to log <em>n</em> to prove the O(log <sup>2</sup> <em>n</em>) upper bound.</p>
+
+<p>Every change of preferred edge results in a new preferred edge being formed. So we count the number of preferred edges formed. Since there are at most log <em>n</em> edges that are light on any given path, there are at most log <em>n</em> light edges changing to preferred.</p>
+
+<p>The number of heavy edges becoming preferred can be O(n) for any given operation, but it is O(log n) amortized. Over a series of executions we can have <em>n</em>-1 heavy edges become preferred (as there are at most <em>n</em>-1 heavy edges total in the represented tree), but from then on the number of heavy edges that become preferred is equal to the number of heavy edges that became unpreferred on a previous step. For every heavy edge that becomes unpreferred a light edge must become preferred. We have seen already that the number of light edges that can become preferred is at most log <em>n</em>. So the number of heavy edges that become preferred for <em>m</em> operations is <em>m(log n) + (n - 1)</em>. Over enough operations (<em>m &gt; n-1</em>) this averages to O(log n).</p>
+<h4 id="improving-to-olog-n-upper-bound">Improving to O(log n) upper bound</h4>
+
+<p>We have bound the number of preferred child changes at O(log n), so if we can show that each preferred child change has cost O(1) amortized we can bound the <em>access</em> operation at O(log n). This is done using the <a href="potential_method" title="wikilink">potential method</a>.</p>
+
+<p>Let s(v) be the number of nodes under <em>v</em> in the tree of auxiliary trees. Then the potential function 
+
+<math display="inline" id="Link::cut_tree:3">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Φ</mi>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mi>v</mi>
+    </msub>
+    <mrow>
+     <mrow>
+      <mi>log</mi>
+      <mi>s</mi>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>v</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>normal-Φ</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <ci>v</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <log></log>
+       <ci>s</ci>
+      </apply>
+      <ci>v</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Phi=\sum_{v}\log{s(v)}
+  </annotation>
+ </semantics>
+</math>
+
+. We know that the amortized cost of splaying is bounded by:</p>
+
+<p>
+
+<math display="inline" id="Link::cut_tree:4">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>c</mi>
+    <mi>o</mi>
+    <mi>s</mi>
+    <mi>t</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>s</mi>
+      <mi>p</mi>
+      <mi>l</mi>
+      <mi>a</mi>
+      <mi>y</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>v</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>≤</mo>
+   <mrow>
+    <mrow>
+     <mn>3</mn>
+     <mrow>
+      <mo>(</mo>
+      <mrow>
+       <mrow>
+        <mrow>
+         <mi>log</mi>
+         <mi>s</mi>
+        </mrow>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>r</mi>
+          <mi>o</mi>
+          <mi>o</mi>
+          <mi>t</mi>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mi>v</mi>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mrow>
+         <mi>log</mi>
+         <mi>s</mi>
+        </mrow>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>v</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <ci>c</ci>
+     <ci>o</ci>
+     <ci>s</ci>
+     <ci>t</ci>
+     <apply>
+      <times></times>
+      <ci>s</ci>
+      <ci>p</ci>
+      <ci>l</ci>
+      <ci>a</ci>
+      <ci>y</ci>
+      <ci>v</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <cn type="integer">3</cn>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <apply>
+         <log></log>
+         <ci>s</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>r</ci>
+         <ci>o</ci>
+         <ci>o</ci>
+         <ci>t</ci>
+         <ci>v</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <log></log>
+         <ci>s</ci>
+        </apply>
+        <ci>v</ci>
+       </apply>
+      </apply>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   cost(splay(v))\leq 3\left(\log{s(root(v))}-\log{s(v)}\right)+1
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>We know that after splaying, <em>v</em> is the child of its path-parent node <em>w</em>. So we know that:</p>
+
+<p>
+
+<math display="inline" id="Link::cut_tree:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>s</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>v</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>≤</mo>
+   <mrow>
+    <mi>s</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>w</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <ci>v</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <ci>w</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(v)\leq s(w)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>We use this inequality and the amortized cost of access to achieve a telescoping sum that is bounded by:</p>
+
+<p>
+
+<math display="inline" id="Link::cut_tree:6">
+ <semantics>
+  <mrow>
+   <mn>3</mn>
+   <mrow>
+    <mo>(</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mi>log</mi>
+       <mi>s</mi>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>R</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>-</mo>
+     <mrow>
+      <mrow>
+       <mi>log</mi>
+       <mi>s</mi>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>v</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <cn type="integer">3</cn>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <apply>
+       <log></log>
+       <ci>s</ci>
+      </apply>
+      <ci>R</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <log></log>
+       <ci>s</ci>
+      </apply>
+      <ci>v</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   3\left(\log{s(R)}-\log{s(v)}\right)
+  </annotation>
+ </semantics>
+</math>
+
+ <em>+ O(# of preferred child changes)</em></p>
+
+<p>where <em>R</em> is the root of the represented tree, and we know the number of preferred child changes is O(log n). s(<em>R</em>) = <em>n</em>, so we have O(log n) amortized.</p>
+<h2 id="application">Application</h2>
+
+<p>Link-Cut trees can be used to solve the <a href="dynamic_connectivity" title="wikilink">dynamic connectivity</a> problem for acyclic graphs. Given two nodes x and y, they are connected if and only if FindRoot(x)=FindRoot(y).</p>
+
+<p>Another data structure that can be used for the same purpose is <a href="Euler_tour_tree" title="wikilink">Euler tour tree</a>.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Splay_tree" title="wikilink">Splay tree</a></li>
+<li><a href="Potential_method" title="wikilink">Potential method</a></li>
+</ul>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li></li>
+<li></li>
+<li>
+
+<p>— Application to min-cost circulation</p></li>
+<li><a href="http://courses.csail.mit.edu/6.851/spring12/scribe/L19.pdf">Link-Cut trees</a> in: lecture notes in advanced data structures, Spring 2012, lecture 19. Prof. Erik Demaine, Scribes: Scribes: Justin Holmgren (2012), Jing Jian (2012), Maksim Stepanenko (2012), Mashhood Ishaque (2007).</li>
+<li><a class="uri" href="http://compgeom.cs.uiuc.edu/~jeffe/teaching/datastructures/2006/notes/07-linkcut.pdf">http://compgeom.cs.uiuc.edu/~jeffe/teaching/datastructures/2006/notes/07-linkcut.pdf</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Trees_(data_structures)" title="wikilink">Category:Trees (data structures)</a></p>
+</body>
+</html>

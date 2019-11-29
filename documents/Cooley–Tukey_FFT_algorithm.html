@@ -1,0 +1,3494 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="284">Cooley–Tukey FFT algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Cooley–Tukey FFT algorithm</h1>
+<hr/>
+
+<p>The <strong>Cooley–Tukey algorithm</strong>, named after <a href="James_Cooley" title="wikilink">J.W. Cooley</a> and <a href="John_Tukey" title="wikilink">John Tukey</a>, is the most common <a href="fast_Fourier_transform" title="wikilink">fast Fourier transform</a> (FFT) algorithm. It re-expresses the <a href="discrete_Fourier_transform" title="wikilink">discrete Fourier transform</a> (DFT) of an arbitrary <a href="composite_number" title="wikilink">composite</a> size <em>N</em> = <em>N</em><sub>1</sub><em>N</em><sub>2</sub> in terms of smaller DFTs of sizes <em>N</em><sub>1</sub> and <em>N</em><sub>2</sub>, <a href="recursion" title="wikilink">recursively</a>, to reduce the computation time to O(<em>N</em> log <em>N</em>) for highly composite <em>N</em> (<a href="smooth_number" title="wikilink">smooth numbers</a>). Because of the algorithm's importance, specific variants and implementation styles have become known by their own names, as described below.</p>
+
+<p>Because the Cooley-Tukey algorithm breaks the DFT into smaller DFTs, it can be combined arbitrarily with any other algorithm for the DFT. For example, <a href="Rader's_FFT_algorithm" title="wikilink">Rader's</a> or <a href="Bluestein's_FFT_algorithm" title="wikilink">Bluestein's</a> algorithm can be used to handle large prime factors that cannot be decomposed by Cooley–Tukey, or the <a href="prime-factor_FFT_algorithm" title="wikilink">prime-factor algorithm</a> can be exploited for greater efficiency in separating out <a href="relatively_prime" title="wikilink">relatively prime</a> factors.</p>
+
+<p>The algorithm, along with its recursive application, was invented by <a href="Carl_Friedrich_Gauss" title="wikilink">Carl Friedrich Gauss</a>. Cooley and Tukey independently rediscovered and popularized it 160 years later.</p>
+<h2 id="history">History</h2>
+
+<p>This algorithm, including its recursive application, was invented around 1805 by <a href="Carl_Friedrich_Gauss" title="wikilink">Carl Friedrich Gauss</a>, who used it to interpolate the trajectories of the <a href="asteroid" title="wikilink">asteroids</a> <a href="2_Pallas" title="wikilink">Pallas</a> and <a href="3_Juno" title="wikilink">Juno</a>, but his work was not widely recognized (being published only posthumously and in <a href="New_Latin" title="wikilink">neo-Latin</a>).<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> Gauss did not analyze the asymptotic computational time, however. Various limited forms were also rediscovered several times throughout the 19th and early 20th centuries.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> FFTs became popular after <a href="James_Cooley" title="wikilink">James Cooley</a> of <a href="International_Business_Machines" title="wikilink">IBM</a> and <a href="John_Tukey" title="wikilink">John Tukey</a> of <a href="Princeton_University" title="wikilink">Princeton</a> published a paper in 1965 reinventing the algorithm and describing how to perform it conveniently on a computer.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>Tukey reportedly came up with the idea during a meeting of President Kennedy’s Science Advisory Committee discussing ways to detect <a href="nuclear_testing" title="wikilink">nuclear-weapon tests</a> in the <a href="Soviet_Union" title="wikilink">Soviet Union</a> by employing seismometers located outside the country. These sensors would generate seismological time series. However, analysis of this data would require fast algorithms for computing DFT due to number of sensors and length of time. This task was critical for the ratification of the proposed nuclear test ban so that any violations could be detected without need to visit Soviet facilities.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a><a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Another participant at that meeting, <a href="Richard_Garwin" title="wikilink">Richard Garwin</a> of IBM, recognized the potential of the method and put Tukey in touch with Cooley however making sure that Cooley did not know the original purpose. Instead Cooley was told that this was needed to determine periodicities of the spin orientations in a 3-D crystal of <a class="uri" href="Helium-3" title="wikilink">Helium-3</a>. Cooley and Tukey subsequently published their joint paper, and wide adoption quickly followed due to simultaneous development of analog to digital converters capable of sampling at the rates as much as of 300KHz.</p>
+
+<p>The fact that Gauss had described the same algorithm (albeit without analyzing its asymptotic cost) was not realized until several years after Cooley and Tukey's 1965 paper.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> Their paper cited as inspiration for work by I. J. Good on what is now called the <a href="prime-factor_FFT_algorithm" title="wikilink">prime-factor FFT algorithm</a> (PFA);<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> although Good's algorithm was initially thought to be equivalent to the Cooley–Tukey algorithm, it was quickly realized that PFA is a quite different algorithm (only working for sizes that have <a href="relatively_prime" title="wikilink">relatively prime</a> factors and relying on the <a href="Chinese_Remainder_Theorem" title="wikilink">Chinese Remainder Theorem</a>, unlike the support for any composite size in Cooley–Tukey).<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+<h2 id="the-radix-2-dit-case">The radix-2 DIT case</h2>
+
+<p>A <strong>radix-2</strong> decimation-in-time (<strong>DIT</strong>) FFT is the simplest and most common form of the Cooley–Tukey algorithm, although highly optimized Cooley–Tukey implementations typically use other forms of the algorithm as described below. Radix-2 DIT divides a DFT of size <em>N</em> into two interleaved DFTs (hence the name "radix-2") of size <em>N</em>/2 with each recursive stage.</p>
+
+<p>The discrete Fourier transform (DFT) is defined by the formula:</p>
+
+<p>
+
+<math display="block" id="Cooley–Tukey_FFT_algorithm:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>X</mi>
+     <mi>k</mi>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>n</mi>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </munderover>
+     <mrow>
+      <msub>
+       <mi>x</mi>
+       <mi>n</mi>
+      </msub>
+      <msup>
+       <mi>e</mi>
+       <mrow>
+        <mo>-</mo>
+        <mrow>
+         <mfrac>
+          <mrow>
+           <mn>2</mn>
+           <mi>π</mi>
+           <mi>i</mi>
+          </mrow>
+          <mi>N</mi>
+         </mfrac>
+         <mi>n</mi>
+         <mi>k</mi>
+        </mrow>
+       </mrow>
+      </msup>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>X</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>n</ci>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <ci>N</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>e</ci>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <divide></divide>
+          <apply>
+           <times></times>
+           <cn type="integer">2</cn>
+           <ci>π</ci>
+           <ci>i</ci>
+          </apply>
+          <ci>N</ci>
+         </apply>
+         <ci>n</ci>
+         <ci>k</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{k}=\sum_{n=0}^{N-1}x_{n}e^{-\frac{2\pi i}{N}nk},
+  </annotation>
+ </semantics>
+</math>
+
+ where 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:1">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ is an integer ranging from 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:2">
+ <semantics>
+  <mn>0</mn>
+  <annotation-xml encoding="MathML-Content">
+   <cn type="integer">0</cn>
+  </annotation-xml>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:3">
+ <semantics>
+  <mrow>
+   <mi>N</mi>
+   <mo>-</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <ci>N</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N-1
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Radix-2 DIT first computes the DFTs of the even-indexed inputs 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:4">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mrow>
+    <msub>
+     <mi>x</mi>
+     <mrow>
+      <mn>2</mn>
+      <mi>m</mi>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>x</mi>
+      <mn>0</mn>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>x</mi>
+      <mn>2</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>x</mi>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>2</mn>
+      </mrow>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>m</ci>
+     </apply>
+    </apply>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">0</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <apply>
+       <minus></minus>
+       <ci>N</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (x_{2m}=x_{0},x_{2},\ldots,x_{N-2})
+  </annotation>
+ </semantics>
+</math>
+
+ and of the odd-indexed inputs 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:5">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mrow>
+    <msub>
+     <mi>x</mi>
+     <mrow>
+      <mrow>
+       <mn>2</mn>
+       <mi>m</mi>
+      </mrow>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>x</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>x</mi>
+      <mn>3</mn>
+     </msub>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <msub>
+      <mi>x</mi>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msub>
+    </mrow>
+   </mrow>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <ci>m</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">3</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <apply>
+       <minus></minus>
+       <ci>N</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (x_{2m+1}=x_{1},x_{3},\ldots,x_{N-1})
+  </annotation>
+ </semantics>
+</math>
+
+, and then combines those two results to produce the DFT of the whole sequence. This idea can then be performed <a href="recursion" title="wikilink">recursively</a> to reduce the overall runtime to O(<em>N</em> log <em>N</em>). This simplified form assumes that <em>N</em> is a <a href="power_of_two" title="wikilink">power of two</a>; since the number of sample points <em>N</em> can usually be chosen freely by the application, this is often not an important restriction.</p>
+
+<p>The Radix-2 DIT algorithm rearranges the DFT of the function 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:6">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{n}
+  </annotation>
+ </semantics>
+</math>
+
+ into two parts: a sum over the even-numbered indices 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:7">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>2</mn>
+    <mi>m</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>n</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <ci>m</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n={2m}
+  </annotation>
+ </semantics>
+</math>
+
+ and a sum over the odd-numbered indices 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:8">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mn>2</mn>
+     <mi>m</mi>
+    </mrow>
+    <mo>+</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>n</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>m</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n={2m+1}
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="block" id="Cooley–Tukey_FFT_algorithm:9">
+ <semantics>
+  <mtable displaystyle="true">
+   <mtr>
+    <mtd columnalign="center">
+     <msub>
+      <mi>X</mi>
+      <mi>k</mi>
+     </msub>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>=</mo>
+    </mtd>
+    <mtd columnalign="center">
+     <mrow>
+      <mrow>
+       <mstyle displaystyle="false">
+        <munderover>
+         <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+         <mrow>
+          <mi>m</mi>
+          <mo>=</mo>
+          <mn>0</mn>
+         </mrow>
+         <mrow>
+          <mrow>
+           <mi>N</mi>
+           <mo>/</mo>
+           <mn>2</mn>
+          </mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </munderover>
+       </mstyle>
+       <mrow>
+        <msub>
+         <mi>x</mi>
+         <mrow>
+          <mn>2</mn>
+          <mi>m</mi>
+         </mrow>
+        </msub>
+        <msup>
+         <mi>e</mi>
+         <mrow>
+          <mo>-</mo>
+          <mrow>
+           <mfrac>
+            <mrow>
+             <mn>2</mn>
+             <mi>π</mi>
+             <mi>i</mi>
+            </mrow>
+            <mi>N</mi>
+           </mfrac>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mn>2</mn>
+             <mi>m</mi>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+           <mi>k</mi>
+          </mrow>
+         </mrow>
+        </msup>
+       </mrow>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <mstyle displaystyle="false">
+        <munderover>
+         <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+         <mrow>
+          <mi>m</mi>
+          <mo>=</mo>
+          <mn>0</mn>
+         </mrow>
+         <mrow>
+          <mrow>
+           <mi>N</mi>
+           <mo>/</mo>
+           <mn>2</mn>
+          </mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </munderover>
+       </mstyle>
+       <mrow>
+        <msub>
+         <mi>x</mi>
+         <mrow>
+          <mrow>
+           <mn>2</mn>
+           <mi>m</mi>
+          </mrow>
+          <mo>+</mo>
+          <mn>1</mn>
+         </mrow>
+        </msub>
+        <msup>
+         <mi>e</mi>
+         <mrow>
+          <mo>-</mo>
+          <mrow>
+           <mfrac>
+            <mrow>
+             <mn>2</mn>
+             <mi>π</mi>
+             <mi>i</mi>
+            </mrow>
+            <mi>N</mi>
+           </mfrac>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mrow>
+              <mn>2</mn>
+              <mi>m</mi>
+             </mrow>
+             <mo>+</mo>
+             <mn>1</mn>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+           <mi>k</mi>
+          </mrow>
+         </mrow>
+        </msup>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+  </mtable>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>k</ci>
+     </apply>
+     <eq></eq>
+     <apply>
+      <plus></plus>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>m</ci>
+          <cn type="integer">0</cn>
+         </apply>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <divide></divide>
+          <ci>N</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <ci>m</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>e</ci>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <apply>
+            <divide></divide>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <ci>π</ci>
+             <ci>i</ci>
+            </apply>
+            <ci>N</ci>
+           </apply>
+           <apply>
+            <times></times>
+            <cn type="integer">2</cn>
+            <ci>m</ci>
+           </apply>
+           <ci>k</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>m</ci>
+          <cn type="integer">0</cn>
+         </apply>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <divide></divide>
+          <ci>N</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <apply>
+          <plus></plus>
+          <apply>
+           <times></times>
+           <cn type="integer">2</cn>
+           <ci>m</ci>
+          </apply>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>e</ci>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <apply>
+            <divide></divide>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <ci>π</ci>
+             <ci>i</ci>
+            </apply>
+            <ci>N</ci>
+           </apply>
+           <apply>
+            <plus></plus>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <ci>m</ci>
+            </apply>
+            <cn type="integer">1</cn>
+           </apply>
+           <ci>k</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{matrix}X_{k}&=&\sum\limits_{m=0}^{N/2-1}x_{2m}e^{-\frac{2\pi i}{N}(2m)k%
+}+\sum\limits_{m=0}^{N/2-1}x_{2m+1}e^{-\frac{2\pi i}{N}(2m+1)k}\end{matrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>One can factor a common multiplier 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:10">
+ <semantics>
+  <msup>
+   <mi>e</mi>
+   <mrow>
+    <mo>-</mo>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <mn>2</mn>
+       <mi>π</mi>
+       <mi>i</mi>
+      </mrow>
+      <mi>N</mi>
+     </mfrac>
+     <mi>k</mi>
+    </mrow>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>e</ci>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <ci>π</ci>
+        <ci>i</ci>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <ci>k</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   e^{-\frac{2\pi i}{N}k}
+  </annotation>
+ </semantics>
+</math>
+
+ out of the second sum, as shown in the equation below. It is then clear that the two sums are the DFT of the even-indexed part 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:11">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mrow>
+    <mn>2</mn>
+    <mi>m</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <ci>m</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{2m}
+  </annotation>
+ </semantics>
+</math>
+
+ and the DFT of odd-indexed part 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:12">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mrow>
+    <mrow>
+     <mn>2</mn>
+     <mi>m</mi>
+    </mrow>
+    <mo>+</mo>
+    <mn>1</mn>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>m</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{2m+1}
+  </annotation>
+ </semantics>
+</math>
+
+ of the function 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:13">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>n</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{n}
+  </annotation>
+ </semantics>
+</math>
+
+. Denote the DFT of the <strong><em>E</em></strong>ven-indexed inputs 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:14">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mrow>
+    <mn>2</mn>
+    <mi>m</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <ci>m</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{2m}
+  </annotation>
+ </semantics>
+</math>
+
+ by 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:15">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ and the DFT of the <strong><em>O</em></strong>dd-indexed inputs 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:16">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mrow>
+    <mrow>
+     <mn>2</mn>
+     <mi>m</mi>
+    </mrow>
+    <mo>+</mo>
+    <mn>1</mn>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>m</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{2m+1}
+  </annotation>
+ </semantics>
+</math>
+
+ by 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:17">
+ <semantics>
+  <msub>
+   <mi>O</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>O</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ and we obtain:</p>
+
+<p>
+
+<math display="block" id="Cooley–Tukey_FFT_algorithm:18">
+ <semantics>
+  <mtable displaystyle="true">
+   <mtr>
+    <mtd columnalign="center">
+     <mrow>
+      <mrow>
+       <msub>
+        <mi>X</mi>
+        <mi>k</mi>
+       </msub>
+       <mo>=</mo>
+       <mrow>
+        <munder>
+         <munder accentunder="true">
+          <mrow>
+           <mstyle displaystyle="false">
+            <munderover>
+             <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+             <mrow>
+              <mi>m</mi>
+              <mo movablelimits="false">=</mo>
+              <mn>0</mn>
+             </mrow>
+             <mrow>
+              <mrow>
+               <mi>N</mi>
+               <mo movablelimits="false">/</mo>
+               <mn>2</mn>
+              </mrow>
+              <mo movablelimits="false">-</mo>
+              <mn>1</mn>
+             </mrow>
+            </munderover>
+           </mstyle>
+           <mrow>
+            <msub>
+             <mi>x</mi>
+             <mrow>
+              <mn>2</mn>
+              <mi>m</mi>
+             </mrow>
+            </msub>
+            <msup>
+             <mi>e</mi>
+             <mrow>
+              <mo movablelimits="false">-</mo>
+              <mrow>
+               <mfrac>
+                <mrow>
+                 <mn>2</mn>
+                 <mi>π</mi>
+                 <mi>i</mi>
+                </mrow>
+                <mrow>
+                 <mi>N</mi>
+                 <mo movablelimits="false">/</mo>
+                 <mn>2</mn>
+                </mrow>
+               </mfrac>
+               <mi>m</mi>
+               <mi>k</mi>
+              </mrow>
+             </mrow>
+            </msup>
+           </mrow>
+          </mrow>
+          <mo movablelimits="false">⏟</mo>
+         </munder>
+         <mrow>
+          <mrow>
+           <mpadded width="+2.8pt">
+            <mi>DFT</mi>
+           </mpadded>
+           <mpadded width="+2.8pt">
+            <mi>of</mi>
+           </mpadded>
+           <mi>even</mi>
+          </mrow>
+          <mo>-</mo>
+          <mrow>
+           <mpadded width="+2.8pt">
+            <mi>indexed</mi>
+           </mpadded>
+           <mpadded width="+2.8pt">
+            <mi>part</mi>
+           </mpadded>
+           <mpadded width="+2.8pt">
+            <mi>of</mi>
+           </mpadded>
+           <msub>
+            <mi>x</mi>
+            <mi>m</mi>
+           </msub>
+          </mrow>
+         </mrow>
+        </munder>
+        <mo>+</mo>
+        <mrow>
+         <msup>
+          <mi>e</mi>
+          <mrow>
+           <mo>-</mo>
+           <mrow>
+            <mfrac>
+             <mrow>
+              <mn>2</mn>
+              <mi>π</mi>
+              <mi>i</mi>
+             </mrow>
+             <mi>N</mi>
+            </mfrac>
+            <mi>k</mi>
+           </mrow>
+          </mrow>
+         </msup>
+         <munder>
+          <munder accentunder="true">
+           <mrow>
+            <mstyle displaystyle="false">
+             <munderover>
+              <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+              <mrow>
+               <mi>m</mi>
+               <mo movablelimits="false">=</mo>
+               <mn>0</mn>
+              </mrow>
+              <mrow>
+               <mrow>
+                <mi>N</mi>
+                <mo movablelimits="false">/</mo>
+                <mn>2</mn>
+               </mrow>
+               <mo movablelimits="false">-</mo>
+               <mn>1</mn>
+              </mrow>
+             </munderover>
+            </mstyle>
+            <mrow>
+             <msub>
+              <mi>x</mi>
+              <mrow>
+               <mrow>
+                <mn>2</mn>
+                <mi>m</mi>
+               </mrow>
+               <mo movablelimits="false">+</mo>
+               <mn>1</mn>
+              </mrow>
+             </msub>
+             <msup>
+              <mi>e</mi>
+              <mrow>
+               <mo movablelimits="false">-</mo>
+               <mrow>
+                <mfrac>
+                 <mrow>
+                  <mn>2</mn>
+                  <mi>π</mi>
+                  <mi>i</mi>
+                 </mrow>
+                 <mrow>
+                  <mi>N</mi>
+                  <mo movablelimits="false">/</mo>
+                  <mn>2</mn>
+                 </mrow>
+                </mfrac>
+                <mi>m</mi>
+                <mi>k</mi>
+               </mrow>
+              </mrow>
+             </msup>
+            </mrow>
+           </mrow>
+           <mo movablelimits="false">⏟</mo>
+          </munder>
+          <mrow>
+           <mrow>
+            <mpadded width="+2.8pt">
+             <mi>DFT</mi>
+            </mpadded>
+            <mpadded width="+2.8pt">
+             <mi>of</mi>
+            </mpadded>
+            <mi>odd</mi>
+           </mrow>
+           <mo>-</mo>
+           <mrow>
+            <mpadded width="+2.8pt">
+             <mi>indexed</mi>
+            </mpadded>
+            <mpadded width="+2.8pt">
+             <mi>part</mi>
+            </mpadded>
+            <mpadded width="+2.8pt">
+             <mi>of</mi>
+            </mpadded>
+            <msub>
+             <mi>x</mi>
+             <mi>m</mi>
+            </msub>
+           </mrow>
+          </mrow>
+         </munder>
+        </mrow>
+       </mrow>
+       <mo>=</mo>
+       <mrow>
+        <msub>
+         <mi>E</mi>
+         <mi>k</mi>
+        </msub>
+        <mo>+</mo>
+        <mrow>
+         <msup>
+          <mi>e</mi>
+          <mrow>
+           <mo>-</mo>
+           <mrow>
+            <mfrac>
+             <mrow>
+              <mn>2</mn>
+              <mi>π</mi>
+              <mi>i</mi>
+             </mrow>
+             <mi>N</mi>
+            </mfrac>
+            <mi>k</mi>
+           </mrow>
+          </mrow>
+         </msup>
+         <msub>
+          <mi>O</mi>
+          <mi>k</mi>
+         </msub>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>.</mo>
+     </mrow>
+    </mtd>
+   </mtr>
+  </mtable>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <apply>
+      <and></and>
+      <apply>
+       <eq></eq>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>X</ci>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <plus></plus>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <ci>normal-⏟</ci>
+          <apply>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <sum></sum>
+             <apply>
+              <eq></eq>
+              <ci>m</ci>
+              <cn type="integer">0</cn>
+             </apply>
+            </apply>
+            <apply>
+             <minus></minus>
+             <apply>
+              <divide></divide>
+              <ci>N</ci>
+              <cn type="integer">2</cn>
+             </apply>
+             <cn type="integer">1</cn>
+            </apply>
+           </apply>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>x</ci>
+             <apply>
+              <times></times>
+              <cn type="integer">2</cn>
+              <ci>m</ci>
+             </apply>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">superscript</csymbol>
+             <ci>e</ci>
+             <apply>
+              <minus></minus>
+              <apply>
+               <times></times>
+               <apply>
+                <divide></divide>
+                <apply>
+                 <times></times>
+                 <cn type="integer">2</cn>
+                 <ci>π</ci>
+                 <ci>i</ci>
+                </apply>
+                <apply>
+                 <divide></divide>
+                 <ci>N</ci>
+                 <cn type="integer">2</cn>
+                </apply>
+               </apply>
+               <ci>m</ci>
+               <ci>k</ci>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <ci>DFT</ci>
+           <ci>of</ci>
+           <ci>even</ci>
+          </apply>
+          <apply>
+           <times></times>
+           <ci>indexed</ci>
+           <ci>part</ci>
+           <ci>of</ci>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>x</ci>
+            <ci>m</ci>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>e</ci>
+          <apply>
+           <minus></minus>
+           <apply>
+            <times></times>
+            <apply>
+             <divide></divide>
+             <apply>
+              <times></times>
+              <cn type="integer">2</cn>
+              <ci>π</ci>
+              <ci>i</ci>
+             </apply>
+             <ci>N</ci>
+            </apply>
+            <ci>k</ci>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <apply>
+           <ci>normal-⏟</ci>
+           <apply>
+            <apply>
+             <csymbol cd="ambiguous">superscript</csymbol>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <sum></sum>
+              <apply>
+               <eq></eq>
+               <ci>m</ci>
+               <cn type="integer">0</cn>
+              </apply>
+             </apply>
+             <apply>
+              <minus></minus>
+              <apply>
+               <divide></divide>
+               <ci>N</ci>
+               <cn type="integer">2</cn>
+              </apply>
+              <cn type="integer">1</cn>
+             </apply>
+            </apply>
+            <apply>
+             <times></times>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>x</ci>
+              <apply>
+               <plus></plus>
+               <apply>
+                <times></times>
+                <cn type="integer">2</cn>
+                <ci>m</ci>
+               </apply>
+               <cn type="integer">1</cn>
+              </apply>
+             </apply>
+             <apply>
+              <csymbol cd="ambiguous">superscript</csymbol>
+              <ci>e</ci>
+              <apply>
+               <minus></minus>
+               <apply>
+                <times></times>
+                <apply>
+                 <divide></divide>
+                 <apply>
+                  <times></times>
+                  <cn type="integer">2</cn>
+                  <ci>π</ci>
+                  <ci>i</ci>
+                 </apply>
+                 <apply>
+                  <divide></divide>
+                  <ci>N</ci>
+                  <cn type="integer">2</cn>
+                 </apply>
+                </apply>
+                <ci>m</ci>
+                <ci>k</ci>
+               </apply>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+          <apply>
+           <minus></minus>
+           <apply>
+            <times></times>
+            <ci>DFT</ci>
+            <ci>of</ci>
+            <ci>odd</ci>
+           </apply>
+           <apply>
+            <times></times>
+            <ci>indexed</ci>
+            <ci>part</ci>
+            <ci>of</ci>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>x</ci>
+             <ci>m</ci>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <eq></eq>
+       <share href="#.cmml">
+       </share>
+       <apply>
+        <plus></plus>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>E</ci>
+         <ci>k</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>e</ci>
+          <apply>
+           <minus></minus>
+           <apply>
+            <times></times>
+            <apply>
+             <divide></divide>
+             <apply>
+              <times></times>
+              <cn type="integer">2</cn>
+              <ci>π</ci>
+              <ci>i</ci>
+             </apply>
+             <ci>N</ci>
+            </apply>
+            <ci>k</ci>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>O</ci>
+          <ci>k</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{matrix}X_{k}=\underbrace{\sum\limits_{m=0}^{N/2-1}x_{2m}e^{-\frac{2\pi i%
+}{N/2}mk}}_{\mathrm{DFT\;of\;even-indexed\;part\;of\;}x_{m}}{}+e^{-\frac{2\pi i%
+}{N}k}\underbrace{\sum\limits_{m=0}^{N/2-1}x_{2m+1}e^{-\frac{2\pi i}{N/2}mk}}_%
+{\mathrm{DFT\;of\;odd-indexed\;part\;of\;}x_{m}}=E_{k}+e^{-\frac{2\pi i}{N}k}O%
+_{k}.\end{matrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Thanks to the periodicity of the DFT, we know that</p>
+
+<p>
+
+<math display="block" id="Cooley–Tukey_FFT_algorithm:19">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>E</mi>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mfrac>
+      <mi>N</mi>
+      <mn>2</mn>
+     </mfrac>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>E</mi>
+    <mi>k</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <apply>
+       <divide></divide>
+       <ci>N</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>E</ci>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{{k}+\frac{N}{2}}=E_{k}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>and</p>
+
+<p>
+
+<math display="block" id="Cooley–Tukey_FFT_algorithm:20">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>O</mi>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mfrac>
+      <mi>N</mi>
+      <mn>2</mn>
+     </mfrac>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>O</mi>
+    <mi>k</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>O</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <apply>
+       <divide></divide>
+       <ci>N</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>O</ci>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O_{{k}+\frac{N}{2}}=O_{k}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Therefore, we can rewrite the above equation as</p>
+
+<p>
+
+<math display="block" id="Cooley–Tukey_FFT_algorithm:21">
+ <semantics>
+  <mtable displaystyle="true">
+   <mtr>
+    <mtd columnalign="center">
+     <msub>
+      <mi>X</mi>
+      <mi>k</mi>
+     </msub>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>=</mo>
+    </mtd>
+    <mtd columnalign="center">
+     <mrow>
+      <mo>{</mo>
+      <mtable displaystyle="true">
+       <mtr>
+        <mtd columnalign="center">
+         <mrow>
+          <msub>
+           <mi>E</mi>
+           <mi>k</mi>
+          </msub>
+          <mo>+</mo>
+          <mrow>
+           <msup>
+            <mi>e</mi>
+            <mrow>
+             <mo>-</mo>
+             <mrow>
+              <mfrac>
+               <mrow>
+                <mn>2</mn>
+                <mi>π</mi>
+                <mi>i</mi>
+               </mrow>
+               <mi>N</mi>
+              </mfrac>
+              <mi>k</mi>
+             </mrow>
+            </mrow>
+           </msup>
+           <msub>
+            <mi>O</mi>
+            <mi>k</mi>
+           </msub>
+          </mrow>
+         </mrow>
+        </mtd>
+        <mtd columnalign="center">
+         <mrow>
+          <mrow>
+           <mtext>for</mtext>
+           <mn>0</mn>
+          </mrow>
+          <mo>≤</mo>
+          <mi>k</mi>
+          <mo><</mo>
+          <mrow>
+           <mi>N</mi>
+           <mo>/</mo>
+           <mn>2</mn>
+          </mrow>
+         </mrow>
+        </mtd>
+       </mtr>
+       <mtr>
+        <mtd columnalign="center">
+         <mi></mi>
+        </mtd>
+       </mtr>
+       <mtr>
+        <mtd columnalign="center">
+         <mrow>
+          <msub>
+           <mi>E</mi>
+           <mrow>
+            <mi>k</mi>
+            <mo>-</mo>
+            <mrow>
+             <mi>N</mi>
+             <mo>/</mo>
+             <mn>2</mn>
+            </mrow>
+           </mrow>
+          </msub>
+          <mo>+</mo>
+          <mrow>
+           <msup>
+            <mi>e</mi>
+            <mrow>
+             <mo>-</mo>
+             <mrow>
+              <mfrac>
+               <mrow>
+                <mn>2</mn>
+                <mi>π</mi>
+                <mi>i</mi>
+               </mrow>
+               <mi>N</mi>
+              </mfrac>
+              <mi>k</mi>
+             </mrow>
+            </mrow>
+           </msup>
+           <msub>
+            <mi>O</mi>
+            <mrow>
+             <mi>k</mi>
+             <mo>-</mo>
+             <mrow>
+              <mi>N</mi>
+              <mo>/</mo>
+              <mn>2</mn>
+             </mrow>
+            </mrow>
+           </msub>
+          </mrow>
+         </mrow>
+        </mtd>
+        <mtd columnalign="center">
+         <mrow>
+          <mrow>
+           <mrow>
+            <mrow>
+             <mtext>for</mtext>
+             <mi>N</mi>
+            </mrow>
+            <mo>/</mo>
+            <mn>2</mn>
+           </mrow>
+           <mo>≤</mo>
+           <mi>k</mi>
+           <mo><</mo>
+           <mi>N</mi>
+          </mrow>
+          <mo>.</mo>
+         </mrow>
+        </mtd>
+       </mtr>
+      </mtable>
+     </mrow>
+    </mtd>
+   </mtr>
+  </mtable>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>k</ci>
+     </apply>
+     <eq></eq>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-{</ci>
+      <matrix>
+       <matrixrow>
+        <apply>
+         <plus></plus>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>E</ci>
+          <ci>k</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <ci>e</ci>
+           <apply>
+            <minus></minus>
+            <apply>
+             <times></times>
+             <apply>
+              <divide></divide>
+              <apply>
+               <times></times>
+               <cn type="integer">2</cn>
+               <ci>π</ci>
+               <ci>i</ci>
+              </apply>
+              <ci>N</ci>
+             </apply>
+             <ci>k</ci>
+            </apply>
+           </apply>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>O</ci>
+           <ci>k</ci>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <and></and>
+         <apply>
+          <leq></leq>
+          <apply>
+           <times></times>
+           <mtext>for</mtext>
+           <cn type="integer">0</cn>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <apply>
+          <lt></lt>
+          <share href="#.cmml">
+          </share>
+          <apply>
+           <divide></divide>
+           <ci>N</ci>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </matrixrow>
+       <matrixrow>
+        <csymbol cd="latexml">absent</csymbol>
+       </matrixrow>
+       <matrixrow>
+        <apply>
+         <plus></plus>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>E</ci>
+          <apply>
+           <minus></minus>
+           <ci>k</ci>
+           <apply>
+            <divide></divide>
+            <ci>N</ci>
+            <cn type="integer">2</cn>
+           </apply>
+          </apply>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <ci>e</ci>
+           <apply>
+            <minus></minus>
+            <apply>
+             <times></times>
+             <apply>
+              <divide></divide>
+              <apply>
+               <times></times>
+               <cn type="integer">2</cn>
+               <ci>π</ci>
+               <ci>i</ci>
+              </apply>
+              <ci>N</ci>
+             </apply>
+             <ci>k</ci>
+            </apply>
+           </apply>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>O</ci>
+           <apply>
+            <minus></minus>
+            <ci>k</ci>
+            <apply>
+             <divide></divide>
+             <ci>N</ci>
+             <cn type="integer">2</cn>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <and></and>
+         <apply>
+          <leq></leq>
+          <apply>
+           <divide></divide>
+           <apply>
+            <times></times>
+            <mtext>for</mtext>
+            <ci>N</ci>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <apply>
+          <lt></lt>
+          <share href="#.cmml">
+          </share>
+          <ci>N</ci>
+         </apply>
+        </apply>
+       </matrixrow>
+      </matrix>
+     </cerror>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{matrix}X_{k}&=&\left\{\begin{matrix}E_{k}+e^{-\frac{2\pi i}{N}k}O_{k}&%
+\mbox{for }0\leq k<N/2\\
+\\
+E_{k-N/2}+e^{-\frac{2\pi i}{N}k}O_{k-N/2}&\mbox{for }N/2\leq k<N.\\
+\end{matrix}\right.\end{matrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>We also know that the <a href="twiddle_factor" title="wikilink">twiddle factor</a> 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:22">
+ <semantics>
+  <msup>
+   <mi>e</mi>
+   <mrow>
+    <mo>-</mo>
+    <mrow>
+     <mrow>
+      <mn>2</mn>
+      <mi>π</mi>
+      <mi>i</mi>
+      <mi>k</mi>
+     </mrow>
+     <mo>/</mo>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>e</ci>
+    <apply>
+     <minus></minus>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <ci>π</ci>
+       <ci>i</ci>
+       <ci>k</ci>
+      </apply>
+      <ci>N</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   e^{-2\pi ik/N}
+  </annotation>
+ </semantics>
+</math>
+
+ obeys the following relation:</p>
+
+<p>
+
+<math display="block" id="Cooley–Tukey_FFT_algorithm:23">
+ <semantics>
+  <mtable displaystyle="true">
+   <mtr>
+    <mtd columnalign="center">
+     <msup>
+      <mi>e</mi>
+      <mrow>
+       <mfrac>
+        <mrow>
+         <mo>-</mo>
+         <mrow>
+          <mn>2</mn>
+          <mi>π</mi>
+          <mi>i</mi>
+         </mrow>
+        </mrow>
+        <mi>N</mi>
+       </mfrac>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mi>k</mi>
+         <mo>+</mo>
+         <mrow>
+          <mi>N</mi>
+          <mo>/</mo>
+          <mn>2</mn>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </msup>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>=</mo>
+    </mtd>
+    <mtd columnalign="center">
+     <msup>
+      <mi>e</mi>
+      <mrow>
+       <mfrac>
+        <mrow>
+         <mo>-</mo>
+         <mrow>
+          <mn>2</mn>
+          <mi>π</mi>
+          <mi>i</mi>
+          <mi>k</mi>
+         </mrow>
+        </mrow>
+        <mi>N</mi>
+       </mfrac>
+       <mo>-</mo>
+       <mrow>
+        <mi>π</mi>
+        <mi>i</mi>
+       </mrow>
+      </mrow>
+     </msup>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd columnalign="center">
+     <mi></mi>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>=</mo>
+    </mtd>
+    <mtd columnalign="center">
+     <mrow>
+      <msup>
+       <mi>e</mi>
+       <mrow>
+        <mo>-</mo>
+        <mrow>
+         <mi>π</mi>
+         <mi>i</mi>
+        </mrow>
+       </mrow>
+      </msup>
+      <msup>
+       <mi>e</mi>
+       <mfrac>
+        <mrow>
+         <mo>-</mo>
+         <mrow>
+          <mn>2</mn>
+          <mi>π</mi>
+          <mi>i</mi>
+          <mi>k</mi>
+         </mrow>
+        </mrow>
+        <mi>N</mi>
+       </mfrac>
+      </msup>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd columnalign="center">
+     <mi></mi>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>=</mo>
+    </mtd>
+    <mtd columnalign="center">
+     <mrow>
+      <mo>-</mo>
+      <msup>
+       <mi>e</mi>
+       <mfrac>
+        <mrow>
+         <mo>-</mo>
+         <mrow>
+          <mn>2</mn>
+          <mi>π</mi>
+          <mi>i</mi>
+          <mi>k</mi>
+         </mrow>
+        </mrow>
+        <mi>N</mi>
+       </mfrac>
+      </msup>
+     </mrow>
+    </mtd>
+   </mtr>
+  </mtable>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>e</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <ci>π</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+        <ci>N</ci>
+       </apply>
+       <apply>
+        <plus></plus>
+        <ci>k</ci>
+        <apply>
+         <divide></divide>
+         <ci>N</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>e</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <divide></divide>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <ci>π</ci>
+          <ci>i</ci>
+          <ci>k</ci>
+         </apply>
+        </apply>
+        <ci>N</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>π</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <csymbol cd="latexml">absent</csymbol>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>e</ci>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <ci>π</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>e</ci>
+       <apply>
+        <divide></divide>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <ci>π</ci>
+          <ci>i</ci>
+          <ci>k</ci>
+         </apply>
+        </apply>
+        <ci>N</ci>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <csymbol cd="latexml">absent</csymbol>
+     <eq></eq>
+     <apply>
+      <minus></minus>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>e</ci>
+       <apply>
+        <divide></divide>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <ci>π</ci>
+          <ci>i</ci>
+          <ci>k</ci>
+         </apply>
+        </apply>
+        <ci>N</ci>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{matrix}e^{\frac{-2\pi i}{N}(k+N/2)}&=&e^{\frac{-2\pi ik}{N}-{\pi i}}\\
+&=&e^{-\pi i}e^{\frac{-2\pi ik}{N}}\\
+&=&-e^{\frac{-2\pi ik}{N}}\end{matrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This allows us to cut the number of "twiddle factor" calculations in half also. For 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:24">
+ <semantics>
+  <mrow>
+   <mn>0</mn>
+   <mo>≤</mo>
+   <mi>k</mi>
+   <mo><</mo>
+   <mfrac>
+    <mi>N</mi>
+    <mn>2</mn>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <leq></leq>
+     <cn type="integer">0</cn>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <lt></lt>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <ci>N</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   0\leq k<\frac{N}{2}
+  </annotation>
+ </semantics>
+</math>
+
+, we have</p>
+
+<p>
+
+<math display="block" id="Cooley–Tukey_FFT_algorithm:25">
+ <semantics>
+  <mtable displaystyle="true">
+   <mtr>
+    <mtd columnalign="center">
+     <msub>
+      <mi>X</mi>
+      <mi>k</mi>
+     </msub>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>=</mo>
+    </mtd>
+    <mtd columnalign="center">
+     <mrow>
+      <msub>
+       <mi>E</mi>
+       <mi>k</mi>
+      </msub>
+      <mo>+</mo>
+      <mrow>
+       <msup>
+        <mi>e</mi>
+        <mrow>
+         <mo>-</mo>
+         <mrow>
+          <mfrac>
+           <mrow>
+            <mn>2</mn>
+            <mi>π</mi>
+            <mi>i</mi>
+           </mrow>
+           <mi>N</mi>
+          </mfrac>
+          <mi>k</mi>
+         </mrow>
+        </mrow>
+       </msup>
+       <msub>
+        <mi>O</mi>
+        <mi>k</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd columnalign="center">
+     <msub>
+      <mi>X</mi>
+      <mrow>
+       <mi>k</mi>
+       <mo>+</mo>
+       <mfrac>
+        <mi>N</mi>
+        <mn>2</mn>
+       </mfrac>
+      </mrow>
+     </msub>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>=</mo>
+    </mtd>
+    <mtd columnalign="center">
+     <mrow>
+      <msub>
+       <mi>E</mi>
+       <mi>k</mi>
+      </msub>
+      <mo>-</mo>
+      <mrow>
+       <msup>
+        <mi>e</mi>
+        <mrow>
+         <mo>-</mo>
+         <mrow>
+          <mfrac>
+           <mrow>
+            <mn>2</mn>
+            <mi>π</mi>
+            <mi>i</mi>
+           </mrow>
+           <mi>N</mi>
+          </mfrac>
+          <mi>k</mi>
+         </mrow>
+        </mrow>
+       </msup>
+       <msub>
+        <mi>O</mi>
+        <mi>k</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+  </mtable>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>k</ci>
+     </apply>
+     <eq></eq>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>e</ci>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <apply>
+           <divide></divide>
+           <apply>
+            <times></times>
+            <cn type="integer">2</cn>
+            <ci>π</ci>
+            <ci>i</ci>
+           </apply>
+           <ci>N</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>O</ci>
+        <ci>k</ci>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <apply>
+       <plus></plus>
+       <ci>k</ci>
+       <apply>
+        <divide></divide>
+        <ci>N</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <eq></eq>
+     <apply>
+      <minus></minus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <ci>k</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>e</ci>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <apply>
+           <divide></divide>
+           <apply>
+            <times></times>
+            <cn type="integer">2</cn>
+            <ci>π</ci>
+            <ci>i</ci>
+           </apply>
+           <ci>N</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>O</ci>
+        <ci>k</ci>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{matrix}X_{k}&=&E_{k}+e^{-\frac{2\pi i}{N}k}O_{k}\\
+X_{k+\frac{N}{2}}&=&E_{k}-e^{-\frac{2\pi i}{N}k}O_{k}\end{matrix}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This result, expressing the DFT of length <em>N</em> recursively in terms of two DFTs of size <em>N</em>/2, is the core of the radix-2 DIT fast Fourier transform. The algorithm gains its speed by re-using the results of intermediate computations to compute multiple DFT outputs. Note that final outputs are obtained by a +/− combination of 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:26">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:27">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>O</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mi>exp</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mo>-</mo>
+      <mrow>
+       <mrow>
+        <mn>2</mn>
+        <mi>π</mi>
+        <mi>i</mi>
+        <mi>k</mi>
+       </mrow>
+       <mo>/</mo>
+       <mi>N</mi>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>O</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <exp></exp>
+     <apply>
+      <minus></minus>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <ci>π</ci>
+        <ci>i</ci>
+        <ci>k</ci>
+       </apply>
+       <ci>N</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O_{k}\exp(-2\pi ik/N)
+  </annotation>
+ </semantics>
+</math>
+
+, which is simply a size-2 DFT (sometimes called a <a href="butterfly_diagram" title="wikilink">butterfly</a> in this context); when this is generalized to larger radices below, the size-2 DFT is replaced by a larger DFT (which itself can be evaluated with an FFT). </p>
+
+<p>This process is an example of the general technique of <a href="divide_and_conquer_algorithm" title="wikilink">divide and conquer algorithms</a>; in many traditional implementations, however, the explicit recursion is avoided, and instead one traverses the computational tree in <a href="breadth-first_search" title="wikilink">breadth-first</a> fashion.</p>
+
+<p>The above re-expression of a size-<em>N</em> DFT as two size-<em>N</em>/2 DFTs is sometimes called the <strong><a href="G._C._Danielson" title="wikilink">Danielson</a>–<a href="Cornelius_Lanczos" title="wikilink">Lanczos</a></strong> <a href="lemma_(mathematics)" title="wikilink">lemma</a>, since the identity was noted by those two authors in 1942<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> (influenced by <a href="Carl_David_Tolmé_Runge" title="wikilink">Runge's</a> 1903 work<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a>). They applied their lemma in a "backwards" recursive fashion, repeatedly <em>doubling</em> the DFT size until the transform spectrum converged (although they apparently didn't realize the <a class="uri" href="linearithmic" title="wikilink">linearithmic</a> [i.e., order <em>N</em> log <em>N</em>] asymptotic complexity they had achieved). The Danielson–Lanczos work predated widespread availability of <a href="computer" title="wikilink">computers</a> and required hand calculation (possibly with mechanical aids such as <a href="adding_machine" title="wikilink">adding machines</a>); they reported a computation time of 140 minutes for a size-64 DFT operating on <a href="Fast_Fourier_transform#FFT_algorithms_specialized_for_real_and/or_symmetric_data" title="wikilink">real inputs</a> to 3–5 significant digits. Cooley and Tukey's 1965 paper reported a running time of 0.02 minutes for a size-2048 complex DFT on an <a href="IBM_7094" title="wikilink">IBM 7094</a> (probably in 36-bit <a href="floating_point" title="wikilink">single precision</a>, ~8 digits).<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> Rescaling the time by the number of operations, this corresponds roughly to a speedup factor of around 800,000. (To put the time for the hand calculation in perspective, 140 minutes for size 64 corresponds to an average of at most 16 seconds per floating-point operation, around 20% of which are multiplications.)</p>
+<h3 id="pseudocode">Pseudocode</h3>
+
+<p>In <a class="uri" href="pseudocode" title="wikilink">pseudocode</a>, the below procedure could be written:<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+
+<p><em><code>X</code></em><sub><code>0,...,</code><em><code>N</code></em><code>−1</code></sub><code> ← </code><strong><code>ditfft2</code></strong><code>(</code><em><code>x</code></em><code>, </code><em><code>N</code></em><code>, </code><em><code>s</code></em><code>):             </code><em><code>DFT</code> <code>of</code> <code>(x</code></em><sub><code>0</code></sub><code>, </code><em><code>x</code><sub><code>s</code></sub></em><code>, </code><em><code>x</code></em><sub><code>2</code><em><code>s</code></em></sub><code>, ..., </code><em><code>x</code></em><sub><code>(</code><em><code>N</code></em><code>-1)</code><em><code>s</code></em></sub><code>):</code><br/>
+<code>    if </code><em><code>N</code></em><code> = 1 then</code><br/>
+<code>        </code><em><code>X</code></em><sub><code>0</code></sub><code> ← </code><em><code>x</code></em><sub><code>0</code></sub><code>                                      </code><em><code>trivial</code> <code>size-1</code> <code>DFT</code> <code>base</code> <code>case</code></em><br/>
+<code>    else</code><br/>
+<code>        </code><em><code>X</code></em><sub><code>0,...,</code><em><code>N</code></em><code>/2−1</code></sub><code> ← </code><strong><code>ditfft2</code></strong><code>(</code><em><code>x</code></em><code>, </code><em><code>N</code></em><code>/2, 2</code><em><code>s</code></em><code>)             </code><em><code>DFT</code> <code>of</code> <code>(x</code></em><sub><code>0</code></sub><code>, </code><em><code>x</code></em><sub><code>2</code><em><code>s</code></em></sub><code>, </code><em><code>x</code></em><sub><code>4</code><em><code>s</code></em></sub><code>, ...)</code><br/>
+<code>        </code><em><code>X</code><sub><code>N</code></sub></em><sub><code>/2,...,</code><em><code>N</code></em><code>−1</code></sub><code> ← </code><strong><code>ditfft2</code></strong><code>(</code><em><code>x</code></em><code>+s, </code><em><code>N</code></em><code>/2, 2</code><em><code>s</code></em><code>)           </code><em><code>DFT</code> <code>of</code> <code>(x</code><sub><code>s</code></sub></em><code>, </code><em><code>x</code><sub><code>s</code></sub></em><sub><code>+2</code><em><code>s</code></em></sub><code>, </code><em><code>x</code><sub><code>s</code></sub></em><sub><code>+4</code><em><code>s</code></em></sub><code>, ...)</code><br/>
+<code>        for </code><em><code>k</code></em><code> = 0 to </code><em><code>N</code></em><code>/2−1                           </code><em><code>combine</code> <code>DFTs</code> <code>of</code> <code>two</code> <code>halves</code> <code>into</code> <code>full</code> <code>DFT:</code></em><br/>
+<code>            t ← </code><em><code>X</code><sub><code>k</code></sub></em><br/>
+<code>            </code><em><code>X</code><sub><code>k</code></sub></em><code> ← t + exp(−2π</code><em><code>i</code></em><code> </code><em><code>k</code></em><code>/</code><em><code>N</code></em><code>) </code><em><code>X</code><sub><code>k</code></sub></em><sub><code>+</code><em><code>N</code></em><code>/2</code></sub><br/>
+<code>            </code><em><code>X</code><sub><code>k</code></sub></em><sub><code>+</code><em><code>N</code></em><code>/2</code></sub><code> ← t − exp(−2π</code><em><code>i</code></em><code> </code><em><code>k</code></em><code>/</code><em><code>N</code></em><code>) </code><em><code>X</code><sub><code>k</code></sub></em><sub><code>+</code><em><code>N</code></em><code>/2</code></sub><br/>
+<code>        endfor</code><br/>
+<code>    endif</code></p>
+
+<p>Here, <code>'''ditfft2'''</code>(<em>x</em>,<em>N</em>,1), computes <em>X</em>=DFT(<em>x</em>) <a href="In-place_algorithm" title="wikilink">out-of-place</a> by a radix-2 DIT FFT, where <em>N</em> is an integer power of 2 and <em>s</em>=1 is the <a href="stride_of_an_array" title="wikilink">stride</a> of the input <em>x</em> <a href="Array_data_structure" title="wikilink">array</a>. <em>x</em>+<em>s</em> denotes the array starting with <em>x<sub>s</sub></em>.</p>
+
+<p>(The results are in the correct order in <em>X</em> and no further <a href="bit-reversal_permutation" title="wikilink">bit-reversal permutation</a> is required; the often-mentioned necessity of a separate bit-reversal stage only arises for certain in-place algorithms, as described below.)</p>
+
+<p>High-performance FFT implementations make many modifications to the implementation of such an algorithm compared to this simple pseudocode. For example, one can use a larger base case than <em>N</em>=1 to <a class="uri" href="amortize" title="wikilink">amortize</a> the overhead of recursion, the <a href="twiddle_factor" title="wikilink">twiddle factors</a> 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:28">
+ <semantics>
+  <mrow>
+   <mi>exp</mi>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <mrow>
+       <mn>2</mn>
+       <mi>π</mi>
+       <mi>i</mi>
+       <mi>k</mi>
+      </mrow>
+      <mo>/</mo>
+      <mi>N</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <exp></exp>
+    <apply>
+     <minus></minus>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <ci>π</ci>
+       <ci>i</ci>
+       <ci>k</ci>
+      </apply>
+      <ci>N</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \exp[-2\pi ik/N]
+  </annotation>
+ </semantics>
+</math>
+
+ can be precomputed, and larger radices are often used for <a href="cache_(computing)" title="wikilink">cache</a> reasons; these and other optimizations together can improve the performance by an order of magnitude or more.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> (In many textbook implementations the <a class="uri" href="depth-first" title="wikilink">depth-first</a> recursion is eliminated entirely in favor of a nonrecursive <a class="uri" href="breadth-first" title="wikilink">breadth-first</a> approach, although depth-first recursion has been argued to have better <a href="memory_locality" title="wikilink">memory locality</a>.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a><a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a>) Several of these ideas are described in further detail below.</p>
+<h2 id="general-factorizations">General factorizations</h2>
+<figure><b>(Figure)</b>
+<figcaption>The basic step of the Cooley–Tukey FFT for general factorizations can be viewed as re-interpreting a 1d DFT as something like a 2d DFT. The 1d input array of length <em>N</em> = <em>N</em><sub>1</sub><em>N</em><sub>2</sub> is reinterpreted as a 2d <em>N</em><sub>1</sub>×<em>N</em><sub>2</sub> matrix stored in <a href="column-major_order" title="wikilink">column-major order</a>. One performs smaller 1d DFTs along the <em>N</em><sub>2</sub> direction (the non-contiguous direction), then multiplies by phase factors (twiddle factors), and finally performs 1d DFTs along the <em>N</em><sub>1</sub> direction. The transposition step can be performed in the middle, as shown here, or at the beginning or end. This is done recursively for the smaller transforms.</figcaption>
+</figure>
+
+<p>More generally, Cooley–Tukey algorithms recursively re-express a DFT of a composite size <em>N</em> = <em>N</em><sub>1</sub><em>N</em><sub>2</sub> as:<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<ol>
+<li>Perform <em>N</em><sub>1</sub> DFTs of size <em>N</em><sub>2</sub>.</li>
+<li>Multiply by complex <a href="roots_of_unity" title="wikilink">roots of unity</a> called <a href="twiddle_factor" title="wikilink">twiddle factors</a>.</li>
+<li>Perform <em>N</em><sub>2</sub> DFTs of size <em>N</em><sub>1</sub>.</li>
+</ol>
+
+<p>Typically, either <em>N</em><sub>1</sub> or <em>N</em><sub>2</sub> is a small factor (<em>not</em> necessarily prime), called the <strong>radix</strong> (which can differ between stages of the recursion). If <em>N</em><sub>1</sub> is the radix, it is called a <strong>decimation in time</strong> (DIT) algorithm, whereas if <em>N</em><sub>2</sub> is the radix, it is <strong>decimation in frequency</strong> (DIF, also called the Sande-Tukey algorithm). The version presented above was a radix-2 DIT algorithm; in the final expression, the phase multiplying the odd transform is the twiddle factor, and the +/- combination (<em>butterfly</em>) of the even and odd transforms is a size-2 DFT. (The radix's small DFT is sometimes known as a <a href="butterfly_(FFT_algorithm)" title="wikilink">butterfly</a>, so-called because of the shape of the <a href="dataflow_diagram" title="wikilink">dataflow diagram</a> for the radix-2 case.)</p>
+
+<p>There are many other variations on the Cooley–Tukey algorithm. <strong>Mixed-radix</strong> implementations handle composite sizes with a variety of (typically small) factors in addition to two, usually (but not always) employing the O(<em>N</em><sup>2</sup>) algorithm for the prime base cases of the recursion (it is also possible to employ an <em>N</em> log <em>N</em> algorithm for the prime base cases, such as <a href="Rader's_FFT_algorithm" title="wikilink">Rader</a>'s or <a href="Bluestein's_FFT_algorithm" title="wikilink">Bluestein</a>'s algorithm). <a href="Split-radix_FFT_algorithm" title="wikilink">Split radix</a> merges radices 2 and 4, exploiting the fact that the first transform of radix 2 requires no twiddle factor, in order to achieve what was long the lowest known arithmetic operation count for power-of-two sizes,<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> although recent variations achieve an even lower count.<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a><a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a> (On present-day computers, performance is determined more by <a href="CPU_cache" title="wikilink">cache</a> and <a href="CPU_pipeline" title="wikilink">CPU pipeline</a> considerations than by strict operation counts; well-optimized FFT implementations often employ larger radices and/or hard-coded base-case transforms of significant size.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a>) Another way of looking at the Cooley–Tukey algorithm is that it re-expresses a size <em>N</em> one-dimensional DFT as an <em>N</em><sub>1</sub> by <em>N</em><sub>2</sub> two-dimensional DFT (plus twiddles), where the output matrix is <a href="transpose" title="wikilink">transposed</a>. The net result of all of these transpositions, for a radix-2 algorithm, corresponds to a bit reversal of the input (DIF) or output (DIT) indices. If, instead of using a small radix, one employs a radix of roughly √<em>N</em> and explicit input/output matrix transpositions, it is called a <strong>four-step</strong> algorithm (or <em>six-step</em>, depending on the number of transpositions), initially proposed to improve memory locality,<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a><a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a> e.g. for cache optimization or <a class="uri" href="out-of-core" title="wikilink">out-of-core</a> operation, and was later shown to be an optimal <a href="cache-oblivious_algorithm" title="wikilink">cache-oblivious algorithm</a>.<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a></p>
+
+<p>The general Cooley–Tukey factorization rewrites the indices <em>k</em> and <em>n</em> as 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:29">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>N</mi>
+      <mn>2</mn>
+     </msub>
+     <msub>
+      <mi>k</mi>
+      <mn>1</mn>
+     </msub>
+    </mrow>
+    <mo>+</mo>
+    <msub>
+     <mi>k</mi>
+     <mn>2</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>k</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>N</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>k</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k=N_{2}k_{1}+k_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:30">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>N</mi>
+      <mn>1</mn>
+     </msub>
+     <msub>
+      <mi>n</mi>
+      <mn>2</mn>
+     </msub>
+    </mrow>
+    <mo>+</mo>
+    <msub>
+     <mi>n</mi>
+     <mn>1</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>n</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>N</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>n</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n=N_{1}n_{2}+n_{1}
+  </annotation>
+ </semantics>
+</math>
+
+, respectively, where the indices <em>k</em><sub>a</sub> and <em>n</em><sub>a</sub> run from 0..<em>N</em><sub>a</sub>-1 (for <em>a</em> of 1 or 2). That is, it re-indexes the input (<em>n</em>) and output (<em>k</em>) as <em>N</em><sub>1</sub> by <em>N</em><sub>2</sub> two-dimensional arrays in <a href="column-major_order" title="wikilink">column-major</a> and <a href="row-major_order" title="wikilink">row-major order</a>, respectively; the difference between these indexings is a transposition, as mentioned above. When this re-indexing is substituted into the DFT formula for <em>nk</em>, the 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:31">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>N</mi>
+    <mn>1</mn>
+   </msub>
+   <msub>
+    <mi>n</mi>
+    <mn>2</mn>
+   </msub>
+   <msub>
+    <mi>N</mi>
+    <mn>2</mn>
+   </msub>
+   <msub>
+    <mi>k</mi>
+    <mn>1</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>N</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>N</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>k</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N_{1}n_{2}N_{2}k_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ cross term vanishes (its exponential is unity), and the remaining terms give</p>
+
+<p>
+
+<math display="block" id="Cooley–Tukey_FFT_algorithm:32">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>X</mi>
+    <mrow>
+     <mrow>
+      <msub>
+       <mi>N</mi>
+       <mn>2</mn>
+      </msub>
+      <msub>
+       <mi>k</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+     <mo>+</mo>
+     <msub>
+      <mi>k</mi>
+      <mn>2</mn>
+     </msub>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <msub>
+       <mi>n</mi>
+       <mn>1</mn>
+      </msub>
+      <mo>=</mo>
+      <mn>0</mn>
+     </mrow>
+     <mrow>
+      <msub>
+       <mi>N</mi>
+       <mn>1</mn>
+      </msub>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </munderover>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <msub>
+        <mi>n</mi>
+        <mn>2</mn>
+       </msub>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <msub>
+        <mi>N</mi>
+        <mn>2</mn>
+       </msub>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </munderover>
+     <mrow>
+      <msub>
+       <mi>x</mi>
+       <mrow>
+        <mrow>
+         <msub>
+          <mi>N</mi>
+          <mn>1</mn>
+         </msub>
+         <msub>
+          <mi>n</mi>
+          <mn>2</mn>
+         </msub>
+        </mrow>
+        <mo>+</mo>
+        <msub>
+         <mi>n</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+      </msub>
+      <msup>
+       <mi>e</mi>
+       <mrow>
+        <mo>-</mo>
+        <mrow>
+         <mfrac>
+          <mrow>
+           <mn>2</mn>
+           <mi>π</mi>
+           <mi>i</mi>
+          </mrow>
+          <mrow>
+           <msub>
+            <mi>N</mi>
+            <mn>1</mn>
+           </msub>
+           <msub>
+            <mi>N</mi>
+            <mn>2</mn>
+           </msub>
+          </mrow>
+         </mfrac>
+         <mo>⋅</mo>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mrow>
+            <msub>
+             <mi>N</mi>
+             <mn>1</mn>
+            </msub>
+            <msub>
+             <mi>n</mi>
+             <mn>2</mn>
+            </msub>
+           </mrow>
+           <mo>+</mo>
+           <msub>
+            <mi>n</mi>
+            <mn>1</mn>
+           </msub>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+         <mo>⋅</mo>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mrow>
+            <msub>
+             <mi>N</mi>
+             <mn>2</mn>
+            </msub>
+            <msub>
+             <mi>k</mi>
+             <mn>1</mn>
+            </msub>
+           </mrow>
+           <mo>+</mo>
+           <msub>
+            <mi>k</mi>
+            <mn>2</mn>
+           </msub>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mrow>
+      </msup>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>X</ci>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>n</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>n</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>N</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <apply>
+         <plus></plus>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>N</ci>
+           <cn type="integer">1</cn>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>n</ci>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>n</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>e</ci>
+        <apply>
+         <minus></minus>
+         <apply>
+          <ci>normal-⋅</ci>
+          <apply>
+           <divide></divide>
+           <apply>
+            <times></times>
+            <cn type="integer">2</cn>
+            <ci>π</ci>
+            <ci>i</ci>
+           </apply>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>N</ci>
+             <cn type="integer">1</cn>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>N</ci>
+             <cn type="integer">2</cn>
+            </apply>
+           </apply>
+          </apply>
+          <apply>
+           <plus></plus>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>N</ci>
+             <cn type="integer">1</cn>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>n</ci>
+             <cn type="integer">2</cn>
+            </apply>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>n</ci>
+            <cn type="integer">1</cn>
+           </apply>
+          </apply>
+          <apply>
+           <plus></plus>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>N</ci>
+             <cn type="integer">2</cn>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>k</ci>
+             <cn type="integer">1</cn>
+            </apply>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>k</ci>
+            <cn type="integer">2</cn>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{N_{2}k_{1}+k_{2}}=\sum_{n_{1}=0}^{N_{1}-1}\sum_{n_{2}=0}^{N_{2}-1}x_{N_{1}n%
+_{2}+n_{1}}e^{-\frac{2\pi i}{N_{1}N_{2}}\cdot(N_{1}n_{2}+n_{1})\cdot(N_{2}k_{1%
+}+k_{2})}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<dl>
+<dd><dl>
+<dd><math>=
+</math></dd>
+</dl>
+</dd>
+</dl>
+
+<p><code>   \sum_{n_1=0}^{N_1-1} </code><br/>
+<code>     \left[ e^{-\frac{2\pi i}{N} n_1 k_2 } \right]</code><br/>
+<code>     \left( \sum_{n_2=0}^{N_2-1} x_{N_1 n_2 + n_1}  </code><br/>
+<code>             e^{-\frac{2\pi i}{N_2} n_2 k_2 } \right)</code><br/>
+<code>     e^{-\frac{2\pi i}{N_1} n_1 k_1 }</code></p>
+
+<p></p>
+
+<p>where each inner sum is a DFT of size <em>N</em><sub>2</sub>, each outer sum is a DFT of size <em>N</em><sub>1</sub>, and the [...] bracketed term is the twiddle factor.</p>
+
+<p>An arbitrary radix <em>r</em> (as well as mixed radices) can be employed, as was shown by both Cooley and Tukey<a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a> as well as Gauss (who gave examples of radix-3 and radix-6 steps).<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a> Cooley and Tukey originally assumed that the radix butterfly required O(<em>r</em><sup>2</sup>) work and hence reckoned the complexity for a radix <em>r</em> to be O(<em>r</em><sup>2</sup> <em>N</em>/<em>r</em> log<sub><em>r</em></sub><em>N</em>) = O(<em>N</em> log<sub>2</sub>(<em>N</em>) <em>r</em>/log<sub>2</sub><em>r</em>); from calculation of values of <em>r</em>/log<sub>2</sub><em>r</em> for integer values of <em>r</em> from 2 to 12 the optimal radix is found to be 3 (the closest integer to <em><a href="e_(mathematical_constant)" title="wikilink">e</a></em>, which minimizes <em>r</em>/log<sub>2</sub><em>r</em>).<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a><a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a> This analysis was erroneous, however: the radix-butterfly is also a DFT and can be performed via an FFT algorithm in O(<em>r</em> log <em>r</em>) operations, hence the radix <em>r</em> actually cancels in the complexity O(<em>r</em> log(<em>r</em>) <em>N</em>/<em>r</em> log<sub><em>r</em></sub><em>N</em>), and the optimal <em>r</em> is determined by more complicated considerations. In practice, quite large <em>r</em> (32 or 64) are important in order to effectively exploit e.g. the large number of <a href="processor_register" title="wikilink">processor registers</a> on modern processors,<a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a> and even an unbounded radix <em>r</em>=√<em>N</em> also achieves O(<em>N</em> log <em>N</em>) complexity and has theoretical and practical advantages for large <em>N</em> as mentioned above.<a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a><a class="footnoteRef" href="#fn31" id="fnref31"><sup>31</sup></a><a class="footnoteRef" href="#fn32" id="fnref32"><sup>32</sup></a></p>
+<h2 id="data-reordering-bit-reversal-and-in-place-algorithms">Data reordering, bit reversal, and in-place algorithms</h2>
+
+<p>Although the abstract Cooley–Tukey factorization of the DFT, above, applies in some form to all implementations of the algorithm, much greater diversity exists in the techniques for ordering and accessing the data at each stage of the FFT. Of special interest is the problem of devising an <a href="in-place_algorithm" title="wikilink">in-place algorithm</a> that overwrites its input with its output data using only O(1) auxiliary storage.</p>
+
+<p>The most well-known reordering technique involves explicit <strong>bit reversal</strong> for in-place radix-2 algorithms. <a href="Bit-reversal_permutation" title="wikilink">Bit reversal</a> is the <a class="uri" href="permutation" title="wikilink">permutation</a> where the data at an index <em>n</em>, written in <a href="binary_numeral_system" title="wikilink">binary</a> with digits <em>b</em><sub>4</sub><em>b</em><sub>3</sub><em>b</em><sub>2</sub><em>b</em><sub>1</sub><em>b</em><sub>0</sub> (e.g. 5 digits for <em>N</em>=32 inputs), is transferred to the index with reversed digits <em>b</em><sub>0</sub><em>b</em><sub>1</sub><em>b</em><sub>2</sub><em>b</em><sub>3</sub><em>b</em><sub>4</sub> . Consider the last stage of a radix-2 DIT algorithm like the one presented above, where the output is written in-place over the input: when 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:33">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:34">
+ <semantics>
+  <msub>
+   <mi>O</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>O</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ are combined with a size-2 DFT, those two values are overwritten by the outputs. However, the two output values should go in the first and second <em>halves</em> of the output array, corresponding to the <em>most</em> significant bit <em>b</em><sub>4</sub> (for <em>N</em>=32); whereas the two inputs 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:35">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:36">
+ <semantics>
+  <msub>
+   <mi>O</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>O</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ are interleaved in the even and odd elements, corresponding to the <em>least</em> significant bit <em>b</em><sub>0</sub>. Thus, in order to get the output in the correct place, <em>b</em><sub>0</sub> should take the place of <em>b</em><sub>4</sub> and the index becomes <em>b</em><sub>0</sub><em>b</em><sub>4</sub><em>b</em><sub>3</sub><em>b</em><sub>2</sub><em>b</em><sub>1</sub>. And for next recursive stage, those 4 least significant bits will become <em>b</em><sub>1</sub><em>b</em><sub>4</sub><em>b</em><sub>3</sub><em>b</em><sub>2</sub>, If you include all of the recursive stages of a radix-2 DIT algorithm, <em>all</em> the bits must be reversed and thus one must pre-process the input (<em>or</em> post-process the output) with a bit reversal to get in-order output. (If each size-<em>N</em>/2 subtransform is to operate on contiguous data, the DIT <em>input</em> is pre-processed by bit-reversal.) Correspondingly, if you perform all of the steps in reverse order, you obtain a radix-2 DIF algorithm with bit reversal in post-processing (or pre-processing, respectively). Alternatively, some applications (such as convolution) work equally well on bit-reversed data, so one can perform forward transforms, processing, and then inverse transforms all without bit reversal to produce final results in the natural order.</p>
+
+<p>Many FFT users, however, prefer natural-order outputs, and a separate, explicit bit-reversal stage can have a non-negligible impact on the computation time,<a class="footnoteRef" href="#fn33" id="fnref33"><sup>33</sup></a> even though bit reversal can be done in O(<em>N</em>) time and has been the subject of much research.<a class="footnoteRef" href="#fn34" id="fnref34"><sup>34</sup></a><a class="footnoteRef" href="#fn35" id="fnref35"><sup>35</sup></a><a class="footnoteRef" href="#fn36" id="fnref36"><sup>36</sup></a> Also, while the permutation is a bit reversal in the radix-2 case, it is more generally an arbitrary (mixed-base) digit reversal for the mixed-radix case, and the permutation algorithms become more complicated to implement. Moreover, it is desirable on many hardware architectures to re-order intermediate stages of the FFT algorithm so that they operate on consecutive (or at least more localized) data elements. To these ends, a number of alternative implementation schemes have been devised for the Cooley–Tukey algorithm that do not require separate bit reversal and/or involve additional permutations at intermediate stages.</p>
+
+<p>The problem is greatly simplified if it is <strong>out-of-place</strong>: the output array is distinct from the input array or, equivalently, an equal-size auxiliary array is available. The <strong>Stockham auto-sort</strong> algorithm<a class="footnoteRef" href="#fn37" id="fnref37"><sup>37</sup></a><a class="footnoteRef" href="#fn38" id="fnref38"><sup>38</sup></a> performs every stage of the FFT out-of-place, typically writing back and forth between two arrays, transposing one "digit" of the indices with each stage, and has been especially popular on <a class="uri" href="SIMD" title="wikilink">SIMD</a> architectures.<a class="footnoteRef" href="#fn39" id="fnref39"><sup>39</sup></a><a class="footnoteRef" href="#fn40" id="fnref40"><sup>40</sup></a> Even greater potential SIMD advantages (more consecutive accesses) have been proposed for the <strong>Pease</strong> algorithm,<a class="footnoteRef" href="#fn41" id="fnref41"><sup>41</sup></a> which also reorders out-of-place with each stage, but this method requires separate bit/digit reversal and O(<em>N</em> log <em>N</em>) storage. One can also directly apply the Cooley–Tukey factorization definition with explicit (<a href="depth-first_search" title="wikilink">depth-first</a>) recursion and small radices, which produces natural-order out-of-place output with no separate permutation step (as in the pseudocode above) and can be argued to have <a href="cache-oblivious_algorithm" title="wikilink">cache-oblivious</a> locality benefits on systems with <a href="cache_(computing)" title="wikilink">hierarchical memory</a>.<a class="footnoteRef" href="#fn42" id="fnref42"><sup>42</sup></a><a class="footnoteRef" href="#fn43" id="fnref43"><sup>43</sup></a><a class="footnoteRef" href="#fn44" id="fnref44"><sup>44</sup></a></p>
+
+<p>A typical strategy for in-place algorithms without auxiliary storage and without separate digit-reversal passes involves small matrix transpositions (which swap individual pairs of digits) at intermediate stages, which can be combined with the radix butterflies to reduce the number of passes over the data.<a class="footnoteRef" href="#fn45" id="fnref45"><sup>45</sup></a><a class="footnoteRef" href="#fn46" id="fnref46"><sup>46</sup></a><a class="footnoteRef" href="#fn47" id="fnref47"><sup>47</sup></a><a class="footnoteRef" href="#fn48" id="fnref48"><sup>48</sup></a><a class="footnoteRef" href="#fn49" id="fnref49"><sup>49</sup></a></p>
+<h3 id="pseudocode-1">Pseudocode</h3>
+
+<p>The following is a mathematical pseudocode algorithm for a radix-2 decomposed decimation-in-frequency DFT. It requires O(1) storage and computes exactly 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:37">
+ <semantics>
+  <mfrac>
+   <mrow>
+    <mi>N</mi>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msub>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+   <mn>2</mn>
+  </mfrac>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <apply>
+     <times></times>
+     <ci>N</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <log></log>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>N</ci>
+     </apply>
+    </apply>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{N\log_{2}{N}}{2}
+  </annotation>
+ </semantics>
+</math>
+
+ length-2 DFTs in place and 
+
+<math display="inline" id="Cooley–Tukey_FFT_algorithm:38">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msub>
+     <mi>N</mi>
+    </mrow>
+    <mo>+</mo>
+    <mi>N</mi>
+   </mrow>
+   <mo>-</mo>
+   <mn>3</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <apply>
+     <plus></plus>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <log></log>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>N</ci>
+     </apply>
+     <ci>N</ci>
+    </apply>
+    <cn type="integer">3</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log_{2}{N}+N-3
+  </annotation>
+ </semantics>
+</math>
+
+ roots of unity based on a single computation of the complex exponential.</p>
+
+<p><em><code>x</code></em><sub><code>0,...,</code><em><code>N</code></em><code>−1</code></sub><code> ← </code><strong><code>diffft2</code></strong><code>(</code><em><code>x</code></em><code>, </code><em><code>N</code></em><code>):             </code><em><code>DFT</code> <code>of</code> <code>{x</code></em><sub><code>0</code></sub><em><code>,</code> <code>...,x</code><sub><code>N-</code><em><code>1</code></em></sub><code>}:</code></em><br/>
+<code>    </code><em><code>φ</code><sub><code>T</code></sub></em><code> ← e</code><sup><code>π</code><em><code>i</code></em><code>/</code><em><code>N</code></em></sup><br/>
+<code>    for </code><em><code>n</code></em><code> ∈ {2</code><sup><code>-</code><em><code>k</code></em></sup><code> × </code><em><code>N</code></em><code> : </code><em><code>k</code></em><code> ∈[1, </code><em><code>log</code></em><sub><code>2</code></sub><code>(</code><em><code>N</code></em><code>))}</code><br/>
+<code>        </code><em><code>φ</code><sub><code>T</code></sub></em><code> ← </code><em><code>φ</code><sub><code>T</code></sub></em><code> × </code><em><code>φ</code><sub><code>T</code></sub></em><br/>
+<code>        </code><em><code>T</code></em><code> ← conj(</code><em><code>φ</code><sub><code>T</code></sub></em><code>)</code><br/>
+<code>        for </code><em><code>a</code></em><code> ∈ [0, </code><em><code>n</code></em><code>/2)</code><br/>
+<code>            </code><em><code>T</code></em><code> ← </code><em><code>φ</code><sub><code>T</code></sub></em><code> × </code><em><code>T</code></em><br/>
+<code>            for </code><em><code>b</code></em><code> ∈ {</code><em><code>a</code></em><code> + </code><em><code>kn</code></em><code> : </code><em><code>k</code></em><code> ∈ [0, (</code><em><code>N</code></em><code>/</code><em><code>n</code></em><code>))}</code><br/>
+<code>                t ← </code><em><code>x</code></em><sub><em><code>b</code></em></sub><code> - </code><em><code>x</code></em><sub><em><code>b</code></em><code>+</code><em><code>n</code></em><code>/2</code></sub><br/>
+<code>                </code><em><code>x</code></em><sub><em><code>b</code></em></sub><code> ← </code><em><code>x</code></em><sub><em><code>b</code></em></sub><code> + </code><em><code>x</code></em><sub><em><code>b</code></em><code>+</code><em><code>n</code></em><code>/2</code></sub><br/>
+<code>                </code><em><code>x</code></em><sub><em><code>b</code></em><code>+</code><em><code>n</code></em><code>/2</code></sub><code> ← </code><em><code>T</code></em><code> × </code><em><code>t</code></em></p>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.librow.com/articles/article-10">a simple, pedagogical radix-2 Cooley–Tukey FFT algorithm in C++.</a></li>
+<li><a href="http://sourceforge.net/projects/kissfft/">KISSFFT</a>: a simple mixed-radix Cooley–Tukey implementation in C (open source)</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:FFT_algorithms" title="wikilink">Category:FFT algorithms</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Gauss, Carl Friedrich, "<a href="http://lseet.univ-tln.fr/~iaroslav/Gauss_Theoria_interpolationis_methodo_nova_tractata.php">Theoria interpolationis methodo nova tractata</a>", Werke, Band 3, 265–327 (Königliche Gesellschaft der Wissenschaften, Göttingen, 1866)<a href="#fnref1">↩</a></li>
+<li id="fn2">Heideman, M. T., D. H. Johnson, and <a href="C._Sidney_Burrus" title="wikilink">C. S. Burrus</a>, "<a href="http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=1162257">Gauss and the history of the fast Fourier transform</a>," IEEE ASSP Magazine, 1, (4), 14–21 (1984)<a href="#fnref2">↩</a></li>
+<li id="fn3"></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6">Rockmore, Daniel N. , <em>Comput. Sci. Eng.</em> <strong>2</strong> (1), 60 (2000). <a href="http://www.cs.dartmouth.edu/~rockmore/cse-fft.pdf">The FFT — an algorithm the whole family can use</a> Special issue on "top ten algorithms of the century "<a href="http://amath.colorado.edu/resources/archive/topten.pdf"></a><a href="#fnref6">↩</a></li>
+<li id="fn7"></li>
+<li id="fn8"></li>
+<li id="fn9">James W. Cooley, Peter A. W. Lewis, and Peter W. Welch, "Historical notes on the fast Fourier transform," <em>Proc. IEEE</em>, vol. <strong>55</strong> (no. 10), p. 1675–1677 (1967).<a href="#fnref9">↩</a></li>
+<li id="fn10">Danielson, G. C., and C. Lanczos, "Some improvements in practical Fourier analysis and their application to X-ray scattering from liquids," <em>J. Franklin Inst.</em> <strong>233</strong>, 365–380 and 435–452 (1942).<a href="#fnref10">↩</a></li>
+<li id="fn11"></li>
+<li id="fn12"></li>
+<li id="fn13"></li>
+<li id="fn14">S. G. Johnson and M. Frigo, "<a href="http://cnx.org/content/m16336/">Implementing FFTs in practice</a>," in <em>Fast Fourier Transforms</em> (C. S. Burrus, ed.), ch. 11, Rice University, Houston TX: Connexions, September 2008.<a href="#fnref14">↩</a></li>
+<li id="fn15"></li>
+<li id="fn16"></li>
+<li id="fn17">Duhamel, P., and M. Vetterli, "Fast Fourier transforms: a tutorial review and a state of the art," <em>Signal Processing</em> <strong>19</strong>, 259–299 (1990)<a href="#fnref17">↩</a></li>
+<li id="fn18"></li>
+<li id="fn19">Lundy, T., and J. Van Buskirk, "A new matrix approach to real FFTs and convolutions of length 2<sup><em>k</em></sup>," <em>Computing</em> <strong>80</strong>, 23-45 (2007).<a href="#fnref19">↩</a></li>
+<li id="fn20">Johnson, S. G., and M. Frigo, "<a href="http://www.fftw.org/newsplit.pdf">A modified split-radix FFT with fewer arithmetic operations</a>," <em>IEEE Trans. Signal Processing</em> <strong>55</strong> (1), 111–119 (2007).<a href="#fnref20">↩</a></li>
+<li id="fn21"></li>
+<li id="fn22">Gentleman W. M., and G. Sande, "Fast Fourier transforms—for fun and profit," <em>Proc. AFIPS</em> <strong>29</strong>, 563–578 (1966).<a href="#fnref22">↩</a></li>
+<li id="fn23">Bailey, David H., "FFTs in external or hierarchical memory," <em>J. Supercomputing</em> <strong>4</strong> (1), 23–35 (1990)<a href="#fnref23">↩</a></li>
+<li id="fn24">M. Frigo, C.E. Leiserson, H. Prokop, and S. Ramachandran. Cache-oblivious algorithms. In <em>Proceedings of the 40th IEEE Symposium on Foundations of Computer Science</em> (FOCS 99), p.285-297. 1999. <a href="http://ieeexplore.ieee.org/iel5/6604/17631/00814600.pdf?arnumber=814600">Extended abstract at IEEE</a>, <a href="http://citeseer.ist.psu.edu/307799.html">at Citeseer</a>.<a href="#fnref24">↩</a></li>
+<li id="fn25"></li>
+<li id="fn26"></li>
+<li id="fn27"></li>
+<li id="fn28">Cooley, J. W., P. Lewis and P. Welch, "The Fast Fourier Transform and its Applications", <em>IEEE Trans on Education</em> <strong>12</strong>, 1, 28-34 (1969)<a href="#fnref28">↩</a></li>
+<li id="fn29"></li>
+<li id="fn30"></li>
+<li id="fn31"></li>
+<li id="fn32"></li>
+<li id="fn33"></li>
+<li id="fn34"><a href="#fnref34">↩</a></li>
+<li id="fn35"><a href="#fnref35">↩</a></li>
+<li id="fn36"><a href="#fnref36">↩</a></li>
+<li id="fn37">Originally attributed to Stockham in W. T. Cochran <em>et al.</em>, <a href="http://dx.doi.org/10.1109/PROC.1967.5957">What is the fast Fourier transform?</a>, <em>Proc. IEEE</em> vol. 55, 1664–1674 (1967).<a href="#fnref37">↩</a></li>
+<li id="fn38"></li>
+<li id="fn39">P. N. Swarztrauber, <a href="http://dx.doi.org/10.1016/S0167-8191(84)90413-7">FFT algorithms for vector computers</a>, <em>Parallel Computing</em> vol. 1, 45–63 (1984).<a href="#fnref39">↩</a></li>
+<li id="fn40"><a href="#fnref40">↩</a></li>
+<li id="fn41"><a href="#fnref41">↩</a></li>
+<li id="fn42"><a href="#fnref42">↩</a></li>
+<li id="fn43"><a href="#fnref43">↩</a></li>
+<li id="fn44"> A free (<a href="GNU_General_Public_License" title="wikilink">GPL</a>) C library for computing discrete Fourier transforms in one or more dimensions, of arbitrary size, using the Cooley–Tukey algorithm<a href="#fnref44">↩</a></li>
+<li id="fn45"></li>
+<li id="fn46"><a href="#fnref46">↩</a></li>
+<li id="fn47"><a href="#fnref47">↩</a></li>
+<li id="fn48"><a href="#fnref48">↩</a></li>
+<li id="fn49"><a href="#fnref49">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

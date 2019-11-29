@@ -1,0 +1,5565 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1112">Expectation–maximization algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Expectation–maximization algorithm</h1>
+<hr/>
+
+<p>In <a class="uri" href="statistics" title="wikilink">statistics</a>, an <strong>expectation–maximization</strong> (<strong>EM</strong>) <strong>algorithm</strong> is an <a href="iterative_method" title="wikilink">iterative method</a> for finding <a href="maximum_likelihood" title="wikilink">maximum likelihood</a> or <a href="maximum_a_posteriori" title="wikilink">maximum a posteriori</a> (MAP) estimates of <a href="parameter" title="wikilink">parameters</a> in <a href="statistical_model" title="wikilink">statistical models</a>, where the model depends on unobserved <a href="latent_variable" title="wikilink">latent variables</a>. The EM iteration alternates between performing an expectation (E) step, which creates a function for the expectation of the <a href="Likelihood_function#Log-likelihood" title="wikilink">log-likelihood</a> evaluated using the current estimate for the parameters, and a maximization (M) step, which computes parameters maximizing the expected log-likelihood found on the <em>E</em> step. These parameter-estimates are then used to determine the distribution of the latent variables in the next E step.</p>
+<figure><b>(Figure)</b>
+<figcaption>EM clustering of <a href="Old_Faithful" title="wikilink">Old Faithful</a> eruption data. The random initial model (which, due to the different scales of the axes, appears to be two very flat and wide spheres) is fit to the observed data. In the first iterations, the model changes substantially, but then converges to the two modes of the <a class="uri" href="geyser" title="wikilink">geyser</a>. Visualized using <a class="uri" href="ELKI" title="wikilink">ELKI</a>.</figcaption>
+</figure>
+<h2 id="history">History</h2>
+
+<p>The EM algorithm was explained and given its name in a classic 1977 paper by <a href="Arthur_P._Dempster" title="wikilink">Arthur Dempster</a>, <a href="Nan_Laird" title="wikilink">Nan Laird</a>, and <a href="Donald_Rubin" title="wikilink">Donald Rubin</a>.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> They pointed out that the method had been "proposed many times in special circumstances" by earlier authors. In particular, a very detailed treatment of the EM method for exponential families was published by Rolf Sundberg in his thesis and several papers<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a><a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> following his collaboration with <a href="Per_Martin-Löf" title="wikilink">Per Martin-Löf</a> and <a href="Anders_Martin-Löf" title="wikilink">Anders Martin-Löf</a>.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a><a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a><a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a><a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a><a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a><a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a><a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> The Dempster-Laird-Rubin paper in 1977 generalized the method and sketched a convergence analysis for a wider class of problems. Regardless of earlier inventions, the innovative Dempster-Laird-Rubin paper in the <em>Journal of the Royal Statistical Society</em> received an enthusiastic discussion at the Royal Statistical Society meeting with Sundberg calling the paper "brilliant". The Dempster-Laird-Rubin paper established the EM method as an important tool of statistical analysis.</p>
+
+<p>The convergence analysis of the Dempster-Laird-Rubin paper was flawed and a correct convergence analysis was published by <a href="C.F._Jeff_Wu" title="wikilink">C.F. Jeff Wu</a> in 1983.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> Wu's proof established the EM method's convergence outside of the <a href="exponential_family" title="wikilink">exponential family</a>, as claimed by Dempster-Laird-Rubin.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h2 id="introduction">Introduction</h2>
+
+<p>The EM algorithm is used to find (locally) <a href="maximum_likelihood" title="wikilink">maximum likelihood</a> parameters of a <a href="statistical_model" title="wikilink">statistical model</a> in cases where the equations cannot be solved directly. Typically these models involve <a href="latent_variable" title="wikilink">latent variables</a> in addition to unknown <a class="uri" href="parameters" title="wikilink">parameters</a> and known data observations. That is, either there are <a href="missing_values" title="wikilink">missing values</a> among the data, or the model can be formulated more simply by assuming the existence of additional unobserved data points. For example, a <a href="mixture_model" title="wikilink">mixture model</a> can be described more simply by assuming that each observed data point has a corresponding unobserved data point, or latent variable, specifying the mixture component that each data point belongs to.</p>
+
+<p>Finding a maximum likelihood solution typically requires taking the <a href="derivative" title="wikilink">derivatives</a> of the <a href="likelihood_function" title="wikilink">likelihood function</a> with respect to all the unknown values — viz. the parameters and the latent variables — and simultaneously solving the resulting equations. In statistical models with latent variables, this usually is not possible. Instead, the result is typically a set of interlocking equations in which the solution to the parameters requires the values of the latent variables and vice versa, but substituting one set of equations into the other produces an unsolvable equation.</p>
+
+<p>The EM algorithm proceeds from the observation that the following is a way to solve these two sets of equations numerically. One can simply pick arbitrary values for one of the two sets of unknowns, use them to estimate the second set, then use these new values to find a better estimate of the first set, and then keep alternating between the two until the resulting values both converge to fixed points. It's not obvious that this will work at all, but in fact it can be proven that in this particular context it does, and that the derivative of the likelihood is (arbitrarily close to) zero at that point, which in turn means that the point is either a maximum or a <a href="saddle_point" title="wikilink">saddle point</a>. In general there may be multiple maxima, and there is no guarantee that the global maximum will be found. Some likelihoods also have <a href="Mathematical_singularity" title="wikilink">singularities</a> in them, i.e. nonsensical maxima. For example, one of the "solutions" that may be found by EM in a mixture model involves setting one of the components to have zero variance and the mean parameter for the same component to be equal to one of the data points.</p>
+<h2 id="description">Description</h2>
+
+<p>Given a <a href="statistical_model" title="wikilink">statistical model</a> which generates a set 
+
+<math display="inline" id="Expectation–maximization_algorithm:0">
+ <semantics>
+  <mi>𝐗</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐗</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}
+  </annotation>
+ </semantics>
+</math>
+
+ of observed data, a set of unobserved latent data or <a href="missing_values" title="wikilink">missing values</a> 
+
+<math display="inline" id="Expectation–maximization_algorithm:1">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+, and a vector of unknown parameters 
+
+<math display="inline" id="Expectation–maximization_algorithm:2">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+, along with a <a href="likelihood_function" title="wikilink">likelihood function</a> 
+
+<math display="inline" id="Expectation–maximization_algorithm:3">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝜽</mi>
+    <mo>;</mo>
+    <mi>𝐗</mi>
+    <mo>,</mo>
+    <mi>𝐙</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐗</mi>
+    <mo>,</mo>
+    <mi>𝐙</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">L</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">Z</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">Z</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(\boldsymbol{\theta};\mathbf{X},\mathbf{Z})=p(\mathbf{X},\mathbf{Z}|%
+\boldsymbol{\theta})
+  </annotation>
+ </semantics>
+</math>
+
+, the <a href="maximum_likelihood_estimate" title="wikilink">maximum likelihood estimate</a> (MLE) of the unknown parameters is determined by the <a href="marginal_likelihood" title="wikilink">marginal likelihood</a> of the observed data</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:4">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝜽</mi>
+    <mo>;</mo>
+    <mi>𝐗</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐗</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <munder>
+    <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+    <mi>𝐙</mi>
+   </munder>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐗</mi>
+    <mo>,</mo>
+    <mi>𝐙</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">L</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <sum></sum>
+     <ci>𝐙</ci>
+    </apply>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">Z</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(\boldsymbol{\theta};\mathbf{X})=p(\mathbf{X}|\boldsymbol{\theta})=\sum_{%
+\mathbf{Z}}p(\mathbf{X},\mathbf{Z}|\boldsymbol{\theta})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>However, this quantity is often intractable (e.g. if 
+
+<math display="inline" id="Expectation–maximization_algorithm:5">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ is a sequence of events, so that the number of values grows exponentially with the sequence length, making the exact calculation of the sum extremely difficult).</p>
+
+<p>The EM algorithm seeks to find the MLE of the marginal likelihood by iteratively applying the following two steps:</p>
+<dl>
+<dd><strong>Expectation step (E step)</strong>: Calculate the <a href="expected_value" title="wikilink">expected value</a> of the log <a href="likelihood_function" title="wikilink">likelihood function</a>, with respect to the <a href="conditional_probability_distribution" title="wikilink">conditional distribution</a> of 
+
+<math display="inline" id="Expectation–maximization_algorithm:6">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ given 
+
+<math display="inline" id="Expectation–maximization_algorithm:7">
+ <semantics>
+  <mi>𝐗</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐗</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}
+  </annotation>
+ </semantics>
+</math>
+
+ under the current estimate of the parameters 
+
+<math display="inline" id="Expectation–maximization_algorithm:8">
+ <semantics>
+  <msup>
+   <mi>𝜽</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>t</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>𝜽</ci>
+    <ci>t</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}^{(t)}
+  </annotation>
+ </semantics>
+</math>
+
+:
+</dd>
+</dl>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Expectation–maximization_algorithm:9">
+ <semantics>
+  <mrow>
+   <mi>Q</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mo>E</mo>
+    <mrow>
+     <mi>𝐙</mi>
+     <mo stretchy="false">|</mo>
+     <mi>𝐗</mi>
+     <mo>,</mo>
+     <msup>
+      <mi>𝜽</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msup>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo>[</mo>
+    <mi>log</mi>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝜽</mi>
+     <mo>;</mo>
+     <mi>𝐗</mi>
+     <mo>,</mo>
+     <mi>𝐙</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo rspace="4.2pt">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">Q</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-E</ci>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <csymbol cd="unknown">Z</csymbol>
+      <ci>normal-|</ci>
+      <csymbol cd="unknown">X</csymbol>
+      <ci>normal-,</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>𝜽</ci>
+       <ci>t</ci>
+      </apply>
+     </cerror>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <log></log>
+     <csymbol cd="unknown">L</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">θ</csymbol>
+      <ci>normal-;</ci>
+      <csymbol cd="unknown">X</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">Z</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q(\boldsymbol{\theta}|\boldsymbol{\theta}^{(t)})=\operatorname{E}_{\mathbf{Z}|%
+\mathbf{X},\boldsymbol{\theta}^{(t)}}\left[\log L(\boldsymbol{\theta};\mathbf{%
+X},\mathbf{Z})\right]\,
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+<dl>
+<dd><strong>Maximization step (M step)</strong>: Find the parameter that maximizes this quantity:
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:10">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>𝜽</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mpadded width="+5pt">
+    <munder accentunder="true">
+     <mrow>
+      <mpadded width="+1.7pt">
+       <mi>arg</mi>
+      </mpadded>
+      <mi>max</mi>
+     </mrow>
+     <mo>𝜽</mo>
+    </munder>
+   </mpadded>
+   <mi>Q</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo rspace="4.2pt" stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>𝜽</ci>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <eq></eq>
+    <apply>
+     <ci>𝜽</ci>
+     <apply>
+      <times></times>
+      <ci>arg</ci>
+      <ci>max</ci>
+     </apply>
+    </apply>
+    <csymbol cd="unknown">Q</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}^{(t+1)}=\underset{\boldsymbol{\theta}}{\operatorname{arg\,%
+max}}\ Q(\boldsymbol{\theta}|\boldsymbol{\theta}^{(t)})\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+</dd>
+</dl>
+
+<p>Note that in typical models to which EM is applied:</p>
+<ol>
+<li>The observed data points 
+
+<math display="inline" id="Expectation–maximization_algorithm:11">
+ <semantics>
+  <mi>𝐗</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐗</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}
+  </annotation>
+ </semantics>
+</math>
+
+ may be <a href="discrete_random_variable" title="wikilink">discrete</a> (taking values in a finite or countably infinite set) or <a href="continuous_random_variable" title="wikilink">continuous</a> (taking values in an uncountably infinite set). There may in fact be a vector of observations associated with each data point.</li>
+<li>The <a href="missing_values" title="wikilink">missing values</a> (aka <a href="latent_variables" title="wikilink">latent variables</a>) 
+
+<math display="inline" id="Expectation–maximization_algorithm:12">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ are <a href="discrete_random_variable" title="wikilink">discrete</a>, drawn from a fixed number of values, and there is one latent variable per observed data point.</li>
+<li>The parameters are continuous, and are of two kinds: Parameters that are associated with all data points, and parameters associated with a particular value of a latent variable (i.e. associated with all data points whose corresponding latent variable has a particular value).</li>
+</ol>
+
+<p>However, it is possible to apply EM to other sorts of models.</p>
+
+<p>The motivation is as follows. If we know the value of the parameters 
+
+<math display="inline" id="Expectation–maximization_algorithm:13">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+, we can usually find the value of the latent variables 
+
+<math display="inline" id="Expectation–maximization_algorithm:14">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ by maximizing the log-likelihood over all possible values of 
+
+<math display="inline" id="Expectation–maximization_algorithm:15">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+, either simply by iterating over 
+
+<math display="inline" id="Expectation–maximization_algorithm:16">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ or through an algorithm such as the <a href="Viterbi_algorithm" title="wikilink">Viterbi algorithm</a> for <a href="hidden_Markov_model" title="wikilink">hidden Markov models</a>. Conversely, if we know the value of the latent variables 
+
+<math display="inline" id="Expectation–maximization_algorithm:17">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+, we can find an estimate of the parameters 
+
+<math display="inline" id="Expectation–maximization_algorithm:18">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+ fairly easily, typically by simply grouping the observed data points according to the value of the associated latent variable and averaging the values, or some function of the values, of the points in each group. This suggests an iterative algorithm, in the case where both 
+
+<math display="inline" id="Expectation–maximization_algorithm:19">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Expectation–maximization_algorithm:20">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ are unknown:</p>
+<ol>
+<li>First, initialize the parameters 
+
+<math display="inline" id="Expectation–maximization_algorithm:21">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+ to some random values.</li>
+<li>Compute the best value for 
+
+<math display="inline" id="Expectation–maximization_algorithm:22">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ given these parameter values.</li>
+<li>Then, use the just-computed values of 
+
+<math display="inline" id="Expectation–maximization_algorithm:23">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ to compute a better estimate for the parameters 
+
+<math display="inline" id="Expectation–maximization_algorithm:24">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+. Parameters associated with a particular value of 
+
+<math display="inline" id="Expectation–maximization_algorithm:25">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ will use only those data points whose associated latent variable has that value.</li>
+<li>Iterate steps 2 and 3 until convergence.</li>
+</ol>
+
+<p>The algorithm as just described monotonically approaches a local minimum of the cost function, and is commonly called <em>hard EM</em>. The <a href="k-means_algorithm" title="wikilink"><em>k</em>-means algorithm</a> is an example of this class of algorithms.</p>
+
+<p>However, one can do somewhat better: Rather than making a hard choice for 
+
+<math display="inline" id="Expectation–maximization_algorithm:26">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ given the current parameter values and averaging only over the set of data points associated with a particular value of 
+
+<math display="inline" id="Expectation–maximization_algorithm:27">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+, one can instead determine the probability of each possible value of 
+
+<math display="inline" id="Expectation–maximization_algorithm:28">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ for each data point, and then use the probabilities associated with a particular value of 
+
+<math display="inline" id="Expectation–maximization_algorithm:29">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ to compute a <a href="weighted_average" title="wikilink">weighted average</a> over the entire set of data points. The resulting algorithm is commonly called <em>soft EM</em>, and is the type of algorithm normally associated with EM. The counts used to compute these weighted averages are called <em>soft counts</em> (as opposed to the <em>hard counts</em> used in a hard-EM-type algorithm such as <em>k</em>-means). The probabilities computed for 
+
+<math display="inline" id="Expectation–maximization_algorithm:30">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ are <a href="posterior_probabilities" title="wikilink">posterior probabilities</a> and are what is computed in the E step. The soft counts used to compute new parameter values are what is computed in the M step.</p>
+<h2 id="properties">Properties</h2>
+
+<p>Speaking of an expectation (E) step is a bit of a <a class="uri" href="misnomer" title="wikilink">misnomer</a>. What is calculated in the first step are the fixed, data-dependent parameters of the function <em>Q</em>. Once the parameters of <em>Q</em> are known, it is fully determined and is maximized in the second (M) step of an EM algorithm.</p>
+
+<p>Although an EM iteration does increase the observed data (i.e. marginal) likelihood function there is no guarantee that the sequence converges to a <a href="maximum_likelihood_estimator" title="wikilink">maximum likelihood estimator</a>. For <a href="bimodal_distribution" title="wikilink">multimodal distributions</a>, this means that an EM algorithm may converge to a <a href="local_maximum" title="wikilink">local maximum</a> of the observed data likelihood function, depending on starting values. There are a variety of heuristic or <a class="uri" href="metaheuristic" title="wikilink">metaheuristic</a> approaches for escaping a local maximum such as <a href="Random-restart_hill_climbing" title="wikilink">random restart</a> (starting with several different random initial estimates <em>θ</em><sup>(<em>t</em>)</sup>), or applying <a href="simulated_annealing" title="wikilink">simulated annealing</a> methods.</p>
+
+<p>EM is particularly useful when the likelihood is an <a href="exponential_family" title="wikilink">exponential family</a>: the E step becomes the sum of expectations of <a href="sufficient_statistic" title="wikilink">sufficient statistics</a>, and the M step involves maximizing a linear function. In such a case, it is usually possible to derive <a href="Closed-form_expression" title="wikilink">closed form</a> updates for each step, using the Sundberg formula (published by Rolf Sundberg using unpublished results of <a href="Per_Martin-Löf" title="wikilink">Per Martin-Löf</a> and <a href="Anders_Martin-Löf" title="wikilink">Anders Martin-Löf</a>).<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a><a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a><a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a><a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a><a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a><a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a><a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a></p>
+
+<p>The EM method was modified to compute <a href="maximum_a_posteriori" title="wikilink">maximum a posteriori</a> (MAP) estimates for <a href="Bayesian_inference" title="wikilink">Bayesian inference</a> in the original paper by Dempster, Laird, and Rubin.</p>
+
+<p>There are other methods for finding maximum likelihood estimates, such as <a href="gradient_descent" title="wikilink">gradient descent</a>, <a href="conjugate_gradient" title="wikilink">conjugate gradient</a> or variations of the <a href="Gauss–Newton_method" title="wikilink">Gauss–Newton method</a>. Unlike EM, such methods typically require the evaluation of first and/or second derivatives of the likelihood function.</p>
+<h2 id="proof-of-correctness">Proof of correctness</h2>
+
+<p>Expectation-maximization works to improve 
+
+<math display="inline" id="Expectation–maximization_algorithm:31">
+ <semantics>
+  <mrow>
+   <mi>Q</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">Q</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q(\boldsymbol{\theta}|\boldsymbol{\theta}^{(t)})
+  </annotation>
+ </semantics>
+</math>
+
+ rather than directly improving 
+
+<math display="inline" id="Expectation–maximization_algorithm:32">
+ <semantics>
+  <mrow>
+   <mi>log</mi>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐗</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <log></log>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log p(\mathbf{X}|\boldsymbol{\theta})
+  </annotation>
+ </semantics>
+</math>
+
+. Here we show that improvements to the former imply improvements to the latter.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a></p>
+
+<p>For any 
+
+<math display="inline" id="Expectation–maximization_algorithm:33">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ with non-zero probability 
+
+<math display="inline" id="Expectation–maximization_algorithm:34">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐙</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝐗</mi>
+    <mo>,</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">Z</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{Z}|\mathbf{X},\boldsymbol{\theta})
+  </annotation>
+ </semantics>
+</math>
+
+, we can write</p>
+<dl>
+<dd><dl>
+<dd><math>
+</math></dd>
+</dl>
+</dd>
+</dl>
+
+<p>\log p(\mathbf{X}|\boldsymbol\theta) = \log p(\mathbf{X},\mathbf{Z}|\boldsymbol\theta) - \log p(\mathbf{Z}|\mathbf{X},\boldsymbol\theta) \,.  We take the expectation over values of 
+
+<math display="inline" id="Expectation–maximization_algorithm:35">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+ by multiplying both sides by 
+
+<math display="inline" id="Expectation–maximization_algorithm:36">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐙</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝐗</mi>
+    <mo>,</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">Z</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\mathbf{Z}|\mathbf{X},\boldsymbol{\theta}^{(t)})
+  </annotation>
+ </semantics>
+</math>
+
+ and summing (or integrating) over 
+
+<math display="inline" id="Expectation–maximization_algorithm:37">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+. The left-hand side is the expectation of a constant, so we get:</p>
+<dl>
+<dd><dl>
+<dd><math>
+</math></dd>
+</dl>
+</dd>
+</dl>
+
+<p>\begin{align} \log p(\mathbf{X}|\boldsymbol\theta) &amp;</p>
+<h1 id="sum_mathbfz-pmathbfzmathbfxboldsymbolthetat-log-pmathbfxmathbfzboldsymboltheta---sum_mathbfz-pmathbfzmathbfxboldsymbolthetat-log-pmathbfzmathbfxboldsymboltheta">\sum_{\mathbf{Z}} p(\mathbf{Z}|\mathbf{X},\boldsymbol\theta^{(t)}) \log p(\mathbf{X},\mathbf{Z}|\boldsymbol\theta) - \sum_{\mathbf{Z}} p(\mathbf{Z}|\mathbf{X},\boldsymbol\theta^{(t)}) \log p(\mathbf{Z}|\mathbf{X},\boldsymbol\theta) \\ &amp;</h1>
+
+<p>Q(\boldsymbol\theta|\boldsymbol\theta^{(t)}) + H(\boldsymbol\theta|\boldsymbol\theta^{(t)}) \,, \end{align}  where 
+
+<math display="inline" id="Expectation–maximization_algorithm:38">
+ <semantics>
+  <mrow>
+   <mi>H</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">H</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H(\boldsymbol{\theta}|\boldsymbol{\theta}^{(t)})
+  </annotation>
+ </semantics>
+</math>
+
+ is defined by the negated sum it is replacing. This last equation holds for any value of 
+
+<math display="inline" id="Expectation–maximization_algorithm:39">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+ including 
+
+<math display="inline" id="Expectation–maximization_algorithm:40">
+ <semantics>
+  <mrow>
+   <mi>𝜽</mi>
+   <mo>=</mo>
+   <msup>
+    <mi>𝜽</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝜽</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>𝜽</ci>
+     <ci>t</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}=\boldsymbol{\theta}^{(t)}
+  </annotation>
+ </semantics>
+</math>
+
+,</p>
+<dl>
+<dd><dl>
+<dd><math>
+</math></dd>
+</dl>
+</dd>
+</dl>
+
+<p>\log p(\mathbf{X}|\boldsymbol\theta^{(t)}) = Q(\boldsymbol\theta^{(t)}|\boldsymbol\theta^{(t)}) + H(\boldsymbol\theta^{(t)}|\boldsymbol\theta^{(t)}) \,,  and subtracting this last equation from the previous equation gives</p>
+<dl>
+<dd><dl>
+<dd><math>
+</math></dd>
+</dl>
+</dd>
+</dl>
+
+<p>\log p(\mathbf{X}|\boldsymbol\theta) - \log p(\mathbf{X}|\boldsymbol\theta^{(t)}) = Q(\boldsymbol\theta|\boldsymbol\theta^{(t)}) - Q(\boldsymbol\theta^{(t)}|\boldsymbol\theta^{(t)})</p>
+
+<p><code>+ H(\boldsymbol\theta|\boldsymbol\theta^{(t)}) - H(\boldsymbol\theta^{(t)}|\boldsymbol\theta^{(t)}) \,,</code></p>
+
+<p> However, <a href="Gibbs'_inequality" title="wikilink">Gibbs' inequality</a> tells us that 
+
+<math display="inline" id="Expectation–maximization_algorithm:41">
+ <semantics>
+  <mrow>
+   <mi>H</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>≥</mo>
+   <mi>H</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">H</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <geq></geq>
+    <csymbol cd="unknown">H</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H(\boldsymbol{\theta}|\boldsymbol{\theta}^{(t)})\geq H(\boldsymbol{\theta}^{(t%
+)}|\boldsymbol{\theta}^{(t)})
+  </annotation>
+ </semantics>
+</math>
+
+, so we can conclude that</p>
+<dl>
+<dd><dl>
+<dd><math>
+</math></dd>
+</dl>
+</dd>
+</dl>
+
+<p>\log p(\mathbf{X}|\boldsymbol\theta) - \log p(\mathbf{X}|\boldsymbol\theta^{(t)}) \ge Q(\boldsymbol\theta|\boldsymbol\theta^{(t)}) - Q(\boldsymbol\theta^{(t)}|\boldsymbol\theta^{(t)}) \,.  In words, choosing 
+
+<math display="inline" id="Expectation–maximization_algorithm:42">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+ to improve 
+
+<math display="inline" id="Expectation–maximization_algorithm:43">
+ <semantics>
+  <mrow>
+   <mi>Q</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">Q</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q(\boldsymbol{\theta}|\boldsymbol{\theta}^{(t)})
+  </annotation>
+ </semantics>
+</math>
+
+ beyond 
+
+<math display="inline" id="Expectation–maximization_algorithm:44">
+ <semantics>
+  <mrow>
+   <mi>Q</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">Q</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Q(\boldsymbol{\theta}^{(t)}|\boldsymbol{\theta}^{(t)})
+  </annotation>
+ </semantics>
+</math>
+
+ will improve 
+
+<math display="inline" id="Expectation–maximization_algorithm:45">
+ <semantics>
+  <mrow>
+   <mi>log</mi>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐗</mi>
+    <mo stretchy="false">|</mo>
+    <mi>𝜽</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <log></log>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log p(\mathbf{X}|\boldsymbol{\theta})
+  </annotation>
+ </semantics>
+</math>
+
+ beyond 
+
+<math display="inline" id="Expectation–maximization_algorithm:46">
+ <semantics>
+  <mrow>
+   <mi>log</mi>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐗</mi>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>𝜽</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <log></log>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">X</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>𝜽</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log p(\mathbf{X}|\boldsymbol{\theta}^{(t)})
+  </annotation>
+ </semantics>
+</math>
+
+ at least as much.</p>
+<h2 id="alternative-description">Alternative description</h2>
+
+<p>Under some circumstances, it is convenient to view the EM algorithm as two alternating maximization steps.<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a><a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a> Consider the function:</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:47">
+ <semantics>
+  <mrow>
+   <mi>F</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>q</mi>
+    <mo>,</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mo>E</mo>
+    <mi>q</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>log</mi>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>θ</mi>
+     <mo>;</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>Z</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mo>+</mo>
+   <mi>H</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>q</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mo>-</mo>
+   <msub>
+    <mi>D</mi>
+    <mi>KL</mi>
+   </msub>
+   <mrow>
+    <mo maxsize="120%" minsize="120%">(</mo>
+    <mi>q</mi>
+    <mo mathsize="120%" stretchy="false">∥</mo>
+    <msub>
+     <mi>p</mi>
+     <mrow>
+      <mi>Z</mi>
+      <mo stretchy="false">|</mo>
+      <mi>X</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mo>⋅</mo>
+     <mo stretchy="false">|</mo>
+     <mi>x</mi>
+     <mo>;</mo>
+     <mi>θ</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo maxsize="120%" minsize="120%">)</mo>
+   </mrow>
+   <mo>+</mo>
+   <mi>log</mi>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo>;</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">F</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">q</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-E</ci>
+     <ci>q</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <log></log>
+     <csymbol cd="unknown">L</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">θ</csymbol>
+      <ci>normal-;</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">Z</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+    <plus></plus>
+    <csymbol cd="unknown">H</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">q</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <minus></minus>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>D</ci>
+     <ci>KL</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">q</csymbol>
+     <csymbol cd="latexml">parallel-to</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>p</ci>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">Z</csymbol>
+       <ci>normal-|</ci>
+       <csymbol cd="unknown">X</csymbol>
+      </cerror>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <ci>normal-⋅</ci>
+      <ci>normal-|</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-;</ci>
+      <csymbol cd="unknown">θ</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-)</ci>
+    </cerror>
+    <plus></plus>
+    <log></log>
+    <csymbol cd="unknown">L</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F(q,\theta)=\operatorname{E}_{q}[\log L(\theta;x,Z)]+H(q)=-D_{\mathrm{KL}}\big%
+(q\big\|p_{Z|X}(\cdot|x;\theta)\big)+\log L(\theta;x)
+  </annotation>
+ </semantics>
+</math>
+
+ where <em>q</em> is an arbitrary probability distribution over the unobserved data <em>z</em>, <em>p</em><sub><em>Z</em>|<em>X</em></sub>(· |<em>x</em>;<em>θ</em>) is the conditional distribution of the unobserved data given the observed data <em>x</em>, <em>H</em> is the <a href="Entropy_(information_theory)" title="wikilink">entropy</a> and <em>D</em><sub>KL</sub> is the <a href="Kullback–Leibler_divergence" title="wikilink">Kullback–Leibler divergence</a>.</p>
+
+<p>Then the steps in the EM algorithm may be viewed as:</p>
+<dl>
+<dd><strong>Expectation step</strong>: Choose <em>q</em> to maximize <em>F</em>:
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:48">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>q</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mpadded width="+5pt">
+      <munder>
+       <mrow>
+        <mpadded width="+1.7pt">
+         <mi>arg</mi>
+        </mpadded>
+        <mi>max</mi>
+       </mrow>
+       <mi>q</mi>
+      </munder>
+     </mpadded>
+     <mi>F</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>q</mi>
+     <mo>,</mo>
+     <msup>
+      <mi>θ</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>q</ci>
+     <ci>t</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <times></times>
+        <ci>arg</ci>
+        <ci>max</ci>
+       </apply>
+       <ci>q</ci>
+      </apply>
+      <ci>F</ci>
+     </apply>
+     <interval closure="open">
+      <ci>q</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>θ</ci>
+       <ci>t</ci>
+      </apply>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   q^{(t)}=\operatorname*{arg\,max}_{q}\ F(q,\theta^{(t)})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+</dd>
+<dd><strong>Maximization step</strong>: Choose <em>θ</em> to maximize <em>F</em>:
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:49">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>θ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mpadded width="+5pt">
+      <munder>
+       <mrow>
+        <mpadded width="+1.7pt">
+         <mi>arg</mi>
+        </mpadded>
+        <mi>max</mi>
+       </mrow>
+       <mi>θ</mi>
+      </munder>
+     </mpadded>
+     <mi>F</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msup>
+      <mi>q</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msup>
+     <mo>,</mo>
+     <mi>θ</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>θ</ci>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <times></times>
+        <ci>arg</ci>
+        <ci>max</ci>
+       </apply>
+       <ci>θ</ci>
+      </apply>
+      <ci>F</ci>
+     </apply>
+     <interval closure="open">
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>q</ci>
+       <ci>t</ci>
+      </apply>
+      <ci>θ</ci>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta^{(t+1)}=\operatorname*{arg\,max}_{\theta}\ F(q^{(t)},\theta)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+</dd>
+</dl>
+<h2 id="applications">Applications</h2>
+
+<p>EM is frequently used for <a href="data_clustering" title="wikilink">data clustering</a> in <a href="machine_learning" title="wikilink">machine learning</a> and <a href="computer_vision" title="wikilink">computer vision</a>. In <a href="natural_language_processing" title="wikilink">natural language processing</a>, two prominent instances of the algorithm are the <a href="Baum-Welch_algorithm" title="wikilink">Baum-Welch algorithm</a> and the <a href="inside-outside_algorithm" title="wikilink">inside-outside algorithm</a> for unsupervised induction of <a href="probabilistic_context-free_grammar" title="wikilink">probabilistic context-free grammars</a>.</p>
+
+<p>In <a class="uri" href="psychometrics" title="wikilink">psychometrics</a>, EM is almost indispensable for estimating item parameters and latent abilities of <a href="item_response_theory" title="wikilink">item response theory</a> models.</p>
+
+<p>With the ability to deal with missing data and observe unidentified variables, EM is becoming a useful tool to price and manage risk of a portfolio.[ref?]</p>
+
+<p>The EM algorithm (and its faster variant <a href="Ordered_subset_expectation_maximization" title="wikilink">Ordered subset expectation maximization</a>) is also widely used in <a href="medical_imaging" title="wikilink">medical image</a> reconstruction, especially in <a href="positron_emission_tomography" title="wikilink">positron emission tomography</a> and <a href="single_photon_emission_computed_tomography" title="wikilink">single photon emission computed tomography</a>. See below for other faster variants of EM.</p>
+<h2 id="filtering-and-smoothing-em-algorithms">Filtering and smoothing EM algorithms</h2>
+
+<p>A <a href="Kalman_filter" title="wikilink">Kalman filter</a> is typically used for on-line state estimation and a minimum-variance smoother may be employed for off-line or batch state estimation. However, these minimum-variance solutions require estimates of the state-space model parameters. EM algorithms can be used for solving joint state and parameter estimation problems.</p>
+
+<p>Filtering and smoothing EM algorithms arise by repeating the following two-step procedure:</p>
+<dl>
+<dt>E-step</dt>
+<dd>Operate a Kalman filter or a minimum-variance smoother designed with current parameter estimates to obtain updated state estimates.
+</dd>
+</dl>
+<dl>
+<dt>M-step</dt>
+<dd>Use the filtered or smoothed state estimates within maximum-likelihood calculations to obtain updated parameter estimates.
+</dd>
+</dl>
+
+<p>Suppose that a <a href="Kalman_filter" title="wikilink">Kalman filter</a> or minimum-variance smoother operates on noisy measurements of a single-input-single-output system. An updated measurement noise variance estimate can be obtained from the <a href="maximum_likelihood" title="wikilink">maximum likelihood</a> calculation</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:50">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mover accent="true">
+     <mi>σ</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+    <mi>v</mi>
+    <mn>2</mn>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>N</mi>
+    </mfrac>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>N</mi>
+     </munderover>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msub>
+         <mi>z</mi>
+         <mi>k</mi>
+        </msub>
+        <mo>-</mo>
+        <msub>
+         <mover accent="true">
+          <mi>x</mi>
+          <mo stretchy="false">^</mo>
+         </mover>
+         <mi>k</mi>
+        </msub>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <ci>normal-^</ci>
+       <ci>σ</ci>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>v</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>N</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>z</ci>
+         <ci>k</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <ci>normal-^</ci>
+          <ci>x</ci>
+         </apply>
+         <ci>k</ci>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{\sigma}^{2}_{v}=\frac{1}{N}\sum_{k=1}^{N}{(z_{k}-\hat{x}_{k})}^{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Expectation–maximization_algorithm:51">
+ <semantics>
+  <msub>
+   <mover accent="true">
+    <mi>x</mi>
+    <mo stretchy="false">^</mo>
+   </mover>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <ci>normal-^</ci>
+     <ci>x</ci>
+    </apply>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{x}_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ are scalar output estimates calculated by a filter or a smoother from N scalar measurements 
+
+<math display="inline" id="Expectation–maximization_algorithm:52">
+ <semantics>
+  <msub>
+   <mi>z</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>z</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {z_{k}}
+  </annotation>
+ </semantics>
+</math>
+
+. Similarly, for a first-order auto-regressive process, an updated process noise variance estimate can be calculated by</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:53">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mover accent="true">
+     <mi>σ</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+    <mi>w</mi>
+    <mn>2</mn>
+   </msubsup>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>N</mi>
+    </mfrac>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>N</mi>
+     </munderover>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msub>
+         <mover accent="true">
+          <mi>x</mi>
+          <mo stretchy="false">^</mo>
+         </mover>
+         <mrow>
+          <mi>k</mi>
+          <mo>+</mo>
+          <mn>1</mn>
+         </mrow>
+        </msub>
+        <mo>-</mo>
+        <mrow>
+         <mover accent="true">
+          <mi>F</mi>
+          <mo stretchy="false">^</mo>
+         </mover>
+         <msub>
+          <mover accent="true">
+           <mi>x</mi>
+           <mo stretchy="false">^</mo>
+          </mover>
+          <mi>k</mi>
+         </msub>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <ci>normal-^</ci>
+       <ci>σ</ci>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>w</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>N</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <ci>normal-^</ci>
+          <ci>x</ci>
+         </apply>
+         <apply>
+          <plus></plus>
+          <ci>k</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <ci>normal-^</ci>
+          <ci>F</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <apply>
+           <ci>normal-^</ci>
+           <ci>x</ci>
+          </apply>
+          <ci>k</ci>
+         </apply>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{\sigma}^{2}_{w}=\frac{1}{N}\sum_{k=1}^{N}{(\hat{x}_{k+1}-\hat{F}\hat{{x}}%
+_{k})}^{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Expectation–maximization_algorithm:54">
+ <semantics>
+  <msub>
+   <mover accent="true">
+    <mi>x</mi>
+    <mo stretchy="false">^</mo>
+   </mover>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <ci>normal-^</ci>
+     <ci>x</ci>
+    </apply>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{x}_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Expectation–maximization_algorithm:55">
+ <semantics>
+  <msub>
+   <mover accent="true">
+    <mi>x</mi>
+    <mo stretchy="false">^</mo>
+   </mover>
+   <mrow>
+    <mi>k</mi>
+    <mo>+</mo>
+    <mn>1</mn>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <ci>normal-^</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>k</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{x}_{k+1}
+  </annotation>
+ </semantics>
+</math>
+
+ are scalar state estimates calculated by a filter or a smoother. The updated model coefficient estimate is obtained via</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:56">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>F</mi>
+    <mo stretchy="false">^</mo>
+   </mover>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>N</mi>
+     </msubsup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <msub>
+        <mover accent="true">
+         <mi>x</mi>
+         <mo stretchy="false">^</mo>
+        </mover>
+        <mrow>
+         <mi>k</mi>
+         <mo>+</mo>
+         <mn>1</mn>
+        </mrow>
+       </msub>
+       <mo>-</mo>
+       <mrow>
+        <mover accent="true">
+         <mi>F</mi>
+         <mo stretchy="false">^</mo>
+        </mover>
+        <msub>
+         <mover accent="true">
+          <mi>x</mi>
+          <mo stretchy="false">^</mo>
+         </mover>
+         <mi>k</mi>
+        </msub>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>N</mi>
+     </msubsup>
+     <msubsup>
+      <mover accent="true">
+       <mi>x</mi>
+       <mo stretchy="false">^</mo>
+      </mover>
+      <mi>k</mi>
+      <mn>2</mn>
+     </msubsup>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-^</ci>
+     <ci>F</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-^</ci>
+         <ci>x</ci>
+        </apply>
+        <apply>
+         <plus></plus>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <ci>normal-^</ci>
+         <ci>F</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <apply>
+          <ci>normal-^</ci>
+          <ci>x</ci>
+         </apply>
+         <ci>k</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>N</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-^</ci>
+         <ci>x</ci>
+        </apply>
+        <ci>k</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{F}=\frac{\sum_{k=1}^{N}(\hat{x}_{k+1}-\hat{F}\hat{x}_{k})}{\sum_{k=1}^{N}%
+\hat{x}_{k}^{2}}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The convergence of parameter estimates such as those above are well studied.<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a><a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a><a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a></p>
+<h2 id="variants">Variants</h2>
+
+<p>A number of methods have been proposed to accelerate the sometimes slow convergence of the EM algorithm, such as those using <a href="conjugate_gradient" title="wikilink">conjugate gradient</a> and modified <a class="uri" href="Newton–Raphson" title="wikilink">Newton–Raphson</a> techniques.<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a> Additionally EM can be used with constrained estimation techniques.</p>
+
+<p><strong>Expectation conditional maximization (ECM)</strong> replaces each M step with a sequence of conditional maximization (CM) steps in which each parameter <em>θ</em><sub><em>i</em></sub> is maximized individually, conditionally on the other parameters remaining fixed.<a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a></p>
+
+<p>This idea is further extended in <strong>generalized expectation maximization (GEM)</strong> algorithm, in which one only seeks an increase in the objective function <em>F</em> for both the E step and M step under the <a href="#Alternative_description" title="wikilink">alternative description</a>.<a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a> GEM is further developed in a distributed environment and shows promising results.<a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a></p>
+
+<p>It is also possible to consider the EM algorithm as a subclass of the <strong><a href="MM_algorithm" title="wikilink">MM</a></strong> (Majorize/Minimize or Minorize/Maximize, depending on context) algorithm,<a class="footnoteRef" href="#fn31" id="fnref31"><sup>31</sup></a> and therefore use any machinery developed in the more general case.</p>
+<h3 id="α-em-algorithm">α-EM algorithm</h3>
+
+<p>The Q-function used in the EM algorithm is based on the log likelihood. Therefore, it is regarded as the log-EM algorithm. The use of the log likelihood can be generalized to that of the α-log likelihood ratio. Then, the α-log likelihood ratio of the observed data can be exactly expressed as equality by using the Q-function of the α-log likelihood ratio and the α-divergence. Obtaining this Q-function is a generalized E step. Its maximization is a generalized M step. This pair is called the α-EM algorithm <a class="footnoteRef" href="#fn32" id="fnref32"><sup>32</sup></a> which contains the log-EM algorithm as its subclass. Thus, the α-EM algorithm by <a href="Yasuo_Matsuyama" title="wikilink">Yasuo Matsuyama</a> is an exact generalization of the log-EM algorithm. No computation of gradient or Hessian matrix is needed. The α-EM shows faster convergence than the log-EM algorithm by choosing an appropriate α. The α-EM algorithm leads to a faster version of the Hidden Markov model estimation algorithm α-HMM. <a class="footnoteRef" href="#fn33" id="fnref33"><sup>33</sup></a></p>
+<h2 id="relation-to-variational-bayes-methods">Relation to variational Bayes methods</h2>
+
+<p>EM is a partially non-Bayesian, maximum likelihood method. Its final result gives a <a href="probability_distribution" title="wikilink">probability distribution</a> over the latent variables (in the Bayesian style) together with a point estimate for <em>θ</em> (either a <a href="maximum_likelihood_estimation" title="wikilink">maximum likelihood estimate</a> or a posterior mode). We may want a fully Bayesian version of this, giving a probability distribution over <em>θ</em> as well as the latent variables. In fact the Bayesian approach to inference is simply to treat <em>θ</em> as another latent variable. In this paradigm, the distinction between the E and M steps disappears. If we use the factorized Q approximation as described above (<a href="variational_Bayes" title="wikilink">variational Bayes</a>), we may iterate over each latent variable (now including <em>θ</em>) and optimize them one at a time. There are now <em>k</em> steps per iteration, where <em>k</em> is the number of latent variables. For <a href="graphical_models" title="wikilink">graphical models</a> this is easy to do as each variable's new <em>Q</em> depends only on its <a href="Markov_blanket" title="wikilink">Markov blanket</a>, so local <a href="Message_passing_(disambiguation)" title="wikilink">message passing</a> can be used for efficient inference.</p>
+<h2 id="geometric-interpretation">Geometric interpretation</h2>
+
+<p>In <a href="information_geometry" title="wikilink">information geometry</a>, the E step and the M step are interpreted as projections under dual <a href="affine_connection" title="wikilink">affine connections</a>, called the e-connection and the m-connection; the <a href="Kullback–Leibler_divergence" title="wikilink">Kullback–Leibler divergence</a> can also be understood in these terms.</p>
+<h2 id="examples">Examples</h2>
+<h3 id="gaussian-mixture">Gaussian mixture</h3>
+<figure><b>(Figure)</b>
+<figcaption>An animation demonstrating the EM algorithm fitting a two component Gaussian <a href="mixture_model" title="wikilink">mixture model</a> to the <a href="Old_Faithful" title="wikilink">Old Faithful</a> dataset. The algorithm steps through from a random initialization to convergence. </figcaption>
+</figure>
+
+<p>Let 
+
+<math display="inline" id="Expectation–maximization_algorithm:57">
+ <semantics>
+  <mrow>
+   <mi>𝐱</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐱</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>n</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{x}=(\mathbf{x}_{1},\mathbf{x}_{2},\ldots,\mathbf{x}_{n})
+  </annotation>
+ </semantics>
+</math>
+
+ be a sample of 
+
+<math display="inline" id="Expectation–maximization_algorithm:58">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ independent observations from a <a href="mixture_model" title="wikilink">mixture</a> of two <a href="multivariate_normal_distribution" title="wikilink">multivariate normal distributions</a> of dimension 
+
+<math display="inline" id="Expectation–maximization_algorithm:59">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+, and let 
+
+<math display="inline" id="Expectation–maximization_algorithm:60">
+ <semantics>
+  <mrow>
+   <mi>𝐳</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>z</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>z</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>z</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐳</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>z</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>z</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>z</ci>
+      <ci>n</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{z}=(z_{1},z_{2},\ldots,z_{n})
+  </annotation>
+ </semantics>
+</math>
+
+ be the latent variables that determine the component from which the observation originates.<a class="footnoteRef" href="#fn34" id="fnref34"><sup>34</sup></a></p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:61">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>X</mi>
+    <mi>i</mi>
+   </msub>
+   <mo stretchy="false">|</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>=</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>∼</mo>
+   <msub>
+    <mi class="ltx_font_mathcaligraphic">𝒩</mi>
+    <mi>d</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝝁</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Σ</mi>
+     <mn>1</mn>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>X</ci>
+     <ci>i</ci>
+    </apply>
+    <ci>normal-|</ci>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <ci>i</ci>
+     </apply>
+     <eq></eq>
+     <cn type="integer">1</cn>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝒩</ci>
+     <ci>d</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝝁</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{i}|(Z_{i}=1)\sim\mathcal{N}_{d}(\boldsymbol{\mu}_{1},\Sigma_{1})
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Expectation–maximization_algorithm:62">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>X</mi>
+    <mi>i</mi>
+   </msub>
+   <mo stretchy="false">|</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>=</mo>
+    <mn>2</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>∼</mo>
+   <msub>
+    <mi class="ltx_font_mathcaligraphic">𝒩</mi>
+    <mi>d</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝝁</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Σ</mi>
+     <mn>2</mn>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>X</ci>
+     <ci>i</ci>
+    </apply>
+    <ci>normal-|</ci>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <ci>i</ci>
+     </apply>
+     <eq></eq>
+     <cn type="integer">2</cn>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝒩</ci>
+     <ci>d</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝝁</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{i}|(Z_{i}=2)\sim\mathcal{N}_{d}(\boldsymbol{\mu}_{2},\Sigma_{2})
+  </annotation>
+ </semantics>
+</math>
+
+ where</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:63">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>P</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msub>
+       <mi>Z</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mpadded width="+1.7pt">
+    <msub>
+     <mi>τ</mi>
+     <mn>1</mn>
+    </msub>
+   </mpadded>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-P</ci>
+     <apply>
+      <eq></eq>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>Z</ci>
+       <ci>i</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>τ</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \operatorname{P}(Z_{i}=1)=\tau_{1}\,
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Expectation–maximization_algorithm:64">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>P</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msub>
+       <mi>Z</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>=</mo>
+      <mn>2</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mi>τ</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo>-</mo>
+    <msub>
+     <mi>τ</mi>
+     <mn>1</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <ci>normal-P</ci>
+      <apply>
+       <eq></eq>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>Z</ci>
+        <ci>i</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>τ</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>τ</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \operatorname{P}(Z_{i}=2)=\tau_{2}=1-\tau_{1}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The aim is to estimate the unknown parameters representing the "mixing" value between the Gaussians and the means and covariances of each:</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:65">
+ <semantics>
+  <mrow>
+   <mi>θ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo maxsize="120%" minsize="120%">(</mo>
+    <mi>𝝉</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>𝝁</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>𝝁</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Σ</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Σ</mi>
+     <mn>2</mn>
+    </msub>
+    <mo maxsize="120%" minsize="120%">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>θ</ci>
+    <vector>
+     <ci>𝝉</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝝁</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝝁</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta=\big(\boldsymbol{\tau},\boldsymbol{\mu}_{1},\boldsymbol{\mu}_{2},\Sigma%
+_{1},\Sigma_{2}\big)
+  </annotation>
+ </semantics>
+</math>
+
+ where the incomplete-data likelihood function is</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:66">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>L</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>θ</mi>
+     <mo>;</mo>
+     <mi>𝐱</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>n</mi>
+    </munderover>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>j</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mn>2</mn>
+     </munderover>
+     <mrow>
+      <mpadded width="+5pt">
+       <msub>
+        <mi>τ</mi>
+        <mi>j</mi>
+       </msub>
+      </mpadded>
+      <mi>f</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>𝐱</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>;</mo>
+       <msub>
+        <mi>𝝁</mi>
+        <mi>j</mi>
+       </msub>
+       <mo>,</mo>
+       <msub>
+        <mi mathvariant="normal">Σ</mi>
+        <mi>j</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>L</ci>
+     <list>
+      <ci>θ</ci>
+      <ci>𝐱</ci>
+     </list>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">product</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>τ</ci>
+        <ci>j</ci>
+       </apply>
+       <ci>f</ci>
+       <list>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝝁</ci>
+         <ci>j</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Σ</ci>
+         <ci>j</ci>
+        </apply>
+       </list>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(\theta;\mathbf{x})=\prod_{i=1}^{n}\sum_{j=1}^{2}\tau_{j}\ f(\mathbf{x}_{i};%
+\boldsymbol{\mu}_{j},\Sigma_{j})
+  </annotation>
+ </semantics>
+</math>
+
+,</p>
+
+<p>and the complete-data likelihood function is</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:67">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo>;</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <mi>𝐳</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <mi>𝐳</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>n</mi>
+   </munderover>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+    <mrow>
+     <mi>j</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mn>2</mn>
+   </munderover>
+   <mi>𝕀</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>z</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>=</mo>
+    <mi>j</mi>
+    <mo rspace="7.5pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>𝐱</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>;</mo>
+    <msub>
+     <mi>𝝁</mi>
+     <mi>j</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi mathvariant="normal">Σ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <msub>
+    <mi>τ</mi>
+    <mi>j</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">L</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">z</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">z</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <eq></eq>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <cn type="integer">2</cn>
+    </apply>
+    <csymbol cd="unknown">I</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>z</ci>
+      <ci>i</ci>
+     </apply>
+     <eq></eq>
+     <csymbol cd="unknown">j</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">f</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝐱</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝝁</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>τ</ci>
+     <ci>j</ci>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(\theta;\mathbf{x},\mathbf{z})=P(\mathbf{x},\mathbf{z}|\theta)=\prod_{i=1}^{n%
+}\sum_{j=1}^{2}\mathbb{I}(z_{i}=j)\ f(\mathbf{x}_{i};\boldsymbol{\mu}_{j},%
+\Sigma_{j})\tau_{j}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>or</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:68">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo>;</mo>
+    <mi>𝐱</mi>
+    <mo>,</mo>
+    <mi>𝐳</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>exp</mi>
+   <mrow>
+    <mo>{</mo>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>n</mi>
+    </munderover>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>j</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mn>2</mn>
+    </munderover>
+    <mi>𝕀</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>z</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>=</mo>
+     <mi>j</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mrow>
+     <mo maxsize="120%" minsize="120%">[</mo>
+     <mi>log</mi>
+     <msub>
+      <mi>τ</mi>
+      <mi>j</mi>
+     </msub>
+     <mo>-</mo>
+     <mstyle displaystyle="false">
+      <mfrac>
+       <mn>1</mn>
+       <mn>2</mn>
+      </mfrac>
+     </mstyle>
+     <mi>log</mi>
+     <mo stretchy="false">|</mo>
+     <msub>
+      <mi mathvariant="normal">Σ</mi>
+      <mi>j</mi>
+     </msub>
+     <mo stretchy="false">|</mo>
+     <mo>-</mo>
+     <mstyle displaystyle="false">
+      <mfrac>
+       <mn>1</mn>
+       <mn>2</mn>
+      </mfrac>
+     </mstyle>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>𝐱</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>-</mo>
+       <msub>
+        <mi>𝝁</mi>
+        <mi>j</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mo>⊤</mo>
+     </msup>
+     <msubsup>
+      <mi mathvariant="normal">Σ</mi>
+      <mi>j</mi>
+      <mrow>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>𝐱</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>-</mo>
+      <msub>
+       <mi>𝝁</mi>
+       <mi>j</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo>-</mo>
+     <mstyle displaystyle="false">
+      <mfrac>
+       <mi>d</mi>
+       <mn>2</mn>
+      </mfrac>
+     </mstyle>
+     <mi>log</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mn>2</mn>
+      <mi>π</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo maxsize="120%" minsize="120%">]</mo>
+    </mrow>
+    <mo>}</mo>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">L</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">z</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <exp></exp>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-{</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>j</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+     <csymbol cd="unknown">I</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>z</ci>
+       <ci>i</ci>
+      </apply>
+      <eq></eq>
+      <csymbol cd="unknown">j</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-[</ci>
+      <log></log>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>τ</ci>
+       <ci>j</ci>
+      </apply>
+      <minus></minus>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </apply>
+      <log></log>
+      <ci>normal-|</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Σ</ci>
+       <ci>j</ci>
+      </apply>
+      <ci>normal-|</ci>
+      <minus></minus>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>i</ci>
+        </apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝝁</ci>
+         <ci>j</ci>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+       <csymbol cd="latexml">top</csymbol>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>normal-Σ</ci>
+        <ci>j</ci>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <ci>i</ci>
+       </apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝝁</ci>
+        <ci>j</ci>
+       </apply>
+       <ci>normal-)</ci>
+      </cerror>
+      <minus></minus>
+      <apply>
+       <divide></divide>
+       <ci>d</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <log></log>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <cn type="integer">2</cn>
+       <csymbol cd="unknown">π</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <ci>normal-]</ci>
+     </cerror>
+     <ci>normal-}</ci>
+    </cerror>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L(\theta;\mathbf{x},\mathbf{z})=\exp\left\{\sum_{i=1}^{n}\sum_{j=1}^{2}\mathbb%
+{I}(z_{i}=j)\big[\log\tau_{j}-\tfrac{1}{2}\log|\Sigma_{j}|-\tfrac{1}{2}(%
+\mathbf{x}_{i}-\boldsymbol{\mu}_{j})^{\top}\Sigma_{j}^{-1}(\mathbf{x}_{i}-%
+\boldsymbol{\mu}_{j})-\tfrac{d}{2}\log(2\pi)\big]\right\}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Expectation–maximization_algorithm:69">
+ <semantics>
+  <mi>𝕀</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝕀</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{I}
+  </annotation>
+ </semantics>
+</math>
+
+ is an <a href="indicator_function" title="wikilink">indicator function</a> and 
+
+<math display="inline" id="Expectation–maximization_algorithm:70">
+ <semantics>
+  <mi>f</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>f</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f
+  </annotation>
+ </semantics>
+</math>
+
+ is the <a href="probability_density_function" title="wikilink">probability density function</a> of a multivariate normal.</p>
+
+<p>To see the last equality, note that for each <em>i</em> all indicators 
+
+<math display="inline" id="Expectation–maximization_algorithm:71">
+ <semantics>
+  <mrow>
+   <mi>𝕀</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>z</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>=</mo>
+    <mi>j</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">I</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>z</ci>
+      <ci>i</ci>
+     </apply>
+     <eq></eq>
+     <csymbol cd="unknown">j</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbb{I}(z_{i}=j)
+  </annotation>
+ </semantics>
+</math>
+
+ are equal to zero, except for one which is equal to one. The inner sum thus reduces to a single term.</p>
+<h4 id="e-step">E step</h4>
+
+<p>Given our current estimate of the parameters <em>θ</em><sup>(<em>t</em>)</sup>, the conditional distribution of the <em>Z</em><sub><em>i</em></sub> is determined by <a href="Bayes_theorem" title="wikilink">Bayes theorem</a> to be the proportional height of the normal <a href="probability_density_function" title="wikilink">density</a> weighted by <em>τ</em>:</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:72">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>T</mi>
+    <mrow>
+     <mi>j</mi>
+     <mo>,</mo>
+     <mi>i</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>t</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>:=</mo>
+   <mrow>
+    <mo>P</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msub>
+       <mi>Z</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>=</mo>
+      <mi>j</mi>
+     </mrow>
+     <mo stretchy="false">|</mo>
+     <mrow>
+      <msub>
+       <mi>X</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>=</mo>
+      <msub>
+       <mi>𝐱</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+     <mo>;</mo>
+     <msup>
+      <mi>θ</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mpadded width="+5pt">
+      <msubsup>
+       <mi>τ</mi>
+       <mi>j</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>t</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+     </mpadded>
+     <mi>f</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>𝐱</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>;</mo>
+      <msubsup>
+       <mi>𝝁</mi>
+       <mi>j</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>t</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+      <mo>,</mo>
+      <msubsup>
+       <mi mathvariant="normal">Σ</mi>
+       <mi>j</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>t</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mrow>
+      <mpadded width="+5pt">
+       <msubsup>
+        <mi>τ</mi>
+        <mn>1</mn>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>t</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+      </mpadded>
+      <mi>f</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>𝐱</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>;</mo>
+       <msubsup>
+        <mi>𝝁</mi>
+        <mn>1</mn>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>t</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+       <mo>,</mo>
+       <msubsup>
+        <mi mathvariant="normal">Σ</mi>
+        <mn>1</mn>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>t</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mpadded width="+5pt">
+       <msubsup>
+        <mi>τ</mi>
+        <mn>2</mn>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>t</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+      </mpadded>
+      <mi>f</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>𝐱</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>;</mo>
+       <msubsup>
+        <mi>𝝁</mi>
+        <mn>2</mn>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>t</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+       <mo>,</mo>
+       <msubsup>
+        <mi mathvariant="normal">Σ</mi>
+        <mn>2</mn>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>t</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <csymbol cd="latexml">assign</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>T</ci>
+       <list>
+        <ci>j</ci>
+        <ci>i</ci>
+       </list>
+      </apply>
+      <ci>t</ci>
+     </apply>
+     <apply>
+      <ci>normal-P</ci>
+      <apply>
+       <eq></eq>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>Z</ci>
+        <ci>i</ci>
+       </apply>
+       <ci>j</ci>
+      </apply>
+      <apply>
+       <eq></eq>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>X</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>θ</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>τ</ci>
+         <ci>j</ci>
+        </apply>
+        <ci>t</ci>
+       </apply>
+       <ci>f</ci>
+       <list>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝝁</ci>
+          <ci>j</ci>
+         </apply>
+         <ci>t</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>normal-Σ</ci>
+          <ci>j</ci>
+         </apply>
+         <ci>t</ci>
+        </apply>
+       </list>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>τ</ci>
+          <cn type="integer">1</cn>
+         </apply>
+         <ci>t</ci>
+        </apply>
+        <ci>f</ci>
+        <list>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝝁</ci>
+           <cn type="integer">1</cn>
+          </apply>
+          <ci>t</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>normal-Σ</ci>
+           <cn type="integer">1</cn>
+          </apply>
+          <ci>t</ci>
+         </apply>
+        </list>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>τ</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>t</ci>
+        </apply>
+        <ci>f</ci>
+        <list>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝝁</ci>
+           <cn type="integer">2</cn>
+          </apply>
+          <ci>t</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>normal-Σ</ci>
+           <cn type="integer">2</cn>
+          </apply>
+          <ci>t</ci>
+         </apply>
+        </list>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{j,i}^{(t)}:=\operatorname{P}(Z_{i}=j|X_{i}=\mathbf{x}_{i};\theta^{(t)})=%
+\frac{\tau_{j}^{(t)}\ f(\mathbf{x}_{i};\boldsymbol{\mu}_{j}^{(t)},\Sigma_{j}^{%
+(t)})}{\tau_{1}^{(t)}\ f(\mathbf{x}_{i};\boldsymbol{\mu}_{1}^{(t)},\Sigma_{1}^%
+{(t)})+\tau_{2}^{(t)}\ f(\mathbf{x}_{i};\boldsymbol{\mu}_{2}^{(t)},\Sigma_{2}^%
+{(t)})}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>These are called the "membership probabilities" which are normally considered the output of the E step (although this is not the Q function of below).</p>
+
+<p>Note that this E step corresponds with the following function for Q:</p>
+
+<p>
+
+<math display="inline" id="Expectation–maximization_algorithm:73">
+ <semantics>
+  <mrow>
+   <mi>Q</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <msup>
+     <mi>θ</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>t</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">Q</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>θ</ci>
+      <ci>t</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle Q(\theta|\theta^{(t)})
+  </annotation>
+ </semantics>
+</math>
+
+
+ This does not need to be calculated, because in the M step we only require the terms depending on <em>τ</em> when we maximize for <em>τ</em>, or only the terms depending on <strong>μ</strong> if we maximize for <strong>μ</strong>.</p>
+<h4 id="m-step">M step</h4>
+
+<p>The fact that <em>Q</em>(<em>θ</em>|<em>θ</em><sup>(<em>t</em>)</sup>) is quadratic in form means that determining the maximizing values of <em>θ</em> is relatively straightforward. Note that <em>τ</em>, (<strong>μ</strong><sub>1</sub>,<em>Σ</em><sub>1</sub>) and (<strong>μ</strong><sub>2</sub>,<em>Σ</em><sub>2</sub>) may all be maximized independently since they all appear in separate linear terms.</p>
+
+<p>To begin, consider <em>τ</em>, which has the constraint <em>τ</em><sub>1</sub> + <em>τ</em><sub>2</sub>=1:</p>
+
+<p>
+
+<math display="inline" id="Expectation–maximization_algorithm:74">
+ <semantics>
+  <msup>
+   <mi>𝝉</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>𝝉</ci>
+    <apply>
+     <plus></plus>
+     <ci>t</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\boldsymbol{\tau}^{(t+1)}
+  </annotation>
+ </semantics>
+</math>
+
+
+ This has the same form as the MLE for the <a href="binomial_distribution" title="wikilink">binomial distribution</a>, so</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:75">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>τ</mi>
+    <mi>j</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </msubsup>
+     <msubsup>
+      <mi>T</mi>
+      <mrow>
+       <mi>j</mi>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+    </mrow>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </msubsup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <msubsup>
+        <mi>T</mi>
+        <mrow>
+         <mn>1</mn>
+         <mo>,</mo>
+         <mi>i</mi>
+        </mrow>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>t</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+       <mo>+</mo>
+       <msubsup>
+        <mi>T</mi>
+        <mrow>
+         <mn>2</mn>
+         <mo>,</mo>
+         <mi>i</mi>
+        </mrow>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>t</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msubsup>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>n</mi>
+    </mfrac>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </munderover>
+     <msubsup>
+      <mi>T</mi>
+      <mrow>
+       <mi>j</mi>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>τ</ci>
+       <apply>
+        <plus></plus>
+        <ci>t</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>j</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>T</ci>
+         <list>
+          <ci>j</ci>
+          <ci>i</ci>
+         </list>
+        </apply>
+        <ci>t</ci>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <plus></plus>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>T</ci>
+          <list>
+           <cn type="integer">1</cn>
+           <ci>i</ci>
+          </list>
+         </apply>
+         <ci>t</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>T</ci>
+          <list>
+           <cn type="integer">2</cn>
+           <ci>i</ci>
+          </list>
+         </apply>
+         <ci>t</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>T</ci>
+         <list>
+          <ci>j</ci>
+          <ci>i</ci>
+         </list>
+        </apply>
+        <ci>t</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \tau^{(t+1)}_{j}=\frac{\sum_{i=1}^{n}T_{j,i}^{(t)}}{\sum_{i=1}^{n}(T_{1,i}^{(t%
+)}+T_{2,i}^{(t)})}=\frac{1}{n}\sum_{i=1}^{n}T_{j,i}^{(t)}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>For the next estimates of (<strong>μ</strong><sub>1</sub>,<em>σ</em><sub>1</sub>):</p>
+
+<p>
+
+<math display="inline" id="Expectation–maximization_algorithm:76">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <msubsup>
+    <mi>𝝁</mi>
+    <mn>1</mn>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>,</mo>
+   <msubsup>
+    <mi mathvariant="normal">Σ</mi>
+    <mn>1</mn>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open">
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝝁</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle(\boldsymbol{\mu}_{1}^{(t+1)},\Sigma_{1}^{(t+1)})
+  </annotation>
+ </semantics>
+</math>
+
+
+. This has the same form as a weighted MLE for a normal distribution, so</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:77">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>𝝁</mi>
+    <mn>1</mn>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </msubsup>
+     <mrow>
+      <msubsup>
+       <mi>T</mi>
+       <mrow>
+        <mn>1</mn>
+        <mo>,</mo>
+        <mi>i</mi>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>t</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+      <msub>
+       <mi>𝐱</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </msubsup>
+     <msubsup>
+      <mi>T</mi>
+      <mrow>
+       <mn>1</mn>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝝁</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>T</ci>
+         <list>
+          <cn type="integer">1</cn>
+          <ci>i</ci>
+         </list>
+        </apply>
+        <ci>t</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>T</ci>
+        <list>
+         <cn type="integer">1</cn>
+         <ci>i</ci>
+        </list>
+       </apply>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\mu}_{1}^{(t+1)}=\frac{\sum_{i=1}^{n}T_{1,i}^{(t)}\mathbf{x}_{i}}{%
+\sum_{i=1}^{n}T_{1,i}^{(t)}}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Expectation–maximization_algorithm:78">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi mathvariant="normal">Σ</mi>
+    <mn>1</mn>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mstyle displaystyle="false">
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>n</mi>
+      </msubsup>
+     </mstyle>
+     <mrow>
+      <msubsup>
+       <mi>T</mi>
+       <mrow>
+        <mn>1</mn>
+        <mo>,</mo>
+        <mi>i</mi>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>t</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msub>
+         <mi>𝐱</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>-</mo>
+        <msubsup>
+         <mi>𝝁</mi>
+         <mn>1</mn>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mi>t</mi>
+           <mo>+</mo>
+           <mn>1</mn>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </msubsup>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <msub>
+          <mi>𝐱</mi>
+          <mi>i</mi>
+         </msub>
+         <mo>-</mo>
+         <msubsup>
+          <mi>𝝁</mi>
+          <mn>1</mn>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mi>t</mi>
+            <mo>+</mo>
+            <mn>1</mn>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </msubsup>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mo>⊤</mo>
+      </msup>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mstyle displaystyle="false">
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>n</mi>
+      </msubsup>
+     </mstyle>
+     <msubsup>
+      <mi>T</mi>
+      <mrow>
+       <mn>1</mn>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>T</ci>
+         <list>
+          <cn type="integer">1</cn>
+          <ci>i</ci>
+         </list>
+        </apply>
+        <ci>t</ci>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝝁</ci>
+          <cn type="integer">1</cn>
+         </apply>
+         <apply>
+          <plus></plus>
+          <ci>t</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <minus></minus>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝝁</ci>
+           <cn type="integer">1</cn>
+          </apply>
+          <apply>
+           <plus></plus>
+           <ci>t</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+        </apply>
+        <csymbol cd="latexml">top</csymbol>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>T</ci>
+        <list>
+         <cn type="integer">1</cn>
+         <ci>i</ci>
+        </list>
+       </apply>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma_{1}^{(t+1)}=\frac{\sum_{i=1}^{n}T_{1,i}^{(t)}(\mathbf{x}_{i}-%
+\boldsymbol{\mu}_{1}^{(t+1)})(\mathbf{x}_{i}-\boldsymbol{\mu}_{1}^{(t+1)})^{%
+\top}}{\sum_{i=1}^{n}T_{1,i}^{(t)}}
+  </annotation>
+ </semantics>
+</math>
+
+ and, by symmetry</p>
+
+<p>
+
+<math display="block" id="Expectation–maximization_algorithm:79">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi>𝝁</mi>
+    <mn>2</mn>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </msubsup>
+     <mrow>
+      <msubsup>
+       <mi>T</mi>
+       <mrow>
+        <mn>2</mn>
+        <mo>,</mo>
+        <mi>i</mi>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>t</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+      <msub>
+       <mi>𝐱</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </msubsup>
+     <msubsup>
+      <mi>T</mi>
+      <mrow>
+       <mn>2</mn>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝝁</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>T</ci>
+         <list>
+          <cn type="integer">2</cn>
+          <ci>i</ci>
+         </list>
+        </apply>
+        <ci>t</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝐱</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>T</ci>
+        <list>
+         <cn type="integer">2</cn>
+         <ci>i</ci>
+        </list>
+       </apply>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\mu}_{2}^{(t+1)}=\frac{\sum_{i=1}^{n}T_{2,i}^{(t)}\mathbf{x}_{i}}{%
+\sum_{i=1}^{n}T_{2,i}^{(t)}}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Expectation–maximization_algorithm:80">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mi mathvariant="normal">Σ</mi>
+    <mn>2</mn>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msubsup>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mstyle displaystyle="false">
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>n</mi>
+      </msubsup>
+     </mstyle>
+     <mrow>
+      <msubsup>
+       <mi>T</mi>
+       <mrow>
+        <mn>2</mn>
+        <mo>,</mo>
+        <mi>i</mi>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>t</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msubsup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msub>
+         <mi>𝐱</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>-</mo>
+        <msubsup>
+         <mi>𝝁</mi>
+         <mn>2</mn>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mrow>
+           <mi>t</mi>
+           <mo>+</mo>
+           <mn>1</mn>
+          </mrow>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </msubsup>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <msub>
+          <mi>𝐱</mi>
+          <mi>i</mi>
+         </msub>
+         <mo>-</mo>
+         <msubsup>
+          <mi>𝝁</mi>
+          <mn>2</mn>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mi>t</mi>
+            <mo>+</mo>
+            <mn>1</mn>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </msubsup>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mo>⊤</mo>
+      </msup>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mstyle displaystyle="false">
+      <msubsup>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>n</mi>
+      </msubsup>
+     </mstyle>
+     <msubsup>
+      <mi>T</mi>
+      <mrow>
+       <mn>2</mn>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>t</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msubsup>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Σ</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>t</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>T</ci>
+         <list>
+          <cn type="integer">2</cn>
+          <ci>i</ci>
+         </list>
+        </apply>
+        <ci>t</ci>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>𝐱</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝝁</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <apply>
+          <plus></plus>
+          <ci>t</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <minus></minus>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>𝐱</ci>
+          <ci>i</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>𝝁</ci>
+           <cn type="integer">2</cn>
+          </apply>
+          <apply>
+           <plus></plus>
+           <ci>t</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+        </apply>
+        <csymbol cd="latexml">top</csymbol>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>T</ci>
+        <list>
+         <cn type="integer">2</cn>
+         <ci>i</ci>
+        </list>
+       </apply>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Sigma_{2}^{(t+1)}=\frac{\sum_{i=1}^{n}T_{2,i}^{(t)}(\mathbf{x}_{i}-%
+\boldsymbol{\mu}_{2}^{(t+1)})(\mathbf{x}_{i}-\boldsymbol{\mu}_{2}^{(t+1)})^{%
+\top}}{\sum_{i=1}^{n}T_{2,i}^{(t)}}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h4 id="termination">Termination</h4>
+
+<p>Conclude the iterative process if 
+
+<math display="inline" id="Expectation–maximization_algorithm:81">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>log</mi>
+     <mi>L</mi>
+    </mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msup>
+      <mi>θ</mi>
+      <mi>t</mi>
+     </msup>
+     <mo>;</mo>
+     <mi>𝐱</mi>
+     <mo>,</mo>
+     <mi>𝐙</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>≤</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mi>log</mi>
+      <mi>L</mi>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msup>
+       <mi>θ</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mi>t</mi>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msup>
+      <mo>;</mo>
+      <mi>𝐱</mi>
+      <mo>,</mo>
+      <mi>𝐙</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mi>ϵ</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <apply>
+      <log></log>
+      <ci>L</ci>
+     </apply>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>θ</ci>
+       <ci>t</ci>
+      </apply>
+      <ci>𝐱</ci>
+      <ci>𝐙</ci>
+     </list>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <log></log>
+       <ci>L</ci>
+      </apply>
+      <list>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>θ</ci>
+        <apply>
+         <minus></minus>
+         <ci>t</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>𝐱</ci>
+       <ci>𝐙</ci>
+      </list>
+     </apply>
+     <ci>ϵ</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log L(\theta^{t};\mathbf{x},\mathbf{Z})\leq\log L(\theta^{(t-1)};\mathbf{x},%
+\mathbf{Z})+\epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ for 
+
+<math display="inline" id="Expectation–maximization_algorithm:82">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ below some preset threshold.</p>
+<h4 id="generalization">Generalization</h4>
+
+<p>The algorithm illustrated above can be generalized for mixtures of more than two <a href="multivariate_normal_distribution" title="wikilink">multivariate normal distributions</a>.</p>
+<h3 id="truncated-and-censored-regression">Truncated and censored regression</h3>
+
+<p>The EM algorithm has been implemented in the case where there is an underlying <a href="linear_regression" title="wikilink">linear regression</a> model explaining the variation of some quantity, but where the values actually observed are censored or truncated versions of those represented in the model.<a class="footnoteRef" href="#fn35" id="fnref35"><sup>35</sup></a> Special cases of this model include censored or truncated observations from a single <a href="normal_distribution" title="wikilink">normal distribution</a>.<a class="footnoteRef" href="#fn36" id="fnref36"><sup>36</sup></a></p>
+<h2 id="alternatives-to-em">Alternatives to EM</h2>
+
+<p>EM typically converges to a local optimum--not necessarily the global optimum--and there is no bound on the convergence rate in general. It is possible that it can be arbitrarily poor in high dimensions and there can be an exponential number of local optima. Hence, there is a need for alternative techniques for guaranteed learning, especially in the high-dimensional setting. There are alternatives to EM with better guarantees in terms of consistency which are known as moment-based approaches or the so-called "spectral techniques". Moment-based approaches to learning the parameters of a probabilistic model are of increasing interest recently since they enjoy guarantees such as global convergence under certain conditions unlike EM which is often plagued by the issue of getting stuck in local optima. Algorithms with guarantees for learning can be derived for a number of important models such as mixture models, HMMs etc. For these spectral methods, there are no spurious local optima and the true parameters can be consistently estimated under some regularity conditions.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Density_estimation" title="wikilink">Density estimation</a></li>
+<li><a href="Total_absorption_spectroscopy" title="wikilink">Total absorption spectroscopy</a></li>
+<li>The EM algorithm can be viewed as a special case of the <a href="MM_algorithm" title="wikilink">majorize-minimization (MM) algorithm</a>.<a class="footnoteRef" href="#fn37" id="fnref37"><sup>37</sup></a></li>
+</ul>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li>Robert Hogg, Joseph McKean and <a href="Allen_Craig" title="wikilink">Allen Craig</a>. <em>Introduction to Mathematical Statistics</em>. pp. 359–364. Upper Saddle River, NJ: Pearson Prentice Hall, 2005.</li>
+<li><a href="http://www.inference.phy.cam.ac.uk/mackay/itila/">The on-line textbook: Information Theory, Inference, and Learning Algorithms</a>, by <a href="David_J.C._MacKay" title="wikilink">David J.C. MacKay</a> includes simple examples of the EM algorithm such as clustering using the soft <em>k</em>-means algorithm, and emphasizes the variational view of the EM algorithm, as described in Chapter 33.7 of version 7.2 (fourth edition).</li>
+<li>
+
+<p>gives an easier explanation of EM algorithm in terms of lowerbound maximization.</p></li>
+<li></li>
+<li>
+
+<p>A well-written short book on EM, including detailed derivation of EM for GMMs, HMMs, and Dirichlet.</p></li>
+<li>
+
+<p>includes a simplified derivation of the EM equations for Gaussian Mixtures and Gaussian Mixture Hidden Markov Models.</p></li>
+<li><a href="http://www.cse.buffalo.edu/faculty/mbeal/papers/beal03.pdf">Variational Algorithms for Approximate Bayesian Inference</a>, by M. J. Beal includes comparisons of EM to Variational Bayesian EM and derivations of several models including Variational Bayesian HMMs (<a href="http://www.cse.buffalo.edu/faculty/mbeal/thesis/index.html">chapters</a>).</li>
+<li><a href="http://www.seanborman.com/publications/EM_algorithm.pdf">The Expectation Maximization Algorithm: A short tutorial</a>, A self-contained derivation of the EM Algorithm by Sean Borman.</li>
+<li><a href="http://pages.cs.wisc.edu/~jerryzhu/cs838/EM.pdf">The EM Algorithm</a>, by Xiaojin Zhu.</li>
+<li><a href="http://arxiv.org/pdf/1105.1476.pdf">EM algorithm and variants: an informal tutorial</a> by Alexis Roche. A concise and very clear description of EM and many interesting variants.</li>
+<li></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li>Various 1D, 2D and 3D <a href="http://wiki.stat.ucla.edu/socr/index.php/SOCR_EduMaterials_Activities_2D_PointSegmentation_EM_Mixture">demonstrations of EM together with Mixture Modeling</a> are provided as part of the paired <a class="uri" href="SOCR" title="wikilink">SOCR</a> activities and applets. These applets and activities show empirically the properties of the EM algorithm for parameter estimation in diverse settings.</li>
+<li><a href="http://arxiv.org/abs/1203.5181">k-MLE: A fast algorithm for learning statistical mixture models</a></li>
+<li><a href="https://github.com/l-/CommonDataAnalysis">Class hierarchy in C++ (GPL) including Gaussian Mixtures</a></li>
+<li>Fast and clean C implementation of the <a href="https://github.com/juandavm/em4gmm">Expectation Maximization</a> (EM) algorithm for estimating <a href="https://github.com/juandavm/em4gmm">Gaussian Mixture Models</a> (GMMs).</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Estimation_theory" title="wikilink">Category:Estimation theory</a> <a href="Category:Machine_learning_algorithms" title="wikilink">Category:Machine learning algorithms</a> <a href="Category:Missing_data" title="wikilink">Category:Missing data</a> <a href="Category:Statistical_algorithms" title="wikilink">Category:Statistical algorithms</a> <a href="Category:Optimization_algorithms_and_methods" title="wikilink">Category:Optimization algorithms and methods</a> <a href="Category:Data_clustering_algorithms" title="wikilink">Category:Data clustering algorithms</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3">Rolf Sundberg. 1971. <em>Maximum likelihood theory and applications for distributions generated when observing a function of an exponential family variable</em>. Dissertation, Institute for Mathematical Statistics, Stockholm University.<a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5">See the acknowledgement by Dempster, Laird and Rubin on pages 3, 5 and 11.<a href="#fnref5">↩</a></li>
+<li id="fn6">G. Kulldorff. 1961.'' Contributions to the theory of estimation from grouped and partially grouped samples''. Almqvist &amp; Wiksell.<a href="#fnref6">↩</a></li>
+<li id="fn7">Anders Martin-Löf. 1963. "Utvärdering av livslängder i subnanosekundsområdet" ("Evaluation of sub-nanosecond lifetimes"). ("Sundberg formula")<a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="Per_Martin-Löf" title="wikilink">Per Martin-Löf</a>. 1966. <em>Statistics from the point of view of statistical mechanics</em>. Lecture notes, Mathematical Institute, Aarhus University. ("Sundberg formula" credited to Anders Martin-Löf).<a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="Per_Martin-Löf" title="wikilink">Per Martin-Löf</a>. 1970. <em>Statistika Modeller (Statistical Models): Anteckningar från seminarier läsåret 1969–1970 (Notes from seminars in the academic year 1969-1970), with the assistance of Rolf Sundberg.</em> Stockholm University. ("Sundberg formula")<a href="#fnref9">↩</a></li>
+<li id="fn10">Martin-Löf, P. The notion of redundancy and its use as a quantitative measure of the deviation between a statistical hypothesis and a set of observational data. With a discussion by F. Abildgård, <a href="Arthur_P._Dempster" title="wikilink">A. P. Dempster</a>, <a href="D._Basu" title="wikilink">D. Basu</a>, <a href="D._R._Cox" title="wikilink">D. R. Cox</a>, <a href="A._W._F._Edwards" title="wikilink">A. W. F. Edwards</a>, D. A. Sprott, <a href="George_A._Barnard" title="wikilink">G. A. Barnard</a>, O. Barndorff-Nielsen, J. D. Kalbfleisch and <a href="Rasch_model" title="wikilink">G. Rasch</a> and a reply by the author. <em>Proceedings of Conference on Foundational Questions in Statistical Inference</em> (Aarhus, 1973), pp. 1–42. Memoirs, No. 1, Dept. Theoret. Statist., Inst. Math., Univ. Aarhus, Aarhus, 1974.<a href="#fnref10">↩</a></li>
+<li id="fn11">Martin-Löf, Per The notion of redundancy and its use as a quantitative measure of the discrepancy between a statistical hypothesis and a set of observational data. <em>Scand. J. Statist.</em> 1 (1974), no. 1, 3–18.<a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+<li id="fn14"></li>
+<li id="fn15"></li>
+<li id="fn16"></li>
+<li id="fn17"></li>
+<li id="fn18"></li>
+<li id="fn19"></li>
+<li id="fn20"></li>
+<li id="fn21"><a href="#fnref21">↩</a></li>
+<li id="fn22"><a href="#fnref22">↩</a></li>
+<li id="fn23"><a href="#fnref23">↩</a></li>
+<li id="fn24"><a href="#fnref24">↩</a></li>
+<li id="fn25"><a href="#fnref25">↩</a></li>
+<li id="fn26"><a href="#fnref26">↩</a></li>
+<li id="fn27"><a href="#fnref27">↩</a></li>
+<li id="fn28"><a href="#fnref28">↩</a></li>
+<li id="fn29"></li>
+<li id="fn30"><a href="#fnref30">↩</a></li>
+<li id="fn31">Hunter DR and Lange K (2004), <a href="http://www.stat.psu.edu/~dhunter/papers/mmtutorial.pdf">A Tutorial on MM Algorithms</a>, The American Statistician, 58: 30-37<a href="#fnref31">↩</a></li>
+<li id="fn32"><a href="#fnref32">↩</a></li>
+<li id="fn33"><a href="#fnref33">↩</a></li>
+<li id="fn34"></li>
+<li id="fn35"><a href="#fnref35">↩</a></li>
+<li id="fn36"></li>
+<li id="fn37"><a href="#fnref37">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

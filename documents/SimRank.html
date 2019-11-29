@@ -1,0 +1,3888 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1257">SimRank</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>SimRank</h1>
+<hr/>
+
+<p><strong>SimRank</strong> is a general <a href="Semantic_similarity" title="wikilink">similarity measure</a>, based on a simple and intuitive <a href="Graph_theory" title="wikilink">graph-theoretic model</a>. SimRank is applicable in any <a href="Domain_model" title="wikilink">domain</a> with object-to-object <a href="Relation_(mathematics)" title="wikilink">relationships</a>, that measures similarity of the structural context in which objects occur, based on their relationships with other objects. Effectively, SimRank is a measure that says "<strong>two objects are considered to be similar if they are referenced by similar objects</strong>."</p>
+<h2 id="introduction">Introduction</h2>
+
+<p>Many <a href="Application_software" title="wikilink">applications</a> require a measure of "similarity" between objects. One obvious example is the "find-similar-document" query, on traditional text corpora or the <a href="World_Wide_Web" title="wikilink">World-Wide Web</a>. More generally, a similarity measure can be used to <a href="Cluster_analysis" title="wikilink">cluster objects</a>, such as for <a href="collaborative_filtering" title="wikilink">collaborative filtering</a> in a <a href="recommender_system" title="wikilink">recommender system</a>, in which “similar” users and items are grouped based on the users’ preferences.</p>
+
+<p>Various aspects of objects can be used to determine similarity, usually depending on the domain and the appropriate definition of similarity for that domain. In a <a href="Text_corpus" title="wikilink">document corpus</a>, matching text may be used, and for collaborative filtering, similar users may be identified by common preferences. SimRank is a general approach that exploits the object-to-object relationships found in many domains of interest. On the <a href="World_Wide_Web" title="wikilink">Web</a>, for example, two pages are related if there are <a href="hyperlink" title="wikilink">hyperlinks</a> between them. A similar approach can be applied to scientific papers and their citations, or to any other document corpus with <a class="uri" href="cross-reference" title="wikilink">cross-reference</a> information. In the case of recommender systems, a user’s preference for an item constitutes a relationship between the user and the item. Such domains are naturally modeled as <a href="Graph_(mathematics)" title="wikilink">graphs</a>, with <a href="Vertex_(graph_theory)" title="wikilink">nodes</a> representing objects and <a href="Edge_(graph_theory)#Graph" title="wikilink">edges</a> representing relationships.</p>
+
+<p>The intuition behind the SimRank algorithm is that, in many domains, <strong>similar objects are referenced by similar objects</strong>. More precisely, objects 
+
+<math display="inline" id="SimRank:0">
+ <semantics>
+  <mi>a</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>a</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="SimRank:1">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+ are considered to be similar if they are pointed from objects 
+
+<math display="inline" id="SimRank:2">
+ <semantics>
+  <mi>c</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>c</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="SimRank:3">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+, respectively, and 
+
+<math display="inline" id="SimRank:4">
+ <semantics>
+  <mi>c</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>c</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="SimRank:5">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+ are themselves similar. The <a href="Recursion_(computer_science)#Recursive_programming" title="wikilink">base case</a> is that objects are maximally similar to themselves .<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p>It is important to note that SimRank is a general algorithm that determines only the similarity of structural context. SimRank applies to any domain where there are enough relevant relationships between objects to base at least some notion of similarity on relationships. Obviously, similarity of other domain-specific aspects are important as well; these can — and should be combined with relational structural-context similarity for an overall similarity measure. For example, for <a href="Web_page" title="wikilink">Web pages</a> SimRank can be combined with traditional textual similarity; the same idea applies to scientific papers or other document corpora. For recommendation systems, there may be built-in known similarities between items (e.g., both computers, both clothing, etc.), as well as similarities between users (e.g., same gender, same spending level). Again, these similarities can be combined with the similarity scores that are computed based on preference patterns, in order to produce an overall similarity measure.</p>
+<h2 id="basic-simrank-equation">Basic SimRank equation</h2>
+
+<p>For a node 
+
+<math display="inline" id="SimRank:6">
+ <semantics>
+  <mi>v</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>v</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v
+  </annotation>
+ </semantics>
+</math>
+
+ in a directed graph, we denote by 
+
+<math display="inline" id="SimRank:7">
+ <semantics>
+  <mrow>
+   <mi>I</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>v</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>I</ci>
+    <ci>v</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I(v)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="SimRank:8">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>v</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <ci>v</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(v)
+  </annotation>
+ </semantics>
+</math>
+
+ the set of in-neighbors and out-neighbors of 
+
+<math display="inline" id="SimRank:9">
+ <semantics>
+  <mi>v</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>v</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v
+  </annotation>
+ </semantics>
+</math>
+
+, respectively. Individual in-neighbors are denoted as 
+
+<math display="inline" id="SimRank:10">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>I</mi>
+    <mi>i</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>v</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>I</ci>
+     <ci>i</ci>
+    </apply>
+    <ci>v</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I_{i}(v)
+  </annotation>
+ </semantics>
+</math>
+
+, for 
+
+<math display="inline" id="SimRank:11">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>≤</mo>
+   <mi>i</mi>
+   <mo>≤</mo>
+   <mrow>
+    <mo>|</mo>
+    <mrow>
+     <mi>I</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>v</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>|</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <leq></leq>
+     <cn type="integer">1</cn>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <leq></leq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <abs></abs>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <ci>v</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1\leq i\leq\left|I(v)\right|
+  </annotation>
+ </semantics>
+</math>
+
+, and individual out-neighbors are denoted as 
+
+<math display="inline" id="SimRank:12">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>O</mi>
+    <mi>i</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>v</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>O</ci>
+     <ci>i</ci>
+    </apply>
+    <ci>v</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O_{i}(v)
+  </annotation>
+ </semantics>
+</math>
+
+, for 
+
+<math display="inline" id="SimRank:13">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>≤</mo>
+   <mi>i</mi>
+   <mo>≤</mo>
+   <mrow>
+    <mo>|</mo>
+    <mrow>
+     <mi>O</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>v</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>|</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <leq></leq>
+     <cn type="integer">1</cn>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <leq></leq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <abs></abs>
+      <apply>
+       <times></times>
+       <ci>O</ci>
+       <ci>v</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1\leq i\leq\left|O(v)\right|
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Let us denote the similarity between objects 
+
+<math display="inline" id="SimRank:14">
+ <semantics>
+  <mi>a</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>a</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="SimRank:15">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+ by 
+
+<math display="inline" id="SimRank:16">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>s</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>0</mn>
+    <mo>,</mo>
+    <mn>1</mn>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <interval closure="open">
+      <ci>a</ci>
+      <ci>b</ci>
+     </interval>
+    </apply>
+    <interval closure="closed">
+     <cn type="integer">0</cn>
+     <cn type="integer">1</cn>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(a,b)\in[0,1]
+  </annotation>
+ </semantics>
+</math>
+
+. Following the earlier motivation, a recursive equation is written for 
+
+<math display="inline" id="SimRank:17">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>s</ci>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+. If 
+
+<math display="inline" id="SimRank:18">
+ <semantics>
+  <mrow>
+   <mi>a</mi>
+   <mo>=</mo>
+   <mi>b</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>a</ci>
+    <ci>b</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a=b
+  </annotation>
+ </semantics>
+</math>
+
+ then 
+
+<math display="inline" id="SimRank:19">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>s</ci>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+ is defined to be 
+
+<math display="inline" id="SimRank:20">
+ <semantics>
+  <mn>1</mn>
+  <annotation-xml encoding="MathML-Content">
+   <cn type="integer">1</cn>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1
+  </annotation>
+ </semantics>
+</math>
+
+. Otherwise,</p>
+
+<p>
+
+<math display="block" id="SimRank:21">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>s</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mi>C</mi>
+     <mrow>
+      <mrow>
+       <mo>|</mo>
+       <mrow>
+        <mi>I</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>a</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>|</mo>
+      </mrow>
+      <mrow>
+       <mo>|</mo>
+       <mrow>
+        <mi>I</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>b</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>|</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mrow>
+       <mo>|</mo>
+       <mrow>
+        <mi>I</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>a</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>|</mo>
+      </mrow>
+     </munderover>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+       <mrow>
+        <mi>j</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mrow>
+        <mo>|</mo>
+        <mrow>
+         <mi>I</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>b</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>|</mo>
+       </mrow>
+      </munderover>
+      <mrow>
+       <mi>s</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <msub>
+          <mi>I</mi>
+          <mi>i</mi>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>a</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>,</mo>
+        <mrow>
+         <msub>
+          <mi>I</mi>
+          <mi>j</mi>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>b</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <interval closure="open">
+      <ci>a</ci>
+      <ci>b</ci>
+     </interval>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <ci>C</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <abs></abs>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <ci>a</ci>
+        </apply>
+       </apply>
+       <apply>
+        <abs></abs>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <ci>b</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <abs></abs>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <ci>a</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>j</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <abs></abs>
+         <apply>
+          <times></times>
+          <ci>I</ci>
+          <ci>b</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>s</ci>
+        <interval closure="open">
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>I</ci>
+           <ci>i</ci>
+          </apply>
+          <ci>a</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>I</ci>
+           <ci>j</ci>
+          </apply>
+          <ci>b</ci>
+         </apply>
+        </interval>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(a,b)=\frac{C}{\left|I(a)\right|\left|I(b)\right|}\sum_{i=1}^{\left|I(a)%
+\right|}\sum_{j=1}^{\left|I(b)\right|}s(I_{i}(a),I_{j}(b))
+  </annotation>
+ </semantics>
+</math>
+
+ where 
+
+<math display="inline" id="SimRank:22">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+ is a constant between 
+
+<math display="inline" id="SimRank:23">
+ <semantics>
+  <mn>0</mn>
+  <annotation-xml encoding="MathML-Content">
+   <cn type="integer">0</cn>
+  </annotation-xml>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="SimRank:24">
+ <semantics>
+  <mn>1</mn>
+  <annotation-xml encoding="MathML-Content">
+   <cn type="integer">1</cn>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1
+  </annotation>
+ </semantics>
+</math>
+
+. A slight technicality here is that either 
+
+<math display="inline" id="SimRank:25">
+ <semantics>
+  <mi>a</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>a</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a
+  </annotation>
+ </semantics>
+</math>
+
+ or 
+
+<math display="inline" id="SimRank:26">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+ may not have any in-neighbors. Since there is no way to infer any similarity between 
+
+<math display="inline" id="SimRank:27">
+ <semantics>
+  <mi>a</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>a</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="SimRank:28">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+ in this case, similarity is set to 
+
+<math display="inline" id="SimRank:29">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>s</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <interval closure="open">
+      <ci>a</ci>
+      <ci>b</ci>
+     </interval>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(a,b)=0
+  </annotation>
+ </semantics>
+</math>
+
+, so the summation in the above equation is defined to be 
+
+<math display="inline" id="SimRank:30">
+ <semantics>
+  <mn>0</mn>
+  <annotation-xml encoding="MathML-Content">
+   <cn type="integer">0</cn>
+  </annotation-xml>
+ </semantics>
+</math>
+
+ when 
+
+<math display="inline" id="SimRank:31">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>I</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mi mathvariant="normal">∅</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>I</ci>
+     <ci>a</ci>
+    </apply>
+    <emptyset></emptyset>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I(a)=\emptyset
+  </annotation>
+ </semantics>
+</math>
+
+ or 
+
+<math display="inline" id="SimRank:32">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>I</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mi mathvariant="normal">∅</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>I</ci>
+     <ci>b</ci>
+    </apply>
+    <emptyset></emptyset>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I(b)=\emptyset
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h2 id="matrix-representation-of-simrank">Matrix representation of SimRank</h2>
+
+<p>Let 
+
+<math display="inline" id="SimRank:33">
+ <semantics>
+  <mi>𝐒</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐒</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{S}
+  </annotation>
+ </semantics>
+</math>
+
+ be the similarity matrix whose entry 
+
+<math display="inline" id="SimRank:34">
+ <semantics>
+  <msub>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>𝐒</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mrow>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <ci>𝐒</ci>
+    </apply>
+    <list>
+     <ci>a</ci>
+     <ci>b</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [\mathbf{S}]_{a,b}
+  </annotation>
+ </semantics>
+</math>
+
+ denotes the similarity score 
+
+<math display="inline" id="SimRank:35">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>s</ci>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="SimRank:36">
+ <semantics>
+  <mi>𝐀</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐀</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{A}
+  </annotation>
+ </semantics>
+</math>
+
+ be the column normalized adjacency matrix whose entry 
+
+<math display="inline" id="SimRank:37">
+ <semantics>
+  <mrow>
+   <msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mi>𝐀</mi>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <mrow>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mfrac>
+    <mn>1</mn>
+    <mrow>
+     <mo stretchy="false">|</mo>
+     <mrow>
+      <mi class="ltx_font_mathcaligraphic">ℐ</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>b</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">|</mo>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>𝐀</ci>
+     </apply>
+     <list>
+      <ci>a</ci>
+      <ci>b</ci>
+     </list>
+    </apply>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <apply>
+      <abs></abs>
+      <apply>
+       <times></times>
+       <ci>ℐ</ci>
+       <ci>b</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [\mathbf{A}]_{a,b}=\tfrac{1}{|\mathcal{I}(b)|}
+  </annotation>
+ </semantics>
+</math>
+
+ if there is an edge from 
+
+<math display="inline" id="SimRank:38">
+ <semantics>
+  <mi>a</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>a</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="SimRank:39">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+, and 0 otherwise. Then, in matrix notations, SimRank can be formulated as</p>
+
+<p>
+
+<math display="block" id="SimRank:40">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝐒</mi>
+    <mo>=</mo>
+    <mrow>
+     <mi>max</mi>
+     <mrow>
+      <mo stretchy="false">{</mo>
+      <mrow>
+       <mi>C</mi>
+       <mo>⋅</mo>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <msup>
+          <mi>𝐀</mi>
+          <mi>T</mi>
+         </msup>
+         <mo>⋅</mo>
+         <mi>𝐒</mi>
+         <mo>⋅</mo>
+         <mi>𝐀</mi>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>,</mo>
+      <mi>𝐈</mi>
+      <mo stretchy="false">}</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐒</ci>
+    <apply>
+     <max></max>
+     <apply>
+      <ci>normal-⋅</ci>
+      <ci>C</ci>
+      <apply>
+       <ci>normal-⋅</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>𝐀</ci>
+        <ci>T</ci>
+       </apply>
+       <ci>𝐒</ci>
+       <ci>𝐀</ci>
+      </apply>
+     </apply>
+     <ci>𝐈</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {{\mathbf{S}}}=\max\{C\cdot(\mathbf{A}^{T}\cdot{{\mathbf{S}}}\cdot{{\mathbf{A}%
+}}),{{\mathbf{I}}}\},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="SimRank:41">
+ <semantics>
+  <mi>𝐈</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐈</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{I}
+  </annotation>
+ </semantics>
+</math>
+
+ is an identity matrix.</p>
+<h2 id="computing-simrank">Computing SimRank</h2>
+
+<p>A solution to the SimRank equations for a graph 
+
+<math display="inline" id="SimRank:42">
+ <semantics>
+  <mi>G</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>G</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G
+  </annotation>
+ </semantics>
+</math>
+
+ can be reached by <a href="Iterative_method" title="wikilink">iteration</a> to a <a href="Fixed_point_(mathematics)" title="wikilink">fixed-point</a>. Let 
+
+<math display="inline" id="SimRank:43">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ be the number of nodes in 
+
+<math display="inline" id="SimRank:44">
+ <semantics>
+  <mi>G</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>G</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G
+  </annotation>
+ </semantics>
+</math>
+
+. For each iteration 
+
+<math display="inline" id="SimRank:45">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+, we can keep 
+
+<math display="inline" id="SimRank:46">
+ <semantics>
+  <msup>
+   <mi>n</mi>
+   <mn>2</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>n</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n^{2}
+  </annotation>
+ </semantics>
+</math>
+
+ entries 
+
+<math display="inline" id="SimRank:47">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>*</mo>
+    <mo>,</mo>
+    <mo>*</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>k</ci>
+    </apply>
+    <interval closure="open">
+     <times></times>
+     <times></times>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k}(*,*)
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="SimRank:48">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>k</ci>
+    </apply>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k}(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+ gives the score between 
+
+<math display="inline" id="SimRank:49">
+ <semantics>
+  <mi>a</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>a</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="SimRank:50">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+ on iteration 
+
+<math display="inline" id="SimRank:51">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+. We successively compute 
+
+<math display="inline" id="SimRank:52">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>*</mo>
+    <mo>,</mo>
+    <mo>*</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <interval closure="open">
+     <times></times>
+     <times></times>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k+1}(*,*)
+  </annotation>
+ </semantics>
+</math>
+
+ based on 
+
+<math display="inline" id="SimRank:53">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>*</mo>
+    <mo>,</mo>
+    <mo>*</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>k</ci>
+    </apply>
+    <interval closure="open">
+     <times></times>
+     <times></times>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k}(*,*)
+  </annotation>
+ </semantics>
+</math>
+
+. We start with 
+
+<math display="inline" id="SimRank:54">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mn>0</mn>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>*</mo>
+    <mo>,</mo>
+    <mo>*</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <cn type="integer">0</cn>
+    </apply>
+    <interval closure="open">
+     <times></times>
+     <times></times>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{0}(*,*)
+  </annotation>
+ </semantics>
+</math>
+
+ where each 
+
+<math display="inline" id="SimRank:55">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mn>0</mn>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <cn type="integer">0</cn>
+    </apply>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{0}(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+ is a lower bound on the actual SimRank score 
+
+<math display="inline" id="SimRank:56">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>s</ci>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="block" id="SimRank:57">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>s</mi>
+     <mn>0</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>{</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mrow>
+         <mrow>
+          <mrow>
+           <mn>1</mn>
+           <mrow></mrow>
+          </mrow>
+          <mo>,</mo>
+          <mrow>
+           <mtext>if</mtext>
+           <mi>a</mi>
+          </mrow>
+         </mrow>
+         <mo>=</mo>
+         <mrow>
+          <mi>b</mi>
+          <mrow></mrow>
+         </mrow>
+        </mrow>
+        <mo>,</mo>
+       </mrow>
+      </mtd>
+      <mtd></mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mrow>
+         <mrow>
+          <mrow>
+           <mn>0</mn>
+           <mrow></mrow>
+          </mrow>
+          <mo>,</mo>
+          <mrow>
+           <mtext>if</mtext>
+           <mi>a</mi>
+          </mrow>
+         </mrow>
+         <mo>≠</mo>
+         <mrow>
+          <mi>b</mi>
+          <mrow></mrow>
+         </mrow>
+        </mrow>
+        <mo>.</mo>
+       </mrow>
+      </mtd>
+      <mtd></mtd>
+     </mtr>
+    </mtable>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <cn type="integer">0</cn>
+     </apply>
+     <interval closure="open">
+      <ci>a</ci>
+      <ci>b</ci>
+     </interval>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">cases</csymbol>
+     <apply>
+      <eq></eq>
+      <list>
+       <apply>
+        <times></times>
+        <cn type="integer">1</cn>
+        <mtext></mtext>
+       </apply>
+       <apply>
+        <times></times>
+        <mtext>if</mtext>
+        <ci>a</ci>
+       </apply>
+      </list>
+      <apply>
+       <times></times>
+       <ci>b</ci>
+       <mtext></mtext>
+      </apply>
+     </apply>
+     <mtext>otherwise</mtext>
+     <apply>
+      <neq></neq>
+      <list>
+       <apply>
+        <times></times>
+        <cn type="integer">0</cn>
+        <mtext></mtext>
+       </apply>
+       <apply>
+        <times></times>
+        <mtext>if</mtext>
+        <ci>a</ci>
+       </apply>
+      </list>
+      <apply>
+       <times></times>
+       <ci>b</ci>
+       <mtext></mtext>
+      </apply>
+     </apply>
+     <mtext>otherwise</mtext>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{0}(a,b)=\begin{cases}1\mbox{ },\mbox{ }\mbox{if }a=b\mbox{ },\\
+0\mbox{ },\mbox{ }\mbox{if }a\neq b\mbox{ }.\end{cases}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>To compute 
+
+<math display="inline" id="SimRank:58">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k+1}(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+ from 
+
+<math display="inline" id="SimRank:59">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>*</mo>
+    <mo>,</mo>
+    <mo>*</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>k</ci>
+    </apply>
+    <interval closure="open">
+     <times></times>
+     <times></times>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k}(*,*)
+  </annotation>
+ </semantics>
+</math>
+
+, we use the basic SimRank equation to get:</p>
+
+<p>
+
+<math display="block" id="SimRank:60">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>s</mi>
+     <mrow>
+      <mi>k</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mi>C</mi>
+     <mrow>
+      <mrow>
+       <mo>|</mo>
+       <mrow>
+        <mi>I</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>a</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>|</mo>
+      </mrow>
+      <mrow>
+       <mo>|</mo>
+       <mrow>
+        <mi>I</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>b</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>|</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mrow>
+       <mo>|</mo>
+       <mrow>
+        <mi>I</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>a</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+       <mo>|</mo>
+      </mrow>
+     </munderover>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+       <mrow>
+        <mi>j</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mrow>
+        <mo>|</mo>
+        <mrow>
+         <mi>I</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>b</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>|</mo>
+       </mrow>
+      </munderover>
+      <mrow>
+       <msub>
+        <mi>s</mi>
+        <mi>k</mi>
+       </msub>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <msub>
+          <mi>I</mi>
+          <mi>i</mi>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>a</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo>,</mo>
+        <mrow>
+         <msub>
+          <mi>I</mi>
+          <mi>j</mi>
+         </msub>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>b</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <apply>
+       <plus></plus>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <interval closure="open">
+      <ci>a</ci>
+      <ci>b</ci>
+     </interval>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <ci>C</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <abs></abs>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <ci>a</ci>
+        </apply>
+       </apply>
+       <apply>
+        <abs></abs>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <ci>b</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <abs></abs>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <ci>a</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>j</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <abs></abs>
+         <apply>
+          <times></times>
+          <ci>I</ci>
+          <ci>b</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>s</ci>
+         <ci>k</ci>
+        </apply>
+        <interval closure="open">
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>I</ci>
+           <ci>i</ci>
+          </apply>
+          <ci>a</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>I</ci>
+           <ci>j</ci>
+          </apply>
+          <ci>b</ci>
+         </apply>
+        </interval>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k+1}(a,b)=\frac{C}{\left|I(a)\right|\left|I(b)\right|}\sum_{i=1}^{\left|I(a%
+)\right|}\sum_{j=1}^{\left|I(b)\right|}s_{k}(I_{i}(a),I_{j}(b))
+  </annotation>
+ </semantics>
+</math>
+
+ for 
+
+<math display="inline" id="SimRank:61">
+ <semantics>
+  <mrow>
+   <mi>a</mi>
+   <mo>≠</mo>
+   <mi>b</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <neq></neq>
+    <ci>a</ci>
+    <ci>b</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a\neq b
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="SimRank:62">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>s</mi>
+     <mrow>
+      <mi>k</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <apply>
+       <plus></plus>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <interval closure="open">
+      <ci>a</ci>
+      <ci>b</ci>
+     </interval>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k+1}(a,b)=1
+  </annotation>
+ </semantics>
+</math>
+
+ for 
+
+<math display="inline" id="SimRank:63">
+ <semantics>
+  <mrow>
+   <mi>a</mi>
+   <mo>=</mo>
+   <mi>b</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>a</ci>
+    <ci>b</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a=b
+  </annotation>
+ </semantics>
+</math>
+
+. That is, on each iteration 
+
+<math display="inline" id="SimRank:64">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <ci>k</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k+1
+  </annotation>
+ </semantics>
+</math>
+
+, we update the similarity of 
+
+<math display="inline" id="SimRank:65">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mi>a</mi>
+   <mo>,</mo>
+   <mi>b</mi>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open">
+    <ci>a</ci>
+    <ci>b</ci>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (a,b)
+  </annotation>
+ </semantics>
+</math>
+
+
+ using the similarity scores of the neighbours of 
+
+<math display="inline" id="SimRank:66">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mi>a</mi>
+   <mo>,</mo>
+   <mi>b</mi>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open">
+    <ci>a</ci>
+    <ci>b</ci>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (a,b)
+  </annotation>
+ </semantics>
+</math>
+
+ from the previous iteration 
+
+<math display="inline" id="SimRank:67">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ according to the basic SimRank equation. The values 
+
+<math display="inline" id="SimRank:68">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>*</mo>
+    <mo>,</mo>
+    <mo>*</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>k</ci>
+    </apply>
+    <interval closure="open">
+     <times></times>
+     <times></times>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k}(*,*)
+  </annotation>
+ </semantics>
+</math>
+
+ are <a href="Monotonic_function" title="wikilink">nondecreasing</a> as 
+
+<math display="inline" id="SimRank:69">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ increases. It was shown in <a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> that the values <a href="Limit_of_a_sequence" title="wikilink">converge</a> to <a href="Limit_of_a_sequence" title="wikilink">limits</a> satisfying the basic SimRank equation, the SimRank scores 
+
+<math display="inline" id="SimRank:70">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>*</mo>
+    <mo>,</mo>
+    <mo>*</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>s</ci>
+    <interval closure="open">
+     <times></times>
+     <times></times>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(*,*)
+  </annotation>
+ </semantics>
+</math>
+
+
+, i.e., for all 
+
+<math display="inline" id="SimRank:71">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+   </mrow>
+   <mo>∈</mo>
+   <mi>V</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <list>
+     <ci>a</ci>
+     <ci>b</ci>
+    </list>
+    <ci>V</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a,b\in V
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="SimRank:72">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mo>lim</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>→</mo>
+      <mi mathvariant="normal">∞</mi>
+     </mrow>
+    </msub>
+    <mrow>
+     <msub>
+      <mi>s</mi>
+      <mi>k</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo>,</mo>
+      <mi>b</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>s</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>a</mi>
+     <mo>,</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <limit></limit>
+      <apply>
+       <ci>normal-→</ci>
+       <ci>k</ci>
+       <infinity></infinity>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>s</ci>
+       <ci>k</ci>
+      </apply>
+      <interval closure="open">
+       <ci>a</ci>
+       <ci>b</ci>
+      </interval>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <interval closure="open">
+      <ci>a</ci>
+      <ci>b</ci>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lim_{k\to\infty}s_{k}(a,b)=s(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The original SimRank proposal suggested choosing the decay factor 
+
+<math display="inline" id="SimRank:73">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mo>=</mo>
+   <mn>0.8</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>C</ci>
+    <cn type="float">0.8</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C=0.8
+  </annotation>
+ </semantics>
+</math>
+
+ and a fixed number 
+
+<math display="inline" id="SimRank:74">
+ <semantics>
+  <mrow>
+   <mi>K</mi>
+   <mo>=</mo>
+   <mn>5</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>K</ci>
+    <cn type="integer">5</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K=5
+  </annotation>
+ </semantics>
+</math>
+
+ of iterations to perform. However, the recent research <a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> showed that the given values for 
+
+<math display="inline" id="SimRank:75">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+
+ and 
+
+<math display="inline" id="SimRank:76">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K
+  </annotation>
+ </semantics>
+</math>
+
+ generally imply relatively low <a href="Accuracy_and_precision" title="wikilink">accuracy</a> of iteratively computed SimRank scores. For guaranteeing more accurate computation results, the latter paper suggests either using a smaller decay factor (in particular, 
+
+<math display="inline" id="SimRank:77">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mo>=</mo>
+   <mn>0.6</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>C</ci>
+    <cn type="float">0.6</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C=0.6
+  </annotation>
+ </semantics>
+</math>
+
+) or taking more iterations.</p>
+<h2 id="cosimrank">CoSimRank</h2>
+
+<p>CoSimRank is a variant of SimRank with the advantage of also having a local formulation, i.e. CoSimRank can be computed for a single node pair.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> Let 
+
+<math display="inline" id="SimRank:78">
+ <semantics>
+  <mi>𝐒</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐒</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{S}
+  </annotation>
+ </semantics>
+</math>
+
+ be the similarity matrix whose entry 
+
+<math display="inline" id="SimRank:79">
+ <semantics>
+  <msub>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>𝐒</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mrow>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <csymbol cd="latexml">delimited-[]</csymbol>
+     <ci>𝐒</ci>
+    </apply>
+    <list>
+     <ci>a</ci>
+     <ci>b</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [\mathbf{S}]_{a,b}
+  </annotation>
+ </semantics>
+</math>
+
+ denotes the similarity score 
+
+<math display="inline" id="SimRank:80">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>s</ci>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+
+, and 
+
+<math display="inline" id="SimRank:81">
+ <semantics>
+  <mi>𝐀</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐀</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{A}
+  </annotation>
+ </semantics>
+</math>
+
+ be the column normalized adjacency matrix. Then, in matrix notations, CoSimRank can be formulated as:</p>
+
+<p>
+
+<math display="block" id="SimRank:82">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>𝐒</mi>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mi>C</mi>
+      <mo>⋅</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msup>
+         <mi>𝐀</mi>
+         <mi>T</mi>
+        </msup>
+        <mo>⋅</mo>
+        <mi>𝐒</mi>
+        <mo>⋅</mo>
+        <mi>𝐀</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mi>𝐈</mi>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐒</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <ci>normal-⋅</ci>
+      <ci>C</ci>
+      <apply>
+       <ci>normal-⋅</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>𝐀</ci>
+        <ci>T</ci>
+       </apply>
+       <ci>𝐒</ci>
+       <ci>𝐀</ci>
+      </apply>
+     </apply>
+     <ci>𝐈</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {{\mathbf{S}}}=C\cdot(\mathbf{A}^{T}\cdot{{\mathbf{S}}}\cdot{{\mathbf{A}}})+{{%
+\mathbf{I}}},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="SimRank:83">
+ <semantics>
+  <mi>𝐈</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐈</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{I}
+  </annotation>
+ </semantics>
+</math>
+
+ is an identity matrix. To compute the similarity score of only a single node pair, let 
+
+<math display="inline" id="SimRank:84">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mn>0</mn>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>i</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <msub>
+    <mi>e</mi>
+    <mi>i</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>p</ci>
+      <cn type="integer">0</cn>
+     </apply>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>e</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p^{(0)}(i)=e_{i}
+  </annotation>
+ </semantics>
+</math>
+
+, with 
+
+<math display="inline" id="SimRank:85">
+ <semantics>
+  <msub>
+   <mi>e</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>e</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   e_{i}
+  </annotation>
+ </semantics>
+</math>
+
+
+ being a vector of the standard basis, i.e., the 
+
+<math display="inline" id="SimRank:86">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+-th entry is 1 and all other entries are 0. Then, CoSimRank can be computed in two steps:</p>
+<ol>
+<li>
+
+<math display="inline" id="SimRank:87">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mi>A</mi>
+    <msup>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>p</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>A</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>p</ci>
+      <apply>
+       <minus></minus>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p^{(k)}=Ap^{(k-1)}
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>
+
+<math display="inline" id="SimRank:88">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>s</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>i</mi>
+     <mo>,</mo>
+     <mi>j</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>=</mo>
+      <mn>0</mn>
+     </mrow>
+     <mi mathvariant="normal">∞</mi>
+    </msubsup>
+    <mrow>
+     <msup>
+      <mi>C</mi>
+      <mi>k</mi>
+     </msup>
+     <mrow>
+      <mo stretchy="false">⟨</mo>
+      <mrow>
+       <msup>
+        <mi>p</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>k</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>i</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>,</mo>
+      <mrow>
+       <msup>
+        <mi>p</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mi>k</mi>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>j</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">⟩</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>s</ci>
+     <interval closure="open">
+      <ci>i</ci>
+      <ci>j</ci>
+     </interval>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>k</ci>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <infinity></infinity>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>C</ci>
+       <ci>k</ci>
+      </apply>
+      <list>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>p</ci>
+         <ci>k</ci>
+        </apply>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>p</ci>
+         <ci>k</ci>
+        </apply>
+        <ci>j</ci>
+       </apply>
+      </list>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s(i,j)=\sum_{k=0}^{\infty}C^{k}\langle p^{(k)}(i),p^{(k)}(j)\rangle
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+</ol>
+
+<p>Step one can be seen a simplified version of Personalized <a class="uri" href="PageRank" title="wikilink">PageRank</a>. Step two sums up the vector similarity of each iteration. Both, matrix and local representation, compute the same similarity score. CoSimRank can also be used to compute the similarity of sets of nodes, by modifying 
+
+<math display="inline" id="SimRank:89">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>0</mn>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>i</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>p</ci>
+     <cn type="integer">0</cn>
+    </apply>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p^{(0)}(i)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h2 id="further-research-on-simrank">Further research on SimRank</h2>
+<ul>
+<li>Fogaras and Racz <a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> suggested speeding up SimRank computation through <a href="Probability_theory" title="wikilink">probabilistic</a> computation using the <a href="Monte_Carlo_method" title="wikilink">Monte Carlo method</a>.</li>
+</ul>
+<ul>
+<li>Antonellis et al.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> extended SimRank equations to take into consideration (i) evidence factor for <a href="Graph_(mathematics)#Properties_of_graphs" title="wikilink">incident nodes</a> and (ii) link weights.</li>
+</ul>
+<ul>
+<li>Yu et al.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> further improved SimRank computation via a fine-grained <a class="uri" href="memoization" title="wikilink">memoization</a> method to share small common parts among different partial sums.</li>
+</ul>
+<h3 id="partial-sums-memoization">Partial Sums Memoization</h3>
+
+<p>Lizorkin et al.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> proposed three optimization techniques for speeding up the computation of SimRank:</p>
+<ol>
+<li>Essential nodes selection may eliminate the computation of a fraction of node pairs with a-priori zero scores.</li>
+<li>Partial sums memoization can effectively reduce repeated calculations of the similarity among different node pairs by caching part of similarity summations for later reuse.</li>
+<li>A threshold setting on the similarity enables a further reduction in the number of node pairs to be computed.</li>
+</ol>
+
+<p>In particular, the second observation of partial sums memoization plays a paramount role in greatly speeding up the computation of SimRank from 
+
+<math display="inline" id="SimRank:90">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒪</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>K</mi>
+     <msup>
+      <mi>d</mi>
+      <mn>2</mn>
+     </msup>
+     <msup>
+      <mi>n</mi>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>𝒪</ci>
+    <apply>
+     <times></times>
+     <ci>K</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>d</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>n</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{O}(Kd^{2}n^{2})
+  </annotation>
+ </semantics>
+</math>
+
+
+ to 
+
+<math display="inline" id="SimRank:91">
+ <semantics>
+  <mrow>
+   <mi class="ltx_font_mathcaligraphic">𝒪</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>K</mi>
+     <mi>d</mi>
+     <msup>
+      <mi>n</mi>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>𝒪</ci>
+    <apply>
+     <times></times>
+     <ci>K</ci>
+     <ci>d</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>n</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{O}(Kdn^{2})
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="SimRank:92">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K
+  </annotation>
+ </semantics>
+</math>
+
+ is the number of iterations, 
+
+<math display="inline" id="SimRank:93">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+ is average degree of a graph, and 
+
+<math display="inline" id="SimRank:94">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ is the number of nodes in a graph. The central idea of partial sums memoization consists of two steps:</p>
+
+<p>First, the partial sums over 
+
+<math display="inline" id="SimRank:95">
+ <semantics>
+  <mrow>
+   <mi>I</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>I</ci>
+    <ci>a</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   I(a)
+  </annotation>
+ </semantics>
+</math>
+
+
+ are memoized as</p>
+
+<p>
+
+<math display="block" id="SimRank:96">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mtext>Partial</mtext>
+    <mrow>
+     <mi>I</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <msub>
+     <mi>s</mi>
+     <mi>k</mi>
+    </msub>
+   </msubsup>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>j</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <munder>
+    <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>∈</mo>
+     <mrow>
+      <mi>I</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>a</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </munder>
+   <msub>
+    <mi>s</mi>
+    <mi>k</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>i</mi>
+    <mo>,</mo>
+    <mi>j</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo rspace="22.5pt">,</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>∀</mo>
+    <mi>j</mi>
+    <mo>∈</mo>
+    <mi>I</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <mtext>Partial</mtext>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <ci>a</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">j</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <sum></sum>
+     <apply>
+      <in></in>
+      <ci>i</ci>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <ci>a</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <ci>k</ci>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">i</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">j</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <ci>normal-,</ci>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="latexml">for-all</csymbol>
+     <csymbol cd="unknown">j</csymbol>
+     <in></in>
+     <csymbol cd="unknown">I</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">b</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \text{Partial}_{I(a)}^{s_{k}}(j)=\sum_{i\in I(a)}s_{k}(i,j),\qquad(\forall j%
+\in I(b))
+  </annotation>
+ </semantics>
+</math>
+
+ and then 
+
+<math display="inline" id="SimRank:97">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mi>b</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <interval closure="open">
+     <ci>a</ci>
+     <ci>b</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k+1}(a,b)
+  </annotation>
+ </semantics>
+</math>
+
+ is iteratively computed from 
+
+<math display="inline" id="SimRank:98">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mtext>Partial</mtext>
+    <mrow>
+     <mi>I</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <msub>
+     <mi>s</mi>
+     <mi>k</mi>
+    </msub>
+   </msubsup>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>j</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <mtext>Partial</mtext>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <ci>a</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \text{Partial}_{I(a)}^{s_{k}}(j)
+  </annotation>
+ </semantics>
+</math>
+
+ as</p>
+
+<p>
+
+<math display="block" id="SimRank:99">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>s</mi>
+      <mrow>
+       <mi>k</mi>
+       <mo>+</mo>
+       <mn>1</mn>
+      </mrow>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo>,</mo>
+      <mi>b</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mfrac>
+      <mi>C</mi>
+      <mrow>
+       <mrow>
+        <mo stretchy="false">|</mo>
+        <mrow>
+         <mi>I</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>a</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">|</mo>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">|</mo>
+        <mrow>
+         <mi>I</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>b</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">|</mo>
+       </mrow>
+      </mrow>
+     </mfrac>
+     <mrow>
+      <munder>
+       <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+       <mrow>
+        <mi>j</mi>
+        <mo>∈</mo>
+        <mrow>
+         <mi>I</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>b</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+       </mrow>
+      </munder>
+      <mrow>
+       <msubsup>
+        <mtext>Partial</mtext>
+        <mrow>
+         <mi>I</mi>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mi>a</mi>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <msub>
+         <mi>s</mi>
+         <mi>k</mi>
+        </msub>
+       </msubsup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>j</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <apply>
+       <plus></plus>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <interval closure="open">
+      <ci>a</ci>
+      <ci>b</ci>
+     </interval>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <ci>C</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <abs></abs>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <ci>a</ci>
+        </apply>
+       </apply>
+       <apply>
+        <abs></abs>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <ci>b</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <in></in>
+        <ci>j</ci>
+        <apply>
+         <times></times>
+         <ci>I</ci>
+         <ci>b</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <mtext>Partial</mtext>
+         <apply>
+          <times></times>
+          <ci>I</ci>
+          <ci>a</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>s</ci>
+         <ci>k</ci>
+        </apply>
+       </apply>
+       <ci>j</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k+1}(a,b)=\frac{C}{|I(a)||I(b)|}\sum_{j\in I(b)}\text{Partial}_{I(a)}^{s_{k%
+}}(j).
+  </annotation>
+ </semantics>
+</math>
+
+ Consequently, the results of 
+
+<math display="inline" id="SimRank:100">
+ <semantics>
+  <mrow>
+   <msubsup>
+    <mtext>Partial</mtext>
+    <mrow>
+     <mi>I</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>a</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <msub>
+     <mi>s</mi>
+     <mi>k</mi>
+    </msub>
+   </msubsup>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>j</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <mtext>Partial</mtext>
+      <apply>
+       <times></times>
+       <ci>I</ci>
+       <ci>a</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \text{Partial}_{I(a)}^{s_{k}}(j)
+  </annotation>
+ </semantics>
+</math>
+
+
+, 
+
+<math display="inline" id="SimRank:101">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>∀</mo>
+    <mi>j</mi>
+   </mrow>
+   <mo>∈</mo>
+   <mrow>
+    <mi>I</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>b</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <apply>
+     <csymbol cd="latexml">for-all</csymbol>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>I</ci>
+     <ci>b</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \forall j\in I(b)
+  </annotation>
+ </semantics>
+</math>
+
+, can be reused later when we compute the similarities 
+
+<math display="inline" id="SimRank:102">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>s</mi>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>a</mi>
+    <mo>,</mo>
+    <mo>*</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>s</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <interval closure="open">
+     <ci>a</ci>
+     <times></times>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{k+1}(a,*)
+  </annotation>
+ </semantics>
+</math>
+
+ for a given vertex 
+
+<math display="inline" id="SimRank:103">
+ <semantics>
+  <mi>a</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>a</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a
+  </annotation>
+ </semantics>
+</math>
+
+ as the first argument.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a class="uri" href="PageRank" title="wikilink">PageRank</a></li>
+</ul>
+<h2 id="citations">Citations</h2>
+
+<p>"</p>
+
+<p><a href="Category:Information_retrieval_evaluation" title="wikilink">Category:Information retrieval evaluation</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">G. Jeh and J. Widom. SimRank: A Measure of Structural-Context Similarity. In <a href="SIGKDD" title="wikilink">KDD'02</a>: Proceedings of the eighth ACM SIGKDD international conference on Knowledge discovery and data mining, pages 538-543. <a href="Association_for_Computing_Machinery" title="wikilink">ACM Press</a>, 2002. <a href="http://www-cs-students.stanford.edu/~glenj/simrank.pdf">1</a><a href="#fnref1">↩</a></li>
+<li id="fn2"></li>
+<li id="fn3">D. Lizorkin, P. Velikhov, M. Grinev and D. Turdakov. Accuracy Estimate and Optimization Techniques for SimRank Computation. In <a href="Very_large_database" title="wikilink">VLDB '08</a>: Proceedings of the 34th International Conference on Very Large Data Bases, pages 422--433. <a href="http://modis.ispras.ru/Lizorkin/Publications/simrank_accuracy.pdf">2</a><a href="#fnref3">↩</a></li>
+<li id="fn4">S. Rothe and H. Schütze. CoSimRank: A Flexible &amp; Efficient Graph-Theoretic Similarity Measure. In <a href="Association_for_Computational_Linguistics" title="wikilink">ACL '14</a>: Proceedings of the 52nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 1392-1402 . <a href="http://acl2014.org/acl2014/P14-1/pdf/P14-1131.pdf">3</a><a href="#fnref4">↩</a></li>
+<li id="fn5">D. Fogaras and B. Racz. Scaling link-based similarity search. In <a href="World_Wide_Web_Conference" title="wikilink">WWW '05</a>: Proceedings of the 14th international conference on World Wide Web, pages 641--650, New York, NY, USA, 2005. <a href="Association_for_Computing_Machinery" title="wikilink">ACM</a>. <a href="http://www2005.org/docs/p641.pdf">4</a><a href="#fnref5">↩</a></li>
+<li id="fn6">I. Antonellis, H. Garcia-Molina and C.-C. Chang. Simrank++: Query Rewriting through Link Analysis of the Click Graph. In <a href="Very_large_database" title="wikilink">VLDB '08</a>: Proceedings of the 34th International Conference on Very Large Data Bases, pages 408--421. [<a class="uri" href="http://dbpubs.stanford.edu/pub/showDoc.Fulltext?lang=en&amp;doc">http://dbpubs.stanford.edu/pub/showDoc.Fulltext?lang=en&amp;doc;</a>;=2008-17&amp;format;=pdf&amp;compression;=&amp;name;=2008-17.pdf]<a href="#fnref6">↩</a></li>
+<li id="fn7">W. Yu, X. Lin, W. Zhang. Towards Efficient SimRank Computation on Large Networks. In <a href="International_Conference_on_Data_Engineering" title="wikilink">ICDE '13</a>: Proceedings of the 29th IEEE International Conference on Data Engineering, pages 601--612. <a href="http://www.cse.unsw.edu.au/~weirenyu/pubs/icde13.pdf">5</a><a href="#fnref7">↩</a></li>
+<li id="fn8"></li>
+</ol>
+</section>
+</body>
+</html>

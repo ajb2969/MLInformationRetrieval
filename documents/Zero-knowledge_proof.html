@@ -1,0 +1,1841 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="977">Zero-knowledge proof</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Zero-knowledge proof</h1>
+<hr/>
+
+<p>In <a class="uri" href="cryptography" title="wikilink">cryptography</a>, a <strong>zero-knowledge proof</strong> or <strong>zero-knowledge protocol</strong> is a method by which one party (the <em>prover</em>) can prove to another party (the <em>verifier</em>) that a given statement is true, without conveying any information apart from the fact that the statement is indeed true.</p>
+
+<p>If proving the statement requires knowledge of some secret information on the part of the prover, the definition implies that the verifier will not be able to prove the statement in turn to anyone else, since the verifier does not possess the secret information. Notice that the statement being proved must include the assertion that the prover has such knowledge (otherwise, the statement would not be proved in zero-knowledge, since at the end of the protocol the verifier would gain the additional information that the prover has knowledge of the required secret information). If the statement consists <em>only</em> of the fact that the prover possesses the secret information, it is a special case known as <em>zero-knowledge proof of knowledge</em>, and it nicely illustrates the essence of the notion of zero-knowledge proofs: proving that one has knowledge of certain information is trivial if one is allowed to simply reveal that information; the challenge is proving that one has such knowledge without revealing the secret information or anything else.</p>
+
+<p>For zero-knowledge proofs of knowledge, the protocol must necessarily require interactive input from the verifier, usually in the form of a challenge or challenges such that the responses from the prover will convince the verifier if and only if the statement is true (i.e., if the prover does have the claimed knowledge). This is clearly the case, since otherwise the verifier could record the execution of the protocol and replay it to someone else: if this were accepted by the new party as proof that the replaying party knows the secret information, then the new party's acceptance is either justified – the replayer <em>does</em> know the secret information – which means that the protocol leaks knowledge and is not zero-knowledge, or it is spurious – i.e. leads to a party accepting someone's proof of knowledge who does not actually possess it.</p>
+
+<p>Some forms of non-interactive zero-knowledge proofs of knowledge exist,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> but the validity of the proof relies on computational assumptions (typically the assumptions of an ideal <a href="cryptographic_hash_function" title="wikilink">cryptographic hash function</a>).</p>
+<h2 id="abstract-example">Abstract example</h2>
+
+<p>There is a well-known story presenting the fundamental ideas of zero-knowledge proofs, first published by <a href="Jean-Jacques_Quisquater" title="wikilink">Jean-Jacques Quisquater</a> and others in their paper "How to Explain Zero-Knowledge Protocols to Your Children".<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> It is <a href="Alice_and_Bob" title="wikilink">common practice</a> to label the two <a href="characters_in_cryptography" title="wikilink">parties</a> in a zero-knowledge proof as Peggy (the prover of the statement) and Victor (the verifier of the statement).</p>
+
+<p>In this story, Peggy has uncovered the secret word used to open a magic door in a cave. The cave is shaped like a ring, with the entrance on one side and the magic door blocking the opposite side. Victor wants to know whether Peggy knows the secret word; but Peggy, being a very private person, does not want to reveal the fact of her knowledge to the world in general.</p>
+
+<p>They label the left and right paths from the entrance A and B. First, Victor waits outside the cave as Peggy goes in. Peggy takes either path A or B; Victor is not allowed to see which path she takes. Then, Victor enters the cave and shouts the name of the path he wants her to use to return, either A or B, chosen at random. Providing she really does know the magic word, this is easy: she opens the door, if necessary, and returns along the desired path.</p>
+
+<p>However, suppose she did not know the word. Then, she would only be able to return by the named path if Victor were to give the name of the same path by which she had entered. Since Victor would choose A or B at random, she would have a 50% chance of guessing correctly. If they were to repeat this trick many times, say 20 times in a row, her chance of successfully anticipating all of Victor's requests would become vanishingly small (about one in 1.05 million).</p>
+
+<p>Thus, if Peggy repeatedly appears at the exit Victor names, he can conclude that it is very probable — astronomically probable — that Peggy does in fact know the secret word.</p>
+
+<p>One side note with respect to third party observers: Even if Victor is wearing a hidden camera that records the whole transaction, the only thing the camera will record is in one case Victor shouting "A!" and Peggy appearing at A or in the other case Victor shouting "B!" and Peggy appearing at B. A recording of this type would be trivial for any two people to fake (requiring only that Peggy and Victor agree beforehand on the sequence of A's and B's that Victor will shout). Such a recording will certainly never be convincing to anyone but the original participants. In fact, even a person who was present as an observer <em>at the original experiment</em> would be unconvinced, since Victor and Peggy might have orchestrated the whole "experiment" from start to finish.</p>
+
+<p>Further notice that if Victor chooses his A's and B's by flipping a coin on-camera, this protocol loses its zero-knowledge property; the on-camera coin flip would probably be convincing to any person watching the recording later. However, digital cryptography generally "flips coins" by relying on a <a href="pseudo-random_number_generator" title="wikilink">pseudo-random number generator</a>, which is akin to a coin with a fixed pattern of heads and tails known only to the coin's owner. If Victor's coin behaved this way, then again it would be possible for Victor and Peggy to have faked the "experiment".</p>
+<h2 id="definition">Definition</h2>
+
+<p>A zero-knowledge proof must satisfy three properties:</p>
+<ol>
+<li><strong>Completeness</strong>: if the statement is true, the honest verifier (that is, one following the protocol properly) will be convinced of this fact by an honest prover.</li>
+<li><strong>Soundness</strong>: if the statement is false, no cheating prover can convince the honest verifier that it is true, except with some small probability.</li>
+<li><strong>Zero-knowledge</strong>: if the statement is true, no cheating verifier learns anything other than this fact. This is formalized by showing that every cheating verifier has some <em>simulator</em> that, given only the statement to be proved (and no access to the prover), can produce a transcript that "looks like" an interaction between the honest prover and the cheating verifier.</li>
+</ol>
+
+<p>The first two of these are properties of more general <a href="interactive_proof_system" title="wikilink">interactive proof systems</a>. The third is what makes the proof zero-knowledge.</p>
+
+<p>Zero-knowledge proofs are not proofs in the mathematical sense of the term because there is some small probability, the <em>soundness error</em>, that a cheating prover will be able to convince the verifier of a false statement. In other words, zero-knowledge proofs are probabilistic "proofs" rather than deterministic proofs. However, there are techniques to decrease the soundness error to negligibly small values.</p>
+
+<p>A formal definition of zero-knowledge has to use some computational model, the most common one being that of a <a href="Turing_machine" title="wikilink">Turing machine</a>. Let 
+
+<math display="inline" id="Zero-knowledge_proof:0">
+ <semantics>
+  <mi>P</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>P</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P
+  </annotation>
+ </semantics>
+</math>
+
+,
+
+<math display="inline" id="Zero-knowledge_proof:1">
+ <semantics>
+  <mi>V</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>V</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   V
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Zero-knowledge_proof:2">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ be turing machines. An <a href="interactive_proof_system" title="wikilink">interactive proof system</a> with 
+
+<math display="inline" id="Zero-knowledge_proof:3">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mi>P</mi>
+   <mo>,</mo>
+   <mi>V</mi>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open">
+    <ci>P</ci>
+    <ci>V</ci>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (P,V)
+  </annotation>
+ </semantics>
+</math>
+
+ for a language 
+
+<math display="inline" id="Zero-knowledge_proof:4">
+ <semantics>
+  <mi>L</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>L</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L
+  </annotation>
+ </semantics>
+</math>
+
+ is zero-knowledge if for any <a href="probabilistic_polynomial_time" title="wikilink">probabilistic polynomial time</a> (PPT) verifier 
+
+<math display="inline" id="Zero-knowledge_proof:5">
+ <semantics>
+  <mover accent="true">
+   <mi>V</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>V</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{V}
+  </annotation>
+ </semantics>
+</math>
+
+ there exists an expected PPT simulator 
+
+<math display="inline" id="Zero-knowledge_proof:6">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ such that<br/>
+
+
+<math display="inline" id="Zero-knowledge_proof:7">
+ <semantics>
+  <mrow>
+   <mo>∀</mo>
+   <mi>x</mi>
+   <mo>∈</mo>
+   <mi>L</mi>
+   <mo>,</mo>
+   <mi>z</mi>
+   <mo>∈</mo>
+   <msup>
+    <mrow>
+     <mo stretchy="false">{</mo>
+     <mn>0</mn>
+     <mo>,</mo>
+     <mn>1</mn>
+     <mo stretchy="false">}</mo>
+    </mrow>
+    <mo>*</mo>
+   </msup>
+   <mo>,</mo>
+   <msub>
+    <mtext>View</mtext>
+    <mover accent="true">
+     <mi>V</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+   </msub>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>P</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>↔</mo>
+    <mover accent="true">
+     <mi>V</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>z</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">]</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>S</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>z</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="latexml">for-all</csymbol>
+    <csymbol cd="unknown">x</csymbol>
+    <in></in>
+    <csymbol cd="unknown">L</csymbol>
+    <ci>normal-,</ci>
+    <csymbol cd="unknown">z</csymbol>
+    <in></in>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-{</ci>
+      <cn type="integer">0</cn>
+      <ci>normal-,</ci>
+      <cn type="integer">1</cn>
+      <ci>normal-}</ci>
+     </cerror>
+     <times></times>
+    </apply>
+    <ci>normal-,</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <mtext>View</mtext>
+     <apply>
+      <ci>normal-^</ci>
+      <ci>V</ci>
+     </apply>
+    </apply>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <csymbol cd="unknown">P</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-↔</ci>
+     <apply>
+      <ci>normal-^</ci>
+      <ci>V</ci>
+     </apply>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">x</csymbol>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">z</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-]</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">S</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">x</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">z</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \forall x\in L,z\in\{0,1\}^{*},\text{View}_{\hat{V}}[P(x)\leftrightarrow\hat{V%
+}(x,z)]=S(x,z)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The prover 
+
+<math display="inline" id="Zero-knowledge_proof:8">
+ <semantics>
+  <mi>P</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>P</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P
+  </annotation>
+ </semantics>
+</math>
+
+ is modeled as having unlimited computation power (in practice, P usually is a <a href="probabilistic_Turing_machine" title="wikilink">probabilistic Turing machine</a>). Intuitively, the definition states that an interactive proof system 
+
+<math display="inline" id="Zero-knowledge_proof:9">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mi>P</mi>
+   <mo>,</mo>
+   <mi>V</mi>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open">
+    <ci>P</ci>
+    <ci>V</ci>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (P,V)
+  </annotation>
+ </semantics>
+</math>
+
+ is zero- knowledge if for any verifier 
+
+<math display="inline" id="Zero-knowledge_proof:10">
+ <semantics>
+  <mover accent="true">
+   <mi>V</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>V</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{V}
+  </annotation>
+ </semantics>
+</math>
+
+ there exists an efficient simulator 
+
+<math display="inline" id="Zero-knowledge_proof:11">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ that can reproduce the conversation between 
+
+<math display="inline" id="Zero-knowledge_proof:12">
+ <semantics>
+  <mi>P</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>P</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Zero-knowledge_proof:13">
+ <semantics>
+  <mover accent="true">
+   <mi>V</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>V</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{V}
+  </annotation>
+ </semantics>
+</math>
+
+ on any given input. The auxiliary string 
+
+<math display="inline" id="Zero-knowledge_proof:14">
+ <semantics>
+  <mi>z</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>z</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z
+  </annotation>
+ </semantics>
+</math>
+
+ in the definition plays the role of “prior knowledge”. The definition implies that 
+
+<math display="inline" id="Zero-knowledge_proof:15">
+ <semantics>
+  <mover accent="true">
+   <mi>V</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>V</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{V}
+  </annotation>
+ </semantics>
+</math>
+
+ cannot use any prior knowledge string 
+
+<math display="inline" id="Zero-knowledge_proof:16">
+ <semantics>
+  <mi>z</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>z</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z
+  </annotation>
+ </semantics>
+</math>
+
+ to mine information out of its conversation with 
+
+<math display="inline" id="Zero-knowledge_proof:17">
+ <semantics>
+  <mi>P</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>P</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P
+  </annotation>
+ </semantics>
+</math>
+
+ because we demand that if 
+
+<math display="inline" id="Zero-knowledge_proof:18">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ is also given this prior knowledge then it can reproduce the conversation between 
+
+<math display="inline" id="Zero-knowledge_proof:19">
+ <semantics>
+  <mover accent="true">
+   <mi>V</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>V</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{V}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Zero-knowledge_proof:20">
+ <semantics>
+  <mi>P</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>P</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P
+  </annotation>
+ </semantics>
+</math>
+
+ just as before.</p>
+
+<p>The definition given is that of perfect zero-knowledge. Computational zero-knowledge is obtained by requiring that the views of the verifier 
+
+<math display="inline" id="Zero-knowledge_proof:21">
+ <semantics>
+  <mover accent="true">
+   <mi>V</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>V</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{V}
+  </annotation>
+ </semantics>
+</math>
+
+ and the simulator are only <a href="Computational_indistinguishability" title="wikilink">computationally indistinguishable</a>, given the auxiliary string.</p>
+<h2 id="practical-examples">Practical examples</h2>
+<h3 id="discrete-log-of-a-given-value">Discrete Log of a given value</h3>
+
+<p>We can extend these ideas to a more realistic cryptography application. Peggy wants to prove to Victor that she knows the <a href="discrete_logarithm" title="wikilink">discrete log</a> of a given value in a given <a href="group_theory" title="wikilink">group</a>.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> For example, given a value 
+
+<math display="inline" id="Zero-knowledge_proof:22">
+ <semantics>
+  <mi>y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y
+  </annotation>
+ </semantics>
+</math>
+
+, a large <a href="Prime_number" title="wikilink">prime</a> 
+
+<math display="inline" id="Zero-knowledge_proof:23">
+ <semantics>
+  <mi>p</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>p</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p
+  </annotation>
+ </semantics>
+</math>
+
+ and a generator 
+
+<math display="inline" id="Zero-knowledge_proof:24">
+ <semantics>
+  <mi>g</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>g</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g
+  </annotation>
+ </semantics>
+</math>
+
+, she wants to prove that she knows a value 
+
+<math display="inline" id="Zero-knowledge_proof:25">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ such that 
+
+<math display="inline" id="Zero-knowledge_proof:26">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mpadded width="+3.3pt">
+     <msup>
+      <mi>g</mi>
+      <mi>x</mi>
+     </msup>
+    </mpadded>
+    <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+    <mi>p</mi>
+   </mrow>
+   <mo>=</mo>
+   <mi>y</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>g</ci>
+      <ci>x</ci>
+     </apply>
+     <ci>p</ci>
+    </apply>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g^{x}~{}\bmod~{}p=y
+  </annotation>
+ </semantics>
+</math>
+
+, without revealing 
+
+<math display="inline" id="Zero-knowledge_proof:27">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+. This could be used as a proof of identity, in that Peggy could have such knowledge because she chose a random value 
+
+<math display="inline" id="Zero-knowledge_proof:28">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ that she didn't reveal to anyone, computed 
+
+<math display="inline" id="Zero-knowledge_proof:29">
+ <semantics>
+  <mrow>
+   <mi>y</mi>
+   <mo>=</mo>
+   <mrow>
+    <mpadded width="+3.3pt">
+     <msup>
+      <mi>g</mi>
+      <mi>x</mi>
+     </msup>
+    </mpadded>
+    <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+    <mi>p</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>y</ci>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>g</ci>
+      <ci>x</ci>
+     </apply>
+     <ci>p</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y=g^{x}~{}\bmod~{}p
+  </annotation>
+ </semantics>
+</math>
+
+ and distributed the value of 
+
+<math display="inline" id="Zero-knowledge_proof:30">
+ <semantics>
+  <mi>y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y
+  </annotation>
+ </semantics>
+</math>
+
+ to all potential verifiers, such that at a later time, proving knowledge of 
+
+<math display="inline" id="Zero-knowledge_proof:31">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ is equivalent to proving identity as Peggy.</p>
+
+<p>The protocol proceeds as follows: in each round, Peggy generates a random number 
+
+<math display="inline" id="Zero-knowledge_proof:32">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+, computes 
+
+<math display="inline" id="Zero-knowledge_proof:33">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mo>=</mo>
+   <mrow>
+    <mpadded width="+3.3pt">
+     <msup>
+      <mi>g</mi>
+      <mi>r</mi>
+     </msup>
+    </mpadded>
+    <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+    <mi>p</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>C</ci>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>g</ci>
+      <ci>r</ci>
+     </apply>
+     <ci>p</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C=g^{r}~{}\bmod~{}p
+  </annotation>
+ </semantics>
+</math>
+
+ and discloses this to Victor. After receiving 
+
+<math display="inline" id="Zero-knowledge_proof:34">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+, Victor randomly issues one of the following two requests: he either requests that Peggy discloses the value of 
+
+<math display="inline" id="Zero-knowledge_proof:35">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+, or the value of 
+
+<math display="inline" id="Zero-knowledge_proof:36">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>+</mo>
+     <mi>r</mi>
+    </mrow>
+    <mo rspace="5.8pt" stretchy="false">)</mo>
+   </mrow>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>p</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <plus></plus>
+     <ci>x</ci>
+     <ci>r</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>p</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (x+r)~{}\bmod~{}(p-1)
+  </annotation>
+ </semantics>
+</math>
+
+. With either answer, Peggy is only disclosing a random value, so no information is disclosed by a correct execution of one round of the protocol.</p>
+
+<p>Victor can verify either answer; if he requested 
+
+<math display="inline" id="Zero-knowledge_proof:37">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+, he can then compute 
+
+<math display="inline" id="Zero-knowledge_proof:38">
+ <semantics>
+  <mrow>
+   <mpadded width="+3.3pt">
+    <msup>
+     <mi>g</mi>
+     <mi>r</mi>
+    </msup>
+   </mpadded>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mi>p</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>g</ci>
+     <ci>r</ci>
+    </apply>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g^{r}~{}\bmod~{}p
+  </annotation>
+ </semantics>
+</math>
+
+ and verify that it matches 
+
+<math display="inline" id="Zero-knowledge_proof:39">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+. If he requested 
+
+<math display="inline" id="Zero-knowledge_proof:40">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>+</mo>
+     <mi>r</mi>
+    </mrow>
+    <mo rspace="5.8pt" stretchy="false">)</mo>
+   </mrow>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>p</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <plus></plus>
+     <ci>x</ci>
+     <ci>r</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>p</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (x+r)~{}\bmod~{}(p-1)
+  </annotation>
+ </semantics>
+</math>
+
+, he can verify that 
+
+<math display="inline" id="Zero-knowledge_proof:41">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+ is consistent with this, by computing 
+
+<math display="inline" id="Zero-knowledge_proof:42">
+ <semantics>
+  <mrow>
+   <mpadded width="+3.3pt">
+    <msup>
+     <mi>g</mi>
+     <mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>x</mi>
+        <mo>+</mo>
+        <mi>r</mi>
+       </mrow>
+       <mo rspace="5.8pt" stretchy="false">)</mo>
+      </mrow>
+      <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>p</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </msup>
+   </mpadded>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mi>p</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>g</ci>
+     <apply>
+      <csymbol cd="latexml">modulo</csymbol>
+      <apply>
+       <plus></plus>
+       <ci>x</ci>
+       <ci>r</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <ci>p</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g^{(x+r)~{}\bmod~{}(p-1)}~{}\bmod~{}p
+  </annotation>
+ </semantics>
+</math>
+
+ and verifying that it matches 
+
+<math display="inline" id="Zero-knowledge_proof:43">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>C</mi>
+    <mo>⋅</mo>
+    <mpadded width="+3.3pt">
+     <mi>y</mi>
+    </mpadded>
+   </mrow>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mi>p</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <ci>normal-⋅</ci>
+     <ci>C</ci>
+     <ci>y</ci>
+    </apply>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C\cdot y~{}\bmod~{}p
+  </annotation>
+ </semantics>
+</math>
+
+. If Peggy indeed knows the value of 
+
+<math display="inline" id="Zero-knowledge_proof:44">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+, she can respond to either one of Victor's possible challenges.</p>
+
+<p>If Peggy knew or could guess which challenge Victor is going to issue, then she could easily cheat and convince Victor that she knows 
+
+<math display="inline" id="Zero-knowledge_proof:45">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ when she does not: if she knows that Victor is going to request 
+
+<math display="inline" id="Zero-knowledge_proof:46">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+, then she proceeds normally: she picks 
+
+<math display="inline" id="Zero-knowledge_proof:47">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+, computes 
+
+<math display="inline" id="Zero-knowledge_proof:48">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mo>=</mo>
+   <mrow>
+    <mpadded width="+3.3pt">
+     <msup>
+      <mi>g</mi>
+      <mi>r</mi>
+     </msup>
+    </mpadded>
+    <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+    <mi>p</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>C</ci>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>g</ci>
+      <ci>r</ci>
+     </apply>
+     <ci>p</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C=g^{r}~{}\bmod~{}p
+  </annotation>
+ </semantics>
+</math>
+
+ and discloses 
+
+<math display="inline" id="Zero-knowledge_proof:49">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+ to Victor; she will be able to respond to Victor's challenge. On the other hand, if she knows that Victor will request 
+
+<math display="inline" id="Zero-knowledge_proof:50">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>+</mo>
+     <mi>r</mi>
+    </mrow>
+    <mo rspace="5.8pt" stretchy="false">)</mo>
+   </mrow>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>p</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <plus></plus>
+     <ci>x</ci>
+     <ci>r</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>p</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (x+r)~{}\bmod~{}(p-1)
+  </annotation>
+ </semantics>
+</math>
+
+, then she picks a random value 
+
+<math display="inline" id="Zero-knowledge_proof:51">
+ <semantics>
+  <msup>
+   <mi>r</mi>
+   <mo>′</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>r</ci>
+    <ci>normal-′</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+, computes 
+
+<math display="inline" id="Zero-knowledge_proof:52">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>C</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msup>
+      <mi>g</mi>
+      <msup>
+       <mi>r</mi>
+       <mo>′</mo>
+      </msup>
+     </msup>
+     <mo>⋅</mo>
+     <mpadded width="+3.3pt">
+      <msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msup>
+         <mi>g</mi>
+         <mi>x</mi>
+        </msup>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+     </mpadded>
+    </mrow>
+    <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+    <mi>p</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>C</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>g</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>r</ci>
+        <ci>normal-′</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>g</ci>
+        <ci>x</ci>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+     <ci>p</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C^{\prime}=g^{r^{\prime}}\cdot{(g^{x})}^{-1}~{}\bmod~{}p
+  </annotation>
+ </semantics>
+</math>
+
+, and disclose 
+
+<math display="inline" id="Zero-knowledge_proof:53">
+ <semantics>
+  <msup>
+   <mi>C</mi>
+   <mo>′</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>C</ci>
+    <ci>normal-′</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+ to Victor as the value of 
+
+<math display="inline" id="Zero-knowledge_proof:54">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+ that he is expecting. When Victor challenges her to reveal 
+
+<math display="inline" id="Zero-knowledge_proof:55">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>+</mo>
+     <mi>r</mi>
+    </mrow>
+    <mo rspace="5.8pt" stretchy="false">)</mo>
+   </mrow>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>p</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <plus></plus>
+     <ci>x</ci>
+     <ci>r</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>p</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (x+r)~{}\bmod~{}(p-1)
+  </annotation>
+ </semantics>
+</math>
+
+, she reveals 
+
+<math display="inline" id="Zero-knowledge_proof:56">
+ <semantics>
+  <msup>
+   <mi>r</mi>
+   <mo>′</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>r</ci>
+    <ci>normal-′</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+, for which Victor will verify consistency, since he will in turn compute 
+
+<math display="inline" id="Zero-knowledge_proof:57">
+ <semantics>
+  <mrow>
+   <mpadded width="+3.3pt">
+    <msup>
+     <mi>g</mi>
+     <msup>
+      <mi>r</mi>
+      <mo>′</mo>
+     </msup>
+    </msup>
+   </mpadded>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mi>p</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>g</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>r</ci>
+      <ci>normal-′</ci>
+     </apply>
+    </apply>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g^{r^{\prime}}~{}\bmod~{}p
+  </annotation>
+ </semantics>
+</math>
+
+, which matches 
+
+<math display="inline" id="Zero-knowledge_proof:58">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>C</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>⋅</mo>
+   <mi>y</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-⋅</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>C</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C^{\prime}\cdot y
+  </annotation>
+ </semantics>
+</math>
+
+, since Peggy multiplied by the inverse of 
+
+<math display="inline" id="Zero-knowledge_proof:59">
+ <semantics>
+  <mi>y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>However, if in either one of the above scenarios Victor issues a challenge other than the one she was expecting and for which she manufactured the result, then she will be unable to respond to the challenge under the assumption of infeasibility of solving the discrete log for this group. If she picked 
+
+<math display="inline" id="Zero-knowledge_proof:60">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+ and disclosed 
+
+<math display="inline" id="Zero-knowledge_proof:61">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mo>=</mo>
+   <mrow>
+    <mpadded width="+3.3pt">
+     <msup>
+      <mi>g</mi>
+      <mi>r</mi>
+     </msup>
+    </mpadded>
+    <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+    <mi>p</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>C</ci>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>g</ci>
+      <ci>r</ci>
+     </apply>
+     <ci>p</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C=g^{r}~{}\bmod~{}p
+  </annotation>
+ </semantics>
+</math>
+
+, then she will be unable to produce a valid 
+
+<math display="inline" id="Zero-knowledge_proof:62">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>+</mo>
+     <mi>r</mi>
+    </mrow>
+    <mo rspace="5.8pt" stretchy="false">)</mo>
+   </mrow>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>p</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <plus></plus>
+     <ci>x</ci>
+     <ci>r</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>p</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (x+r)~{}\bmod~{}(p-1)
+  </annotation>
+ </semantics>
+</math>
+
+ that would pass Victor's verification, given that she does not know 
+
+<math display="inline" id="Zero-knowledge_proof:63">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+. And if she picked a value 
+
+<math display="inline" id="Zero-knowledge_proof:64">
+ <semantics>
+  <msup>
+   <mi>r</mi>
+   <mo>′</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>r</ci>
+    <ci>normal-′</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r^{\prime}
+  </annotation>
+ </semantics>
+</math>
+
+ that poses as 
+
+<math display="inline" id="Zero-knowledge_proof:65">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>x</mi>
+     <mo>+</mo>
+     <mi>r</mi>
+    </mrow>
+    <mo rspace="5.8pt" stretchy="false">)</mo>
+   </mrow>
+   <mo lspace="2.5pt" rspace="5.8pt">mod</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>p</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">modulo</csymbol>
+    <apply>
+     <plus></plus>
+     <ci>x</ci>
+     <ci>r</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>p</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (x+r)~{}\bmod~{}(p-1)
+  </annotation>
+ </semantics>
+</math>
+
+, then she would have to respond with the discrete log of the value that she disclosed — a value that she obtained through arithmetic with known values, and not by computing a power with a known exponent.</p>
+
+<p>Thus, a cheating prover has a 0.5 probability of successfully cheating in one round. By executing a large enough number of rounds, the probability of a cheating prover succeeding can be made arbitrarily low.</p>
+<h3 id="hamiltonian-cycle-for-a-large-graph">Hamiltonian cycle for a large graph</h3>
+
+<p>In this scenario, Peggy knows a <a href="Hamiltonian_path" title="wikilink">Hamiltonian cycle</a> for a large <a href="Graph_(mathematics)" title="wikilink">graph</a>, <em>G</em>. Victor knows <em>G</em> but not the cycle (e.g., Peggy has generated <em>G</em> and revealed it to him.) Finding a Hamiltonian cycle given a large graph is believed to be computationally infeasible, since its corresponding decision version is known to be <a class="uri" href="NP-complete" title="wikilink">NP-complete</a>. Peggy will prove that she knows the cycle without simply revealing it (perhaps Victor is interested in buying it but wants verification first, or maybe Peggy is the only one who knows this information and is proving her identity to Victor).</p>
+
+<p>To show that Peggy knows this Hamiltonian cycle, she and Victor play several rounds of a game.</p>
+<ul>
+<li>At the beginning of each round, Peggy creates <em>H</em>, a graph which is <a href="graph_isomorphism" title="wikilink">isomorphic</a> to <em>G</em> (i.e. <em>H</em> is just like <em>G</em> except that all the vertices have different names). Since it is trivial to translate a Hamiltonian cycle between isomorphic graphs with known isomorphism, if Peggy knows a Hamiltonian cycle for <em>G</em> she also must know one for <em>H</em>.</li>
+<li>Peggy commits to <em>H</em>. She could do so by using a cryptographic <a href="commitment_scheme" title="wikilink">commitment scheme</a>. Alternatively, she could number the vertices of <em>H</em>, then for each edge of <em>H</em> write a small piece of paper containing the two vertices of the edge and then put these pieces of paper upside down on a table. The purpose of this commitment is that Peggy is not able to change <em>H</em> while at the same time Victor has no information about <em>H</em>.</li>
+<li>Victor then randomly chooses one of two questions to ask Peggy. He can either ask her to show the isomorphism between <em>H</em> and <em>G</em> (see <a href="graph_isomorphism_problem" title="wikilink">graph isomorphism problem</a>), or he can ask her to show a Hamiltonian cycle in <em>H</em>.</li>
+<li>If Peggy is asked to show that the two graphs are isomorphic, she first uncovers all of <em>H</em> (e.g. by turning all pieces of papers that she put on the table) and then provides the vertex translations that map <em>G</em> to <em>H</em>. Victor can verify that they are indeed isomorphic.</li>
+<li>If Peggy is asked to prove that she knows a Hamiltonian cycle in <em>H</em>, she translates her Hamiltonian cycle in <em>G</em> onto <em>H</em> and only uncovers the edges on the Hamiltonian cycle. This is enough for Victor to check that <em>H</em> does indeed contain a Hamiltonian cycle.</li>
+</ul>
+<dl>
+<dt>Completeness:</dt>
+</dl>
+
+<p>If Peggy does know a Hamiltonian cycle in G, she can easily satisfy Victor's demand for either the graph isomorphism producing H from G (which she had committed to in the first step) or a Hamiltonian cycle in H (which she can construct by applying the isomorphism to the cycle in <em>G</em>).</p>
+<dl>
+<dt>Zero-Knowledge:</dt>
+</dl>
+
+<p>Peggy's answers do not reveal the original Hamiltonian cycle in <em>G</em>. Each round, Victor will learn only <em>H</em>'s isomorphism to <em>G</em> or a Hamiltonian cycle in <em>H</em>. He would need both answers for a single <em>H</em> to discover the cycle in <em>G</em>, so the information remains unknown as long as Peggy can generate a distinct <em>H</em> every round. If Peggy does not know of a Hamiltonian Cycle in <em>G</em>, but somehow knew in advance what Victor would ask to see each round then she could cheat. For example, if Peggy knew ahead of time that Victor would ask to see the Hamiltonian Cycle in <em>H</em> then she could generate a Hamiltonian cycle for an unrelated graph. Similarly, if Peggy knew in advance that Victor would ask to see the isomorphism then she could simply generate an isomorphic graph <em>H</em> (in which she also does not know a Hamiltonian Cycle). Victor could simulate the protocol by himself (without Peggy) because he knows what he will ask to see. Therefore, Victor gains no information about the Hamiltonian cycle in <em>G</em> from the information revealed in each round.</p>
+<dl>
+<dt>Soundness:</dt>
+</dl>
+
+<p>If Peggy does not know the information, she can guess which question Victor will ask and generate either a graph isomorphic to <em>G</em> or a Hamiltonian cycle for an unrelated graph, but since she does not know a Hamiltonian cycle for <em>G</em> she cannot do both. With this guesswork, her chance of fooling Victor is 2<sup>−<var>n</var></sup>, where <var>n</var> is the number of rounds. For all realistic purposes, it is infeasibly difficult to defeat a zero knowledge proof with a reasonable number of rounds in this way.</p>
+<h2 id="variants-of-zero-knowledge">Variants of zero-knowledge</h2>
+
+<p>Different variants of zero-knowledge can be defined by formalizing the intuitive concept of what is meant by the output of the simulator "looking like" the execution of the real proof protocol in the following ways:</p>
+<ul>
+<li>We speak of <em>perfect zero-knowledge</em> if the distributions produced by the simulator and the proof protocol are distributed exactly the same. This is for instance the case in the first example above.</li>
+</ul>
+<ul>
+<li><em>Statistical zero-knowledge</em><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> means that the distributions are not necessarily exactly the same, but they are <a href="statistically_close" title="wikilink">statistically close</a>, meaning that their statistical difference is a <a href="negligible_function" title="wikilink">negligible function</a>.</li>
+</ul>
+<ul>
+<li>We speak of <em>computational zero-knowledge</em> if no efficient algorithm can distinguish the two distributions.</li>
+</ul>
+<h2 id="applications">Applications</h2>
+
+<p>Research in zero-knowledge proofs has been motivated by <a class="uri" href="authentication" title="wikilink">authentication</a> systems where one party wants to prove its identity to a second party via some secret information (such as a password) but doesn't want the second party to learn anything about this secret. This is called a "zero-knowledge <a href="proof_of_knowledge" title="wikilink">proof of knowledge</a>". However, a password is typically too small or insufficiently random to be used in many schemes for zero-knowledge proofs of knowledge. A <a href="zero-knowledge_password_proof" title="wikilink">zero-knowledge password proof</a> is a special kind of zero-knowledge proof of knowledge that addresses the limited size of passwords.</p>
+
+<p>One of the most fascinating uses of zero-knowledge proofs within cryptographic protocols is to enforce honest behavior while maintaining privacy. Roughly, the idea is to force a user to prove, using a zero-knowledge proof, that its behavior is correct according to the protocol. Because of soundness, we know that the user must really act honestly in order to be able to provide a valid proof. Because of zero knowledge, we know that the user does not compromise the privacy of its secrets in the process of providing the proof. This application of zero-knowledge proofs was first used in the ground-breaking paper <a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> of <a href="Oded_Goldreich" title="wikilink">Oded Goldreich</a>, <a href="Silvio_Micali" title="wikilink">Silvio Micali</a>, and <a href="Avi_Wigderson" title="wikilink">Avi Wigderson</a> on <a href="secure_multiparty_computation" title="wikilink">secure multiparty computation</a>.</p>
+<h2 id="history-and-results">History and results</h2>
+
+<p>Zero-knowledge proofs were first conceived in 1985 by <a href="Shafi_Goldwasser" title="wikilink">Shafi Goldwasser</a>, <a href="Silvio_Micali" title="wikilink">Silvio Micali</a>, and <a href="Charles_Rackoff" title="wikilink">Charles Rackoff</a> in their paper "The Knowledge Complexity of Interactive Proof-Systems".<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> This paper introduced the <strong>IP</strong> hierarchy of interactive proof systems (<em>see <a href="interactive_proof_system" title="wikilink">interactive proof system</a></em>) and conceived the concept of <em>knowledge complexity</em>, a measurement of the amount of knowledge about the proof transferred from the prover to the verifier. They also gave the first zero-knowledge proof for a concrete problem, that of deciding <a href="quadratic_residue" title="wikilink">quadratic nonresidues</a> mod <em>m</em> (this more or less means that there isn't any number <em>x</em> where 
+
+<math display="inline" id="Zero-knowledge_proof:66">
+ <semantics>
+  <msup>
+   <mi>x</mi>
+   <mn>2</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{2}
+  </annotation>
+ </semantics>
+</math>
+
+ is "equivalent" to some given number). Together with a paper by <a href="László_Babai" title="wikilink">László Babai</a> and <a href="Shlomo_Moran" title="wikilink">Shlomo Moran</a>, this landmark paper invented interactive proof systems, for which all five authors won the first <a href="Gödel_Prize" title="wikilink">Gödel Prize</a> in 1993.</p>
+
+<p>In their own words, Goldwasser, Micali, and Rackoff say:</p>
+<blockquote>
+
+<p>Of particular interest is the case where this additional knowledge is essentially 0 and we show that [it] is possible to interactively prove that a number is quadratic non residue mod <em>m</em> releasing 0 additional knowledge. This is surprising as no efficient algorithm for deciding quadratic residuosity mod <em>m</em> is known when <em>m</em>’s factorization is not given. Moreover, all known <em>NP</em> proofs for this problem exhibit the prime factorization of <em>m</em>. This indicates that adding interaction to the proving process, may decrease the amount of knowledge that must be communicated in order to prove a theorem.</p>
+</blockquote>
+
+<p>The quadratic nonresidue problem has both an <strong><a href="NP_(complexity)" title="wikilink">NP</a></strong> and a <strong><a class="uri" href="co-NP" title="wikilink">co-NP</a></strong> algorithm, and so lies in the intersection of <strong>NP</strong> and <strong>co-NP</strong>. This was also true of several other problems for which zero-knowledge proofs were subsequently discovered, such as an unpublished proof system by Oded Goldreich verifying that a two-prime modulus is not a <a href="Blum_integer" title="wikilink">Blum integer</a>.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+
+<p><a href="Oded_Goldreich" title="wikilink">Oded Goldreich</a>, <a href="Silvio_Micali" title="wikilink">Silvio Micali</a>, and <a href="Avi_Wigderson" title="wikilink">Avi Wigderson</a> took this one step further, showing that, assuming the existence of unbreakable encryption, one can create a zero-knowledge proof system for the NP-complete <a href="graph_coloring_problem" title="wikilink">graph coloring problem</a> with three colors. Since every problem in <strong>NP</strong> can be efficiently reduced to this problem, this means that, under this assumption, all problems in <strong>NP</strong> have zero-knowledge proofs.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> The reason for the assumption is that, as in the above example, their protocols require encryption. A commonly cited sufficient condition for the existence of unbreakable encryption is the existence of <a href="one-way_function" title="wikilink">one-way functions</a>, but it is conceivable that some physical means might also achieve it.</p>
+
+<p>On top of this, they also showed that the <a href="graph_nonisomorphism_problem" title="wikilink">graph nonisomorphism problem</a>, the <a href="complement_(complexity)" title="wikilink">complement</a> of the <a href="graph_isomorphism_problem" title="wikilink">graph isomorphism problem</a>, has a zero-knowledge proof. This problem is in <strong>co-NP</strong>, but is not currently known to be in either <strong>NP</strong> or any practical class. More generally, Goldreich, Goldwasser et al. would go on to show that, also assuming unbreakable encryption, there are zero-knowledge proofs for <em>all</em> problems in <strong>IP</strong>=<strong>PSPACE</strong>, or in other words, anything that can be proved by an interactive proof system can be proved with zero knowledge.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>Not liking to make unnecessary assumptions, many theorists sought a way to eliminate the necessity of <a href="one_way_function" title="wikilink">one way functions</a>. One way this was done was with <em>multi-prover interactive proof systems</em> (see <a href="interactive_proof_system" title="wikilink">interactive proof system</a>), which have multiple independent provers instead of only one, allowing the verifier to "cross-examine" the provers in isolation to avoid being misled. It can be shown that, without any intractability assumptions, all languages in <strong>NP</strong> have zero-knowledge proofs in such a system.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+
+<p>It turns out that in an Internet-like setting, where multiple protocols may be executed concurrently, building zero-knowledge proofs is more challenging. The line of research investigating concurrent zero-knowledge proofs was initiated by the work of <a href="Cynthia_Dwork" title="wikilink">Dwork</a>, <a href="Moni_Naor" title="wikilink">Naor</a>, and <a href="Amit_Sahai" title="wikilink">Sahai</a>.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> One particular development along these lines has been the development of <a href="witness-indistinguishable_proof" title="wikilink">witness-indistinguishable proof</a> protocols. The property of witness-indistinguishability is related to that of zero-knowledge, yet witness-indistinguishable protocols do not suffer from the same problems of concurrent execution.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+
+<p>Another variant of zero-knowledge proofs are <a href="non-interactive_zero-knowledge_proof" title="wikilink">non-interactive zero-knowledge proofs</a>. Blum, Feldman, and Micali showed that a common random string shared between the prover and the verifier is enough to achieve computational zero-knowledge without requiring interaction.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a><a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Arrow_information_paradox" title="wikilink">Arrow information paradox</a></li>
+<li><a href="Cryptographic_protocol" title="wikilink">Cryptographic protocol</a></li>
+<li><a href="Feige–Fiat–Shamir_identification_scheme" title="wikilink">Feige–Fiat–Shamir identification scheme</a></li>
+<li><a href="Proof_of_knowledge" title="wikilink">Proof of knowledge</a></li>
+<li><a href="Topics_in_cryptography" title="wikilink">Topics in cryptography</a></li>
+<li><a href="Witness-indistinguishable_proof" title="wikilink">Witness-indistinguishable proof</a></li>
+<li><a href="Zero-knowledge_password_proof" title="wikilink">Zero-knowledge password proof</a></li>
+<li><a href="Non-interactive_zero-knowledge_proof" title="wikilink">Non-interactive zero-knowledge proof</a></li>
+</ul>
+<h2 id="notes">Notes</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.wisdom.weizmann.ac.il/~naor/PUZZLES/waldo.html">Applied Kid Cryptography</a> – A simple explanation of zero-knowledge proofs using <a href="Where's_Waldo?" title="wikilink">Where's Waldo?</a> as an example</li>
+<li><a href="http://www.austinmohr.com/work/files/zkp.pdf">A gentle introduction to zero-knowledge proofs with applications to cryptography</a></li>
+<li><a href="http://www.wisdom.weizmann.ac.il/~oded/gmw1.html">How to construct zero-knowledge proof systems for NP</a></li>
+<li><a href="http://www.cs.ucsd.edu/users/daniele/papers/GMR.html">An efficient non-interactive statistical zero-knowledge proof system for quasi-safe prime products</a></li>
+<li><a href="http://www.wisdom.weizmann.ac.il/~oded/zk-tut02.html">A tutorial by Oded Goldreich on zero knowledge proofs</a></li>
+<li><a href="Salil_Vadhan" title="wikilink">Salil Vadhan</a>, [<a class="uri" href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.70.4056&amp;rep">http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.70.4056&amp;rep;</a>;=rep1&amp;type;=pdf Vadhan's phd thesis on statistical zero knowledge]</li>
+<li>Theory of Computing Course, Cornell University 2009, <a href="http://www.cs.cornell.edu/courses/cs6810/2009sp/scribe/lecture18.pdf">Zero knowledge proofs</a></li>
+<li><a href="http://twit.tv/show/security-now/363">Ali Baba's Cave as told by Steve Gibson on TWiT show Security Now Episode 363 Wednesday August 1, 2012</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Cryptographic_protocols" title="wikilink">Category:Cryptographic protocols</a> <a href="Category:Theory_of_cryptography" title="wikilink">Category:Theory of cryptography</a> <a href="Category:Zero-knowledge_protocols" title="wikilink">Category:Zero-knowledge protocols</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+<li id="fn14"></li>
+<li id="fn15"></li>
+</ol>
+</section>
+</body>
+</html>

@@ -12,7 +12,7 @@ Rochester Institute of Technology, Rochester, NY, USA
 ---------------------------------------------
 
 
-##Overview
+## Overview
 
 This is the 'Wikipedia' corpus generated for the NTCIR-12 Mathematical Information Retrieval (MathIR) task being held as part of the NTCIR-12 (2016) conference in Tokyo ( http://ntcir-math.nii.ac.jp/introduction/ ).
 
@@ -34,7 +34,7 @@ The collection is broken up into 'math' articles containing \<math\> tags, and '
 Details of how the corpus data is stored, how to decompress archive files, the formula representation, and information about how the corpus was created are provided below. 
 
 ---
-##Wikipedia Data and License
+## Wikipedia Data and License
 
 The Wikipedia articles included in this collection are being provided under a Creative Commons BY-SA license (http://creativecommons.org/licenses/by-sa/3.0/), as required by the Wikimedia foundation (https://en.wikipedia.org/wiki/Wikipedia:Copyrights#Reusers.27_rights_and_obligations). 
 
@@ -58,7 +58,7 @@ Some additional book-keeping data about the archive contents and conversion proc
 
 
 
-##Decompressing Archive Files
+## Decompressing Archive Files
 
 Articles are stored in .tar.bz2 archives containing around 2000 articles each. Archives can be expanded using the 'tar' command, e.g. on our system:
 

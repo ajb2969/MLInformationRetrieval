@@ -1,0 +1,3826 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1693">Approximate Bayesian computation</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Approximate Bayesian computation</h1>
+<hr/>
+
+<p><strong>Approximate Bayesian computation (ABC)</strong> constitutes a class of <a href="Computational_science" title="wikilink">computational methods</a> rooted in <a href="Bayesian_statistics" title="wikilink">Bayesian statistics</a>. In all model-based <a href="statistical_inference" title="wikilink">statistical inference</a>, the <a href="likelihood" title="wikilink">likelihood function</a> is of central importance, since it expresses the probability of the observed data under a particular <a href="statistical_model" title="wikilink">statistical model</a>, and thus quantifies the support data lend to particular values of parameters and to choices among different models. For simple models, an analytical formula for the likelihood function can typically be derived. However, for more complex models, an analytical formula might be elusive or the likelihood function might be computationally very costly to evaluate.</p>
+
+<p>ABC methods bypass the evaluation of the likelihood function. In this way, ABC methods widen the realm of models for which statistical inference can be considered. ABC methods are mathematically well-founded, but they inevitably make assumptions and approximations whose impact needs to be carefully assessed. Furthermore, the wider application domain of ABC exacerbates the challenges of <a href="Estimation_Theory" title="wikilink">parameter estimation</a> and <a href="model_selection" title="wikilink">model selection</a>.</p>
+
+<p>ABC has rapidly gained popularity over the last years and in particular for the analysis of complex problems arising in <a href="Biology" title="wikilink">biological sciences</a>, e.g. in <a href="population_genetics" title="wikilink">population genetics</a>, <a class="uri" href="ecology" title="wikilink">ecology</a>, <a class="uri" href="epidemiology" title="wikilink">epidemiology</a>, and <a href="systems_biology" title="wikilink">systems biology</a>.</p>
+<h2 id="history">History</h2>
+
+<p>The first ABC-related ideas date back to the 1980s. <a href="Donald_Rubin" title="wikilink">Donald Rubin</a>, when discussing the interpretation of Bayesian statements in 1984,<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> described a hypothetical sampling mechanism that yields a sample from the <a href="Posterior_probability" title="wikilink">posterior distribution</a>. This scheme was more of a conceptual <a href="thought_experiment" title="wikilink">thought experiment</a> to demonstrate what type of manipulations are done when inferring the posterior distributions of parameters. The description of the sampling mechanism coincides exactly with that of the <a href="#The_ABC_rejection_algorithm" title="wikilink">ABC-rejection scheme</a>, and this article can be considered to be the first to describe approximate Bayesian computation. However, a two-stage <a class="uri" href="quincunx" title="wikilink">quincunx</a> was constructed by <a href="Francis_Galton" title="wikilink">Francis Galton</a> in the late 1800s that can be seen as a physical implementation of <a href="#The_ABC_rejection_algorithm" title="wikilink">ABC-rejection scheme</a> for a single unknown (parameter) and a single observation - see figure 5 in <a href="http://dx.doi.org/10.1111/j.1467-985X.2010.00643.x">S. Stigler 2010</a>. Another prescient point was made by Rubin when he argued that in Bayesian inference, applied statisticians should not settle for analytically tractable models only, but instead consider computational methods that allow them to estimate the posterior distribution of interest. This way, a wider range of models can be considered. These arguments are particularly relevant in the context of ABC.</p>
+
+<p>In 1984, <a href="Peter_Diggle" title="wikilink">Peter Diggle</a> and Richard Gratton<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> suggested using a systematic simulation scheme to approximate the likelihood function in situations where its analytic form is <a href="Intractability_(complexity)" title="wikilink">intractable</a>. Their method was based on defining a grid in the parameter space and using it to approximate the likelihood by running several simulations for each grid point. The approximation was then improved by applying smoothing techniques to the outcomes of the simulations. While the idea of using simulation for hypothesis testing was not new,<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a><a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> Diggle and Gratton seemingly introduced the first procedure using simulation to do statistical inference under a circumstance where the likelihood is intractable. Importance sampling methods were given by Keith O'Rourke <a href="http://andrewgelman.com/movabletype/mlm/ThesisReprint.pdf?8b0eec">page 19, thesis</a> so that the grid could in principle be replaced by a single point to approximate the full likelihood surface.</p>
+
+<p>Although Diggle and Gratton’s approach had opened a new frontier, their method was not yet exactly identical to what is now known as ABC, as it aimed at approximating the likelihood rather than the posterior distribution. An article of <a href="Simon_Tavaré" title="wikilink">Simon Tavaré</a> <em>et al.</em><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> was first to propose an ABC algorithm for posterior inference. In their seminal work, inference about the genealogy of DNA sequence data was considered, and in particular the problem of deciding the posterior distribution of the time to the <a href="most_recent_common_ancestor" title="wikilink">most recent common ancestor</a> of the sampled individuals. Such inference is analytically intractable for many demographic models, but the authors presented ways of simulating coalescent trees under the putative models. A sample from the posterior of model parameters was obtained by accepting/rejecting proposals based on comparing the number of segregating sites in the synthetic and real data. This work was followed by an applied study on modeling the variation in human Y chromosome by Jonathan K. Pritchard <em>et al.</em><a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> using the ABC method. Finally, the term Approximate Bayesian Computation was established by Mark Beaumont <em>et al.</em>,<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> extending further the ABC methodology and discussing the suitability of the ABC-approach more specifically for problems in population genetics. Since then, ABC has spread to applications outside population genetics, such as systems biology, epidemiology, or <a class="uri" href="phylogeography" title="wikilink">phylogeography</a>.</p>
+<h2 id="method">Method</h2>
+<h3 id="motivation">Motivation</h3>
+
+<p>A common incarnation of <a href="Bayes'_theorem" title="wikilink">Bayes’ theorem</a> relates the <a href="conditional_probability" title="wikilink">conditional probability</a> (or density) of a particular parameter value 
+
+<math display="inline" id="Approximate_Bayesian_computation:0">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ given data 
+
+<math display="inline" id="Approximate_Bayesian_computation:1">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ to the <a class="uri" href="probability" title="wikilink">probability</a> of 
+
+<math display="inline" id="Approximate_Bayesian_computation:2">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ given 
+
+<math display="inline" id="Approximate_Bayesian_computation:3">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ by the rule:</p>
+
+<p>
+
+<math display="block" id="Approximate_Bayesian_computation:4">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>D</mi>
+      <mo stretchy="false">|</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>θ</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>D</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">D</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <divide></divide>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <csymbol cd="unknown">p</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">D</csymbol>
+       <ci>normal-|</ci>
+       <csymbol cd="unknown">θ</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+      <csymbol cd="unknown">p</csymbol>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <ci>normal-(</ci>
+       <csymbol cd="unknown">θ</csymbol>
+       <ci>normal-)</ci>
+      </cerror>
+     </cerror>
+     <apply>
+      <times></times>
+      <ci>p</ci>
+      <ci>D</ci>
+     </apply>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|D)=\frac{p(D|\theta)p(\theta)}{p(D)}
+  </annotation>
+ </semantics>
+</math>
+
+,</p>
+
+<p>where 
+
+<math display="inline" id="Approximate_Bayesian_computation:5">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">D</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|D)
+  </annotation>
+ </semantics>
+</math>
+
+ denotes the posterior, 
+
+<math display="inline" id="Approximate_Bayesian_computation:6">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">D</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(D|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+ the likelihood, 
+
+<math display="inline" id="Approximate_Bayesian_computation:7">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>θ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta)
+  </annotation>
+ </semantics>
+</math>
+
+ the prior, and 
+
+<math display="inline" id="Approximate_Bayesian_computation:8">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(D)
+  </annotation>
+ </semantics>
+</math>
+
+ the evidence (also referred to as the <a href="marginal_likelihood" title="wikilink">marginal likelihood</a> or the prior predictive probability of the data).</p>
+
+<p>The prior represents beliefs about 
+
+<math display="inline" id="Approximate_Bayesian_computation:9">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ before 
+
+<math display="inline" id="Approximate_Bayesian_computation:10">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ is available, and it is often specified by choosing a particular distribution among a set of well-known and tractable families of distributions, such that both the evaluation of prior probabilities and random generation of values of 
+
+<math display="inline" id="Approximate_Bayesian_computation:11">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ are relatively straightforward. For certain kinds of models, it is more pragmatic to specify the prior 
+
+<math display="inline" id="Approximate_Bayesian_computation:12">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>θ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta)
+  </annotation>
+ </semantics>
+</math>
+
+ using a factorization of the joint distribution of all the elements of 
+
+<math display="inline" id="Approximate_Bayesian_computation:13">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ in terms of a sequence of their conditional distributions. If one is only interested in the relative posterior plausibilities of different values of 
+
+<math display="inline" id="Approximate_Bayesian_computation:14">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+, the evidence 
+
+<math display="inline" id="Approximate_Bayesian_computation:15">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(D)
+  </annotation>
+ </semantics>
+</math>
+
+ can be ignored, as it constitutes a <a href="Normalizing_constant" title="wikilink">normalising constant</a>, which cancels for any ratio of posterior probabilities. It remains, however, necessary to evaluate the likelihood 
+
+<math display="inline" id="Approximate_Bayesian_computation:16">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">|</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">D</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(D|\theta)
+  </annotation>
+ </semantics>
+</math>
+
+ and the prior 
+
+<math display="inline" id="Approximate_Bayesian_computation:17">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>θ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta)
+  </annotation>
+ </semantics>
+</math>
+
+. For numerous applications, it is <a href="computationally_expensive" title="wikilink">computationally expensive</a>, or even completely infeasible, to evaluate the likelihood,<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> which motivates the use of ABC to circumvent this issue.</p>
+<h3 id="the-abc-rejection-algorithm">The ABC rejection algorithm</h3>
+
+<p>All ABC based methods approximate the likelihood function by simulations, the outcomes of which are compared with the observed data.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a><a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a><a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> More specifically, with the ABC rejection algorithm—the most basic form of ABC—a set of parameter points is first sampled from the prior distribution. Given a sampled parameter point 
+
+<math display="inline" id="Approximate_Bayesian_computation:18">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+, a data set 
+
+<math display="inline" id="Approximate_Bayesian_computation:19">
+ <semantics>
+  <mover accent="true">
+   <mi>D</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{D}
+  </annotation>
+ </semantics>
+</math>
+
+ is then simulated under the statistical model 
+
+<math display="inline" id="Approximate_Bayesian_computation:20">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ specified by 
+
+<math display="inline" id="Approximate_Bayesian_computation:21">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+. If the generated 
+
+<math display="inline" id="Approximate_Bayesian_computation:22">
+ <semantics>
+  <mover accent="true">
+   <mi>D</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{D}
+  </annotation>
+ </semantics>
+</math>
+
+ is too different from the observed data 
+
+<math display="inline" id="Approximate_Bayesian_computation:23">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+, the sampled parameter value is discarded. In precise terms, 
+
+<math display="inline" id="Approximate_Bayesian_computation:24">
+ <semantics>
+  <mover accent="true">
+   <mi>D</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{D}
+  </annotation>
+ </semantics>
+</math>
+
+ is accepted with tolerance 
+
+<math display="inline" id="Approximate_Bayesian_computation:25">
+ <semantics>
+  <mrow>
+   <mi>ϵ</mi>
+   <mo>≥</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <geq></geq>
+    <ci>ϵ</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon\geq 0
+  </annotation>
+ </semantics>
+</math>
+
+ if:</p>
+
+<p>
+
+<math display="block" id="Approximate_Bayesian_computation:26">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>ρ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mover accent="true">
+      <mi>D</mi>
+      <mo stretchy="false">^</mo>
+     </mover>
+     <mo>,</mo>
+     <mi>D</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>≤</mo>
+   <mi>ϵ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <ci>ρ</ci>
+     <interval closure="open">
+      <apply>
+       <ci>normal-^</ci>
+       <ci>D</ci>
+      </apply>
+      <ci>D</ci>
+     </interval>
+    </apply>
+    <ci>ϵ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \rho(\hat{D},D)\leq\epsilon
+  </annotation>
+ </semantics>
+</math>
+
+,</p>
+
+<p>where the distance measure 
+
+<math display="inline" id="Approximate_Bayesian_computation:27">
+ <semantics>
+  <mrow>
+   <mi>ρ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mover accent="true">
+     <mi>D</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+    <mo>,</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>ρ</ci>
+    <interval closure="open">
+     <apply>
+      <ci>normal-^</ci>
+      <ci>D</ci>
+     </apply>
+     <ci>D</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \rho(\hat{D},D)
+  </annotation>
+ </semantics>
+</math>
+
+ determines the level of discrepancy between 
+
+<math display="inline" id="Approximate_Bayesian_computation:28">
+ <semantics>
+  <mover accent="true">
+   <mi>D</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{D}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:29">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ based on a given <a href="Metric_(mathematics)" title="wikilink">metric</a> (e.g., the <a href="Euclidean_distance" title="wikilink">Euclidean distance</a>). A strictly positive tolerance is usually necessary, since the probability that the simulation outcome coincides exactly with the data (event 
+
+<math display="inline" id="Approximate_Bayesian_computation:30">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>D</mi>
+    <mo stretchy="false">^</mo>
+   </mover>
+   <mo>=</mo>
+   <mi>D</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-^</ci>
+     <ci>D</ci>
+    </apply>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{D}=D
+  </annotation>
+ </semantics>
+</math>
+
+) is negligible for all but trivial applications of ABC, which would in practice lead to rejection of nearly all sampled parameter points. The outcome of the ABC rejection algorithm is a sample of parameter values approximately distributed according to the desired posterior distribution, and, crucially, obtained without the need of explicitly evaluating the likelihood function (<a href="#Fig-1" title="wikilink">Figure 1</a>).</p>
+<figure><b>(Figure)</b>
+<figcaption>Figure 1. Parameter Estimation by Approximate Bayesian Computation: a conceptual overview</figcaption>
+</figure>
+<h3 id="summary-statistics">Summary statistics</h3>
+
+<p>The probability of generating a data set 
+
+<math display="inline" id="Approximate_Bayesian_computation:31">
+ <semantics>
+  <mover accent="true">
+   <mi>D</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{D}
+  </annotation>
+ </semantics>
+</math>
+
+ with a small distance to 
+
+<math display="inline" id="Approximate_Bayesian_computation:32">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ typically decreases as the dimensionality of the data increases. This leads to a substantial decrease in the computational efficiency of the above basic ABC rejection algorithm. A common approach to lessen this problem is to replace 
+
+<math display="inline" id="Approximate_Bayesian_computation:33">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ with a set of lower-dimensional <a href="summary_statistics" title="wikilink">summary statistics</a> 
+
+<math display="inline" id="Approximate_Bayesian_computation:34">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>S</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S(D)
+  </annotation>
+ </semantics>
+</math>
+
+, which are selected to capture the relevant information in 
+
+<math display="inline" id="Approximate_Bayesian_computation:35">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+. The acceptance criterion in ABC rejection algorithm becomes:</p>
+
+<p>
+
+<math display="block" id="Approximate_Bayesian_computation:36">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>ρ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>S</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mover accent="true">
+        <mi>D</mi>
+        <mo stretchy="false">^</mo>
+       </mover>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>,</mo>
+     <mrow>
+      <mi>S</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>D</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>≤</mo>
+   <mi>ϵ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <apply>
+     <times></times>
+     <ci>ρ</ci>
+     <interval closure="open">
+      <apply>
+       <times></times>
+       <ci>S</ci>
+       <apply>
+        <ci>normal-^</ci>
+        <ci>D</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>S</ci>
+       <ci>D</ci>
+      </apply>
+     </interval>
+    </apply>
+    <ci>ϵ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \rho(S(\hat{D}),S(D))\leq\epsilon
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>If the summary statistics are <a href="Sufficient_statistic" title="wikilink">sufficient</a> with respect to the model parameters 
+
+<math display="inline" id="Approximate_Bayesian_computation:37">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+, the efficiency increase obtained in this way does not introduce any error.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> Indeed, by definition, sufficiency implies that all information in 
+
+<math display="inline" id="Approximate_Bayesian_computation:38">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ about 
+
+<math display="inline" id="Approximate_Bayesian_computation:39">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ is captured by 
+
+<math display="inline" id="Approximate_Bayesian_computation:40">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>S</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S(D)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>As <a href="#Choice_and_sufficiency_of_summary_statistics" title="wikilink">elaborated below</a>, it is typically impossible, outside the <a href="Exponential_family" title="wikilink">exponential family of distributions</a>, to identify a finite-dimensional set of sufficient statistics. Nevertheless, informative, but possibly non-sufficient, summary statistics are often used in applications where inference is performed with ABC methods.</p>
+<h2 id="example">Example</h2>
+<figure><b>(Figure)</b>
+<figcaption> Figure 2. A dynamic bistable hidden Markov model.</figcaption>
+</figure>
+
+<p>An illustrative example is a <a href="Bistability" title="wikilink">bistable</a> system that can be characterized by a <a href="Hidden_Markov_model" title="wikilink">hidden Markov model (HMM)</a> subject to measurement noise (<a href="#Fig-2" title="wikilink">Figure 2</a>). Such models are employed for many biological systems: they have for example been used in development, <a href="cell_signaling" title="wikilink">cell signaling</a>, <a class="uri" href="activation" title="wikilink">activation</a>/deactivation, logical processing and <a href="non-equilibrium_thermodynamics" title="wikilink">non-equilibrium thermodynamics</a>. For instance, the behavior of the <a href="Sonic_hedgehog" title="wikilink">Sonic Hedgehog</a> (Shh) transcription factor in <em><a href="Drosophila_melanogaster" title="wikilink">Drosophila melanogaster</a></em> can be modeled with a HMM.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> The (biological) dynamical model consists of two states: A and B. If the probability of a transition from one state to the other is defined as 
+
+<math display="inline" id="Approximate_Bayesian_computation:41">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ in both directions, the probability to remain in the same state at each time step is 1-
+
+<math display="inline" id="Approximate_Bayesian_computation:42">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+. The probability to measure the state correctly is 
+
+<math display="inline" id="Approximate_Bayesian_computation:43">
+ <semantics>
+  <mi>γ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>γ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma
+  </annotation>
+ </semantics>
+</math>
+
+ (conversely, the probability of an incorrect measurement is 1-
+
+<math display="inline" id="Approximate_Bayesian_computation:44">
+ <semantics>
+  <mi>γ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>γ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma
+  </annotation>
+ </semantics>
+</math>
+
+).</p>
+
+<p>Due to the conditional dependencies between states at different time points, calculation of the likelihood of time series data is somewhat tedious, which illustrates the motivation to use ABC. A computational issue for the basic ABC is the large dimensionality of the data in an application like this. This can be reduced using the summary statistic S, which is the frequency of switches between the two states. As a distance measure 
+
+<math display="inline" id="Approximate_Bayesian_computation:45">
+ <semantics>
+  <mrow>
+   <mi>ρ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mo>⋅</mo>
+    <mo>,</mo>
+    <mo>⋅</mo>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>ρ</ci>
+    <interval closure="open">
+     <ci>normal-⋅</ci>
+     <ci>normal-⋅</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \rho(\cdot,\cdot)
+  </annotation>
+ </semantics>
+</math>
+
+, the absolute difference is used, combined with a tolerance 
+
+<math display="inline" id="Approximate_Bayesian_computation:46">
+ <semantics>
+  <mrow>
+   <mi>ϵ</mi>
+   <mo>=</mo>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>ϵ</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon=2
+  </annotation>
+ </semantics>
+</math>
+
+. The posterior inference about the parameter 
+
+<math display="inline" id="Approximate_Bayesian_computation:47">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ can be done following the five steps presented in <a href="#Fig-1" title="wikilink">Figure 1</a>:</p>
+
+<p><strong>Step 1:</strong> Assume that the observed data are the state sequence AAAABAABBAAAAAABAAAA, which was generated using 
+
+<math display="inline" id="Approximate_Bayesian_computation:48">
+ <semantics>
+  <mrow>
+   <mi>θ</mi>
+   <mo>=</mo>
+   <mn>0.25</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>θ</ci>
+    <cn type="float">0.25</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta=0.25
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:49">
+ <semantics>
+  <mrow>
+   <mi>γ</mi>
+   <mo>=</mo>
+   <mn>0.8</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>γ</ci>
+    <cn type="float">0.8</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma=0.8
+  </annotation>
+ </semantics>
+</math>
+
+. The associated summary statistic, the number of switches between the states in the experimental data, is 
+
+<math display="inline" id="Approximate_Bayesian_computation:50">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>ω</mi>
+    <mi>E</mi>
+   </msub>
+   <mo>=</mo>
+   <mn>6</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>ω</ci>
+     <ci>E</ci>
+    </apply>
+    <cn type="integer">6</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \omega_{E}=6
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p><strong>Step 2:</strong> Assuming nothing is known about 
+
+<math display="inline" id="Approximate_Bayesian_computation:51">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+, a uniform prior in the interval 
+
+<math display="inline" id="Approximate_Bayesian_computation:52">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">[</mo>
+   <mn>0</mn>
+   <mo>,</mo>
+   <mn>1</mn>
+   <mo stretchy="false">]</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="closed">
+    <cn type="integer">0</cn>
+    <cn type="integer">1</cn>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [0,1]
+  </annotation>
+ </semantics>
+</math>
+
+ is employed. The parameter 
+
+<math display="inline" id="Approximate_Bayesian_computation:53">
+ <semantics>
+  <mi>γ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>γ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma
+  </annotation>
+ </semantics>
+</math>
+
+ is assumed to be known and fixed to the data-generating value (
+
+<math display="inline" id="Approximate_Bayesian_computation:54">
+ <semantics>
+  <mrow>
+   <mi>γ</mi>
+   <mo>=</mo>
+   <mn>0.8</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>γ</ci>
+    <cn type="float">0.8</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma=0.8
+  </annotation>
+ </semantics>
+</math>
+
+), but could in general also be estimated from the observations. A number <em>n</em> of parameter points are drawn from the prior, and the model is simulated for each of the parameter points 
+
+<math display="inline" id="Approximate_Bayesian_computation:55">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>θ</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>,</mo>
+     <mi>i</mi>
+    </mrow>
+    <mo>=</mo>
+    <mn>1</mn>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mi>n</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>θ</ci>
+       <ci>i</ci>
+      </apply>
+      <ci>i</ci>
+     </list>
+     <cn type="integer">1</cn>
+    </apply>
+    <list>
+     <ci>normal-…</ci>
+     <ci>n</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{i},i=1,\ldots,n
+  </annotation>
+ </semantics>
+</math>
+
+, which results in 
+
+<math display="inline" id="Approximate_Bayesian_computation:56">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ sequences of simulated data. In this example, <em>n</em>=5, with each drawn parameter and simulated dataset recorded in <a href="#table1" title="wikilink">Table 1, column 2-3</a>. In practice, <em>n</em> would need to be much larger to obtain an appropriate approximation.</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Table 1: Example of ABC rejection algorithm</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>i</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>1</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>3</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>4</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>5</p></td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Step 3:</strong> The summary statistic is being computed for each sequence of simulated data, 
+
+<math display="inline" id="Approximate_Bayesian_computation:57">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>ω</mi>
+      <mrow>
+       <mi>S</mi>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+     </msub>
+     <mo>,</mo>
+     <mi>i</mi>
+    </mrow>
+    <mo>=</mo>
+    <mn>1</mn>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mi>n</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ω</ci>
+       <list>
+        <ci>S</ci>
+        <ci>i</ci>
+       </list>
+      </apply>
+      <ci>i</ci>
+     </list>
+     <cn type="integer">1</cn>
+    </apply>
+    <list>
+     <ci>normal-…</ci>
+     <ci>n</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \omega_{S,i},i=1,\ldots,n
+  </annotation>
+ </semantics>
+</math>
+
+ (<a href="#table1" title="wikilink">Table 1, column 4</a>).</p>
+
+<p><strong>Step 4:</strong> The distance between the observed and simulated transition frequencies 
+
+<math display="inline" id="Approximate_Bayesian_computation:58">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>ρ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>ω</mi>
+      <mrow>
+       <mi>S</mi>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>ω</mi>
+      <mi>E</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <mrow>
+     <msub>
+      <mi>ω</mi>
+      <mrow>
+       <mi>S</mi>
+       <mo>,</mo>
+       <mi>i</mi>
+      </mrow>
+     </msub>
+     <mo>-</mo>
+     <msub>
+      <mi>ω</mi>
+      <mi>E</mi>
+     </msub>
+    </mrow>
+    <mo stretchy="false">|</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>ρ</ci>
+     <interval closure="open">
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ω</ci>
+       <list>
+        <ci>S</ci>
+        <ci>i</ci>
+       </list>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ω</ci>
+       <ci>E</ci>
+      </apply>
+     </interval>
+    </apply>
+    <apply>
+     <abs></abs>
+     <apply>
+      <minus></minus>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ω</ci>
+       <list>
+        <ci>S</ci>
+        <ci>i</ci>
+       </list>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>ω</ci>
+       <ci>E</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \rho(\omega_{S,i},\omega_{E})=|\omega_{S,i}-\omega_{E}|
+  </annotation>
+ </semantics>
+</math>
+
+ is computed for all parameter points (<a href="#table1" title="wikilink">Table 1, column 5</a>). Parameter points for which the distance is smaller than or equal to 
+
+<math display="inline" id="Approximate_Bayesian_computation:59">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ are accepted as approximate samples from the posterior (<a href="#table1" title="wikilink">Table 1, column 6</a>).</p>
+<figure><b>(Figure)</b>
+<figcaption> Figure 3. Posterior of 
+
+<math display="inline" id="Approximate_Bayesian_computation:60">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ obtained in the example (red), compared with the true posterior distribution (black) and ABC simulations with large <em>n</em>. The use of the insufficient summary statistic 
+
+<math display="inline" id="Approximate_Bayesian_computation:61">
+ <semantics>
+  <mi>ω</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ω</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \omega
+  </annotation>
+ </semantics>
+</math>
+
+ introduces a bias, even when requiring 
+
+<math display="inline" id="Approximate_Bayesian_computation:62">
+ <semantics>
+  <mrow>
+   <mi>ϵ</mi>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>ϵ</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon=0
+  </annotation>
+ </semantics>
+</math>
+
+ (light green).</figcaption>
+</figure>
+
+<p><strong>Step 5:</strong> The posterior distribution is approximated with the accepted parameter points. The posterior distribution should have a non-negligible probability for parameter values in a region around the true value of 
+
+<math display="inline" id="Approximate_Bayesian_computation:63">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ in the system, if the data are sufficiently informative. In this example, the posterior probability mass is evenly split between the values 0.08 and 0.43.</p>
+
+<p><a href="#Fig-3" title="wikilink">Figure 3</a> shows the posterior probabilities obtained by ABC and a large <em>n</em> using either the summary statistic combined with (
+
+<math display="inline" id="Approximate_Bayesian_computation:64">
+ <semantics>
+  <mrow>
+   <mi>ϵ</mi>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>ϵ</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon=0
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:65">
+ <semantics>
+  <mrow>
+   <mi>ϵ</mi>
+   <mo>=</mo>
+   <mn>2</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>ϵ</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon=2
+  </annotation>
+ </semantics>
+</math>
+
+) or the full data sequence. These are compared with the true posterior, which can be computed exactly and efficiently using the <a href="Viterbi_algorithm" title="wikilink">Viterbi algorithm</a>. The used summary statistic is not sufficient, and it is seen that even with 
+
+<math display="inline" id="Approximate_Bayesian_computation:66">
+ <semantics>
+  <mrow>
+   <mi>ϵ</mi>
+   <mo>=</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>ϵ</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon=0
+  </annotation>
+ </semantics>
+</math>
+
+, the deviation from the theoretical posterior is considerable. Of note, a much longer observed data sequence would be required to obtain a posterior that is concentrated around the true value of 
+
+<math display="inline" id="Approximate_Bayesian_computation:67">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ (
+
+<math display="inline" id="Approximate_Bayesian_computation:68">
+ <semantics>
+  <mrow>
+   <mi>θ</mi>
+   <mo>=</mo>
+   <mn>0.25</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>θ</ci>
+    <cn type="float">0.25</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta=0.25
+  </annotation>
+ </semantics>
+</math>
+
+).</p>
+
+<p>This example application of ABC used simplifications for illustrative purposes. A number of review articles provide pointers to more realistic applications of ABC.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a><a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a><a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a><a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<h2 id="model-comparison-with-abc">Model comparison with ABC</h2>
+
+<p>Besides parameter estimation, the ABC-framework can be used to compute the posterior probabilities of different candidate models.<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a><a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a><a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a> In such applications, one possibility is to use the rejection-sampling in a hierarchical manner. First, a model is sampled from the prior distribution for the models; then, given the model sampled, the model parameters are sampled from the prior distribution assigned to that model. Finally, a simulation is performed as in the single-model ABC. The relative acceptance frequencies for the different models now approximate the posterior distribution for these models. Again, computational improvements for ABC in the space of models have been proposed, such as constructing a particle filter in the joint space of models and parameters.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a></p>
+
+<p>Once the posterior probabilities of models have been estimated, one can make full use of the techniques of <a href="Bayesian_model_comparison" title="wikilink">Bayesian model comparison</a>. For instance, to compare the relative plausibilities of two models 
+
+<math display="inline" id="Approximate_Bayesian_computation:69">
+ <semantics>
+  <msub>
+   <mi>M</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>M</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:70">
+ <semantics>
+  <msub>
+   <mi>M</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>M</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, one can compute their posterior ratio, which is related to the <a href="Bayes_factor" title="wikilink">Bayes factor</a> 
+
+<math display="inline" id="Approximate_Bayesian_computation:71">
+ <semantics>
+  <msub>
+   <mi>B</mi>
+   <mrow>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mn>2</mn>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>B</ci>
+    <list>
+     <cn type="integer">1</cn>
+     <cn type="integer">2</cn>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{1,2}
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="block" id="Approximate_Bayesian_computation:72">
+ <semantics>
+  <mrow>
+   <mfrac>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>M</mi>
+       <mn>1</mn>
+      </msub>
+      <mo stretchy="false">|</mo>
+      <mi>D</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>M</mi>
+       <mn>2</mn>
+      </msub>
+      <mo stretchy="false">|</mo>
+      <mi>D</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>D</mi>
+       <mo stretchy="false">|</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>1</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>D</mi>
+       <mo stretchy="false">|</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>2</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+    <mfrac>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>1</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>2</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>B</mi>
+     <mrow>
+      <mn>1</mn>
+      <mo>,</mo>
+      <mn>2</mn>
+     </mrow>
+    </msub>
+    <mfrac>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>1</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>2</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <divide></divide>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>M</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <ci>normal-|</ci>
+        <csymbol cd="unknown">D</csymbol>
+        <ci>normal-)</ci>
+       </cerror>
+      </cerror>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>M</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>normal-|</ci>
+        <csymbol cd="unknown">D</csymbol>
+        <ci>normal-)</ci>
+       </cerror>
+      </cerror>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <csymbol cd="unknown">p</csymbol>
+        <cerror>
+         <csymbol cd="ambiguous">fragments</csymbol>
+         <ci>normal-(</ci>
+         <csymbol cd="unknown">D</csymbol>
+         <ci>normal-|</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>M</ci>
+          <cn type="integer">1</cn>
+         </apply>
+         <ci>normal-)</ci>
+        </cerror>
+       </cerror>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <csymbol cd="unknown">p</csymbol>
+        <cerror>
+         <csymbol cd="ambiguous">fragments</csymbol>
+         <ci>normal-(</ci>
+         <csymbol cd="unknown">D</csymbol>
+         <ci>normal-|</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>M</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>normal-)</ci>
+        </cerror>
+       </cerror>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <ci>p</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>M</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>p</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>M</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>B</ci>
+       <list>
+        <cn type="integer">1</cn>
+        <cn type="integer">2</cn>
+       </list>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <ci>p</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>M</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>p</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>M</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{p(M_{1}|D)}{p(M_{2}|D)}=\frac{p(D|M_{1})}{p(D|M_{2})}\frac{p(M_{1})}{p(M%
+_{2})}=B_{1,2}\frac{p(M_{1})}{p(M_{2})}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>If the model priors are equal (
+
+<math display="inline" id="Approximate_Bayesian_computation:73">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>M</mi>
+      <mn>1</mn>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>M</mi>
+      <mn>2</mn>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(M_{1})=p(M_{2})
+  </annotation>
+ </semantics>
+</math>
+
+), the Bayes factor equals the posterior ratio.</p>
+
+<p>In practice, <a href="#Bayes_factor_with_ABC_and_summary_statistics" title="wikilink">as discussed below</a>, these measures can be highly sensitive to the choice of parameter prior distributions and summary statistics, and thus conclusions of model comparison should be drawn with caution.</p>
+<h2 id="pitfalls-and-remedies">Pitfalls and remedies</h2>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Table 2: Potential risks and remedies in ABC-based statistical inference</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Error source</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Non-zero tolerance ε</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Non-sufficient summary statistics</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Small number of models/Mis-specified models</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Priors and parameter ranges</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Curse-of-dimensionality</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Model ranking with summary statistics</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Implementation</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>As for all statistical methods, a number of assumptions and approximations are inherently required for the application of ABC-based methods to real modeling problems. For example, setting the <a href="#The_ABC_rejection_algorithm" title="wikilink">tolerance parameter 
+
+<math display="inline" id="Approximate_Bayesian_computation:74">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+</a> to zero ensures an exact result, but typically makes computations prohibitively expensive. Thus, values of 
+
+<math display="inline" id="Approximate_Bayesian_computation:75">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ larger than zero are used in practice, which introduces a bias. Likewise, sufficient statistics are typically not available and instead, other summary statistics are used, which introduces an additional bias due to the loss of information. Additional sources of bias- for example, in the context of model selection—may be more subtle.<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a><a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a></p>
+
+<p>At the same time, some of the criticisms that have been directed at the ABC methods, in particular within the field of <a class="uri" href="phylogeography" title="wikilink">phylogeography</a>,<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a><a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a><a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a> are not specific to ABC and apply to all Bayesian methods or even all statistical methods (e.g., the choice of prior distribution and parameter ranges).<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a><a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a> However, because of the ability of ABC-methods to handle much more complex models, some of these general pitfalls are of particular relevance in the context of ABC analyses.</p>
+
+<p>This section discusses these potential risks and reviews possible ways to address them (<a href="#table2" title="wikilink">Table 2</a>).</p>
+<h3 id="approximation-of-the-posterior">Approximation of the posterior</h3>
+
+<p>A non-negligible 
+
+<math display="inline" id="Approximate_Bayesian_computation:76">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ comes with the price that one samples from 
+
+<math display="inline" id="Approximate_Bayesian_computation:77">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <mi>ρ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mover accent="true">
+      <mi>D</mi>
+      <mo stretchy="false">^</mo>
+     </mover>
+     <mo>,</mo>
+     <mi>D</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>≤</mo>
+    <mi>ϵ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">ρ</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <apply>
+       <ci>normal-^</ci>
+       <ci>D</ci>
+      </apply>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">D</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <leq></leq>
+     <csymbol cd="unknown">ϵ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|\rho(\hat{D},D)\leq\epsilon)
+  </annotation>
+ </semantics>
+</math>
+
+ instead of the true posterior 
+
+<math display="inline" id="Approximate_Bayesian_computation:78">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">D</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|D)
+  </annotation>
+ </semantics>
+</math>
+
+. With a sufficiently small tolerance, and a sensible distance measure, the resulting distribution 
+
+<math display="inline" id="Approximate_Bayesian_computation:79">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <mi>ρ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mover accent="true">
+      <mi>D</mi>
+      <mo stretchy="false">^</mo>
+     </mover>
+     <mo>,</mo>
+     <mi>D</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>≤</mo>
+    <mi>ϵ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">ρ</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <apply>
+       <ci>normal-^</ci>
+       <ci>D</ci>
+      </apply>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">D</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <leq></leq>
+     <csymbol cd="unknown">ϵ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|\rho(\hat{D},D)\leq\epsilon)
+  </annotation>
+ </semantics>
+</math>
+
+ should often approximate the actual target distribution 
+
+<math display="inline" id="Approximate_Bayesian_computation:80">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">D</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|D)
+  </annotation>
+ </semantics>
+</math>
+
+ reasonably well. On the other hand, a tolerance that is large enough that every point in the parameter space becomes accepted will yield a replica of the prior distribution. There are empirical studies of the difference between 
+
+<math display="inline" id="Approximate_Bayesian_computation:81">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <mi>ρ</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mover accent="true">
+      <mi>D</mi>
+      <mo stretchy="false">^</mo>
+     </mover>
+     <mo>,</mo>
+     <mi>D</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>≤</mo>
+    <mi>ϵ</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">ρ</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <apply>
+       <ci>normal-^</ci>
+       <ci>D</ci>
+      </apply>
+      <ci>normal-,</ci>
+      <csymbol cd="unknown">D</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <leq></leq>
+     <csymbol cd="unknown">ϵ</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|\rho(\hat{D},D)\leq\epsilon)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:82">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>θ</mi>
+    <mo stretchy="false">|</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">D</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(\theta|D)
+  </annotation>
+ </semantics>
+</math>
+
+ as a function of 
+
+<math display="inline" id="Approximate_Bayesian_computation:83">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+,<a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a> and theoretical results for an upper 
+
+<math display="inline" id="Approximate_Bayesian_computation:84">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+-dependent bound for the error in parameter estimates.<a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a> The accuracy of the posterior (defined as the expected quadratic loss) delivered by ABC as a function of 
+
+<math display="inline" id="Approximate_Bayesian_computation:85">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ has also been investigated.<a class="footnoteRef" href="#fn31" id="fnref31"><sup>31</sup></a> However, the convergence of the distributions when 
+
+<math display="inline" id="Approximate_Bayesian_computation:86">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ approaches zero, and how it depends on the distance measure used, is an important topic that has yet to be investigated in greater detail. In particular, it remains difficult to disentangle errors introduced by this approximation from errors due to model mis-specification.<a class="footnoteRef" href="#fn32" id="fnref32"><sup>32</sup></a></p>
+
+<p>As an attempt to correct some of the error due to a non-zero 
+
+<math display="inline" id="Approximate_Bayesian_computation:87">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+, the usage of local linear weighted regression with ABC to reduce the variance of the posterior estimates has been suggested.<a class="footnoteRef" href="#fn33" id="fnref33"><sup>33</sup></a> The method assigns weights to the parameters according to how well simulated summaries adhere to the observed ones and performs linear regression between the summaries and the weighted parameters in the vicinity of observed summaries. The obtained regression coefficients are used to correct sampled parameters in the direction of observed summaries. An improvement was suggested in the form of nonlinear regression using a feed-forward neural network model.<a class="footnoteRef" href="#fn34" id="fnref34"><sup>34</sup></a> However, it has been shown that the posterior distributions obtained with these approaches are not always consistent with the prior distribution, which did lead to a reformulation of the regression adjustment that respects the prior distribution.<a class="footnoteRef" href="#fn35" id="fnref35"><sup>35</sup></a></p>
+
+<p>Finally, statistical inference using ABC with a non-zero tolerance 
+
+<math display="inline" id="Approximate_Bayesian_computation:88">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ is not inherently flawed: under the assumption of measurement errors, the optimal 
+
+<math display="inline" id="Approximate_Bayesian_computation:89">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ can in fact be shown to be not zero.<a class="footnoteRef" href="#fn36" id="fnref36"><sup>36</sup></a><a class="footnoteRef" href="#fn37" id="fnref37"><sup>37</sup></a> Indeed, the bias caused by a non-zero tolerance can be characterized and compensated by introducing a specific form of noise to the summary statistics. Asymptotic consistency for such “noisy ABC”, has been established, together with formulas for the asymptotic variance of the parameter estimates for a fixed tolerance.<a class="footnoteRef" href="#fn38" id="fnref38"><sup>38</sup></a></p>
+<h3 id="choice-and-sufficiency-of-summary-statistics">Choice and sufficiency of summary statistics</h3>
+
+<p>Summary statistics may be used to increase the acceptance rate of ABC for high-dimensional data. Low-dimensional sufficient statistics are optimal for this purpose, as they capture all relevant information present in the data in the simplest possible form.<a class="footnoteRef" href="#fn39" id="fnref39"><sup>39</sup></a> However, low-dimensional sufficient statistics are typically unattainable for statistical models where ABC-based inference is most relevant, and consequently, some <a class="uri" href="heuristic" title="wikilink">heuristic</a> is usually necessary to identify useful low-dimensional summary statistics. The use of a set of poorly chosen summary statistics will often lead to inflated <a href="credible_interval" title="wikilink">credible intervals</a> due to the implied loss of information,<a class="footnoteRef" href="#fn40" id="fnref40"><sup>40</sup></a> which can also bias the discrimination between models. A review of methods for choosing summary statistics is available,<a class="footnoteRef" href="#fn41" id="fnref41"><sup>41</sup></a> which may provide valuable guidance in practice.</p>
+
+<p>One approach to capture most of the information present in data would be to use many statistics, but the accuracy and stability of ABC appears to decrease rapidly with an increasing numbers of summary statistics.<a class="footnoteRef" href="#fn42" id="fnref42"><sup>42</sup></a><a class="footnoteRef" href="#fn43" id="fnref43"><sup>43</sup></a> Instead, a better strategy is to focus on the relevant statistics only—relevancy depending on the whole inference problem, on the model used, and on the data at hand.<a class="footnoteRef" href="#fn44" id="fnref44"><sup>44</sup></a></p>
+
+<p>An algorithm has been proposed for identifying a representative subset of summary statistics, by iteratively assessing whether an additional statistic introduces a meaningful modification of the posterior.<a class="footnoteRef" href="#fn45" id="fnref45"><sup>45</sup></a> One of the challenges here is that a large ABC approximation error may heavily influence the conclusions about the usefulness of a statistic at any stage of the procedure. Another method<a class="footnoteRef" href="#fn46" id="fnref46"><sup>46</sup></a> decomposes into two main steps. First, a reference approximation of the posterior is constructed by minimizing the <a href="Entropy_(statistical_thermodynamics)" title="wikilink">entropy</a>. Sets of candidate summaries are then evaluated by comparing the ABC-approximated posteriors with the reference posterior.</p>
+
+<p>With both of these strategies, a subset of statistics is selected from a large set of candidate statistics. Instead, the <a href="partial_least_squares_regression" title="wikilink">partial least squares regression</a> approach uses information from all the candidate statistics, each being weighted appropriately.<a class="footnoteRef" href="#fn47" id="fnref47"><sup>47</sup></a> Recently, a method for constructing summaries in a semi-automatic manner has attained a considerable interest.<a class="footnoteRef" href="#fn48" id="fnref48"><sup>48</sup></a> This method is based on the observation that the optimal choice of summary statistics, when minimizing the quadratic loss of the parameter point estimates, can be obtained through the posterior mean of the parameters, which is approximated by performing a linear regression based on the simulated data.</p>
+
+<p>Methods for the identification of summary statistics that could also simultaneously assess the influence on the approximation of the posterior would be of substantial value.<a class="footnoteRef" href="#fn49" id="fnref49"><sup>49</sup></a> This is because the choice of summary statistics and the choice of tolerance constitute two sources of error in the resulting posterior distribution. These errors may corrupt the ranking of models and may also lead to incorrect model predictions. Indeed, none of the methods above assesses the choice of summaries for the purpose of model selection.</p>
+<h3 id="bayes-factor-with-abc-and-summary-statistics">Bayes factor with ABC and summary statistics</h3>
+
+<p>It has been shown that the combination of insufficient summary statistics and ABC for model selection can be problematic.<a class="footnoteRef" href="#fn50" id="fnref50"><sup>50</sup></a><a class="footnoteRef" href="#fn51" id="fnref51"><sup>51</sup></a> Indeed, if one lets the Bayes factor based on the summary statistic 
+
+<math display="inline" id="Approximate_Bayesian_computation:90">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>S</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S(D)
+  </annotation>
+ </semantics>
+</math>
+
+ be denoted by 
+
+<math display="inline" id="Approximate_Bayesian_computation:91">
+ <semantics>
+  <msubsup>
+   <mi>B</mi>
+   <mrow>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mn>2</mn>
+   </mrow>
+   <mi>s</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>B</ci>
+     <list>
+      <cn type="integer">1</cn>
+      <cn type="integer">2</cn>
+     </list>
+    </apply>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{1,2}^{s}
+  </annotation>
+ </semantics>
+</math>
+
+, the relation between 
+
+<math display="inline" id="Approximate_Bayesian_computation:92">
+ <semantics>
+  <msub>
+   <mi>B</mi>
+   <mrow>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mn>2</mn>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>B</ci>
+    <list>
+     <cn type="integer">1</cn>
+     <cn type="integer">2</cn>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{1,2}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:93">
+ <semantics>
+  <msubsup>
+   <mi>B</mi>
+   <mrow>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mn>2</mn>
+   </mrow>
+   <mi>s</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>B</ci>
+     <list>
+      <cn type="integer">1</cn>
+      <cn type="integer">2</cn>
+     </list>
+    </apply>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{1,2}^{s}
+  </annotation>
+ </semantics>
+</math>
+
+ takes the form:<a class="footnoteRef" href="#fn52" id="fnref52"><sup>52</sup></a></p>
+
+<p>
+
+<math display="block" id="Approximate_Bayesian_computation:94">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>B</mi>
+    <mrow>
+     <mn>1</mn>
+     <mo>,</mo>
+     <mn>2</mn>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>D</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>M</mi>
+       <mn>1</mn>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>D</mi>
+      <mo stretchy="false">|</mo>
+      <msub>
+       <mi>M</mi>
+       <mn>2</mn>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>D</mi>
+       <mo stretchy="false">|</mo>
+       <mi>S</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>D</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mo>,</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>1</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>D</mi>
+       <mo stretchy="false">|</mo>
+       <mi>S</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>D</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mo>,</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>2</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+    <mfrac>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>S</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>D</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mo stretchy="false">|</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>1</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>S</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>D</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mo stretchy="false">|</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>2</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>D</mi>
+       <mo stretchy="false">|</mo>
+       <mi>S</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>D</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mo>,</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>1</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>p</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>D</mi>
+       <mo stretchy="false">|</mo>
+       <mi>S</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>D</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mo>,</mo>
+       <msub>
+        <mi>M</mi>
+        <mn>2</mn>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+    <msubsup>
+     <mi>B</mi>
+     <mrow>
+      <mn>1</mn>
+      <mo>,</mo>
+      <mn>2</mn>
+     </mrow>
+     <mi>s</mi>
+    </msubsup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>B</ci>
+      <list>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </list>
+     </apply>
+     <apply>
+      <divide></divide>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">D</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>M</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+      </cerror>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <csymbol cd="unknown">p</csymbol>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <ci>normal-(</ci>
+        <csymbol cd="unknown">D</csymbol>
+        <ci>normal-|</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>M</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <ci>normal-)</ci>
+       </cerror>
+      </cerror>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <csymbol cd="unknown">p</csymbol>
+        <cerror>
+         <csymbol cd="ambiguous">fragments</csymbol>
+         <ci>normal-(</ci>
+         <csymbol cd="unknown">D</csymbol>
+         <ci>normal-|</ci>
+         <csymbol cd="unknown">S</csymbol>
+         <cerror>
+          <csymbol cd="ambiguous">fragments</csymbol>
+          <ci>normal-(</ci>
+          <csymbol cd="unknown">D</csymbol>
+          <ci>normal-)</ci>
+         </cerror>
+         <ci>normal-,</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>M</ci>
+          <cn type="integer">1</cn>
+         </apply>
+         <ci>normal-)</ci>
+        </cerror>
+       </cerror>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <csymbol cd="unknown">p</csymbol>
+        <cerror>
+         <csymbol cd="ambiguous">fragments</csymbol>
+         <ci>normal-(</ci>
+         <csymbol cd="unknown">D</csymbol>
+         <ci>normal-|</ci>
+         <csymbol cd="unknown">S</csymbol>
+         <cerror>
+          <csymbol cd="ambiguous">fragments</csymbol>
+          <ci>normal-(</ci>
+          <csymbol cd="unknown">D</csymbol>
+          <ci>normal-)</ci>
+         </cerror>
+         <ci>normal-,</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>M</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>normal-)</ci>
+        </cerror>
+       </cerror>
+      </apply>
+      <apply>
+       <divide></divide>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <csymbol cd="unknown">p</csymbol>
+        <cerror>
+         <csymbol cd="ambiguous">fragments</csymbol>
+         <ci>normal-(</ci>
+         <csymbol cd="unknown">S</csymbol>
+         <cerror>
+          <csymbol cd="ambiguous">fragments</csymbol>
+          <ci>normal-(</ci>
+          <csymbol cd="unknown">D</csymbol>
+          <ci>normal-)</ci>
+         </cerror>
+         <ci>normal-|</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>M</ci>
+          <cn type="integer">1</cn>
+         </apply>
+         <ci>normal-)</ci>
+        </cerror>
+       </cerror>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <csymbol cd="unknown">p</csymbol>
+        <cerror>
+         <csymbol cd="ambiguous">fragments</csymbol>
+         <ci>normal-(</ci>
+         <csymbol cd="unknown">S</csymbol>
+         <cerror>
+          <csymbol cd="ambiguous">fragments</csymbol>
+          <ci>normal-(</ci>
+          <csymbol cd="unknown">D</csymbol>
+          <ci>normal-)</ci>
+         </cerror>
+         <ci>normal-|</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>M</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>normal-)</ci>
+        </cerror>
+       </cerror>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <csymbol cd="unknown">p</csymbol>
+        <cerror>
+         <csymbol cd="ambiguous">fragments</csymbol>
+         <ci>normal-(</ci>
+         <csymbol cd="unknown">D</csymbol>
+         <ci>normal-|</ci>
+         <csymbol cd="unknown">S</csymbol>
+         <cerror>
+          <csymbol cd="ambiguous">fragments</csymbol>
+          <ci>normal-(</ci>
+          <csymbol cd="unknown">D</csymbol>
+          <ci>normal-)</ci>
+         </cerror>
+         <ci>normal-,</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>M</ci>
+          <cn type="integer">1</cn>
+         </apply>
+         <ci>normal-)</ci>
+        </cerror>
+       </cerror>
+       <cerror>
+        <csymbol cd="ambiguous">fragments</csymbol>
+        <csymbol cd="unknown">p</csymbol>
+        <cerror>
+         <csymbol cd="ambiguous">fragments</csymbol>
+         <ci>normal-(</ci>
+         <csymbol cd="unknown">D</csymbol>
+         <ci>normal-|</ci>
+         <csymbol cd="unknown">S</csymbol>
+         <cerror>
+          <csymbol cd="ambiguous">fragments</csymbol>
+          <ci>normal-(</ci>
+          <csymbol cd="unknown">D</csymbol>
+          <ci>normal-)</ci>
+         </cerror>
+         <ci>normal-,</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>M</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>normal-)</ci>
+        </cerror>
+       </cerror>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>B</ci>
+        <list>
+         <cn type="integer">1</cn>
+         <cn type="integer">2</cn>
+        </list>
+       </apply>
+       <ci>s</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{1,2}=\frac{p(D|M_{1})}{p(D|M_{2})}=\frac{p(D|S(D),M_{1})}{p(D|S(D),M_{2})}%
+\frac{p(S(D)|M_{1})}{p(S(D)|M_{2})}=\frac{p(D|S(D),M_{1})}{p(D|S(D),M_{2})}B_{%
+1,2}^{s}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Thus, a summary statistic 
+
+<math display="inline" id="Approximate_Bayesian_computation:95">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>S</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S(D)
+  </annotation>
+ </semantics>
+</math>
+
+ is sufficient for comparing two models 
+
+<math display="inline" id="Approximate_Bayesian_computation:96">
+ <semantics>
+  <msub>
+   <mi>M</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>M</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:97">
+ <semantics>
+  <msub>
+   <mi>M</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>M</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ if and only if:</p>
+
+<p>
+
+<math display="block" id="Approximate_Bayesian_computation:98">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">|</mo>
+    <mi>S</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>D</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>,</mo>
+    <msub>
+     <mi>M</mi>
+     <mn>1</mn>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">|</mo>
+    <mi>S</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>D</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>,</mo>
+    <msub>
+     <mi>M</mi>
+     <mn>2</mn>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">D</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">S</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">D</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">D</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">S</csymbol>
+     <cerror>
+      <csymbol cd="ambiguous">fragments</csymbol>
+      <ci>normal-(</ci>
+      <csymbol cd="unknown">D</csymbol>
+      <ci>normal-)</ci>
+     </cerror>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>M</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(D|S(D),M_{1})=p(D|S(D),M_{2})
+  </annotation>
+ </semantics>
+</math>
+
+,</p>
+
+<p>which results in that 
+
+<math display="inline" id="Approximate_Bayesian_computation:99">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>B</mi>
+    <mrow>
+     <mn>1</mn>
+     <mo>,</mo>
+     <mn>2</mn>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <msubsup>
+    <mi>B</mi>
+    <mrow>
+     <mn>1</mn>
+     <mo>,</mo>
+     <mn>2</mn>
+    </mrow>
+    <mi>s</mi>
+   </msubsup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>B</ci>
+     <list>
+      <cn type="integer">1</cn>
+      <cn type="integer">2</cn>
+     </list>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>B</ci>
+      <list>
+       <cn type="integer">1</cn>
+       <cn type="integer">2</cn>
+      </list>
+     </apply>
+     <ci>s</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{1,2}=B_{1,2}^{s}
+  </annotation>
+ </semantics>
+</math>
+
+. It is also clear from the equation above that there might be a huge difference between 
+
+<math display="inline" id="Approximate_Bayesian_computation:100">
+ <semantics>
+  <msub>
+   <mi>B</mi>
+   <mrow>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mn>2</mn>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>B</ci>
+    <list>
+     <cn type="integer">1</cn>
+     <cn type="integer">2</cn>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{1,2}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:101">
+ <semantics>
+  <msubsup>
+   <mi>B</mi>
+   <mrow>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mn>2</mn>
+   </mrow>
+   <mi>s</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>B</ci>
+     <list>
+      <cn type="integer">1</cn>
+      <cn type="integer">2</cn>
+     </list>
+    </apply>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B_{1,2}^{s}
+  </annotation>
+ </semantics>
+</math>
+
+ if the condition is not satisfied, as can be demonstrated by toy examples.<a class="footnoteRef" href="#fn53" id="fnref53"><sup>53</sup></a><a class="footnoteRef" href="#fn54" id="fnref54"><sup>54</sup></a><a class="footnoteRef" href="#fn55" id="fnref55"><sup>55</sup></a> Crucially, it was shown that sufficiency for 
+
+<math display="inline" id="Approximate_Bayesian_computation:102">
+ <semantics>
+  <msub>
+   <mi>M</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>M</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ or 
+
+<math display="inline" id="Approximate_Bayesian_computation:103">
+ <semantics>
+  <msub>
+   <mi>M</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>M</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ alone, or for both models, does not guarantee sufficiency for ranking the models.<a class="footnoteRef" href="#fn56" id="fnref56"><sup>56</sup></a> However, it was also shown that any <a href="Sufficient_statistic" title="wikilink">sufficient summary statistic</a> for a model 
+
+<math display="inline" id="Approximate_Bayesian_computation:104">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ in which both 
+
+<math display="inline" id="Approximate_Bayesian_computation:105">
+ <semantics>
+  <msub>
+   <mi>M</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>M</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:106">
+ <semantics>
+  <msub>
+   <mi>M</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>M</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ are <a href="Multilevel_model" title="wikilink">nested</a> is valid for ranking the <a href="Multilevel_model" title="wikilink">nested models</a>.<a class="footnoteRef" href="#fn57" id="fnref57"><sup>57</sup></a></p>
+
+<p>The computation of Bayes factors on 
+
+<math display="inline" id="Approximate_Bayesian_computation:107">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>S</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S(D)
+  </annotation>
+ </semantics>
+</math>
+
+ may therefore be misleading for model selection purposes, unless the ratio between the Bayes factors on 
+
+<math display="inline" id="Approximate_Bayesian_computation:108">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Approximate_Bayesian_computation:109">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>D</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>S</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S(D)
+  </annotation>
+ </semantics>
+</math>
+
+ would be available, or at least could be approximated reasonably well. Alternatively, necessary and sufficient conditions on summary statistics for a consistent Bayesian model choice have recently been derived,<a class="footnoteRef" href="#fn58" id="fnref58"><sup>58</sup></a> which can provide useful guidance.</p>
+
+<p>However, this issue is only relevant for model selection when the dimension of the data has been reduced. ABC-based inference, in which the actual data sets are directly compared—as is the case for some systems biology applications (e.g., see <a class="footnoteRef" href="#fn59" id="fnref59"><sup>59</sup></a>)—circumvents this problem.</p>
+<h3 id="indispensable-quality-controls">Indispensable quality controls</h3>
+
+<p>As the above discussion makes clear, any ABC analysis requires choices and trade-offs that can have a considerable impact on its outcomes. Specifically, the choice of competing models/hypotheses, the number of simulations, the choice of summary statistics, or the acceptance threshold cannot currently be based on general rules, but the effect of these choices should be evaluated and tested in each study.<a class="footnoteRef" href="#fn60" id="fnref60"><sup>60</sup></a></p>
+
+<p>A number of <a href="Heuristic_(computer_science)" title="wikilink">heuristic approaches</a> to the quality control of ABC have been proposed, such as the quantification of the fraction of parameter variance explained by the summary statistics.<a class="footnoteRef" href="#fn61" id="fnref61"><sup>61</sup></a> A common class of methods aims at assessing whether or not the inference yields valid results, regardless of the actually observed data. For instance, given a set of parameter values, which are typically drawn from the prior or the posterior distributions for a model, one can generate a large number of artificial datasets. In this way, the quality and robustness of ABC inference can be assessed in a controlled setting, by gauging how well the chosen ABC inference method recovers the true parameter values, and also models if multiple structurally different models are considered simultaneously.</p>
+
+<p>Another class of methods assesses whether the inference was successful in light of the given observed data, for example, by comparing the posterior predictive distribution of summary statistics to the summary statistics observed.<a class="footnoteRef" href="#fn62" id="fnref62"><sup>62</sup></a> Beyond that, <a href="Cross-validation_(statistics)" title="wikilink">cross-validation</a> techniques<a class="footnoteRef" href="#fn63" id="fnref63"><sup>63</sup></a> and <a href="Predictive_analytics" title="wikilink">predictive checks</a><a class="footnoteRef" href="#fn64" id="fnref64"><sup>64</sup></a><a class="footnoteRef" href="#fn65" id="fnref65"><sup>65</sup></a> represent promising future strategies to evaluate the stability and out-of-sample predictive validity of ABC inferences. This is particularly important when modeling large data sets, because then the posterior support of a particular model can appear overwhelmingly conclusive, even if all proposed models in fact are poor representations of the stochastic system underlying the observation data. Out-of-sample predictive checks can reveal potential systematic biases within a model and provide clues on to how to improve its structure or parametrization.</p>
+
+<p>Interestingly, fundamentally novel approaches for model choice that incorporate quality control as an integral step in the process have recently been proposed. ABC allows, by construction, estimation of the discrepancies between the observed data and the model predictions, with respect to a comprehensive set of statistics. These statistics are not necessarily the same as those used in the acceptance criterion. The resulting discrepancy distributions have been used for selecting models that are in agreement with many aspects of the data simultaneously,<a class="footnoteRef" href="#fn66" id="fnref66"><sup>66</sup></a> and model inconsistency is detected from conflicting and co-dependent summaries. Another quality-control-based method for model selection employs ABC to approximate the effective number of model parameters and the deviance of the posterior predictive distributions of summaries and parameters.<a class="footnoteRef" href="#fn67" id="fnref67"><sup>67</sup></a> The deviance information criterion is then used as measure of model fit. It has also been shown that the models preferred based on this criterion can conflict with those supported by <a href="Bayes_factor" title="wikilink">Bayes factors</a>. For this reason, it is useful to combine different methods for model selection to obtain correct conclusions.</p>
+
+<p>Quality controls are achievable and indeed performed in many ABC-based works, but for certain problems, the assessment of the impact of the method-related parameters can be challenging. However, the rapidly increasing use of ABC can be expected to provide a more thorough understanding of the limitations and applicability of the method.</p>
+<h3 id="general-risks-in-statistical-inference-exacerbated-in-abc">General risks in statistical inference exacerbated in ABC</h3>
+
+<p>This section reviews risks that are strictly speaking not specific to ABC, but also relevant for other statistical methods as well. However, the flexibility offered by ABC to analyze very complex models makes them highly relevant to discuss here.</p>
+<h4 id="prior-distribution-and-parameter-ranges">Prior distribution and parameter ranges</h4>
+
+<p>The specification of the range and the prior distribution of parameters strongly benefits from previous knowledge about the properties of the system. One criticism has been that in some studies the “parameter ranges and distributions are only guessed based upon the subjective opinion of the investigators”,<a class="footnoteRef" href="#fn68" id="fnref68"><sup>68</sup></a> which is connected to classical objections of Bayesian approaches.<a class="footnoteRef" href="#fn69" id="fnref69"><sup>69</sup></a></p>
+
+<p>With any computational method, it is typically necessary to constrain the investigated parameter ranges. The parameter ranges should if possible be defined based on known properties of the studied system, but may for practical applications necessitate an educated guess. However, theoretical results regarding <a href="Prior_distribution#Uninformative_priors" title="wikilink">objective priors</a> are available, which may for example be based on the <a href="principle_of_indifference" title="wikilink">principle of indifference</a> or the <a href="principle_of_maximum_entropy" title="wikilink">principle of maximum entropy</a>.<a class="footnoteRef" href="#fn70" id="fnref70"><sup>70</sup></a><a class="footnoteRef" href="#fn71" id="fnref71"><sup>71</sup></a> On the other hand, automated or semi-automated methods for choosing a prior distribution often yield <a href="Prior_probability#Improper_priors" title="wikilink">improper densities</a>. As most ABC procedures require generating samples from the prior, improper priors are not directly applicable to ABC.</p>
+
+<p>One should also keep the purpose of the analysis in mind when choosing the prior distribution. In principle, uninformative and flat priors, that exaggerate our subjective ignorance about the parameters, may still yield reasonable parameter estimates. However, Bayes factors are highly sensitive to the prior distribution of parameters. Conclusions on model choice based on Bayes factor can be misleading unless the sensitivity of conclusions to the choice of priors is carefully considered.</p>
+<h4 id="small-number-of-models">Small number of models</h4>
+
+<p>Model-based methods have been criticized for not exhaustively covering the hypothesis space.<a class="footnoteRef" href="#fn72" id="fnref72"><sup>72</sup></a> Indeed, model-based studies often revolve around a small number of models, and due to the high computational cost to evaluate a single model in some instances, it may then be difficult to cover a large part of the hypothesis space.</p>
+
+<p>An upper limit to the number of considered candidate models is typically set by the substantial effort required to define the models and to choose between many alternative options.<a class="footnoteRef" href="#fn73" id="fnref73"><sup>73</sup></a> There is no commonly accepted ABC-specific procedure for model construction, so experience and prior knowledge are used instead.<a class="footnoteRef" href="#fn74" id="fnref74"><sup>74</sup></a> Although more robust procedures for <em>a priori</em> model choice and formulation would be beneficial, there is no one-size-fits-all strategy for model development in statistics: sensible characterization of complex systems will always necessitate a great deal of detective work and use of expert knowledge from the problem domain.</p>
+
+<p>Some opponents of ABC contend that since only few models—subjectively chosen and probably all wrong—can be realistically considered, ABC analyses provide only limited insight.<a class="footnoteRef" href="#fn75" id="fnref75"><sup>75</sup></a> However, there is an important distinction between identifying a plausible null hypothesis and assessing the relative fit of alternative hypotheses.<a class="footnoteRef" href="#fn76" id="fnref76"><sup>76</sup></a> Since useful null hypotheses, that potentially hold true, can extremely seldom be put forward in the context of complex models, predictive ability of statistical models as explanations of complex phenomena is far more important than the test of a statistical null hypothesis in this context. It is also common to average over the investigated models, weighted based on their relative plausibility, to infer model features (e.g., parameter values) and to make predictions.</p>
+<h4 id="large-datasets">Large datasets</h4>
+
+<p>Large data sets may constitute a computational bottleneck for model-based methods. It was, for example, pointed out that in some ABC-based analyses, part of the data have to be omitted.<a class="footnoteRef" href="#fn77" id="fnref77"><sup>77</sup></a> A number of authors have argued that large data sets are not a practical limitation,<a class="footnoteRef" href="#fn78" id="fnref78"><sup>78</sup></a><a class="footnoteRef" href="#fn79" id="fnref79"><sup>79</sup></a> although the severity of this issue depends strongly on the characteristics of the models. Several aspects of a modeling problem can contribute to the computational complexity, such as the sample size, number of observed variables or features, time or spatial resolution, etc. However, with increasing computing power, this issue will potentially be less important.</p>
+
+<p>Instead of sampling parameters for each simulation from the prior, it has been proposed alternatively to combine the <a href="Metropolis–Hastings_algorithm" title="wikilink">Metropolis-Hastings algorithm</a> with ABC, which was reported to result in a higher acceptance rate than for plain ABC.<a class="footnoteRef" href="#fn80" id="fnref80"><sup>80</sup></a> Naturally, such an approach inherits the general burdens of MCMC methods, such as the difficulty to assess convergence, correlation among the samples from the posterior,<a class="footnoteRef" href="#fn81" id="fnref81"><sup>81</sup></a> and relatively poor parallelizability.<a class="footnoteRef" href="#fn82" id="fnref82"><sup>82</sup></a></p>
+
+<p>Likewise, the ideas of <a href="Particle_filter" title="wikilink">sequential Monte Carlo</a> (SMC) and population Monte Carlo (PMC) methods have been adapted to the ABC setting.<a class="footnoteRef" href="#fn83" id="fnref83"><sup>83</sup></a><a class="footnoteRef" href="#fn84" id="fnref84"><sup>84</sup></a> The general idea is to iteratively approach the posterior from the prior through a sequence of target distributions. An advantage of such methods, compared to ABC-MCMC, is that the samples from the resulting posterior are independent. In addition, with sequential methods the tolerance levels must not be specified prior to the analysis, but are adjusted adaptively.<a class="footnoteRef" href="#fn85" id="fnref85"><sup>85</sup></a></p>
+
+<p>It is relatively straightforward to parallelize a number of steps in ABC algorithms based on rejection sampling and <a href="Particle_filter" title="wikilink">sequential Monte Carlo</a> methods. It has also been demonstrated that parallel algorithms may yield significant speedups for MCMC-based inference in phylogenetics,<a class="footnoteRef" href="#fn86" id="fnref86"><sup>86</sup></a> which may be a tractable approach also for ABC-based methods. Yet an adequate model for a complex system is very likely to require intensive computation irrespectively of the chosen method of inference, and it is up to the user to select a method that is suitable for the particular application in question.</p>
+<h4 id="curse-of-dimensionality">Curse of Dimensionality</h4>
+
+<p>High-dimensional data sets and high-dimensional parameter spaces can require an extremely large number of parameter points to be simulated in ABC-based studies to obtain a reasonable level of accuracy for the posterior inferences. In such situations, the computational cost is severely increased and may in the worst case render the computational analysis intractable. These are examples of well-known phenomena, which are usually referred to with the umbrella term <a href="curse_of_dimensionality" title="wikilink">curse of dimensionality</a>.<a class="footnoteRef" href="#fn87" id="fnref87"><sup>87</sup></a></p>
+
+<p>To assess how severely the dimensionality of a data set affects the analysis within the context of ABC, analytical formulas have been derived for the error of the ABC estimators as functions of the dimension of the summary statistics.<a class="footnoteRef" href="#fn88" id="fnref88"><sup>88</sup></a><a class="footnoteRef" href="#fn89" id="fnref89"><sup>89</sup></a> In addition, Blum and François have investigated how the dimension of the summary statistics is related to the mean squared error for different correction adjustments to the error of ABC estimators. It was also argued that dimension reduction techniques are useful to avoid the curse-of-dimensionality, due to a potentially lower-dimensional underlying structure of summary statistics.<a class="footnoteRef" href="#fn90" id="fnref90"><sup>90</sup></a> Motivated by minimizing the quadratic loss of ABC estimators, Fearnhead and Prangle have proposed a scheme to project (possibly high-dimensional) data into estimates of the parameter posterior means; these means, now having the same dimension as the parameters, are then used as summary statistics for ABC.<a class="footnoteRef" href="#fn91" id="fnref91"><sup>91</sup></a></p>
+
+<p>ABC can be used to infer problems in high-dimensional parameter spaces, although one should account for the possibility of overfitting (e.g., see the model selection methods in <a class="footnoteRef" href="#fn92" id="fnref92"><sup>92</sup></a> and <a class="footnoteRef" href="#fn93" id="fnref93"><sup>93</sup></a>). However, the probability of accepting the simulated values for the parameters under a given tolerance with the ABC rejection algorithm typically decreases exponentially with increasing dimensionality of the parameter space (due to the global acceptance criterion).<a class="footnoteRef" href="#fn94" id="fnref94"><sup>94</sup></a> Although no computational method (based on ABC or not) seems to be able to break the curse-of-dimensionality, methods have recently been developed to handle high-dimensional parameter spaces under certain assumptions (e.g., based on polynomial approximation on sparse grids,<a class="footnoteRef" href="#fn95" id="fnref95"><sup>95</sup></a> which could potentially heavily reduce the simulation times for ABC). However, the applicability of such methods is problem dependent, and the difficulty of exploring parameter spaces should in general not be underestimated. For example, the introduction of deterministic global parameter estimation led to reports that the global optima obtained in several previous studies of low-dimensional problems were incorrect.<a class="footnoteRef" href="#fn96" id="fnref96"><sup>96</sup></a> For certain problems, it might therefore be difficult to know whether the model is incorrect or, <a href="#Small_number_of_models" title="wikilink">as discussed above</a>, whether the explored region of the parameter space is inappropriate.<a class="footnoteRef" href="#fn97" id="fnref97"><sup>97</sup></a> A more pragmatic approach is to cut the scope of the problem through model reduction.<a class="footnoteRef" href="#fn98" id="fnref98"><sup>98</sup></a></p>
+<h2 id="software">Software</h2>
+
+<p>A number of software packages are currently available for application of ABC to particular classes of statistical models. An assortment of ABC-based software is presented in <a href="#table3" title="wikilink">Table 3</a>.</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Table 3: Software incorporating ABC</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>Software</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www1.montpellier.inra.fr/CBGP/diyabc/">DIY-ABC</a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://cran.r-project.org/web/packages/abc">abc<br/>
+ R package</a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://cran.r-project.org/web/packages/EasyABC/index.html">EasyABC<br/>
+ R package</a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://www.theosysbio.bio.ic.ac.uk/resources/abc-sysbio">ABC-SysBio</a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.cmpg.iee.unibe.ch/content/softwares__services/computer_programs/abctoolbox">ABCtoolbox</a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://msbayes.sourceforge.net/">msBayes</a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://code.google.com/p/popabc/">PopABC</a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://genomics.jun.alaska.edu">ONeSAMP</a></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><a href="http://www.etoology.net/index.php/software/genetics/112-abc4f.html">ABC4F</a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><a href="http://compbio.igc.gulbenkian.pt/pcg/pcg_software.html#2BAD">2BAD</a></p></td>
+</tr>
+</tbody>
+</table>
+
+<p>The suitability of individual software packages depends on the specific application at hand, the computer system environment, and the algorithms required.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Markov_chain_Monte_Carlo" title="wikilink">Markov chain Monte Carlo</a></li>
+<li><a href="Sequential_Monte_Carlo_method" title="wikilink">Sequential Monte Carlo Method</a></li>
+<li><a href="Empirical_Bayes" title="wikilink">Empirical Bayes</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li></li>
+<li></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Bayesian_statistics" title="wikilink">Category:Bayesian statistics</a> <a href="Category:Statistical_approximations" title="wikilink">Category:Statistical approximations</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"></li>
+<li id="fn2"></li>
+<li id="fn3"></li>
+<li id="fn4"></li>
+<li id="fn5"></li>
+<li id="fn6"></li>
+<li id="fn7"></li>
+<li id="fn8"></li>
+<li id="fn9"></li>
+<li id="fn10"></li>
+<li id="fn11"></li>
+<li id="fn12"></li>
+<li id="fn13"></li>
+<li id="fn14"></li>
+<li id="fn15"></li>
+<li id="fn16"></li>
+<li id="fn17"></li>
+<li id="fn18"></li>
+<li id="fn19"></li>
+<li id="fn20"></li>
+<li id="fn21"></li>
+<li id="fn22"></li>
+<li id="fn23"></li>
+<li id="fn24"></li>
+<li id="fn25"></li>
+<li id="fn26"></li>
+<li id="fn27"></li>
+<li id="fn28"></li>
+<li id="fn29"></li>
+<li id="fn30"></li>
+<li id="fn31"></li>
+<li id="fn32"></li>
+<li id="fn33"></li>
+<li id="fn34"></li>
+<li id="fn35"></li>
+<li id="fn36"></li>
+<li id="fn37"></li>
+<li id="fn38"></li>
+<li id="fn39"></li>
+<li id="fn40"></li>
+<li id="fn41"></li>
+<li id="fn42"></li>
+<li id="fn43"></li>
+<li id="fn44"></li>
+<li id="fn45"></li>
+<li id="fn46"></li>
+<li id="fn47"></li>
+<li id="fn48"></li>
+<li id="fn49"></li>
+<li id="fn50"></li>
+<li id="fn51"></li>
+<li id="fn52"></li>
+<li id="fn53"></li>
+<li id="fn54"></li>
+<li id="fn55"></li>
+<li id="fn56"></li>
+<li id="fn57"></li>
+<li id="fn58"></li>
+<li id="fn59"></li>
+<li id="fn60"></li>
+<li id="fn61"></li>
+<li id="fn62"></li>
+<li id="fn63"></li>
+<li id="fn64"></li>
+<li id="fn65"></li>
+<li id="fn66"></li>
+<li id="fn67"></li>
+<li id="fn68"></li>
+<li id="fn69"></li>
+<li id="fn70"></li>
+<li id="fn71"></li>
+<li id="fn72"></li>
+<li id="fn73"></li>
+<li id="fn74"></li>
+<li id="fn75"></li>
+<li id="fn76"></li>
+<li id="fn77"></li>
+<li id="fn78"></li>
+<li id="fn79"></li>
+<li id="fn80"></li>
+<li id="fn81"></li>
+<li id="fn82"></li>
+<li id="fn83"></li>
+<li id="fn84"></li>
+<li id="fn85"></li>
+<li id="fn86"></li>
+<li id="fn87"></li>
+<li id="fn88"></li>
+<li id="fn89"></li>
+<li id="fn90"></li>
+<li id="fn91"></li>
+<li id="fn92"></li>
+<li id="fn93"></li>
+<li id="fn94"></li>
+<li id="fn95"></li>
+<li id="fn96"></li>
+<li id="fn97"></li>
+<li id="fn98"></li>
+</ol>
+</section>
+</body>
+</html>

@@ -1,0 +1,526 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1218">Learning to rank</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Learning to rank</h1>
+<hr/>
+
+<p><strong>Learning to rank</strong><a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> or <strong>machine-learned ranking</strong> (MLR) is the application of <a href="machine_learning" title="wikilink">machine learning</a>, typically <a href="Supervised_learning" title="wikilink">supervised</a>, <a href="Semi-supervised_learning" title="wikilink">semi-supervised</a> or <a href="reinforcement_learning" title="wikilink">reinforcement learning</a>, in the construction of <a href="ranking_function" title="wikilink">ranking models</a> for <a href="information_retrieval" title="wikilink">information retrieval</a> systems.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> Training data consists of lists of items with some <a href="partial_order" title="wikilink">partial order</a> specified between items in each list. This order is typically induced by giving a numerical or ordinal score or a binary judgment (e.g. "relevant" or "not relevant") for each item. The ranking model's purpose is to rank, i.e. produce a <a class="uri" href="permutation" title="wikilink">permutation</a> of items in new, unseen lists in a way which is "similar" to rankings in the training data in some sense.</p>
+
+<p>Learning to rank is a relatively new research area which has emerged in the past decade.</p>
+<h2 id="applications">Applications</h2>
+<h3 id="in-information-retrieval">In information retrieval</h3>
+
+<p> Ranking is a central part of many <a href="information_retrieval" title="wikilink">information retrieval</a> problems, such as <a href="document_retrieval" title="wikilink">document retrieval</a>, <a href="collaborative_filtering" title="wikilink">collaborative filtering</a>, <a href="sentiment_analysis" title="wikilink">sentiment analysis</a>, <a href="computational_advertising" title="wikilink">computational advertising</a> (online ad placement).</p>
+
+<p>A possible architecture of a machine-learned search engine is shown in the figure to the right.</p>
+
+<p>Training data consists of queries and documents matching them together with relevance degree of each match. It may be prepared manually by human <em>assessors</em> (or <em>raters</em>, as <a class="uri" href="Google" title="wikilink">Google</a> calls them),</p>
+
+<p>who check results for some queries and determine <a href="Relevance_(information_retrieval)" title="wikilink">relevance</a> of each result. It is not feasible to check relevance of all documents, and so typically a technique called <a href="pooling_(information_retrieval)" title="wikilink">pooling</a> is used — only the top few documents, retrieved by some existing ranking models are checked. Alternatively, training data may be derived automatically by analyzing <em>clickthrough logs</em> (i.e. search results which got clicks from users),<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> <em>query chains</em>,<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> or such search engines' features as Google's <a href="Google_SearchWiki" title="wikilink">SearchWiki</a>.</p>
+
+<p>Training data is used by a learning algorithm to produce a ranking model which computes relevance of documents for actual queries.</p>
+
+<p>Typically, users expect a search query to complete in a short time (such as a few hundred milliseconds for web search), which makes it impossible to evaluate a complex ranking model on each document in the corpus, and so a two-phase scheme is used.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> First, a small number of potentially relevant documents are identified using simpler retrieval models which permit fast query evaluation, such as <a href="vector_space_model" title="wikilink">vector space model</a>, <a href="Standard_Boolean_model" title="wikilink">boolean model</a>, weighted AND,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> <a href="Okapi_BM25" title="wikilink">BM25</a>. This phase is called <em>top-
+
+<math display="inline" id="Learning_to_rank:0">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ document retrieval</em> and many good heuristics were proposed in the literature to accelerate it, such as using document's static quality score and tiered indexes.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> In the second phase, a more accurate but computationally expensive machine-learned model is used to re-rank these documents.</p>
+<h3 id="in-other-areas">In other areas</h3>
+
+<p>Learning to rank algorithms have been applied in areas other than information retrieval:</p>
+<ul>
+<li>In <a href="machine_translation" title="wikilink">machine translation</a> for ranking a set of hypothesized translations;<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></li>
+<li>In <a href="computational_biology" title="wikilink">computational biology</a> for ranking candidate 3-D structures in protein structure prediction problem.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></li>
+<li>In <a class="uri" href="proteomics" title="wikilink">proteomics</a> for the identification of frequent top scoring peptides.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></li>
+<li>In <a href="Recommender_system" title="wikilink">Recommender systems</a> for identifying a ranked list of related news articles to recommend to a user after he or she has read a current news article.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></li>
+</ul>
+<h2 id="feature-vectors">Feature vectors</h2>
+
+<p>For convenience of MLR algorithms, query-document pairs are usually represented by numerical vectors, which are called <em><a href="feature_vector" title="wikilink">feature vectors</a></em>. Such approach is sometimes called <em>bag of features</em> and is analogous to <a href="bag_of_words" title="wikilink">bag of words</a> and <a href="vector_space_model" title="wikilink">vector space model</a> used in information retrieval for representation of documents.</p>
+
+<p>Components of such vectors are called <em><a href="feature_(machine_learning)" title="wikilink">features</a></em>, <em>factors</em> or <em>ranking signals</em>. They may be divided into three groups (features from <a href="document_retrieval" title="wikilink">document retrieval</a> are shown as examples):</p>
+<ul>
+<li><em>Query-independent</em> or <em>static</em> features — those features, which depend only on the document, but not on the query. For example, <a class="uri" href="PageRank" title="wikilink">PageRank</a> or document's length. Such features can be precomputed in off-line mode during indexing. They may be used to compute document's <em>static quality score</em> (or <em>static rank</em>), which is often used to speed up search query evaluation.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a><ref></ref></li>
+</ul>
+
+<p></p>
+<ul>
+<li><em>Query-dependent</em> or <em>dynamic</em> features — those features, which depend both on the contents of the document and the query, such as <a class="uri" href="TF-IDF" title="wikilink">TF-IDF</a> score or other non-machine-learned ranking functions.</li>
+<li><em>Query level features</em> or <em>query features</em>, which depend only on the query. For example, the number of words in a query. <em>Further information: <a href="query_level_feature" title="wikilink">query level feature</a></em></li>
+</ul>
+
+<p>Some examples of features, which were used in the well-known <a class="uri" href="LETOR" title="wikilink">LETOR</a> dataset:<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<ul>
+<li>TF, <a class="uri" href="TF-IDF" title="wikilink">TF-IDF</a>, <a href="Okapi_BM25" title="wikilink">BM25</a>, and <a href="language_modeling" title="wikilink">language modeling</a> scores of document's <a href="Zone_(information_retrieval)" title="wikilink">zones</a> (title, body, anchors text, URL) for a given query;</li>
+<li>Lengths and <a href="Inverse_document_frequency" title="wikilink">IDF</a> sums of document's zones;</li>
+<li>Document's <a class="uri" href="PageRank" title="wikilink">PageRank</a>, <a href="HITS_algorithm" title="wikilink">HITS</a> ranks and their variants.</li>
+</ul>
+
+<p>Selecting and designing good features is an important area in machine learning, which is called <a href="feature_engineering" title="wikilink">feature engineering</a>.</p>
+<h2 id="evaluation-measures">Evaluation measures</h2>
+
+<p>There are several measures (metrics) which are commonly used to judge how well an algorithm is doing on training data and to compare performance of different MLR algorithms. Often a learning-to-rank problem is reformulated as an optimization problem with respect to one of these metrics.</p>
+
+<p>Examples of ranking quality measures:</p>
+<ul>
+<li><a href="Mean_average_precision" title="wikilink">Mean average precision</a> (MAP);</li>
+<li><a href="Discounted_cumulative_gain" title="wikilink">DCG</a> and <a href="Normalized_discounted_cumulative_gain" title="wikilink">NDCG</a>;</li>
+<li><a href="Precision_(information_retrieval)" title="wikilink">Precision</a>@<em>n</em>, NDCG@<em>n</em>, where "@<em>n</em>" denotes that the metrics are evaluated only on top <em>n</em> documents;</li>
+<li><a href="Mean_reciprocal_rank" title="wikilink">Mean reciprocal rank</a>;</li>
+<li><a href="Kendall's_tau" title="wikilink">Kendall's tau</a></li>
+<li><a href="Spearman's_rank_correlation_coefficient" title="wikilink">Spearman's Rho</a></li>
+</ul>
+
+<p>DCG and its normalized variant NDCG are usually preferred in academic research when multiple levels of relevance are used.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> Other metrics such as MAP, MRR and precision, are defined only for binary judgements.</p>
+
+<p>Recently, there have been proposed several new evaluation metrics which claim to model user's satisfaction with search results better than the DCG metric:</p>
+<ul>
+<li><a href="Expected_reciprocal_rank" title="wikilink">Expected reciprocal rank</a> (ERR);<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a></li>
+<li><a class="uri" href="Yandex" title="wikilink">Yandex</a>'s pfound.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a></li>
+</ul>
+
+<p>Both of these metrics are based on the assumption that the user is more likely to stop looking at search results after examining a more relevant document, than after a less relevant document.</p>
+<h2 id="approaches">Approaches</h2>
+
+<p>Tie-Yan Liu of <a href="Microsoft_Research_Asia" title="wikilink">Microsoft Research Asia</a> in his paper "Learning to Rank for Information Retrieval"<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a> and talks at several leading conferences has analyzed existing algorithms for learning to rank problems and categorized them into three groups by their input representation and <a href="loss_function" title="wikilink">loss function</a>:</p>
+<h3 id="pointwise-approach">Pointwise approach</h3>
+
+<p>In this case it is assumed that each query-document pair in the training data has a numerical or ordinal score. Then learning-to-rank problem can be approximated by a regression problem — given a single query-document pair, predict its score.</p>
+
+<p>A number of existing <a href="Supervised_learning" title="wikilink">supervised</a> machine learning algorithms can be readily used for this purpose. <a href="Ordinal_regression" title="wikilink">Ordinal regression</a> and <a href="classification_(machine_learning)" title="wikilink">classification</a> algorithms can also be used in pointwise approach when they are used to predict score of a single query-document pair, and it takes a small, finite number of values.</p>
+<h3 id="pairwise-approach">Pairwise approach</h3>
+
+<p>In this case learning-to-rank problem is approximated by a classification problem — learning a <a href="binary_classifier" title="wikilink">binary classifier</a> that can tell which document is better in a given pair of documents. The goal is to minimize average number of <a href="Permutation#Inversions" title="wikilink">inversions</a> in ranking.</p>
+<h3 id="listwise-approach">Listwise approach</h3>
+
+<p>These algorithms try to directly optimize the value of one of the above evaluation measures, averaged over all queries in the training data. This is difficult because most evaluation measures are not continuous functions with respect to ranking model's parameters, and so continuous approximations or bounds on evaluation measures have to be used.</p>
+<h3 id="list-of-methods">List of methods</h3>
+
+<p>A partial list of published learning-to-rank algorithms is shown below with years of first publication of each method:</p>
+<dl>
+<dd>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Year</p></th>
+<th style="text-align: left;">
+<p>Name</p></th>
+<th style="text-align: left;">
+<p>Type</p></th>
+<th style="text-align: left;">
+<p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>1989</p></td>
+<td style="text-align: left;">
+<p>OPRF <ref name="Fuhr1989">{{citation</ref></p></td>
+<td style="text-align: left;">
+<p>last=Fuhr</p></td>
+<td style="text-align: left;">
+<p>first=Norbert</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>1992</p></td>
+<td style="text-align: left;">
+<p>SLR <ref name="Cooperetal1992">{{citation</ref></p></td>
+<td style="text-align: left;">
+<p>author=Cooper, William S.; Gey, Frederic C.; Dabney, Daniel P.</p></td>
+<td style="text-align: left;">
+<p>journal=SIGIR '92 Proceedings of the 15th annual international ACM SIGIR conference on Research and development in information retrieval</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2000</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/apps/pubs/default.aspx?id=65610">Ranking SVM</a> (RankSVM)</p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>A more recent exposition is in,<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> which describes an application to ranking using clickthrough logs.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2002</p></td>
+<td style="text-align: left;">
+<p>Pranking<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">1</span> pointwise</p></td>
+<td style="text-align: left;">
+<p>Ordinal regression.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2003</p></td>
+<td style="text-align: left;">
+<p><a href="http://jmlr.csail.mit.edu/papers/volume4/freund03a/freund03a.pdf">RankBoost</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2005</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/en-us/um/people/cburges/papers/ICML_ranking.pdf">RankNet</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2006</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/en-us/people/tyliu/cao-et-al-sigir2006.pdf">IR-SVM</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>Ranking SVM with query-level normalization in the loss function.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2006</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/en-us/um/people/cburges/papers/lambdarank.pdf">LambdaRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>RankNet in which pairwise loss function is multiplied by the change in the IR metric caused by a swap.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/en-us/people/junxu/sigir2007-adarank.pdf">AdaRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/apps/pubs/default.aspx?id=70364">FRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>Based on RankNet, uses a different loss function - fidelity loss.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p><a href="http://www.cc.gatech.edu/~zha/papers/fp086-zheng.pdf">GBRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/apps/pubs/default.aspx?id=70428">ListNet</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/apps/pubs/default.aspx?id=68128">McRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">1</span> pointwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p><a href="http://www.stat.rutgers.edu/~tzhang/papers/nips07-ranking.pdf">QBRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/en-us/people/hangli/qin_ipm_2008.pdf">RankCosine</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p>RankGP<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p><a href="http://staff.cs.utu.fi/~aatapa/publications/inpPaTsAiBoSa07a.pdf">RankRLS</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>Regularized least-squares based ranking. The work is extended in <a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a> to learning to rank from general preference graphs.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2007</p></td>
+<td style="text-align: left;">
+<p><a href="http://www.cs.cornell.edu/People/tj/publications/yue_etal_07a.pdf">SVM<sup>map</sup></a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2008</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/pubs/69536/tr-2008-109.pdf">LambdaMART</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>Winning entry in the recent Yahoo Learning to Rank competition used an ensemble of LambdaMART models.<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2008</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/en-us/people/tyliu/icml-listmle.pdf">ListMLE</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;">
+<p>Based on ListNet.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2008</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/en-us/people/junxu/sigir2008-directoptimize.pdf">PermuRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2008</p></td>
+<td style="text-align: left;">
+<p><a href="http://research.microsoft.com/apps/pubs/?id=63585">SoftRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2008</p></td>
+<td style="text-align: left;">
+<p><a href="http://www.cs.pitt.edu/~valizadegan/Publications/ranking_refinement.pdf">Ranking Refinement</a><a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>A semi-supervised approach to learning to rank that uses Boosting.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2008</p></td>
+<td style="text-align: left;">
+<p><a href="http://www-connex.lip6.fr/~amini/SSRankBoost/">SSRankBoost</a><a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>An extension of RankBoost to learn with partially labeled data (semi-supervised learning to rank)</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2008</p></td>
+<td style="text-align: left;">
+<p><a href="http://phd.dii.unisi.it/PosterDay/2009/Tiziano_Papini.pdf">SortNet</a><a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>SortNet, an adaptive ranking algorithm which orders objects using a neural network as a comparator.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2009</p></td>
+<td style="text-align: left;">
+<p><a href="http://itcs.tsinghua.edu.cn/papers/2009/2009031.pdf">MPBoost</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>Magnitude-preserving variant of RankBoost. The idea is that the more unequal are labels of a pair of documents, the harder should the algorithm try to rank them.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2009</p></td>
+<td style="text-align: left;">
+<p><a href="http://www.machinelearning.org/archive/icml2009/papers/498.pdf">BoltzRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;">
+<p>Unlike earlier methods, BoltzRank produces a ranking model that looks during query time not just at a single document, but also at pairs of documents.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2009</p></td>
+<td style="text-align: left;">
+<p><a href="http://www.iis.sinica.edu.tw/papers/whm/8820-F.pdf">BayesRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;">
+<p>A method combines Plackett-Luce Model and neural network to minimize the expected Bayes risk, related to NDCG, from the decision-making aspect.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2010</p></td>
+<td style="text-align: left;">
+<p><a href="http://www.cs.pitt.edu/~valizadegan/Publications/NDCG_Boost.pdf">NDCG Boost</a><a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">3</span> listwise</p></td>
+<td style="text-align: left;">
+<p>A boosting approach to optimize NDCG.</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2010</p></td>
+<td style="text-align: left;">
+<p><a href="http://arxiv.org/abs/1001.4597">GBlend</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise</p></td>
+<td style="text-align: left;">
+<p>Extends GBRank to the learning-to-blend problem of jointly solving multiple learning-to-rank problems with some shared features.</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>2010</p></td>
+<td style="text-align: left;">
+<p><a href="http://wume.cse.lehigh.edu/~ovd209/wsdm/proceedings/docs/p151.pdf">IntervalRank</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pairwise &amp; listwise</p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>2010</p></td>
+<td style="text-align: left;">
+<p><a href="http://www.eecs.tufts.edu/~dsculley/papers/combined-ranking-and-regression.pdf">CRR</a></p></td>
+<td style="text-align: left;">
+<p><span style="display:none">2</span> pointwise &amp; pairwise</p></td>
+<td style="text-align: left;">
+<p>Combined Regression and Ranking. Uses <a href="stochastic_gradient_descent" title="wikilink">stochastic gradient descent</a> to optimize a linear combination of a pointwise quadratic loss and a pairwise hinge loss from Ranking SVM.</p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+
+<p>Note: as most <a href="supervised_learning" title="wikilink">supervised learning</a> algorithms can be applied to pointwise case, only those methods which are specifically designed with ranking in mind are shown above.</p>
+<h2 id="history">History</h2>
+
+<p><a href="Norbert_Fuhr" title="wikilink">Norbert Fuhr</a> introduced the general idea of MLR in 1992, describing learning approaches in information retrieval as a generalization of parameter estimation;<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a> a specific variant of this approach (using <a href="polynomial_regression" title="wikilink">polynomial regression</a>) had been published by him three years earlier.<a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a> Bill Cooper proposed <a href="logistic_regression" title="wikilink">logistic regression</a> for the same purpose in 1992 <a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a> and used it with his <a href="University_of_California_at_Berkeley" title="wikilink">Berkeley</a> research group to train a successful ranking function for <a href="Text_Retrieval_Conference" title="wikilink">TREC</a>. Manning et al.<a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a> suggest that these early works achieved limited results in their time due to little available training data and poor machine learning techniques.</p>
+
+<p>Several conferences, such as <a href="Neural_Information_Processing_Systems" title="wikilink">NIPS</a>, <a href="Special_Interest_Group_on_Information_Retrieval" title="wikilink">SIGIR</a> and <a href="International_Conference_on_Machine_Learning" title="wikilink">ICML</a> had workshops devoted to the learning-to-rank problem since mid-2000s (decade).</p>
+<h3 id="practical-usage-by-search-engines">Practical usage by search engines</h3>
+
+<p>Commercial <a href="web_search_engine" title="wikilink">web search engines</a> began using machine learned ranking systems since the 2000s (decade). One of the first search engines to start using it was <a class="uri" href="AltaVista" title="wikilink">AltaVista</a> (later its technology was acquired by <a href="Overture_Services,_Inc." title="wikilink">Overture</a>, and then <a class="uri" href="Yahoo" title="wikilink">Yahoo</a>), which launched a <a href="gradient_boosting" title="wikilink">gradient boosting</a>-trained ranking function in April 2003.<a class="footnoteRef" href="#fn31" id="fnref31"><sup>31</sup></a><a class="footnoteRef" href="#fn32" id="fnref32"><sup>32</sup></a></p>
+
+<p><a href="Bing_(search_engine)" title="wikilink">Bing</a>'s search is said to be powered by <a class="uri" href="RankNet" title="wikilink">RankNet</a> algorithm,<a class="footnoteRef" href="#fn33" id="fnref33"><sup>33</sup></a> which was invented at <a href="Microsoft_Research" title="wikilink">Microsoft Research</a> in 2005.</p>
+
+<p>In November 2009 a Russian search engine <a class="uri" href="Yandex" title="wikilink">Yandex</a> announced<a class="footnoteRef" href="#fn34" id="fnref34"><sup>34</sup></a> that it had significantly increased its <a href="search_quality" title="wikilink">search quality</a> due to deployment of a new proprietary MatrixNet algorithm, a variant of <a href="gradient_boosting" title="wikilink">gradient boosting</a> method which uses <a href="oblivious_decision_tree" title="wikilink">oblivious decision trees</a>.<a class="footnoteRef" href="#fn35" id="fnref35"><sup>35</sup></a> Recently they have also sponsored a machine-learned ranking competition "Internet Mathematics 2009"<a class="footnoteRef" href="#fn36" id="fnref36"><sup>36</sup></a> based on their own search engine's production data. Yahoo has announced a similar competition in 2010.<a class="footnoteRef" href="#fn37" id="fnref37"><sup>37</sup></a></p>
+
+<p>As of 2008, <a class="uri" href="Google" title="wikilink">Google</a>'s <a href="Peter_Norvig" title="wikilink">Peter Norvig</a> denied that their search engine exclusively relies on machine-learned ranking.<a class="footnoteRef" href="#fn38" id="fnref38"><sup>38</sup></a> <a class="uri" href="Cuil" title="wikilink">Cuil</a>'s CEO, <a href="Tom_Costello_(businessman)" title="wikilink">Tom Costello</a>, suggests that they prefer hand-built models because they can outperform machine-learned models when measured against metrics like click-through rate or time on landing page, which is because machine-learned models "learn what people say they like, not what people actually like".<a class="footnoteRef" href="#fn39" id="fnref39"><sup>39</sup></a></p>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<dl>
+<dt>Competitions and public datasets</dt>
+</dl>
+<ul>
+<li><a href="http://research.microsoft.com/en-us/um/people/letor/">LETOR: A Benchmark Collection for Research on Learning to Rank for Information Retrieval</a></li>
+<li><a href="http://imat2009.yandex.ru/en/">Yandex's Internet Mathematics 2009</a></li>
+<li><a href="http://learningtorankchallenge.yahoo.com/">Yahoo! Learning to Rank Challenge</a></li>
+<li><a href="http://research.microsoft.com/en-us/projects/mslr/default.aspx">Microsoft Learning to Rank Datasets</a></li>
+</ul>
+<dl>
+<dt>Open Source code</dt>
+</dl>
+<ul>
+<li><a href="https://mloss.org/software/view/332/">Parallel C++/MPI implementation of Gradient Boosted Regression Trees for ranking, released September 2011</a></li>
+<li><a href="https://sites.google.com/site/rtranking/">C++ implementation of Gradient Boosted Regression Trees and Random Forests for ranking</a></li>
+<li><a href="http://dlib.net/ml.html#svm_rank_trainer">C++ and Python tools for using the SVM-Rank algorithm</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Information_retrieval_techniques" title="wikilink">Category:Information retrieval techniques</a> <a href="Category:Machine_learning" title="wikilink">Category:Machine learning</a> <a href="Category:Ranking_functions" title="wikilink">Category:Ranking functions</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">. Slides from Tie-Yan Liu's talk at <a href="World_Wide_Web_Conference" title="wikilink">WWW</a> 2009 conference are <a href="http://www2009.org/pdf/T7A-LEARNING%20TO%20RANK%20TUTORIAL.pdf">available online</a><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="Mehryar_Mohri" title="wikilink">Mehryar Mohri</a>, Afshin Rostamizadeh, Ameet Talwalkar (2012) <em>Foundations of Machine Learning</em>, The MIT Press ISBN 9780262018258.<a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7">. Section <a href="http://nlp.stanford.edu/IR-book/html/htmledition/efficient-scoring-and-ranking-1.html">7.1</a><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11">Yuanhua Lv, Taesup Moon, Pranam Kolari, Zhaohui Zheng, Xuanhui Wang, and Yi Chang, <a href="http://sifaka.cs.uiuc.edu/~ylv2/pub/www11-relatedness.pdf"><em>Learning to Model Relatedness for News Recommendation</em></a>, in International Conference on World Wide Web (WWW), 2011.<a href="#fnref11">↩</a></li>
+<li id="fn12"></li>
+<li id="fn13"><a href="http://research.microsoft.com/en-us/people/taoqin/letor3.pdf">LETOR 3.0. A Benchmark Collection for Learning to Rank for Information Retrieval</a><a href="#fnref13">↩</a></li>
+<li id="fn14"><a class="uri" href="http://www.stanford.edu/class/cs276/handouts/lecture15-learning-ranking.ppt">http://www.stanford.edu/class/cs276/handouts/lecture15-learning-ranking.ppt</a><a href="#fnref14">↩</a></li>
+<li id="fn15"><a href="#fnref15">↩</a></li>
+<li id="fn16"> (in Russian)<a href="#fnref16">↩</a></li>
+<li id="fn17"></li>
+<li id="fn18"></li>
+<li id="fn19"><a href="#fnref19">↩</a></li>
+<li id="fn20"><a href="#fnref20">↩</a></li>
+<li id="fn21"><a href="#fnref21">↩</a></li>
+<li id="fn22">C. Burges. (2010). <a href="http://research.microsoft.com/en-us/um/people/cburges/tech_reports/MSR-TR-2010-82.pdf">From RankNet to LambdaRank to LambdaMART: An Overview</a>.<a href="#fnref22">↩</a></li>
+<li id="fn23">Rong Jin, Hamed Valizadegan, Hang Li, <a href="http://www.cs.pitt.edu/~valizadegan/Publications/ranking_refinement.pdf"><em>Ranking Refinement and Its Application for Information Retrieval</em></a>, in International Conference on World Wide Web (WWW), 2008.<a href="#fnref23">↩</a></li>
+<li id="fn24">Massih-Reza Amini, Vinh Truong, Cyril Goutte, <a href="http://www-connex.lip6.fr/~amini/Publis/SemiSupRanking_sigir08.pdf"><em>A Boosting Algorithm for Learning Bipartite Ranking Functions with Partially Labeled Data</em></a>, International ACM SIGIR conference, 2008. The <a href="http://www-connex.lip6.fr/~amini/SSRankBoost/">code</a> is available for research purposes.<a href="#fnref24">↩</a></li>
+<li id="fn25">Leonardo Rigutini, Tiziano Papini, Marco Maggini, Franco Scarselli, <a href="http://research.microsoft.com/en-us/um/beijing/events/lr4ir-2008/PROCEEDINGS-LR4IR%202008.PDF">"SortNet: learning to rank by a neural-based sorting algorithm"</a>, SIGIR 2008 workshop: Learning to Rank for Information Retrieval, 2008<a href="#fnref25">↩</a></li>
+<li id="fn26">Hamed Valizadegan, Rong Jin, Ruofei Zhang, Jianchang Mao, <a href="http://www.cs.pitt.edu/~valizadegan/Publications/NDCG_Boost.pdf"><em>Learning to Rank by Optimizing NDCG Measure</em></a>, in Proceeding of Neural Information Processing Systems (NIPS), 2010.<a href="#fnref26">↩</a></li>
+<li id="fn27"><a href="#fnref27">↩</a></li>
+<li id="fn28"></li>
+<li id="fn29"></li>
+<li id="fn30">. Sections <a href="http://nlp.stanford.edu/IR-book/html/htmledition/references-and-further-reading-7.html">7.4</a> and <a href="http://nlp.stanford.edu/IR-book/html/htmledition/references-and-further-reading-15.html">15.5</a><a href="#fnref30">↩</a></li>
+<li id="fn31">Jan O. Pedersen. <a href="http://jopedersen.com/Presentations/The_MLR_Story.pdf">The MLR Story</a><a href="#fnref31">↩</a></li>
+<li id="fn32"><a href="#fnref32">↩</a></li>
+<li id="fn33"><a href="http://www.bing.com/community/blogs/search/archive/2009/06/01/user-needs-features-and-the-science-behind-bing.aspx?PageIndex=4">Bing Search Blog: User Needs, Features and the Science behind Bing</a><a href="#fnref33">↩</a></li>
+<li id="fn34">[<a class="uri" href="http://webmaster.ya.ru/replies.xml?item_no=5707&amp;ncrnd">http://webmaster.ya.ru/replies.xml?item_no=5707&amp;ncrnd;</a>;=5118 Yandex corporate blog entry about new ranking model "Snezhinsk"] (in Russian)<a href="#fnref34">↩</a></li>
+<li id="fn35">The algorithm wasn't disclosed, but a few details were made public in <a href="http://download.yandex.ru/company/experience/GDD/Zadnie_algoritmy_Karpovich.pdf">1</a> and <a href="http://download.yandex.ru/company/experience/searchconf/Searchconf_Algoritm_MatrixNet_Gulin.pdf">2</a>.<a href="#fnref35">↩</a></li>
+<li id="fn36"><a href="http://imat2009.yandex.ru/academic/mathematic/2009/en/">Yandex's Internet Mathematics 2009 competition page</a><a href="#fnref36">↩</a></li>
+<li id="fn37"><a href="http://learningtorankchallenge.yahoo.com/">Yahoo Learning to Rank Challenge</a><a href="#fnref37">↩</a></li>
+<li id="fn38"><a href="#fnref38">↩</a></li>
+<li id="fn39"><a href="#fnref39">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

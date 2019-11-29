@@ -1,0 +1,971 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1346">Slice sampling</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Slice sampling</h1>
+<hr/>
+
+<p><strong>Slice sampling</strong> is a type of <a href="Markov_chain_Monte_Carlo" title="wikilink">Markov chain Monte Carlo</a> <a class="uri" href="algorithm" title="wikilink">algorithm</a> for <a href="pseudo-random_number_sampling" title="wikilink">pseudo-random number sampling</a>, i.e. for drawing random samples from a statistical distribution. The method is based on the observation that to sample a <a href="random_variable" title="wikilink">random variable</a> one can sample uniformly from the region under the graph of its density function.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>To visualize this motivation, imagine printing out a simple bell curve and throwing darts at it. Assume that the darts are uniformly distributed around the board. Now take off all of the darts that are outside the curve (i.e. perform <a href="rejection_sampling" title="wikilink">rejection sampling</a>). The x-positions of the remaining darts will be distributed according to the bell curve. This is because there is the most room for the darts to land where curve is highest and thus the probability density is greatest.</p>
+
+<p>Slice sampling, in its simplest form, samples uniformly from underneath the curve f(x) without the need to reject any points, as follows:</p>
+<ol>
+<li>Choose a starting value x<sub>0</sub> for which f(x<sub>0</sub>)&gt;0.</li>
+<li>Sample a y value uniformly between 0 and f(x<sub>0</sub>).</li>
+<li>Draw a horizontal line across the curve at this y position.</li>
+<li>Sample a point (x,y) from the line segments within the curve.</li>
+<li>Repeat from step 2 using the new x value.</li>
+</ol>
+
+<p>The motivation here is that one way to sample a point uniformly from within an arbitrary curve is first to draw thin uniform-height horizontal slices across the whole curve. Then, we can sample a point within the curve by randomly selecting a slice that falls at or below the curve at the x-position from the previous iteration, then randomly picking an x-position somewhere along the slice. By using the x-position from the previous iteration of the algorithm, in the long run we select slices with probabilities proportional to the lengths of their segments within the curve.</p>
+
+<p>Generally, the trickiest part of this algorithm is finding the bounds of the horizontal slice, which involves inverting the function describing the distribution being sampled from. This is especially problematic for multi-modal distributions, where the slice may consist of multiple discontiguous parts. It is often possible to use a form of rejection sampling to overcome this, where we sample from a larger slice that is known to include the desired slice in question, and then discard points outside of the desired slice.</p>
+
+<p>Note also that this algorithm can be used to sample from the area under <em>any</em> curve, regardless of whether the function integrates to 1. In fact, scaling a function by a constant has no effect on the sampled x-positions. This means that the algorithm can be used to sample from a distribution whose <a href="probability_density_function" title="wikilink">probability density function</a> is only known up to a constant (i.e. whose <a href="normalizing_constant" title="wikilink">normalizing constant</a> is unknown), which is common in <a href="computational_statistics" title="wikilink">computational statistics</a>.</p>
+<h2 id="implementation">Implementation</h2>
+
+<p>Slice sampling gets its name from the first step: defining a <em>slice</em> by sampling from an auxiliary variable 
+
+<math display="inline" id="Slice_sampling:0">
+ <semantics>
+  <mi>Y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y
+  </annotation>
+ </semantics>
+</math>
+
+. This variable is sampled from 
+
+<math display="inline" id="Slice_sampling:1">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">[</mo>
+   <mn>0</mn>
+   <mo>,</mo>
+   <mrow>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo stretchy="false">]</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="closed">
+    <cn type="integer">0</cn>
+    <apply>
+     <times></times>
+     <ci>f</ci>
+     <ci>x</ci>
+    </apply>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [0,f(x)]
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Slice_sampling:2">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>f</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f(x)
+  </annotation>
+ </semantics>
+</math>
+
+ is either the probability density function (pdf) of <em>X</em> or is at least proportional to its pdf. This defines a slice of <em>X</em> where 
+
+<math display="inline" id="Slice_sampling:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>></mo>
+   <mi>Y</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <apply>
+     <times></times>
+     <ci>f</ci>
+     <ci>x</ci>
+    </apply>
+    <ci>Y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f(x)>Y
+  </annotation>
+ </semantics>
+</math>
+
+. In other words, we are now looking at a region of <em>X</em> where the probability density is at least 
+
+<math display="inline" id="Slice_sampling:4">
+ <semantics>
+  <mi>Y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y
+  </annotation>
+ </semantics>
+</math>
+
+. Then the next value of <em>X</em> is sampled uniformly from this slice. A new value of 
+
+<math display="inline" id="Slice_sampling:5">
+ <semantics>
+  <mi>Y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y
+  </annotation>
+ </semantics>
+</math>
+
+ is sampled, then <em>X</em>, and so on. This can be visualized as alternatively sampling the y-position and then the x-position of points under pdf, thus the <em>X</em>s are from the desired distribution. The 
+
+<math display="inline" id="Slice_sampling:6">
+ <semantics>
+  <mi>Y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y
+  </annotation>
+ </semantics>
+</math>
+
+ values have no particular consequences or interpretations outside of their usefulness for the procedure.</p>
+
+<p>If both the pdf and its inverse are available, and the distribution is unimodal, then finding the slice and sampling from it are simple. If not, a stepping-out procedure can be used to find a region whose endpoints fall outside the slice. Then, a sample can be drawn from the slice using <a href="rejection_sampling" title="wikilink">rejection sampling</a>. Various procedures for this are described in detail by Neal.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>Note that, in contrast to many available methods for generating random numbers from non-uniform distributions, random variates generated directly by this approach will exhibit serial statistical dependence. This is because to draw the next sample, we define the slice based on the value of f(x) for the current sample.</p>
+<h2 id="motivation">Motivation</h2>
+
+<p>Suppose you want to sample some random variable <em>X</em> with distribution f(x). Suppose that the following is the graph of f(x). The height of f(x) corresponds to the likelihood at that point.</p>
+<figure><b>(Figure)</b>
+<figcaption>Some probability distribution.png</figcaption>
+</figure>
+
+<p>If you were to uniformly sample <em>X</em>, each value would have the same likelihood of being sampled, and your distribution would be of the form f(x)=y for some <em>y</em> value instead of some non-uniform function f(x). Instead of the original black line, your new distribution would look more like the blue line.</p>
+<figure><b>(Figure)</b>
+<figcaption>A horizontally sliced distribution.png</figcaption>
+</figure>
+
+<p>In order to sample <em>X</em> in a manner which will retain the distribution f(x), some sampling technique must be used which takes into account the varied likelihoods for each range of f(x).</p>
+<h2 id="compared-to-other-methods">Compared to Other Methods</h2>
+
+<p>Slice sampling is a Markov chain method and as such serves the same purpose as Gibbs sampling and Metropolis. Unlike Metropolis, there is no need to manually tune the candidate function or candidate standard deviation.</p>
+
+<p>Recall that Metropolis is sensitive to step size. If the step size is too small random walk causes slow decorrelation. If the step size is too large there is great inefficiency due to a high rejection rate.</p>
+
+<p>In contrast to Metropolis, slice sampling automatically adjusts the step size to match the local shape of the density function. Implementation is arguably easier and more efficient than Gibbs sampling or simple Metropolis updates.</p>
+
+<p>Note that, in contrast to many available methods for generating random numbers from non-uniform distributions, random variates generated directly by this approach will exhibit serial statistical dependence. In other words, not all points have the same independent likelihood of selection. This is because to draw the next sample, we define the slice based on the value of f(x) for the current sample. However, the generated are <a href="Markov_property" title="wikilink">markovian</a>, and are therefore expected to converge to the correct distribution in long run.</p>
+
+<p>Slice Sampling requires that the distribution to be sampled be evaluable. One way to relax this requirement is to substitute an evaluable distribution which is proportional to the true unevaluable distribution.</p>
+<h2 id="univariate-case">Univariate Case</h2>
+
+<p> To sample a random variable <em>X</em> with density f(x) we introduce an auxiliary variable <em>Y</em> and iterate as follows:</p>
+<ul>
+<li>Given a sample <em>x</em> we choose <em>y</em> uniformly at random from the interval [0, f(x)];</li>
+<li>given <em>y</em> we choose <em>x</em> uniformly at random from the set 
+
+<math display="inline" id="Slice_sampling:7">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>f</mi>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msup>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>y</mi>
+    <mo>,</mo>
+    <mrow>
+     <mo>+</mo>
+     <mi mathvariant="normal">∞</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>f</ci>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <interval closure="closed-open">
+     <ci>y</ci>
+     <apply>
+      <plus></plus>
+      <infinity></infinity>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f^{-1}[y,+\infty)
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+<li>The sample of <em>x</em> is obtained by ignoring the <em>y</em> values.</li>
+</ul>
+
+<p>Our auxiliary variable <em>Y</em> represents a horizontal "slice" of the distribution. The rest of each iteration is dedicated to sampling an <em>x</em> value from the slice which is representative of the density of the region being considered.</p>
+
+<p>In practice, sampling from a horizontal slice of a multimodal distribution is difficult. There is a tension between obtaining a large sampling region and thereby making possible large moves in the distribution space, and obtaining a simpler sampling region to increase efficiency. One option for simplifying this process is regional expansion and contraction.</p>
+<ul>
+<li>First, a width parameter <em>w</em> is used to define the area containing the given <em>x</em> value. Each endpoint of this area is tested to see if it lies outside the given slice. If not, the region is extended in the appropriate direction(s) by <em>w</em> until the end both endpoints lie outside the slice.</li>
+</ul>
+<ul>
+<li>A candidate sample is selected uniformly from within this region. If the candidate sample lies inside of the slice, then it is accepted as the new sample. If it lies outside of the slice, the candidate point becomes the new boundary for the region. A new candidate sample is taken uniformly. The process repeats until the candidate sample is within the slice. (See diagram for a visual example).</li>
+</ul>
+<figure><b>(Figure)</b>
+<figcaption>Finding a sample given a set of slices (the slices are represented here as blue lines and correspond to the solid line slices in the previous graph of f(x) ). a) A width parameter <em>w</em> is set. b) A region of width <em>w</em> is identified around a given point 
+
+<math display="inline" id="Slice_sampling:8">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mn>0</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{0}
+  </annotation>
+ </semantics>
+</math>
+
+. c) The region is expanded by <em>w</em> until both endpoints are outside of the considered slice. d) 
+
+<math display="inline" id="Slice_sampling:9">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ is selected uniformly from the region. e) Since 
+
+<math display="inline" id="Slice_sampling:10">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ lies outside the considered slice, the region's left bound is adjusted to 
+
+<math display="inline" id="Slice_sampling:11">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{1}
+  </annotation>
+ </semantics>
+</math>
+
+. f) Another uniform sample 
+
+<math display="inline" id="Slice_sampling:12">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ is taken and accepted as the sample since it lies within the considered slice.</figcaption>
+</figure>
+<h2 id="multivariate-methods">Multivariate Methods</h2>
+<h3 id="treating-each-variable-independently">Treating each variable independently</h3>
+
+<p>Single variable slice sampling can be used in the multivariate case by sampling each variable in turn repeatedly, as in Gibbs sampling. To do so requires that we can compute, for each component 
+
+<math display="inline" id="Slice_sampling:13">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ a function that is proportional to 
+
+<math display="inline" id="Slice_sampling:14">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>i</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>x</mi>
+     <mn>0</mn>
+    </msub>
+    <mi mathvariant="normal">…</mi>
+    <msub>
+     <mi>x</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">0</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(x_{i}|x_{0}...x_{n})
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>To prevent random walk behavior, overrelaxation methods can be used to update each variable in turn. Overrelaxation chooses a new value on the opposite side of the mode from the current value, as opposed to choosing a new independent value from the distribution as done in Gibbs.</p>
+<h3 id="hyperrectangle-slice-sampling">Hyperrectangle slice sampling</h3>
+
+<p>This method adapts the univariate algorithm to the multivariate case by substituting a hyperrectangle for the one-dimensional <em>w</em> region used in the original. The hyperrectangle <em>H</em> is initialized to a random position over the slice. <em>H</em> is then shrunken as points from it are rejected.</p>
+<h3 id="reflective-slice-sampling">Reflective slice sampling</h3>
+
+<p>Reflective slice sampling is a technique to suppress random walk behavior in which the successive candidate samples of distribution f(x) are kept within the bounds of the slice by "reflecting" the direction of sampling inward toward the slice once the boundary has been hit.</p>
+
+<p>In this graphical representation of reflective sampling, the shape indicates the bounds of a sampling slice. The dots indicate start and stopping points of a sampling walk. When the samples hit the bounds of the slice, the direction of sampling is "reflected" back into the slice.</p>
+<figure><b>(Figure)</b>
+<figcaption>An example of reflection sampling.png</figcaption>
+</figure>
+<h2 id="example">Example</h2>
+
+<p>Let us consider a single variable example. Suppose our true distribution 
+
+<math display="inline" id="Slice_sampling:15">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>g</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>∼</mo>
+   <mrow>
+    <mi>N</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mn>0</mn>
+     <mo>,</mo>
+     <mn>5</mn>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <apply>
+     <times></times>
+     <ci>g</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>N</ci>
+     <interval closure="open">
+      <cn type="integer">0</cn>
+      <cn type="integer">5</cn>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g(x)\sim N(0,5)
+  </annotation>
+ </semantics>
+</math>
+
+. So: 
+
+<math display="inline" id="Slice_sampling:16">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mpadded width="+5pt">
+     <mfrac>
+      <mn>1</mn>
+      <msqrt>
+       <mrow>
+        <mrow>
+         <mn>2</mn>
+         <mi>π</mi>
+        </mrow>
+        <mo>⋅</mo>
+        <msup>
+         <mn>5</mn>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+      </msqrt>
+     </mfrac>
+    </mpadded>
+    <msup>
+     <mi>e</mi>
+     <mrow>
+      <mo>-</mo>
+      <mfrac>
+       <msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>x</mi>
+          <mo>-</mo>
+          <mn>0</mn>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+       <mrow>
+        <mn>2</mn>
+        <mo>⋅</mo>
+        <msup>
+         <mn>5</mn>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+      </mfrac>
+     </mrow>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>f</ci>
+     <ci>x</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <apply>
+       <root></root>
+       <apply>
+        <ci>normal-⋅</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">2</cn>
+         <ci>π</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <cn type="integer">5</cn>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>e</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <divide></divide>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <minus></minus>
+          <ci>x</ci>
+          <cn type="integer">0</cn>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <ci>normal-⋅</ci>
+         <cn type="integer">2</cn>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <cn type="integer">5</cn>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f(x)=\frac{1}{\sqrt{2\pi\cdot 5^{2}}}\ e^{-\frac{(x-0)^{2}}{2\cdot 5^{2}}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<ul>
+<li>We first draw a uniform random value <em>y</em> from the range of f(x) in order to define our slice(es). Suppose y=0.01.</li>
+</ul>
+<ul>
+<li>Next, we set our width parameter <em>w</em> which we will use to expand our region of consideration. Suppose w=2.</li>
+</ul>
+<ul>
+<li>Next, we need an initial value for <em>x</em>. We draw <em>x</em> from the uniform distribution within the domain of f(x) at our current <em>y</em>. Suppose x=2.</li>
+</ul>
+<ul>
+<li>Because x=2 and w=2, our current region of interest is bounded by (1,3).</li>
+</ul>
+<ul>
+<li>Now, each endpoint of this area is tested to see if it lies outside the given slice. Our right bound lies outside our slice, but the left value does not. We expand the left bound by adding <em>w</em> to it until it extends past the limit of the slice. After this process, the new bounds of our region of interest are (-4,3).</li>
+</ul>
+<ul>
+<li>Next, we take a uniform sample within (-4,3). Suppose this sample yields x=-3.9. Though this sample is within our region of interest, it does not lie within our slice, so we modify the left bound of our region of interest to this point. Now we take a uniform sample from (-3.9,3). This time our sample yields x=1, which is within our slice, and thus is our accepted sample. Had our new <em>x</em> not been within our slice, we would continue the shrinking/resampling process until a valid <em>x</em> within bounds is found.</li>
+</ul>
+<h2 id="another-example">Another Example</h2>
+
+<p>To sample from the <a href="normal_distribution" title="wikilink">normal distribution</a> 
+
+<math display="inline" id="Slice_sampling:17">
+ <semantics>
+  <mrow>
+   <mi>N</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>0</mn>
+    <mo>,</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>N</ci>
+    <interval closure="open">
+     <cn type="integer">0</cn>
+     <cn type="integer">1</cn>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N(0,1)
+  </annotation>
+ </semantics>
+</math>
+
+ we first choose an initial <em>x</em>—say 0. After each sample of <em>x</em> we choose <em>y</em> uniformly at random from 
+
+<math display="inline" id="Slice_sampling:18">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mn>0</mn>
+   <mo>,</mo>
+   <mrow>
+    <msup>
+     <mi>e</mi>
+     <mrow>
+      <mo>-</mo>
+      <mrow>
+       <msup>
+        <mi>x</mi>
+        <mn>2</mn>
+       </msup>
+       <mo>/</mo>
+       <mn>2</mn>
+      </mrow>
+     </mrow>
+    </msup>
+    <mo>/</mo>
+    <msqrt>
+     <mrow>
+      <mn>2</mn>
+      <mi>π</mi>
+     </mrow>
+    </msqrt>
+   </mrow>
+   <mo stretchy="false">]</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open-closed">
+    <cn type="integer">0</cn>
+    <apply>
+     <divide></divide>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>e</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <divide></divide>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>x</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <root></root>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <ci>π</ci>
+      </apply>
+     </apply>
+    </apply>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (0,e^{-x^{2}/2}/\sqrt{2\pi}]
+  </annotation>
+ </semantics>
+</math>
+
+, which is bounded the pdf of 
+
+<math display="inline" id="Slice_sampling:19">
+ <semantics>
+  <mrow>
+   <mi>N</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>0</mn>
+    <mo>,</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>N</ci>
+    <interval closure="open">
+     <cn type="integer">0</cn>
+     <cn type="integer">1</cn>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N(0,1)
+  </annotation>
+ </semantics>
+</math>
+
+. After each <em>y</em> sample we choose <em>x</em> uniformly at random from 
+
+<math display="inline" id="Slice_sampling:20">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">[</mo>
+   <mrow>
+    <mo>-</mo>
+    <mi>α</mi>
+   </mrow>
+   <mo>,</mo>
+   <mi>α</mi>
+   <mo stretchy="false">]</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="closed">
+    <apply>
+     <minus></minus>
+     <ci>α</ci>
+    </apply>
+    <ci>α</ci>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   [-\alpha,\alpha]
+  </annotation>
+ </semantics>
+</math>
+
+ where 
+
+<math display="inline" id="Slice_sampling:21">
+ <semantics>
+  <mrow>
+   <mi>α</mi>
+   <mo>=</mo>
+   <msqrt>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <mn>2</mn>
+      <mrow>
+       <mi>ln</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mi>y</mi>
+         <msqrt>
+          <mrow>
+           <mn>2</mn>
+           <mi>π</mi>
+          </mrow>
+         </msqrt>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </msqrt>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>α</ci>
+    <apply>
+     <root></root>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <apply>
+        <ln></ln>
+        <apply>
+         <times></times>
+         <ci>y</ci>
+         <apply>
+          <root></root>
+          <apply>
+           <times></times>
+           <cn type="integer">2</cn>
+           <ci>π</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha=\sqrt{-2\ln(y\sqrt{2\pi})}
+  </annotation>
+ </semantics>
+</math>
+
+. This is the slice where 
+
+<math display="inline" id="Slice_sampling:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>f</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>></mo>
+   <mi>y</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <apply>
+     <times></times>
+     <ci>f</ci>
+     <ci>x</ci>
+    </apply>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   f(x)>y
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>An implementation in the <a class="uri" href="Macsyma" title="wikilink">Macsyma</a> language is:</p>
+<pre class="smalltalk"><code>slice(x):=block([y,alpha],
+ y:random( exp(-x^2/2.0)/sqrt(2.0*dfloat(%pi))),
+ alpha:sqrt(-2.0*ln(y*sqrt(2.0*dfloat(%pi)))),
+ x:signum(random())*random(alpha)
+);</code></pre>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Markov_chain_Monte_Carlo" title="wikilink">Markov chain Monte Carlo</a></li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a class="uri" href="http://www.probability.ca/jeff/java/slice.html">http://www.probability.ca/jeff/java/slice.html</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Markov_chain_Monte_Carlo" title="wikilink">Category:Markov chain Monte Carlo</a> <a href="Category:Non-uniform_random_numbers" title="wikilink">Category:Non-uniform random numbers</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Damlen, P., Wakefield, J., &amp; Walker, S. (1999). Gibbs sampling for Bayesian non‐conjugate and hierarchical models by using auxiliary variables. Journal of the Royal Statistical Society: Series B (Statistical Methodology), 61(2), 331-344.Chicago<a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"></li>
+</ol>
+</section>
+</body>
+</html>

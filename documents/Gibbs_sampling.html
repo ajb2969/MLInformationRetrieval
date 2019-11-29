@@ -1,0 +1,2371 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1378">Gibbs sampling</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Gibbs sampling</h1>
+<hr/>
+
+<p>In <a class="uri" href="statistics" title="wikilink">statistics</a> and in <a href="statistical_physics" title="wikilink">statistical physics</a>, <strong>Gibbs sampling</strong> or a <strong>Gibbs sampler</strong> is a <a href="Markov_chain_Monte_Carlo" title="wikilink">Markov chain Monte Carlo</a> (MCMC) <a class="uri" href="algorithm" title="wikilink">algorithm</a> for obtaining a sequence of observations which are approximated from a specified <a href="multivariate_distribution" title="wikilink">multivariate</a> <a href="probability_distribution" title="wikilink">probability distribution</a> (i.e. from the <a href="joint_probability" title="wikilink">joint probability distribution</a> of two or more <a href="random_variables" title="wikilink">random variables</a>), when direct sampling is difficult. This sequence can be used to approximate the joint distribution (e.g., to generate a histogram of the distribution); to approximate the <a href="marginal_distribution" title="wikilink">marginal distribution</a> of one of the variables, or some subset of the variables (for example, the unknown <a href="parameter" title="wikilink">parameters</a> or <a href="latent_variable" title="wikilink">latent variables</a>); or to compute an <a class="uri" href="integral" title="wikilink">integral</a> (such as the <a href="expected_value" title="wikilink">expected value</a> of one of the variables). Typically, some of the variables correspond to observations whose values are known, and hence do not need to be sampled.</p>
+
+<p>Gibbs sampling is commonly used as a means of <a href="statistical_inference" title="wikilink">statistical inference</a>, especially <a href="Bayesian_inference" title="wikilink">Bayesian inference</a>. It is a <a href="randomized_algorithm" title="wikilink">randomized algorithm</a> (i.e. an algorithm that makes use of <a href="random_number_generation" title="wikilink">random numbers</a>, and hence may produce different results each time it is run), and is an alternative to <a href="deterministic_algorithm" title="wikilink">deterministic algorithms</a> for statistical inference such as <a href="variational_Bayes" title="wikilink">variational Bayes</a> or the <a href="expectation-maximization_algorithm" title="wikilink">expectation-maximization algorithm</a> (EM).</p>
+
+<p>As with other MCMC algorithms, Gibbs sampling generates a <a href="Markov_chain" title="wikilink">Markov chain</a> of samples, each of which is <a href="autocorrelation" title="wikilink">correlated</a> with nearby samples. As a result, care must be taken if independent samples are desired (typically by <em>thinning</em> the resulting chain of samples by only taking every <em>n</em>th value, e.g. every 100th value). In addition (again, as in other MCMC algorithms), samples from the beginning of the chain (the <em>burn-in period</em>) may not accurately represent the desired distribution.</p>
+<h2 id="introduction">Introduction</h2>
+
+<p>Gibbs sampling is named after the physicist <a href="Josiah_Willard_Gibbs" title="wikilink">Josiah Willard Gibbs</a>, in reference to an analogy between the <a href="Sampling_(statistics)" title="wikilink">sampling</a> algorithm and <a href="statistical_physics" title="wikilink">statistical physics</a>. The algorithm was described by brothers <a href="Stuart_Geman" title="wikilink">Stuart</a> and <a href="Donald_Geman" title="wikilink">Donald Geman</a> in 1984, some eight decades after the death of Gibbs.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p>In its basic version, Gibbs sampling is a special case of the <a href="Metropolis–Hastings_algorithm" title="wikilink">Metropolis–Hastings algorithm</a>. However, in its extended versions (see <a href="#Variations_and_extensions" title="wikilink">below</a>), it can be considered a general framework for sampling from a large set of variables by sampling each variable (or in some cases, each group of variables) in turn, and can incorporate the <a href="Metropolis–Hastings_algorithm" title="wikilink">Metropolis–Hastings algorithm</a> (or similar methods such as <a href="slice_sampling" title="wikilink">slice sampling</a>) to implement one or more of the sampling steps.</p>
+
+<p>Gibbs sampling is applicable when the joint distribution is not known explicitly or is difficult to sample from directly, but the <a href="conditional_distribution" title="wikilink">conditional distribution</a> of each variable is known and is easy (or at least, easier) to sample from. The Gibbs sampling algorithm generates an instance from the distribution of each variable in turn, conditional on the current values of the other variables. It can be shown (see, for example, Gelman et al. 1995) that the sequence of samples constitutes a <a href="Markov_chain" title="wikilink">Markov chain</a>, and the stationary distribution of that Markov chain is just the sought-after joint distribution.</p>
+
+<p>Gibbs sampling is particularly well-adapted to sampling the <a href="posterior_probability" title="wikilink">posterior distribution</a> of a <a href="Bayesian_network" title="wikilink">Bayesian network</a>, since Bayesian networks are typically specified as a collection of conditional distributions.</p>
+<h2 id="implementation">Implementation</h2>
+
+<p>Gibbs sampling, in its basic incarnation, is a special case of the <a href="Metropolis–Hastings_algorithm" title="wikilink">Metropolis–Hastings algorithm</a>. The point of Gibbs sampling is that given a <a href="multivariate_distribution" title="wikilink">multivariate distribution</a> it is simpler to sample from a conditional distribution than to <a href="marginal_distribution" title="wikilink">marginalize</a> by integrating over a <a href="joint_distribution" title="wikilink">joint distribution</a>. Suppose we want to obtain 
+
+<math display="inline" id="Gibbs_sampling:0">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.k\right.
+  </annotation>
+ </semantics>
+</math>
+
+ samples of 
+
+<math display="inline" id="Gibbs_sampling:1">
+ <semantics>
+  <mrow>
+   <mi>𝐗</mi>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>𝐗</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>n</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}=(x_{1},\dots,x_{n})
+  </annotation>
+ </semantics>
+</math>
+
+ from a joint distribution 
+
+<math display="inline" id="Gibbs_sampling:2">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>n</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.p(x_{1},\dots,x_{n})\right.
+  </annotation>
+ </semantics>
+</math>
+
+. Denote the 
+
+<math display="inline" id="Gibbs_sampling:3">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+th sample by 
+
+<math display="inline" id="Gibbs_sampling:4">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>𝐗</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>i</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msubsup>
+     <mi>x</mi>
+     <mn>1</mn>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>i</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msubsup>
+     <mi>x</mi>
+     <mi>n</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>i</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>𝐗</ci>
+     <ci>i</ci>
+    </apply>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>n</ci>
+      </apply>
+      <ci>i</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}^{(i)}=(x_{1}^{(i)},\dots,x_{n}^{(i)})
+  </annotation>
+ </semantics>
+</math>
+
+. We proceed as follows:</p>
+<ol>
+<li>We begin with some initial value 
+
+<math display="inline" id="Gibbs_sampling:5">
+ <semantics>
+  <msup>
+   <mi>𝐗</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>0</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>𝐗</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{X}^{(0)}
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+<li>To get the next sample (call it the 
+
+<math display="inline" id="Gibbs_sampling:6">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <ci>i</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i+1
+  </annotation>
+ </semantics>
+</math>
+
+th sample for generality) we sample each component variable 
+
+<math display="inline" id="Gibbs_sampling:7">
+ <semantics>
+  <msubsup>
+   <mi>x</mi>
+   <mi>j</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>i</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}^{(i+1)}
+  </annotation>
+ </semantics>
+</math>
+
+ from the distribution of that variable conditioned on all other variables, making use of the most recent values and updating the variable with its new value as soon as it has been sampled. This requires updating each of the component variables in turn. If we are up to the 
+
+<math display="inline" id="Gibbs_sampling:8">
+ <semantics>
+  <mi>j</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>j</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j
+  </annotation>
+ </semantics>
+</math>
+
+th component we update it according to the distribution specified by 
+
+<math display="inline" id="Gibbs_sampling:9">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msubsup>
+     <mi>x</mi>
+     <mn>1</mn>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>+</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msubsup>
+     <mi>x</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>+</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+    <mo>,</mo>
+    <msubsup>
+     <mi>x</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>i</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msubsup>
+     <mi>x</mi>
+     <mi>n</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>i</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msubsup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <plus></plus>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <apply>
+        <minus></minus>
+        <ci>j</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <plus></plus>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <apply>
+        <plus></plus>
+        <ci>j</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>n</ci>
+      </apply>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(x_{j}|x_{1}^{(i+1)},\dots,x_{j-1}^{(i+1)},x_{j+1}^{(i)},\dots,x_{n}^{(i)})
+  </annotation>
+ </semantics>
+</math>
+
+. Note that we use the value that the 
+
+<math display="inline" id="Gibbs_sampling:10">
+ <semantics>
+  <mrow>
+   <mi>j</mi>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <ci>j</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j+1
+  </annotation>
+ </semantics>
+</math>
+
+th component had in the 
+
+<math display="inline" id="Gibbs_sampling:11">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+th sample not the 
+
+<math display="inline" id="Gibbs_sampling:12">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>+</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <plus></plus>
+    <ci>i</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i+1
+  </annotation>
+ </semantics>
+</math>
+
+th.</li>
+<li>Repeat the above step 
+
+<math display="inline" id="Gibbs_sampling:13">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ times.</li>
+</ol>
+
+<p>If such sampling is performed, these important facts hold:</p>
+<ul>
+<li>The samples approximate the joint distribution of all variables.</li>
+<li>The marginal distribution of any subset of variables can be approximated by simply considering the samples for that subset of variables, ignoring the rest.</li>
+<li>The <a href="expected_value" title="wikilink">expected value</a> of any variable can be approximated by averaging over all the samples.</li>
+</ul>
+
+<p>When performing the sampling:</p>
+<ul>
+<li>The initial values of the variables can be determined randomly or by some other algorithm such as <a class="uri" href="expectation-maximization" title="wikilink">expectation-maximization</a>.</li>
+<li>It is not actually necessary to determine an initial value for the first variable sampled.</li>
+<li>It is common to ignore some number of samples at the beginning (the so-called <em>burn-in period</em>), and then consider only every 
+
+<math display="inline" id="Gibbs_sampling:14">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+th sample when averaging values to compute an expectation. For example, the first 1,000 samples might be ignored, and then every 100th sample averaged, throwing away all the rest. The reason for this is that (1) successive samples are not independent of each other but form a <a href="Markov_chain" title="wikilink">Markov chain</a> with some amount of correlation; (2) the <a href="stationary_distribution" title="wikilink">stationary distribution</a> of the Markov chain is the desired joint distribution over the variables, but it may take a while for that stationary distribution to be reached. Sometimes, algorithms can be used to determine the amount of <a class="uri" href="autocorrelation" title="wikilink">autocorrelation</a> between samples and the value of 
+
+<math display="inline" id="Gibbs_sampling:15">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ (the period between samples that are actually used) computed from this, but in practice there is a fair amount of "<a href="Black_magic_(programming)" title="wikilink">black magic</a>" involved.</li>
+<li>The process of <a href="simulated_annealing" title="wikilink">simulated annealing</a> is often used to reduce the "<a href="random_walk" title="wikilink">random walk</a>" behavior in the early part of the sampling process (i.e. the tendency to move slowly around the sample space, with a high amount of <a class="uri" href="autocorrelation" title="wikilink">autocorrelation</a> between samples, rather than moving around quickly, as is desired). Other techniques that may reduce autocorrelation are <em>collapsed Gibbs sampling</em>, <em>blocked Gibbs sampling</em>, and <em>ordered overrelaxation</em>; see below.</li>
+</ul>
+<h3 id="relation-of-conditional-distribution-and-joint-distribution">Relation of conditional distribution and joint distribution</h3>
+
+<p>Furthermore, the conditional distribution of one variable given all others is proportional to the joint distribution:</p>
+
+<p>
+
+<math display="block" id="Gibbs_sampling:16">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>x</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>x</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>x</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>x</mi>
+       <mn>1</mn>
+      </msub>
+      <mo>,</mo>
+      <mi mathvariant="normal">…</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>x</mi>
+       <mi>n</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mi>p</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>x</mi>
+       <mn>1</mn>
+      </msub>
+      <mo>,</mo>
+      <mi mathvariant="normal">…</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>x</mi>
+       <mrow>
+        <mi>j</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>x</mi>
+       <mrow>
+        <mi>j</mi>
+        <mo>+</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+      <mo>,</mo>
+      <mi mathvariant="normal">…</mi>
+      <mo>,</mo>
+      <msub>
+       <mi>x</mi>
+       <mi>n</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+   <mo>∝</mo>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>n</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <apply>
+       <minus></minus>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <apply>
+       <plus></plus>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>p</ci>
+      <vector>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-…</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <ci>n</ci>
+       </apply>
+      </vector>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>p</ci>
+      <vector>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-…</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <apply>
+         <minus></minus>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <apply>
+         <plus></plus>
+         <ci>j</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>normal-…</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <ci>n</ci>
+       </apply>
+      </vector>
+     </apply>
+    </apply>
+    <csymbol cd="latexml">proportional-to</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-,</ci>
+     <ci>normal-…</ci>
+     <ci>normal-,</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>n</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(x_{j}|x_{1},\dots,x_{j-1},x_{j+1},\dots,x_{n})=\frac{p(x_{1},\dots,x_{n})}{p%
+(x_{1},\dots,x_{j-1},x_{j+1},\dots,x_{n})}\propto p(x_{1},\dots,x_{n})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>"Proportional to" in this case means that the denominator is not a function of 
+
+<math display="inline" id="Gibbs_sampling:17">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ and thus is the same for all values of 
+
+<math display="inline" id="Gibbs_sampling:18">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}
+  </annotation>
+ </semantics>
+</math>
+
+; it forms part of the <a href="normalization_constant" title="wikilink">normalization constant</a> for the distribution over 
+
+<math display="inline" id="Gibbs_sampling:19">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}
+  </annotation>
+ </semantics>
+</math>
+
+. In practice, to determine the nature of the conditional distribution of a factor 
+
+<math display="inline" id="Gibbs_sampling:20">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}
+  </annotation>
+ </semantics>
+</math>
+
+, it is easiest to factor the joint distribution according to the individual conditional distributions defined by the <a href="graphical_model" title="wikilink">graphical model</a> over the variables, ignore all factors that are not functions of 
+
+<math display="inline" id="Gibbs_sampling:21">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ (all of which, together with the denominator above, constitute the normalization constant), and then reinstate the normalization constant at the end, as necessary. In practice, this means doing one of three things:</p>
+<ol>
+<li>If the distribution is discrete, the individual probabilities of all possible values of 
+
+<math display="inline" id="Gibbs_sampling:22">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ are computed, and then summed to find the normalization constant.</li>
+<li>If the distribution is continuous and of a known form, the normalization constant will also be known.</li>
+<li>In other cases, the normalization constant can usually be ignored, as most sampling methods do not require it.</li>
+</ol>
+<h2 id="inference">Inference</h2>
+
+<p>Gibbs sampling is commonly used for <a href="statistical_inference" title="wikilink">statistical inference</a> (e.g. determining the best value of a parameter, such as determining the number of people likely to shop at a particular store on a given day, the candidate a voter will most likely vote for, etc.). The idea is that observed data is incorporated into the sampling process by creating separate variables for each piece of observed data and fixing the variables in question to their observed values, rather than sampling from those variables. The distribution of the remaining variables is then effectively a <a href="posterior_distribution" title="wikilink">posterior distribution</a> conditioned on the observed data.</p>
+
+<p>The most likely value of a desired parameter (the <a href="mode_(statistics)" title="wikilink">mode</a>) could then simply be selected by choosing the sample value that occurs most commonly; this is essentially equivalent to <a href="maximum_a_posteriori" title="wikilink">maximum a posteriori</a> estimation of a parameter. (Since the parameters are usually continuous, it is often necessary to "bin" the sampled values into one of a finite number of ranges or "bins" in order to get a meaningful estimate of the mode.) More commonly, however, the <a href="expected_value" title="wikilink">expected value</a> (<a class="uri" href="mean" title="wikilink">mean</a> or average) of the sampled values is chosen; this is a <a href="Bayes_estimator" title="wikilink">Bayes estimator</a> that takes advantage of the additional data about the entire distribution that is available from Bayesian sampling, whereas a maximization algorithm such as <a href="expectation_maximization" title="wikilink">expectation maximization</a> (EM) is capable of only returning a single point from the distribution. For example, for a unimodal distribution the mean (expected value) is usually similar to the mode (most common value), but if the distribution is <a href="skewness" title="wikilink">skewed</a> in one direction, the mean will be moved in that direction, which effectively accounts for the extra probability mass in that direction. (Note, however, that if a distribution is multimodal, the expected value may not return a meaningful point, and any of the modes is typically a better choice.)</p>
+
+<p>Although some of the variables typically correspond to parameters of interest, others are uninteresting ("nuisance") variables introduced into the model to properly express the relationships among variables. Although the sampled values represent the <a href="joint_distribution" title="wikilink">joint distribution</a> over all variables, the nuisance variables can simply be ignored when computing expected values or modes; this is equivalent to <a href="marginal_distribution" title="wikilink">marginalizing</a> over the nuisance variables. When a value for multiple variables is desired, the expected value is simply computed over each variable separately. (When computing the mode, however, all variables must be considered together.)</p>
+
+<p><a href="Supervised_learning" title="wikilink">Supervised learning</a>, <a href="unsupervised_learning" title="wikilink">unsupervised learning</a> and <a href="semi-supervised_learning" title="wikilink">semi-supervised learning</a> (aka learning with missing values) can all be handled by simply fixing the values of all variables whose values are known, and sampling from the remainder.</p>
+
+<p>For observed data, there will be one variable for each observation — rather than, for example, one variable corresponding to the <a href="sample_mean" title="wikilink">sample mean</a> or <a href="sample_variance" title="wikilink">sample variance</a> of a set of observations. In fact, there generally will be no variables at all corresponding to concepts such as "sample mean" or "sample variance". Instead, in such a case there will be variables representing the unknown true mean and true variance, and the determination of sample values for these variables results automatically from the operation of the Gibbs sampler.</p>
+
+<p><a href="Generalized_linear_model" title="wikilink">Generalized linear models</a> (i.e. variations of <a href="linear_regression" title="wikilink">linear regression</a>) can sometimes be handled by Gibbs sampling as well. For example, <a href="probit_regression" title="wikilink">probit regression</a> for determining the probability of a given binary (yes/no) choice, with <a href="normal_distribution" title="wikilink">normally distributed</a> priors placed over the regression coefficients, can be implemented with Gibbs sampling because it is possible to add additional variables and take advantage of <a href="conjugate_prior" title="wikilink">conjugacy</a>. However, <a href="logistic_regression" title="wikilink">logistic regression</a> cannot be handled this way. One possibility is to approximate the <a href="logistic_function" title="wikilink">logistic function</a> with a mixture (typically 7-9) of normal distributions. More commonly, however, <a class="uri" href="Metropolis-Hastings" title="wikilink">Metropolis-Hastings</a> is used instead of Gibbs sampling.</p>
+<h2 id="mathematical-background">Mathematical background</h2>
+
+<p>Suppose that a sample 
+
+<math display="inline" id="Gibbs_sampling:23">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.X\right.
+  </annotation>
+ </semantics>
+</math>
+
+ is taken from a distribution depending on a parameter vector 
+
+<math display="inline" id="Gibbs_sampling:24">
+ <semantics>
+  <mrow>
+   <mi>θ</mi>
+   <mo>∈</mo>
+   <mi mathvariant="normal">Θ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>θ</ci>
+    <ci>normal-Θ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta\in\Theta\,\!
+  </annotation>
+ </semantics>
+</math>
+
+ of length 
+
+<math display="inline" id="Gibbs_sampling:25">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.d\right.
+  </annotation>
+ </semantics>
+</math>
+
+, with prior distribution 
+
+<math display="inline" id="Gibbs_sampling:26">
+ <semantics>
+  <mrow>
+   <mi>g</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>θ</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>d</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>g</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>d</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g(\theta_{1},\ldots,\theta_{d})
+  </annotation>
+ </semantics>
+</math>
+
+. It may be that 
+
+<math display="inline" id="Gibbs_sampling:27">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.d\right.
+  </annotation>
+ </semantics>
+</math>
+
+ is very large and that numerical integration to find the marginal densities of the 
+
+<math display="inline" id="Gibbs_sampling:28">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.\theta_{i}\right.
+  </annotation>
+ </semantics>
+</math>
+
+ would be computationally expensive. Then an alternative method of calculating the marginal densities is to create a Markov chain on the space 
+
+<math display="inline" id="Gibbs_sampling:29">
+ <semantics>
+  <mi mathvariant="normal">Θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-Θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.\Theta\right.
+  </annotation>
+ </semantics>
+</math>
+
+ by repeating these two steps:</p>
+<ol>
+<li>Pick a random index 
+
+<math display="inline" id="Gibbs_sampling:30">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>≤</mo>
+   <mi>j</mi>
+   <mo>≤</mo>
+   <mi>d</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <leq></leq>
+     <cn type="integer">1</cn>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <leq></leq>
+     <share href="#.cmml">
+     </share>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1\leq j\leq d
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+<li>Pick a new value for 
+
+<math display="inline" id="Gibbs_sampling:31">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.\theta_{j}\right.
+  </annotation>
+ </semantics>
+</math>
+
+ according to 
+
+<math display="inline" id="Gibbs_sampling:32">
+ <semantics>
+  <mrow>
+   <mi>g</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>θ</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>θ</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo rspace="4.2pt">,</mo>
+    <mo rspace="4.2pt">⋅</mo>
+    <mo>,</mo>
+    <msub>
+     <mi>θ</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>d</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>g</ci>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <apply>
+       <minus></minus>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-⋅</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <apply>
+       <plus></plus>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>d</ci>
+     </apply>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g(\theta_{1},\ldots,\theta_{j-1},\,\cdot\,,\theta_{j+1},\ldots,\theta_{d})
+  </annotation>
+ </semantics>
+</math>
+
+</li>
+</ol>
+
+<p>These steps define a <a href="Markov_chain#Reversible_Markov_chain" title="wikilink">reversible Markov chain</a> with the desired invariant distribution 
+
+<math display="inline" id="Gibbs_sampling:33">
+ <semantics>
+  <mi>g</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>g</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.g\right.
+  </annotation>
+ </semantics>
+</math>
+
+. This can be proved as follows. Define 
+
+<math display="inline" id="Gibbs_sampling:34">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <msub>
+    <mo>∼</mo>
+    <mi>j</mi>
+   </msub>
+   <mi>y</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <csymbol cd="latexml">similar-to</csymbol>
+     <ci>j</ci>
+    </apply>
+    <ci>x</ci>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x\sim_{j}y
+  </annotation>
+ </semantics>
+</math>
+
+ if 
+
+<math display="inline" id="Gibbs_sampling:35">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>x</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>y</mi>
+    <mi>i</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>y</ci>
+     <ci>i</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.x_{i}=y_{i}\right.
+  </annotation>
+ </semantics>
+</math>
+
+ for all 
+
+<math display="inline" id="Gibbs_sampling:36">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>≠</mo>
+   <mi>j</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <neq></neq>
+    <ci>i</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i\neq j
+  </annotation>
+ </semantics>
+</math>
+
+ and let 
+
+<math display="inline" id="Gibbs_sampling:37">
+ <semantics>
+  <msub>
+   <mi>p</mi>
+   <mrow>
+    <mi>x</mi>
+    <mi>y</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>p</ci>
+    <apply>
+     <times></times>
+     <ci>x</ci>
+     <ci>y</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.p_{xy}\right.
+  </annotation>
+ </semantics>
+</math>
+
+ denote the probability of a jump from 
+
+<math display="inline" id="Gibbs_sampling:38">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mo>∈</mo>
+   <mi mathvariant="normal">Θ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>x</ci>
+    <ci>normal-Θ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x\in\Theta
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Gibbs_sampling:39">
+ <semantics>
+  <mrow>
+   <mi>y</mi>
+   <mo>∈</mo>
+   <mi mathvariant="normal">Θ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>y</ci>
+    <ci>normal-Θ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y\in\Theta
+  </annotation>
+ </semantics>
+</math>
+
+. Then, the transition probabilities are</p>
+
+<p>
+
+<math display="block" id="Gibbs_sampling:40">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>p</mi>
+    <mrow>
+     <mi>x</mi>
+     <mi>y</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mo>{</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="left">
+       <mrow>
+        <mstyle displaystyle="false">
+         <mfrac>
+          <mn>1</mn>
+          <mi>d</mi>
+         </mfrac>
+        </mstyle>
+        <mstyle displaystyle="false">
+         <mfrac>
+          <mrow>
+           <mi>g</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mi>y</mi>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+          <mrow>
+           <mstyle displaystyle="false">
+            <msub>
+             <mo largeop="true" symmetric="true">∑</mo>
+             <mrow>
+              <mrow>
+               <mi>z</mi>
+               <mo>∈</mo>
+               <mi mathvariant="normal">Θ</mi>
+              </mrow>
+              <mo>:</mo>
+              <mrow>
+               <mi>z</mi>
+               <msub>
+                <mo>∼</mo>
+                <mi>j</mi>
+               </msub>
+               <mi>x</mi>
+              </mrow>
+             </mrow>
+            </msub>
+           </mstyle>
+           <mrow>
+            <mi>g</mi>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mi>z</mi>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+          </mrow>
+         </mfrac>
+        </mstyle>
+       </mrow>
+      </mtd>
+      <mtd columnalign="left">
+       <mrow>
+        <mi>x</mi>
+        <msub>
+         <mo>∼</mo>
+         <mi>j</mi>
+        </msub>
+        <mi>y</mi>
+       </mrow>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="left">
+       <mn>0</mn>
+      </mtd>
+      <mtd columnalign="left">
+       <mtext>otherwise</mtext>
+      </mtd>
+     </mtr>
+    </mtable>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>p</ci>
+     <apply>
+      <times></times>
+      <ci>x</ci>
+      <ci>y</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="latexml">cases</csymbol>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>d</ci>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <ci>g</ci>
+        <ci>y</ci>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <ci>normal-:</ci>
+          <apply>
+           <in></in>
+           <ci>z</ci>
+           <ci>normal-Θ</ci>
+          </apply>
+          <apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <csymbol cd="latexml">similar-to</csymbol>
+            <ci>j</ci>
+           </apply>
+           <ci>z</ci>
+           <ci>x</ci>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>g</ci>
+         <ci>z</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <csymbol cd="latexml">similar-to</csymbol>
+       <ci>j</ci>
+      </apply>
+      <ci>x</ci>
+      <ci>y</ci>
+     </apply>
+     <cn type="integer">0</cn>
+     <mtext>otherwise</mtext>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p_{xy}=\begin{cases}\frac{1}{d}\frac{g(y)}{\sum_{z\in\Theta:z\sim_{j}x}g(z)}&x%
+\sim_{j}y\\
+0&\text{otherwise}\end{cases}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>So</p>
+
+<p>
+
+<math display="block" id="Gibbs_sampling:41">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>g</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <msub>
+     <mi>p</mi>
+     <mrow>
+      <mi>x</mi>
+      <mi>y</mi>
+     </mrow>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>d</mi>
+    </mfrac>
+    <mfrac>
+     <mrow>
+      <mi>g</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mi>g</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>y</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mrow>
+         <mi>z</mi>
+         <mo>∈</mo>
+         <mi mathvariant="normal">Θ</mi>
+        </mrow>
+        <mo>:</mo>
+        <mrow>
+         <mi>z</mi>
+         <msub>
+          <mo>∼</mo>
+          <mi>j</mi>
+         </msub>
+         <mi>x</mi>
+        </mrow>
+       </mrow>
+      </msub>
+      <mrow>
+       <mi>g</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>z</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>d</mi>
+    </mfrac>
+    <mfrac>
+     <mrow>
+      <mi>g</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>y</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mi>g</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>x</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msub>
+       <mo largeop="true" symmetric="true">∑</mo>
+       <mrow>
+        <mrow>
+         <mi>z</mi>
+         <mo>∈</mo>
+         <mi mathvariant="normal">Θ</mi>
+        </mrow>
+        <mo>:</mo>
+        <mrow>
+         <mi>z</mi>
+         <msub>
+          <mo>∼</mo>
+          <mi>j</mi>
+         </msub>
+         <mi>y</mi>
+        </mrow>
+       </mrow>
+      </msub>
+      <mrow>
+       <mi>g</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>z</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>g</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>y</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <msub>
+     <mi>p</mi>
+     <mrow>
+      <mi>y</mi>
+      <mi>x</mi>
+     </mrow>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>g</ci>
+      <ci>x</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <apply>
+        <times></times>
+        <ci>x</ci>
+        <ci>y</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>d</ci>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <ci>g</ci>
+        <ci>x</ci>
+        <ci>g</ci>
+        <ci>y</ci>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <ci>normal-:</ci>
+          <apply>
+           <in></in>
+           <ci>z</ci>
+           <ci>normal-Θ</ci>
+          </apply>
+          <apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <csymbol cd="latexml">similar-to</csymbol>
+            <ci>j</ci>
+           </apply>
+           <ci>z</ci>
+           <ci>x</ci>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>g</ci>
+         <ci>z</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>d</ci>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <ci>g</ci>
+        <ci>y</ci>
+        <ci>g</ci>
+        <ci>x</ci>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <ci>normal-:</ci>
+          <apply>
+           <in></in>
+           <ci>z</ci>
+           <ci>normal-Θ</ci>
+          </apply>
+          <apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <csymbol cd="latexml">similar-to</csymbol>
+            <ci>j</ci>
+           </apply>
+           <ci>z</ci>
+           <ci>y</ci>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>g</ci>
+         <ci>z</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <ci>g</ci>
+      <ci>y</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <apply>
+        <times></times>
+        <ci>y</ci>
+        <ci>x</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g(x)p_{xy}=\frac{1}{d}\frac{g(x)g(y)}{\sum_{z\in\Theta:z\sim_{j}x}g(z)}=\frac{%
+1}{d}\frac{g(y)g(x)}{\sum_{z\in\Theta:z\sim_{j}y}g(z)}=g(y)p_{yx}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>since 
+
+<math display="inline" id="Gibbs_sampling:42">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <msub>
+    <mo>∼</mo>
+    <mi>j</mi>
+   </msub>
+   <mi>y</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <csymbol cd="latexml">similar-to</csymbol>
+     <ci>j</ci>
+    </apply>
+    <ci>x</ci>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x\sim_{j}y
+  </annotation>
+ </semantics>
+</math>
+
+ is an <a href="equivalence_relation" title="wikilink">equivalence relation</a>. Thus the <a href="detailed_balance_equations" title="wikilink">detailed balance equations</a> are satisfied, implying the chain is reversible and it has invariant distribution 
+
+<math display="inline" id="Gibbs_sampling:43">
+ <semantics>
+  <mi>g</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>g</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.g\right.
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>In practice, the suffix 
+
+<math display="inline" id="Gibbs_sampling:44">
+ <semantics>
+  <mi>j</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>j</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \left.j\right.
+  </annotation>
+ </semantics>
+</math>
+
+ is not chosen at random, and the chain cycles through the suffixes in order. In general this gives a non-stationary Markov process, but each individual step will still be reversible, and the overall process will still have the desired stationary distribution (as long as the chain can access all states under the fixed ordering).</p>
+<h2 id="variations-and-extensions">Variations and extensions</h2>
+
+<p>Numerous variations of the basic Gibbs sampler exist. The goal of these variations is to reduce the <a class="uri" href="autocorrelation" title="wikilink">autocorrelation</a> between samples sufficiently to overcome any added computational costs.</p>
+<h3 id="blocked-gibbs-sampler">Blocked Gibbs sampler</h3>
+<ul>
+<li>A <strong>blocked Gibbs sampler</strong> groups two or more variables together and samples from their <a href="joint_distribution" title="wikilink">joint distribution</a> conditioned on all other variables, rather than sampling from each one individually. For example, in a <a href="hidden_Markov_model" title="wikilink">hidden Markov model</a>, a blocked Gibbs sampler might sample from all the <a href="latent_variable" title="wikilink">latent variables</a> making up the <a href="Markov_chain" title="wikilink">Markov chain</a> in one go, using the <a href="forward-backward_algorithm" title="wikilink">forward-backward algorithm</a>.</li>
+</ul>
+<h3 id="collapsed-gibbs-sampler">Collapsed Gibbs sampler</h3>
+<ul>
+<li>A <strong>collapsed Gibbs sampler</strong> integrates out (<a href="marginal_distribution" title="wikilink">marginalizes over</a>) one or more variables when sampling for some other variable. For example, imagine that a model consists of three variables <em>A</em>, <em>B</em>, and <em>C</em>. A simple Gibbs sampler would sample from <em>p</em>(<em>A</em>|<em>B</em>,<em>C</em>), then <em>p</em>(<em>B</em>|<em>A</em>,<em>C</em>), then <em>p</em>(<em>C</em>|<em>A</em>,<em>B</em>). A collapsed Gibbs sampler might replace the sampling step for <em>A</em> with a sample taken from the marginal distribution <em>p</em>(<em>A</em>|<em>C</em>), with variable <em>B</em> integrated out in this case. Alternatively, variable <em>B</em> could be collapsed out entirely, alternately sampling from <em>p</em>(<em>A</em>|<em>C</em>) and <em>p</em>(<em>C</em>|<em>A</em>) and not sampling over <em>B</em> at all. The distribution over a variable <em>A</em> that arises when collapsing a parent variable <em>B</em> is called a <a href="compound_distribution" title="wikilink">compound distribution</a>; sampling from this distribution is generally tractable when <em>B</em> is the <a href="conjugate_prior" title="wikilink">conjugate prior</a> for <em>A</em>, particularly when <em>A</em> and <em>B</em> are members of the <a href="exponential_family" title="wikilink">exponential family</a>. For more information, see the article on <a href="compound_distribution" title="wikilink">compound distributions</a> or Liu (1994).<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></li>
+</ul>
+<h4 id="implementing-a-collapsed-gibbs-sampler">Implementing a collapsed Gibbs sampler</h4>
+<h5 id="collapsing-dirichlet-distributions">Collapsing Dirichlet distributions</h5>
+
+<p>In <a href="hierarchical_Bayesian_model" title="wikilink">hierarchical Bayesian models</a> with <a href="categorical_distribution" title="wikilink">categorical variables</a>, such as <a href="latent_Dirichlet_allocation" title="wikilink">latent Dirichlet allocation</a> and various other models used in <a href="natural_language_processing" title="wikilink">natural language processing</a>, it is quite common to collapse out the <a href="Dirichlet_distribution" title="wikilink">Dirichlet distributions</a> that are typically used as <a href="prior_distribution" title="wikilink">prior distributions</a> over the categorical variables. The result of this collapsing introduces dependencies among all the categorical variables dependent on a given Dirichlet prior, and the joint distribution of these variables after collapsing is a <a href="Dirichlet-multinomial_distribution" title="wikilink">Dirichlet-multinomial distribution</a>. The conditional distribution of a given categorical variable in this distribution, conditioned on the others, assumes an extremely simple form that makes Gibbs sampling even easier than if the collapsing had not been done. The rules are as follows:</p>
+<ol>
+<li>Collapsing out a Dirichlet prior node affects only the parent and children nodes of the prior. Since the parent is often a constant, it is typically only the children that we need to worry about.</li>
+<li>Collapsing out a Dirichlet prior introduces dependencies among all the categorical children dependent on that prior — but <em>no</em> extra dependencies among any other categorical children. (This is important to keep in mind, for example, when there are multiple Dirichlet priors related by the same hyperprior. Each Dirichlet prior can be independently collapsed and affects only its direct children.)</li>
+<li>After collapsing, the conditional distribution of one dependent children on the others assumes a very simple form: The probability of seeing a given value is proportional to the sum of the corresponding hyperprior for this value, and the count of all of the <em>other dependent nodes</em> assuming the same value. Nodes not dependent on the same prior <strong>must not</strong> be counted. Note that the same rule applies in other iterative inference methods, such as <a href="variational_Bayes" title="wikilink">variational Bayes</a> or <a href="expectation_maximization" title="wikilink">expectation maximization</a>; however, if the method involves keeping partial counts, then the partial counts for the value in question must be summed across all the other dependent nodes. Sometimes this summed up partial count is termed the <em>expected count</em> or similar. Note also that the probability is <em>proportional to</em> the resulting value; the actual probability must be determined by normalizing across all the possible values that the categorical variable can take (i.e. adding up the computed result for each possible value of the categorical variable, and dividing all the computed results by this sum).</li>
+<li>If a given categorical node has dependent children (e.g. when it is a <a href="latent_variable" title="wikilink">latent variable</a> in a <a href="mixture_model" title="wikilink">mixture model</a>), the value computed in the previous step (expected count plus prior, or whatever is computed) must be multiplied by the actual conditional probabilities (<em>not</em> a computed value that is proportional to the probability!) of all children given their parents. See the article on the <a href="Dirichlet-multinomial_distribution" title="wikilink">Dirichlet-multinomial distribution</a> for a detailed discussion.</li>
+<li>In the case where the group membership of the nodes dependent on a given Dirichlet prior may change dynamically depending on some other variable (e.g. a categorical variable indexed by another latent categorical variable, as in a <a href="topic_model" title="wikilink">topic model</a>), the same expected counts are still computed, but need to be done carefully so that the correct set of variables is included. See the article on the <a href="Dirichlet-multinomial_distribution" title="wikilink">Dirichlet-multinomial distribution</a> for more discussion, including in the context of a topic model.</li>
+</ol>
+<h5 id="collapsing-other-conjugate-priors">Collapsing other conjugate priors</h5>
+
+<p>In general, any conjugate prior can be collapsed out, if its only children have distributions conjugate to it. The relevant math is discussed in the article on <a href="compound_distribution" title="wikilink">compound distributions</a>. If there is only one child node, the result will often assume a known distribution. For example, collapsing an <a href="inverse_gamma_distribution" title="wikilink">inverse-gamma-distributed</a> <a class="uri" href="variance" title="wikilink">variance</a> out of a network with a single <a href="Gaussian_distribution" title="wikilink">Gaussian</a> child will yield a <a href="Student's_t-distribution" title="wikilink">Student's t-distribution</a>. (For that matter, collapsing both the mean and variance of a single Gaussian child will still yield a Student's t-distribution, provided both are conjugate, i.e. Gaussian mean, inverse-gamma variance.)</p>
+
+<p>If there are multiple child nodes, they will all become dependent, as in the <a href="Dirichlet_distribution" title="wikilink">Dirichlet</a>-<a href="categorical_distribution" title="wikilink">categorical</a> case. The resulting <a href="joint_distribution" title="wikilink">joint distribution</a> will have a closed form that resembles in some ways the compound distribution, although it will have a product of a number of factors, one for each child node, in it.</p>
+
+<p>In addition, and most importantly, the resulting <a href="conditional_distribution" title="wikilink">conditional distribution</a> of one of the child nodes given the others (and also given the parents of the collapsed node(s), but <em>not</em> given the children of the child nodes) will have the same density as the <a href="posterior_predictive_distribution" title="wikilink">posterior predictive distribution</a> of all the remaining child nodes. Furthermore, the posterior predictive distribution has the same density as the basic compound distribution of a single node, although with different parameters. The general formula is given in the article on <a href="compound_distribution" title="wikilink">compound distributions</a>.</p>
+
+<p>For example, given a Bayes network with a set of conditionally <a href="independent_identically_distributed" title="wikilink">independent identically distributed</a> <a href="Gaussian_distribution" title="wikilink">Gaussian-distributed</a> nodes with <a href="conjugate_prior" title="wikilink">conjugate prior</a> distributions placed on the mean and variance, the conditional distribution of one node given the others after compounding out both the mean and variance will be a <a href="Student's_t-distribution" title="wikilink">Student's t-distribution</a>. Similarly, the result of compounding out the <a href="gamma_distribution" title="wikilink">gamma</a> prior of a number of <a href="Poisson_distribution" title="wikilink">Poisson-distributed</a> nodes causes the conditional distribution of one node given the others to assume a <a href="negative_binomial_distribution" title="wikilink">negative binomial distribution</a>.</p>
+
+<p>In these cases where compounding produces a well-known distribution, efficient sampling procedures often exist, and using them will often (although not necessarily) be more efficient than not collapsing, and instead sampling both prior and child nodes separately. However, in the case where the compound distribution is not well-known, it may not be easy to sample from, since it generally will not belong to the <a href="exponential_family" title="wikilink">exponential family</a> and typically will not be <a class="uri" href="log-concave" title="wikilink">log-concave</a> (which would make it easy to sample using <a href="adaptive_rejection_sampling" title="wikilink">adaptive rejection sampling</a>, since a closed form always exists).</p>
+
+<p>In the case where the child nodes of the collapsed nodes themselves have children, the conditional distribution of one of these child nodes given all other nodes in the graph will have to take into account the distribution of these second-level children. In particular, the resulting conditional distribution will be proportional to a product of the compound distribution as defined above, and the conditional distributions of all of the child nodes given their parents (but not given their own children). This follows from the fact that the full conditional distribution is proportional to the joint distribution. If the child nodes of the collapsed nodes are <a href="continuous_distribution" title="wikilink">continuous</a>, this distribution will generally not be of a known form, and may well be difficult to sample from despite the fact that a closed form can be written, for the same reasons as described above for non-well-known compound distributions. However, in the particular case that the child nodes are <a href="discrete_distribution" title="wikilink">discrete</a>, sampling is feasible, regardless of whether the children of these child nodes are continuous or discrete. In fact, the principle involved here is described in fair detail in the article on the <a href="Dirichlet-multinomial_distribution" title="wikilink">Dirichlet-multinomial distribution</a>.</p>
+<h3 id="gibbs-sampler-with-ordered-overrelaxation">Gibbs sampler with ordered overrelaxation</h3>
+<ul>
+<li>A Gibbs sampler with <strong>ordered overrelaxation</strong> samples a given odd number of candidate values for 
+
+<math display="inline" id="Gibbs_sampling:45">
+ <semantics>
+  <msubsup>
+   <mi>x</mi>
+   <mi>j</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>i</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>j</ci>
+    </apply>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}^{(i)}
+  </annotation>
+ </semantics>
+</math>
+
+ at any given step and sorts them, along with the single value for 
+
+<math display="inline" id="Gibbs_sampling:46">
+ <semantics>
+  <msubsup>
+   <mi>x</mi>
+   <mi>j</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>i</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}^{(i-1)}
+  </annotation>
+ </semantics>
+</math>
+
+ according to some well-defined ordering. If 
+
+<math display="inline" id="Gibbs_sampling:47">
+ <semantics>
+  <msubsup>
+   <mi>x</mi>
+   <mi>j</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>j</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>i</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}^{(i-1)}
+  </annotation>
+ </semantics>
+</math>
+
+ is the <em>s</em><sup>th</sup> smallest in the sorted list then the 
+
+<math display="inline" id="Gibbs_sampling:48">
+ <semantics>
+  <msubsup>
+   <mi>x</mi>
+   <mi>j</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>i</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>x</ci>
+     <ci>j</ci>
+    </apply>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{j}^{(i)}
+  </annotation>
+ </semantics>
+</math>
+
+ is selected as the <em>s</em><sup>th</sup> largest in the sorted list. For more information, see Neal (1995).<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></li>
+</ul>
+<h3 id="other-extensions">Other extensions</h3>
+
+<p>It is also possible to extend Gibbs sampling in various ways. For example, in the case of variables whose conditional distribution is not easy to sample from, a single iteration of <a href="slice_sampling" title="wikilink">slice sampling</a> or the <a href="Metropolis-Hastings_algorithm" title="wikilink">Metropolis-Hastings algorithm</a> can be used to sample from the variables in question. It is also possible to incorporate variables that are not <a href="random_variables" title="wikilink">random variables</a>, but whose value is <a class="uri" href="deterministically" title="wikilink">deterministically</a> computed from other variables. <a href="Generalized_linear_models" title="wikilink">Generalized linear models</a>, e.g. <a href="logistic_regression" title="wikilink">logistic regression</a> (aka "<a href="maximum_entropy" title="wikilink">maximum entropy</a> models"), can be incorporated in this fashion. (BUGS, for example, allows this type of mixing of models.)</p>
+<h2 id="failure-modes">Failure modes</h2>
+
+<p>There are two ways that Gibbs sampling can fail. The first is when there are islands of high-probability states, with no paths between them. For example, consider a probability distribution over 2-bit vectors, where the vectors (0,0) and (1,1) each have probability ½, but the other two vectors (0,1) and (1,0) have probability zero. Gibbs sampling will become trapped in one of the two high-probability vectors, and will never reach the other one. More generally, for any distribution over high-dimensional, real-valued vectors, if two particular elements of the vector are perfectly correlated (or perfectly anti-correlated), those two elements will become stuck, and Gibbs sampling will never be able to change them.</p>
+
+<p>The second problem can happen even when all states have nonzero probability and there is only a single island of high-probability states. For example, consider a probability distribution over 100-bit vectors, where the all-zeros vector occurs with probability ½, and all other vectors are equally probable, and so have a probability of 
+
+<math display="inline" id="Gibbs_sampling:49">
+ <semantics>
+  <mfrac>
+   <mn>1</mn>
+   <mrow>
+    <mn>2</mn>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <msup>
+       <mn>2</mn>
+       <mn>100</mn>
+      </msup>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mfrac>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <cn type="integer">1</cn>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <apply>
+      <minus></minus>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">2</cn>
+       <cn type="integer">100</cn>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{1}{2(2^{100}-1)}
+  </annotation>
+ </semantics>
+</math>
+
+ each. If you want to estimate the probability of the zero vector, it would be sufficient to take 100 or 1000 samples from the true distribution. That would very likely give an answer very close to ½. But you would probably have to take more than 
+
+<math display="inline" id="Gibbs_sampling:50">
+ <semantics>
+  <msup>
+   <mn>2</mn>
+   <mn>100</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <cn type="integer">2</cn>
+    <cn type="integer">100</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   2^{100}
+  </annotation>
+ </semantics>
+</math>
+
+ samples from Gibbs sampling to get the same result. No computer could do this in a lifetime.</p>
+
+<p>This problem occurs no matter how long the burn-in period is. This is because in the true distribution, the zero vector occurs half the time, and those occurrences are randomly mixed in with the nonzero vectors. Even a small sample will see both zero and nonzero vectors. But Gibbs sampling will alternate between returning only the zero vector for long periods (about 
+
+<math display="inline" id="Gibbs_sampling:51">
+ <semantics>
+  <msup>
+   <mn>2</mn>
+   <mn>99</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <cn type="integer">2</cn>
+    <cn type="integer">99</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   2^{99}
+  </annotation>
+ </semantics>
+</math>
+
+ in a row), then only nonzero vectors for long periods (about 
+
+<math display="inline" id="Gibbs_sampling:52">
+ <semantics>
+  <msup>
+   <mn>2</mn>
+   <mn>99</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <cn type="integer">2</cn>
+    <cn type="integer">99</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   2^{99}
+  </annotation>
+ </semantics>
+</math>
+
+ in a row). Thus convergence to the true distribution is extremely slow, requiring much more than 
+
+<math display="inline" id="Gibbs_sampling:53">
+ <semantics>
+  <msup>
+   <mn>2</mn>
+   <mn>99</mn>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <cn type="integer">2</cn>
+    <cn type="integer">99</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   2^{99}
+  </annotation>
+ </semantics>
+</math>
+
+ steps; taking this many steps is not computationally feasible in a reasonable time period. The slow convergence here can be seen as a consequence of the <a href="curse_of_dimensionality" title="wikilink">curse of dimensionality</a>.</p>
+
+<p>Note that a problem like this can be solved by block sampling the entire 100-bit vector at once. (This assumes that the 100-bit vector is part of a larger set of variables. If this vector is the only thing being sampled, then block sampling is equivalent to not doing Gibbs sampling at all, which by hypothesis would be difficult.)</p>
+<h2 id="software">Software</h2>
+
+<p>The <a class="uri" href="OpenBUGS" title="wikilink">OpenBUGS</a> software (<em>Bayesian inference Using Gibbs Sampling</em>) does a <a href="Bayesian_analysis" title="wikilink">Bayesian analysis</a> of complex statistical models using <a href="Markov_chain_Monte_Carlo" title="wikilink">Markov chain Monte Carlo</a>.</p>
+
+<p><a href="Just_another_Gibbs_sampler" title="wikilink">JAGS</a> (<em>Just another Gibbs sampler</em>) is a GPL program for analysis of Bayesian hierarchical models using Markov Chain Monte Carlo.</p>
+
+<p><a href="Church_(programming_language)" title="wikilink">Church</a> is free software for performing Gibbs inference over arbitrary distributions that are specified as probabilistic programs.</p>
+
+<p><a class="uri" href="PyMC" title="wikilink">PyMC</a> is an open source <a href="Python_(programming_language)" title="wikilink">Python</a> library for <a href="Bayesian_learning" title="wikilink">Bayesian learning</a> of general <a href="Graphical_model" title="wikilink">Probabilistic Graphical Model</a> with advanced features and easy to use interface.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<h2 id="notes">Notes</h2>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li>Bolstad, William M. (2010), <em>Understanding Computational Bayesian Statistics</em>, John Wiley ISBN 978-0-470-04609-8</li>
+<li>
+
+<p>(Contains a basic summary and many references.)</p></li>
+<li></li>
+<li><a href="Andrew_Gelman" title="wikilink">Gelman, A.</a>, Carlin J. B., Stern H. S., Dunson D., Vehtari A., Rubin D. B. (2013), <em>Bayesian Data Analysis</em>, third edition. London: <a href="Chapman_&amp;_Hall" title="wikilink">Chapman &amp; Hall</a>.</li>
+<li>Levin, David A.; Peres, Yuval; Wilmer, Elizabeth L. (2008), "<a href="http://www.uoregon.edu/~dlevin/MARKOV/">Markov Chains and Mixing Times</a>", <a href="American_Mathematical_Society" title="wikilink">American Mathematical Society</a>.</li>
+<li>Robert, C. P.; Casella, G. (2004), <em>Monte Carlo Statistical Methods</em> (second edition), Springer-Verlag.</li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www.openbugs.net/">The OpenBUGS Project</a> — Bayesian inference Using Gibbs Sampling</li>
+<li><a href="http://ccmbweb.ccv.brown.edu/gibbs/gibbs.html">A practical application of Gibbs sampling in genomics</a></li>
+<li><a href="https://github.com/pymc-devs/pymc">PyMC</a> — Markov Chain Monte Carlo in Python</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Markov_chain_Monte_Carlo" title="wikilink">Category:Markov chain Monte Carlo</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

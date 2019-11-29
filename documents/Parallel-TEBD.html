@@ -1,0 +1,1963 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1736">Parallel-TEBD</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Parallel-TEBD</h1>
+<hr/>
+
+<p>The <strong>parallel-TEBD</strong> is a version of the <a class="uri" href="TEBD" title="wikilink">TEBD</a> algorithm adapted to run on multiple hosts. The task of parallelizing <em>TEBD</em> could be achieved in various ways.</p>
+<ul>
+<li>As a first option, one could use the <strong><a class="uri" href="OpenMP" title="wikilink">OpenMP</a></strong> <a class="uri" href="API" title="wikilink">API</a> (this would probably be the simplest way to do it), using preprocessor directives to decide which portion of the code should be parallelized. The drawback of this is that one is confined to <a href="Symmetric_multiprocessing" title="wikilink">Symmetric multiprocessing</a> (SMP) architectures and the user has no control on how the code is parallelized. An Intel extension of <em>OpenMP</em>, called <strong>Cluster OpenMP</strong> <a href="http://software.intel.com/en-us/articles/cluster-openmp-for-intel-compilers">1</a>, is a socket-based implementation of <em>OpenMP</em> which can make use of a whole cluster of <em>SMP</em> machines; this spares the user of explicitly writing messaging code while giving access to multiple hosts via a <a href="Distributed_shared_memory" title="wikilink">distributed shared-memory</a> system. The OpenMP paradigm (hence its extension Cluster OpenMP as well) allows the user a straightforward parallelization of serial code by embedding a set of directives in it.</li>
+</ul>
+<ul>
+<li>The second option is using the <a href="Message_Passing_Interface" title="wikilink">Message Passing Interface</a> (<strong>MPI</strong>) API. MPI can treat each core of the multi-core machines as separate execution host, so a cluster of, let's say, 10 compute nodes with dual-core processors will appear as 20 compute nodes, on which the MPI application can be distributed. MPI offers the user more control over the way the program is parallelized. The drawback of MPI is that is not very easy to implement and the programmer has to have a certain understanding of parallel simulation systems.</li>
+</ul>
+<ul>
+<li>For the determined programmer the third option would probably be the most appropriate: to write ones own routines, using a combination of <strong><a href="Thread_(computer_science)" title="wikilink">threads</a></strong> and <strong><a href="Internet_socket" title="wikilink">TCP/IP sockets</a></strong> to complete the task. The threads are necessary in order to make the socket-based communication between the programs non-blocking (the communication between programs has to take place in threads, so that the main thread doesn't have to wait for the communication to end and can execute other parts of the code). This option offers the programmer complete control over the code and eliminates any overhead which might come from the use of the Cluster OpenMP or MPI libraries.</li>
+</ul>
+
+<p>This article introduces the conceptual basis of the implementation, using <em>MPI</em>-based pseudo-code for exemplification, while not restricting itself to MPI - the same basic schema could be implemented with the use of home-grown messaging routines.</p>
+<h2 id="introduction">Introduction</h2>
+
+<p>The TEBD algorithm is a good candidate for <a href="parallel_computing" title="wikilink">parallel computing</a> because the exponential operators used to calculate the time-evolution factorize under the Suzuki-Trotter expansion. A detailed presentation of the way TEBD works is given in the <a href="TEBD" title="wikilink">main article</a>. Here we concern ourselves only with its parallel implementation.</p>
+<h2 id="implementation">Implementation</h2>
+
+<p>For our purposes, we will use the canonical form of the MPS as introduced by <a href="Guifré_Vidal" title="wikilink">Guifré Vidal</a> in his original papers. Hence, we will write the function of state 
+
+<math display="inline" id="Parallel-TEBD:0">
+ <semantics>
+  <mrow>
+   <mo fence="true" stretchy="false">|</mo>
+   <mi mathvariant="normal">Ψ</mi>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">ket</csymbol>
+    <ci>normal-Ψ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |\Psi\rangle
+  </annotation>
+ </semantics>
+</math>
+
+ as:</p>
+
+<p>
+
+<math display="inline" id="Parallel-TEBD:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <mi mathvariant="normal">Ψ</mi>
+    <mo stretchy="false">⟩</mo>
+   </mrow>
+   <mo>=</mo>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+    <mrow>
+     <msub>
+      <mi>i</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mo>.</mo>
+     <mo>.</mo>
+     <mo>,</mo>
+     <msub>
+      <mi>i</mi>
+      <mi>N</mi>
+     </msub>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>M</mi>
+   </munderover>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+    <mrow>
+     <msub>
+      <mi>α</mi>
+      <mn>1</mn>
+     </msub>
+     <mo>,</mo>
+     <mo>.</mo>
+     <mo>.</mo>
+     <mo>,</mo>
+     <msub>
+      <mi>α</mi>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msub>
+     <mo>=</mo>
+     <mn>0</mn>
+    </mrow>
+    <mi>χ</mi>
+   </munderover>
+   <msubsup>
+    <mi mathvariant="normal">Γ</mi>
+    <msub>
+     <mi>α</mi>
+     <mn>1</mn>
+    </msub>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mn>1</mn>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <msub>
+      <mi>i</mi>
+      <mn>1</mn>
+     </msub>
+    </mrow>
+   </msubsup>
+   <msubsup>
+    <mi>λ</mi>
+    <msub>
+     <mi>α</mi>
+     <mn>1</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>1</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </msubsup>
+   <msubsup>
+    <mi mathvariant="normal">Γ</mi>
+    <mrow>
+     <msub>
+      <mi>α</mi>
+      <mn>1</mn>
+     </msub>
+     <msub>
+      <mi>α</mi>
+      <mn>2</mn>
+     </msub>
+    </mrow>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mn>2</mn>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <msub>
+      <mi>i</mi>
+      <mn>2</mn>
+     </msub>
+    </mrow>
+   </msubsup>
+   <msubsup>
+    <mi>λ</mi>
+    <msub>
+     <mi>α</mi>
+     <mn>2</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>2</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </msubsup>
+   <msubsup>
+    <mi mathvariant="normal">Γ</mi>
+    <mrow>
+     <msub>
+      <mi>α</mi>
+      <mn>2</mn>
+     </msub>
+     <msub>
+      <mi>α</mi>
+      <mn>3</mn>
+     </msub>
+    </mrow>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mn>3</mn>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <msub>
+      <mi>i</mi>
+      <mn>3</mn>
+     </msub>
+    </mrow>
+   </msubsup>
+   <msubsup>
+    <mi>λ</mi>
+    <msub>
+     <mi>α</mi>
+     <mn>3</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>3</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </msubsup>
+   <mo>⋅</mo>
+   <mo>.</mo>
+   <mo>.</mo>
+   <mo>⋅</mo>
+   <msubsup>
+    <mi mathvariant="normal">Γ</mi>
+    <mrow>
+     <msub>
+      <mi>α</mi>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>2</mn>
+      </mrow>
+     </msub>
+     <msub>
+      <mi>α</mi>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msub>
+    </mrow>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <msub>
+      <mi>i</mi>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msub>
+    </mrow>
+   </msubsup>
+   <msubsup>
+    <mi>λ</mi>
+    <msub>
+     <mi>α</mi>
+     <mrow>
+      <mi>N</mi>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mrow>
+      <mi>N</mi>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">]</mo>
+    </mrow>
+   </msubsup>
+   <msubsup>
+    <mi mathvariant="normal">Γ</mi>
+    <msub>
+     <mi>α</mi>
+     <mrow>
+      <mi>N</mi>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">[</mo>
+      <mi>N</mi>
+      <mo stretchy="false">]</mo>
+     </mrow>
+     <msub>
+      <mi>i</mi>
+      <mi>N</mi>
+     </msub>
+    </mrow>
+   </msubsup>
+   <mo stretchy="false">|</mo>
+   <msub>
+    <mi>i</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>i</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>,</mo>
+   <mo>.</mo>
+   <mo>.</mo>
+   <mo>,</mo>
+   <msub>
+    <mi>i</mi>
+    <mrow>
+     <mi>N</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>i</mi>
+    <mi>N</mi>
+   </msub>
+   <mo stretchy="false">⟩</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">Ψ</csymbol>
+     <ci>normal-⟩</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-,</ci>
+       <ci>normal-.</ci>
+       <ci>normal-.</ci>
+       <ci>normal-,</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <ci>N</ci>
+       </apply>
+       <eq></eq>
+       <cn type="integer">1</cn>
+      </cerror>
+     </apply>
+     <ci>M</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <cerror>
+       <csymbol cd="ambiguous">fragments</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <ci>normal-,</ci>
+       <ci>normal-.</ci>
+       <ci>normal-.</ci>
+       <ci>normal-,</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <apply>
+         <minus></minus>
+         <ci>N</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <eq></eq>
+       <cn type="integer">0</cn>
+      </cerror>
+     </apply>
+     <ci>χ</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>normal-Γ</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>α</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>λ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>α</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>normal-Γ</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>α</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>α</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>λ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>α</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>normal-Γ</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <cn type="integer">3</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <cn type="integer">3</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>α</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>α</ci>
+       <cn type="integer">3</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>λ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">3</cn>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>α</ci>
+      <cn type="integer">3</cn>
+     </apply>
+    </apply>
+    <ci>normal-⋅</ci>
+    <ci>normal-.</ci>
+    <ci>normal-.</ci>
+    <ci>normal-⋅</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>normal-Γ</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <apply>
+         <minus></minus>
+         <ci>N</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <apply>
+         <minus></minus>
+         <ci>N</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>α</ci>
+       <apply>
+        <minus></minus>
+        <ci>N</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>α</ci>
+       <apply>
+        <minus></minus>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>λ</ci>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <apply>
+        <minus></minus>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>α</ci>
+      <apply>
+       <minus></minus>
+       <ci>N</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>normal-Γ</ci>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="latexml">delimited-[]</csymbol>
+        <ci>N</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>i</ci>
+        <ci>N</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>α</ci>
+      <apply>
+       <minus></minus>
+       <ci>N</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+    <ci>normal-|</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>i</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>normal-,</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>i</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <ci>normal-,</ci>
+    <ci>normal-.</ci>
+    <ci>normal-.</ci>
+    <ci>normal-,</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>i</ci>
+     <apply>
+      <minus></minus>
+      <ci>N</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <ci>normal-,</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>i</ci>
+     <ci>N</ci>
+    </apply>
+    <ci>normal-⟩</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |\Psi\rangle=\sum\limits_{i_{1},..,i_{N}=1}^{M}\sum\limits_{\alpha_{1},..,%
+\alpha_{N-1}=0}^{\chi}\Gamma^{[1]i_{1}}_{\alpha_{1}}\lambda^{[1]}_{\alpha_{1}}%
+\Gamma^{[2]i_{2}}_{\alpha_{1}\alpha_{2}}\lambda^{[2]}_{\alpha_{2}}\Gamma^{[3]i%
+_{3}}_{\alpha_{2}\alpha_{3}}\lambda^{[3]}_{\alpha_{3}}\cdot..\cdot\Gamma^{[{N-%
+1}]i_{N-1}}_{\alpha_{N-2}\alpha_{N-1}}\lambda^{[N-1]}_{\alpha_{N-1}}\Gamma^{[N%
+]i_{N}}_{\alpha_{N-1}}|{i_{1},i_{2},..,i_{N-1},i_{N}}\rangle
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This function describes a <strong>N</strong>-point lattice which we would like to compute on <strong>P</strong> different compute nodes. Let us suppose, for the sake of simplicity, that N=2k*P, where k is an integer number. This means that if we distribute the lattice points evenly among the compute nodes (the easiest scenario), an even number of lattice points 2k is assigned to each compute node. Indexing the lattice points from 0 to N-1 (note that the usual indexing is 1,N) and the compute nodes from 0 to P-1, the lattice points would be distributed as follows among the nodes:</p>
+
+<p><code> NODE 0: 0, 1, ..., 2k-1</code><br/>
+<code> NODE 1: 2k, 2k+1, ..., 4k-1</code><br/>
+<code> ...</code><br/>
+<code> NODE m: m*2k, ..., (m+1)*2k - 1</code><br/>
+<code> ...</code><br/>
+<code> NODE P-1: (P-1)*2k, ..., N-1</code></p>
+
+<p>Using the canonical form of the MPS, we define 
+
+<math display="inline" id="Parallel-TEBD:2">
+ <semantics>
+  <msubsup>
+   <mi>λ</mi>
+   <msub>
+    <mi>α</mi>
+    <mi>l</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mi>l</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>λ</ci>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <ci>l</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>α</ci>
+     <ci>l</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda^{[l]}_{\alpha_{l}}
+  </annotation>
+ </semantics>
+</math>
+
+ as "belonging" to node m if m*2k ≤ l ≤ (m+1)*2k - 1. Similarly, we use the index l to assign the 
+
+<math display="inline" id="Parallel-TEBD:3">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi mathvariant="normal">Γ</mi>
+    <mo>′</mo>
+   </msup>
+   <mi>s</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>normal-Γ</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {\Gamma}^{\prime}s
+  </annotation>
+ </semantics>
+</math>
+
+
+ to a certain lattice point. This means that 
+
+<math display="inline" id="Parallel-TEBD:4">
+ <semantics>
+  <msubsup>
+   <mi mathvariant="normal">Γ</mi>
+   <msub>
+    <mi>α</mi>
+    <mn>0</mn>
+   </msub>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">[</mo>
+     <mn>0</mn>
+     <mo stretchy="false">]</mo>
+    </mrow>
+    <msub>
+     <mi>i</mi>
+     <mn>0</mn>
+    </msub>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>normal-Γ</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="latexml">delimited-[]</csymbol>
+       <cn type="integer">0</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>i</ci>
+       <cn type="integer">0</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>α</ci>
+     <cn type="integer">0</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Gamma^{[0]i_{0}}_{\alpha_{0}}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Parallel-TEBD:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msubsup>
+      <mi mathvariant="normal">Γ</mi>
+      <mrow>
+       <msub>
+        <mi>α</mi>
+        <mrow>
+         <mi>l</mi>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msub>
+       <msub>
+        <mi>α</mi>
+        <mi>l</mi>
+       </msub>
+      </mrow>
+      <mrow>
+       <mrow>
+        <mo stretchy="false">[</mo>
+        <mi>l</mi>
+        <mo stretchy="false">]</mo>
+       </mrow>
+       <msub>
+        <mi>i</mi>
+        <mi>l</mi>
+       </msub>
+      </mrow>
+     </msubsup>
+     <mo>,</mo>
+     <mi>l</mi>
+    </mrow>
+    <mo>=</mo>
+    <mn>1</mn>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <mrow>
+     <mn>2</mn>
+     <mi>k</mi>
+    </mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>normal-Γ</ci>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="latexml">delimited-[]</csymbol>
+          <ci>l</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>i</ci>
+          <ci>l</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>α</ci>
+         <apply>
+          <minus></minus>
+          <ci>l</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>α</ci>
+         <ci>l</ci>
+        </apply>
+       </apply>
+      </apply>
+      <ci>l</ci>
+     </list>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>k</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Gamma^{[l]i_{l}}_{\alpha_{l-1}\alpha_{l}},l=1,2k-1
+  </annotation>
+ </semantics>
+</math>
+
+, belong to NODE 0, as well as 
+
+<math display="inline" id="Parallel-TEBD:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msubsup>
+      <mi>λ</mi>
+      <msub>
+       <mi>α</mi>
+       <mi>l</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">[</mo>
+       <mi>l</mi>
+       <mo stretchy="false">]</mo>
+      </mrow>
+     </msubsup>
+     <mo>,</mo>
+     <mi>l</mi>
+    </mrow>
+    <mo>=</mo>
+    <mn>0</mn>
+   </mrow>
+   <mo>,</mo>
+   <mrow>
+    <mrow>
+     <mn>2</mn>
+     <mi>k</mi>
+    </mrow>
+    <mo>-</mo>
+    <mn>2</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>λ</ci>
+        <apply>
+         <csymbol cd="latexml">delimited-[]</csymbol>
+         <ci>l</ci>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <ci>l</ci>
+       </apply>
+      </apply>
+      <ci>l</ci>
+     </list>
+     <cn type="integer">0</cn>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>k</ci>
+     </apply>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda^{[l]}_{\alpha_{l}},l=0,2k-2
+  </annotation>
+ </semantics>
+</math>
+
+. A parallel version of TEBD implies that the computing nodes need to exchange information among them. The information exchanged will be the MPS matrices and singular values lying at the border between neighbouring compute nodes. How this is done, it will be explained below.</p>
+
+<p>The TEBD algorithm divides the exponential operator performing the time-evolution into a sequence of two-qubit gates of the form:</p>
+
+<p>
+
+<math display="inline" id="Parallel-TEBD:7">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>e</mi>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>i</mi>
+        <mi>δ</mi>
+       </mrow>
+      </mrow>
+      <mi mathvariant="normal">ℏ</mi>
+     </mfrac>
+     <msub>
+      <mi>H</mi>
+      <mrow>
+       <mi>k</mi>
+       <mo>,</mo>
+       <mrow>
+        <mi>k</mi>
+        <mo>+</mo>
+        <mn>1</mn>
+       </mrow>
+      </mrow>
+     </msub>
+    </mrow>
+   </msup>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>e</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <ci>i</ci>
+        <ci>δ</ci>
+       </apply>
+      </apply>
+      <csymbol cd="latexml">Planck-constant-over-2-pi</csymbol>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>H</ci>
+      <list>
+       <ci>k</ci>
+       <apply>
+        <plus></plus>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </list>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   e^{\frac{-i\delta}{\hbar}H_{k,k+1}}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Setting the Planck constant to 1, the time-evolution is expressed as:</p>
+
+<p>
+
+<math display="inline" id="Parallel-TEBD:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mo fence="true" stretchy="false">|</mo>
+     <mrow>
+      <mi mathvariant="normal">Ψ</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>t</mi>
+        <mo>+</mo>
+        <mi>δ</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">⟩</mo>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <msup>
+      <mi>e</mi>
+      <mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>i</mi>
+        <mi>δ</mi>
+        <mfrac>
+         <mi>F</mi>
+         <mn>2</mn>
+        </mfrac>
+       </mrow>
+      </mrow>
+     </msup>
+     <msup>
+      <mi>e</mi>
+      <mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>i</mi>
+        <mi>δ</mi>
+        <mi>G</mi>
+       </mrow>
+      </mrow>
+     </msup>
+     <msup>
+      <mi>e</mi>
+      <mrow>
+       <mo>-</mo>
+       <mrow>
+        <mi>i</mi>
+        <mi>δ</mi>
+        <mfrac>
+         <mi>F</mi>
+         <mn>2</mn>
+        </mfrac>
+       </mrow>
+      </mrow>
+     </msup>
+     <mrow>
+      <mo fence="true" stretchy="false">|</mo>
+      <mrow>
+       <mi mathvariant="normal">Ψ</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>t</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo stretchy="false">⟩</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="latexml">ket</csymbol>
+     <apply>
+      <times></times>
+      <ci>normal-Ψ</ci>
+      <apply>
+       <plus></plus>
+       <ci>t</ci>
+       <ci>δ</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>e</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <ci>i</ci>
+        <ci>δ</ci>
+        <apply>
+         <divide></divide>
+         <ci>F</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>e</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <ci>i</ci>
+        <ci>δ</ci>
+        <ci>G</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>e</ci>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <ci>i</ci>
+        <ci>δ</ci>
+        <apply>
+         <divide></divide>
+         <ci>F</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">ket</csymbol>
+      <apply>
+       <times></times>
+       <ci>normal-Ψ</ci>
+       <ci>t</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |\Psi(t+\delta)\rangle=e^{{-i\delta}\frac{F}{2}}e^{{-i\delta}G}e^{{-i\delta}%
+\frac{F}{2}}|\Psi(t)\rangle,
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>where H = F + G,</p>
+
+<p>
+
+<math display="inline" id="Parallel-TEBD:9">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>F</mi>
+    <mo>≡</mo>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <mfrac>
+        <mi>N</mi>
+        <mn>2</mn>
+       </mfrac>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>H</mi>
+       <mrow>
+        <mrow>
+         <mn>2</mn>
+         <mi>k</mi>
+        </mrow>
+        <mo>,</mo>
+        <mrow>
+         <mrow>
+          <mn>2</mn>
+          <mi>k</mi>
+         </mrow>
+         <mo>+</mo>
+         <mn>1</mn>
+        </mrow>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <mfrac>
+        <mi>N</mi>
+        <mn>2</mn>
+       </mfrac>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>F</mi>
+       <mrow>
+        <mn>2</mn>
+        <mi>k</mi>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <equivalent></equivalent>
+     <ci>F</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <divide></divide>
+         <ci>N</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>H</ci>
+       <list>
+        <apply>
+         <times></times>
+         <cn type="integer">2</cn>
+         <ci>k</ci>
+        </apply>
+        <apply>
+         <plus></plus>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <ci>k</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </list>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <divide></divide>
+         <ci>N</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>F</ci>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <ci>k</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   F\equiv\sum_{k=0}^{\frac{N}{2}-1}(H_{2k,2k+1})=\sum_{k=0}^{\frac{N}{2}-1}(F_{2%
+k}),
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Parallel-TEBD:10">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>G</mi>
+    <mo>≡</mo>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <mfrac>
+        <mi>N</mi>
+        <mn>2</mn>
+       </mfrac>
+       <mo>-</mo>
+       <mn>2</mn>
+      </mrow>
+     </msubsup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>H</mi>
+       <mrow>
+        <mrow>
+         <mrow>
+          <mn>2</mn>
+          <mi>k</mi>
+         </mrow>
+         <mo>+</mo>
+         <mn>1</mn>
+        </mrow>
+        <mo>,</mo>
+        <mrow>
+         <mrow>
+          <mn>2</mn>
+          <mi>k</mi>
+         </mrow>
+         <mo>+</mo>
+         <mn>2</mn>
+        </mrow>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <mfrac>
+        <mi>N</mi>
+        <mn>2</mn>
+       </mfrac>
+       <mo>-</mo>
+       <mn>2</mn>
+      </mrow>
+     </msubsup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>G</mi>
+       <mrow>
+        <mrow>
+         <mn>2</mn>
+         <mi>k</mi>
+        </mrow>
+        <mo>+</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <equivalent></equivalent>
+     <ci>G</ci>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <divide></divide>
+         <ci>N</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>H</ci>
+       <list>
+        <apply>
+         <plus></plus>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <ci>k</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+        <apply>
+         <plus></plus>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <ci>k</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </list>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>k</ci>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <apply>
+         <divide></divide>
+         <ci>N</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>G</ci>
+       <apply>
+        <plus></plus>
+        <apply>
+         <times></times>
+         <cn type="integer">2</cn>
+         <ci>k</ci>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   G\equiv\sum_{k=0}^{\frac{N}{2}-2}(H_{2k+1,2k+2})=\sum_{k=0}^{\frac{N}{2}-2}(G_%
+{2k+1}).
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>What we can explicitly compute in parallel is the sequence of gates 
+
+<math display="inline" id="Parallel-TEBD:11">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>e</mi>
+     <mrow>
+      <mo>-</mo>
+      <mrow>
+       <mi>i</mi>
+       <mfrac>
+        <mi>δ</mi>
+        <mn>2</mn>
+       </mfrac>
+       <msub>
+        <mi>F</mi>
+        <mrow>
+         <mn>2</mn>
+         <mi>k</mi>
+        </mrow>
+       </msub>
+      </mrow>
+     </mrow>
+    </msup>
+    <mo>,</mo>
+    <msup>
+     <mi>e</mi>
+     <mrow>
+      <mo>-</mo>
+      <mrow>
+       <mi>i</mi>
+       <mi>δ</mi>
+       <msub>
+        <mi>G</mi>
+        <mrow>
+         <mrow>
+          <mn>2</mn>
+          <mi>k</mi>
+         </mrow>
+         <mo>+</mo>
+         <mn>1</mn>
+        </mrow>
+       </msub>
+      </mrow>
+     </mrow>
+    </msup>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>e</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <apply>
+        <divide></divide>
+        <ci>δ</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>F</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">2</cn>
+         <ci>k</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>e</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <ci>δ</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>G</ci>
+        <apply>
+         <plus></plus>
+         <apply>
+          <times></times>
+          <cn type="integer">2</cn>
+          <ci>k</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   e^{{-i}\frac{\delta}{2}F_{2k}},e^{{-i\delta}{G_{2k+1}}}.
+  </annotation>
+ </semantics>
+</math>
+
+ Each of the compute node can apply most of the two-qubit gates without needing information from its neighbours. The compute nodes need to exchange information only at the borders, where two-qubit gates cross them, or just need information from the other side. We will now consider all three sweeps, two even and one odd and see what information has to be exchanged. Let us see what is happening on node <em>m</em> during the sweeps.</p>
+<h3 id="first-even-sweep">First (even) sweep</h3>
+
+<p>The sequence of gates that has to be applied in this sweep is:</p>
+
+<p>
+
+<math display="inline" id="Parallel-TEBD:12">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>e</mi>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <mi>i</mi>
+      <mfrac>
+       <mi>δ</mi>
+       <mn>2</mn>
+      </mfrac>
+      <msub>
+       <mi>F</mi>
+       <mrow>
+        <mrow>
+         <mi>m</mi>
+         <mo>*</mo>
+         <mn>2</mn>
+        </mrow>
+        <mi>k</mi>
+       </mrow>
+      </msub>
+     </mrow>
+    </mrow>
+   </msup>
+   <mo>,</mo>
+   <msup>
+    <mi>e</mi>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <mi>i</mi>
+      <mfrac>
+       <mi>δ</mi>
+       <mn>2</mn>
+      </mfrac>
+      <msub>
+       <mi>F</mi>
+       <mrow>
+        <mrow>
+         <mrow>
+          <mi>m</mi>
+          <mo>*</mo>
+          <mn>2</mn>
+         </mrow>
+         <mi>k</mi>
+        </mrow>
+        <mo>+</mo>
+        <mn>2</mn>
+       </mrow>
+      </msub>
+     </mrow>
+    </mrow>
+   </msup>
+   <mo>,</mo>
+   <mi mathvariant="normal">…</mi>
+   <mo>,</mo>
+   <msup>
+    <mi>e</mi>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <mi>i</mi>
+      <mfrac>
+       <mi>δ</mi>
+       <mn>2</mn>
+      </mfrac>
+      <msub>
+       <mi>F</mi>
+       <mrow>
+        <mrow>
+         <mrow>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mi>m</mi>
+            <mo>+</mo>
+            <mn>1</mn>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+          <mo>*</mo>
+          <mn>2</mn>
+         </mrow>
+         <mi>k</mi>
+        </mrow>
+        <mo>-</mo>
+        <mn>2</mn>
+       </mrow>
+      </msub>
+     </mrow>
+    </mrow>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>e</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <apply>
+        <divide></divide>
+        <ci>δ</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>F</ci>
+        <apply>
+         <times></times>
+         <apply>
+          <times></times>
+          <ci>m</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <ci>k</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>e</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <apply>
+        <divide></divide>
+        <ci>δ</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>F</ci>
+        <apply>
+         <plus></plus>
+         <apply>
+          <times></times>
+          <apply>
+           <times></times>
+           <ci>m</ci>
+           <cn type="integer">2</cn>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <ci>normal-…</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>e</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <times></times>
+       <ci>i</ci>
+       <apply>
+        <divide></divide>
+        <ci>δ</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>F</ci>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <apply>
+           <times></times>
+           <apply>
+            <plus></plus>
+            <ci>m</ci>
+            <cn type="integer">1</cn>
+           </apply>
+           <cn type="integer">2</cn>
+          </apply>
+          <ci>k</ci>
+         </apply>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   e^{{-i}\frac{\delta}{2}F_{m*2k}},e^{{-i}\frac{\delta}{2}F_{m*2k+2}},...,e^{{-i%
+}\frac{\delta}{2}F_{(m+1)*2k-2}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Already for computing the first gate, process <em>m</em> needs information from its lowest neighbour, <em>m-1</em>. On the other side, <em>m</em> doesn't need anything from its "higher" neighbour, <em>m+1</em>, because it has all the information it needs to apply the last gate. So the best strategy for <em>m</em> is to send a request to <em>m-1</em>, postponing the calculation of the first gate for later, and continue with the calculation of the other gates. What <em>m</em> does is called <a href="Non-blocking_I/O" title="wikilink">non-blocking communication</a>. Let's look at this in detail. The tensors involved in the calculation of the first gate are:<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<references>
+</references>
+
+<p>"</p>
+
+<p><a href="Category:Computational_physics" title="wikilink">Category:Computational physics</a> <a href="Category:Distributed_algorithms" title="wikilink">Category:Distributed algorithms</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="Guifré_Vidal" title="wikilink">Guifré Vidal</a>, <em>Efficient Classical Simulation of Slightly Entangled Quantum Computations</em>, PRL 91, 147902 (2003)<a href="http://www.citebase.org/cgi-bin/citations?id=oai:arXiv.org:quant-ph/0301063">2</a><a href="#fnref1">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

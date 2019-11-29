@@ -1,0 +1,579 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="809">Fast Kalman filter</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Fast Kalman filter</h1>
+<hr/>
+
+<p>The <strong>fast Kalman filter (FKF)</strong>, devised by Antti Lange (1941- ), is an extension of the <a href="Helmert-Wolf_blocking" title="wikilink">Helmert-Wolf blocking</a><a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> (<strong>HWB</strong>) method from <a class="uri" href="geodesy" title="wikilink">geodesy</a> to real-time applications of <a href="Kalman_filter" title="wikilink">Kalman filtering</a> (KF) such as satellite imaging of the Earth.</p>
+<h2 id="motivation">Motivation</h2>
+
+<p>Kalman filters are an important software technique for building fault-tolerance into a wide range of systems, including real-time imaging. The ordinary Kalman filter is optimal for general systems. However, an <strong>optimal</strong> Kalman filter is probably stable only if Kalman's <strong>observability</strong><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> and <strong>controllability</strong> conditions<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> are also satisfied (Kalman, 1960). These conditions are challenging to continuously maintain for a large system which means that even an optimal Kalman filter may diverge towards false solutions. Fortunately, the stability of an optimal Kalman filter can be controlled by monitoring its error variances if these can be reliably estimated. Their precise computation is, however, much more demanding than the optimal filtering itself but the FKF method may provide the required speed-up also in this respect.</p>
+<h3 id="optimum-calibration">Optimum calibration</h3>
+
+<p>Calibration parameters are a typical example of those state parameters that may create serious observability problems if a narrow window of data (i.e. too few measurements) is continuously used by a Kalman filter (Lange, 1999). Observing instruments onboard orbiting satellites gives an example of <strong>optimal</strong> Kalman filtering where their calibration is done indirectly on ground (Olsson el al, 2001). There may also exist other state parameters that are hardly or not at all observable (estimable) if too small samples of data are processed (analysed) at a time by any sort of a Kalman filter.</p>
+<h3 id="inverse-problem">Inverse problem</h3>
+
+<p>The computing load of the <a href="inverse_problem" title="wikilink">inverse problem</a> of an ordinary <strong>Kalman recursion</strong> is <a href="Cholesky_decomposition#Computing_the_Cholesky_decomposition" title="wikilink">roughly proportional to the cube</a> of the number of the measurements processed simultaneously, which can always be set to 1 by processing each scalar measurement independently and (if necessary) performing a simple pre-filtering algorithm to de-correlate these measurements.</p>
+
+<p>Even when many measurements are processed simultaneously, it is not unusual that the linear equation system is sparse, because some measurements turn out to be independent of some state or calibration parameters. In Satellite Geodesy problems (Brockmann, 1997), the computing load of the <strong>HWB</strong> (and <strong>FKF</strong>) method is only roughly proportional to the <strong>square</strong> of the number of the state parameters (and not of the measurements whose number may be billions).</p>
+<h3 id="reliable-solution">Reliable solution</h3>
+
+<p>Reliable operational Kalman filtering requires continuous fusion of data in real-time. Its optimality depends essentially on use of the error variances and covariances between all measurements and the estimated state and calibration parameters. This large error <a href="covariance_matrix" title="wikilink">covariance matrix</a> is obtained by <a href="matrix_inversion" title="wikilink">matrix inversion</a> from the respective system of <strong><a href="Linear_regression#Multiple_linear_regression" title="wikilink">Normal Equations</a></strong>.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> Its coefficient matrix is usually sparse and the exact solution of all estimated parameters can be computed by using the <strong>HWB</strong> method.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> The optimal solution may also be obtained by Gauss elimination using other sparse-matrix techniques or iterative methods based e.g. on <a href="Calculus_of_variations" title="wikilink">Variational Calculus</a>. However, these latter methods can solve the large matrix of all error variances and covariances only approximately and it would thus be impossible to do the data fusion in a strictly <strong>optimal</strong> fashion. Consequently, the filter's stability may become uncertain even if the observability and controllability conditions were satisfied.</p>
+<h2 id="description">Description</h2>
+
+<p>The Fast Kalman filter applies only to systems with sparse matrices (Lange, 2001), since HWB is an inversion method to solve sparse linear equations (Wolf, 1978).</p>
+
+<p>The sparse coefficient matrix to be inverted may often have either a <strong>bordered block- or band-diagonal</strong> (BBD) structure. If it is band-diagonal it can be transformed into a block-diagonal form e.g. by means of a generalised Canonical Correlation Analysis <a href="Generalized_canonical_correlation" title="wikilink">(<strong>gCCA</strong>)</a>.</p>
+
+<p>Such a large matrix can thus be most effectively inverted in a blockwise manner by using the following <strong><a href="Invertible_matrix#Blockwise_inversion" title="wikilink">analytic inversion formula</a></strong>:</p>
+
+<p>
+
+<math display="block" id="Fast_Kalman_filter:0">
+ <semantics>
+  <mrow>
+   <msup>
+    <mrow>
+     <mo>[</mo>
+     <mtable displaystyle="true">
+      <mtr>
+       <mtd columnalign="center">
+        <mi>A</mi>
+       </mtd>
+       <mtd columnalign="center">
+        <mi>B</mi>
+       </mtd>
+      </mtr>
+      <mtr>
+       <mtd columnalign="center">
+        <mi>C</mi>
+       </mtd>
+       <mtd columnalign="center">
+        <mi>D</mi>
+       </mtd>
+      </mtr>
+     </mtable>
+     <mo>]</mo>
+    </mrow>
+    <mrow>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mo>[</mo>
+    <mtable displaystyle="true">
+     <mtr>
+      <mtd columnalign="center">
+       <mrow>
+        <msup>
+         <mi>A</mi>
+         <mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </msup>
+        <mo>+</mo>
+        <mrow>
+         <msup>
+          <mi>A</mi>
+          <mrow>
+           <mo>-</mo>
+           <mn>1</mn>
+          </mrow>
+         </msup>
+         <mi>B</mi>
+         <msup>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mi>D</mi>
+            <mo>-</mo>
+            <mrow>
+             <mi>C</mi>
+             <msup>
+              <mi>A</mi>
+              <mrow>
+               <mo>-</mo>
+               <mn>1</mn>
+              </mrow>
+             </msup>
+             <mi>B</mi>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+          <mrow>
+           <mo>-</mo>
+           <mn>1</mn>
+          </mrow>
+         </msup>
+         <mi>C</mi>
+         <msup>
+          <mi>A</mi>
+          <mrow>
+           <mo>-</mo>
+           <mn>1</mn>
+          </mrow>
+         </msup>
+        </mrow>
+       </mrow>
+      </mtd>
+      <mtd columnalign="center">
+       <mrow>
+        <mo>-</mo>
+        <mrow>
+         <msup>
+          <mi>A</mi>
+          <mrow>
+           <mo>-</mo>
+           <mn>1</mn>
+          </mrow>
+         </msup>
+         <mi>B</mi>
+         <msup>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mi>D</mi>
+            <mo>-</mo>
+            <mrow>
+             <mi>C</mi>
+             <msup>
+              <mi>A</mi>
+              <mrow>
+               <mo>-</mo>
+               <mn>1</mn>
+              </mrow>
+             </msup>
+             <mi>B</mi>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+          <mrow>
+           <mo>-</mo>
+           <mn>1</mn>
+          </mrow>
+         </msup>
+        </mrow>
+       </mrow>
+      </mtd>
+     </mtr>
+     <mtr>
+      <mtd columnalign="center">
+       <mrow>
+        <mo>-</mo>
+        <mrow>
+         <msup>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mi>D</mi>
+            <mo>-</mo>
+            <mrow>
+             <mi>C</mi>
+             <msup>
+              <mi>A</mi>
+              <mrow>
+               <mo>-</mo>
+               <mn>1</mn>
+              </mrow>
+             </msup>
+             <mi>B</mi>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+          <mrow>
+           <mo>-</mo>
+           <mn>1</mn>
+          </mrow>
+         </msup>
+         <mi>C</mi>
+         <msup>
+          <mi>A</mi>
+          <mrow>
+           <mo>-</mo>
+           <mn>1</mn>
+          </mrow>
+         </msup>
+        </mrow>
+       </mrow>
+      </mtd>
+      <mtd columnalign="center">
+       <msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>D</mi>
+          <mo>-</mo>
+          <mrow>
+           <mi>C</mi>
+           <msup>
+            <mi>A</mi>
+            <mrow>
+             <mo>-</mo>
+             <mn>1</mn>
+            </mrow>
+           </msup>
+           <mi>B</mi>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msup>
+      </mtd>
+     </mtr>
+    </mtable>
+    <mo>]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <matrix>
+      <matrixrow>
+       <ci>A</ci>
+       <ci>B</ci>
+      </matrixrow>
+      <matrixrow>
+       <ci>C</ci>
+       <ci>D</ci>
+      </matrixrow>
+     </matrix>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <matrix>
+     <matrixrow>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>A</ci>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>A</ci>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>B</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <minus></minus>
+          <ci>D</ci>
+          <apply>
+           <times></times>
+           <ci>C</ci>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <ci>A</ci>
+            <apply>
+             <minus></minus>
+             <cn type="integer">1</cn>
+            </apply>
+           </apply>
+           <ci>B</ci>
+          </apply>
+         </apply>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>C</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>A</ci>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>A</ci>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>B</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <minus></minus>
+          <ci>D</ci>
+          <apply>
+           <times></times>
+           <ci>C</ci>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <ci>A</ci>
+            <apply>
+             <minus></minus>
+             <cn type="integer">1</cn>
+            </apply>
+           </apply>
+           <ci>B</ci>
+          </apply>
+         </apply>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </matrixrow>
+     <matrixrow>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <minus></minus>
+          <ci>D</ci>
+          <apply>
+           <times></times>
+           <ci>C</ci>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <ci>A</ci>
+            <apply>
+             <minus></minus>
+             <cn type="integer">1</cn>
+            </apply>
+           </apply>
+           <ci>B</ci>
+          </apply>
+         </apply>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>C</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>A</ci>
+         <apply>
+          <minus></minus>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <minus></minus>
+        <ci>D</ci>
+        <apply>
+         <times></times>
+         <ci>C</ci>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>A</ci>
+          <apply>
+           <minus></minus>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>B</ci>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </matrixrow>
+    </matrix>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{bmatrix}A&B\\
+C&D\end{bmatrix}^{-1}=\begin{bmatrix}A^{-1}+A^{-1}B(D-CA^{-1}B)^{-1}CA^{-1}&-A%
+^{-1}B(D-CA^{-1}B)^{-1}\\
+-(D-CA^{-1}B)^{-1}CA^{-1}&(D-CA^{-1}B)^{-1}\end{bmatrix}
+  </annotation>
+ </semantics>
+</math>
+
+ of <a href="Ferdinand_Georg_Frobenius" title="wikilink">Frobenius</a> where</p>
+
+<p>
+
+<math display="block" id="Fast_Kalman_filter:1">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mo>=</mo>
+   <mi></mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>A</ci>
+    <csymbol cd="latexml">absent</csymbol>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A=
+  </annotation>
+ </semantics>
+</math>
+
+ a large <strong>block- or band-diagonal</strong> (BD) matrix to be easily inverted, and,</p>
+
+<p>
+
+<math display="block" id="Fast_Kalman_filter:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>D</mi>
+     <mo>-</mo>
+     <mrow>
+      <mi>C</mi>
+      <msup>
+       <mi>A</mi>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+      <mi>B</mi>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mi></mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <minus></minus>
+     <ci>D</ci>
+     <apply>
+      <times></times>
+      <ci>C</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>A</ci>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>B</ci>
+     </apply>
+    </apply>
+    <csymbol cd="latexml">absent</csymbol>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (D-CA^{-1}B)=
+  </annotation>
+ </semantics>
+</math>
+
+ a much smaller matrix called the <a href="Issai_Schur" title="wikilink">Schur</a> complement of 
+
+<math display="inline" id="Fast_Kalman_filter:3">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>This is the <strong>FKF</strong> method that may make it computationally possible to estimate a much larger number of state and calibration parameters than an ordinary Kalman recursion can do. Their operational accuracies may also be reliably estimated from the theory of Minimum-Norm Quadratic Unbiased Estimation (<a href="Minque" title="wikilink">MINQUE</a>) of <a href="C._R._Rao" title="wikilink">C. R. Rao</a> (1920- ) and used for controlling the stability of optimal Kalman filtering.</p>
+<h2 id="applications">Applications</h2>
+
+<p>The <strong>FKF</strong> method extends the very high accuracies of Satellite Geodesy to Virtual Reference Station (<strong>VRS</strong>) <a href="Real_Time_Kinematic" title="wikilink">Real Time Kinematic</a> (<strong>RTK</strong>) surveying, mobile positioning and ultra-reliable navigation (Lange, 2003). First important applications will be real-time <strong>optimum calibration</strong> of global observing systems in Meteorology,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Geophysics, Astronomy etc.</p>
+
+<p>For example, a <a href="Numerical_weather_prediction" title="wikilink">Numerical Weather Prediction</a> (NWP) system can now forecast observations with confidence intervals and their operational quality control can thus be improved. A sudden increase of uncertainty in predicting observations would indicate that important observations were missing (observability problem) or an unpredictable change of weather is taking place (controllability problem). Remote sensing and imaging from satellites may partly be based on forecast information. Controlling stability of such <strong>feedback</strong> between the forecast and satellite data calls for the theory of optimal Kalman filtering. No suboptimal solution would do a proper job as public safety is usually at stake.</p>
+
+<p>The computational advantage of <strong>FKF</strong> is marginal for applications using only small amounts of data in real-time data. Therefore improved built-in calibration and data communication infrastructures need to be developed first and introduced to public use before personal gadgets and machine-to-machine (M2M) devices can make the best out of <strong>FKF</strong>.</p>
+<h2 id="notes">Notes</h2>
+<h2 id="references">References</h2>
+<ul>
+<li><a href="http://www.sgc.ethz.ch/sgc-volumes/sgk-55.pdf">Brockmann, E. (1997)</a>: "Combination of solutions for geodetic and geodynamic applications of the Global Positioning System (GPS)", <em>Geodätisch - geophysikalische Arbeiten in der Schweiz</em>, Volume 55, Schweitzerische Geodätische Kommission.</li>
+<li>Kalman, R. E. (1960): "A New Approach to Linear Filtering and Prediction Problems", <em>Transactions of the ASME - Journal of Basic Engineering</em>, Vol. 82: pp. 35–45.</li>
+<li>Lange, A. A. (1999): "Statistical Calibration of Observing Systems", Academic Dissertation, <em>Finnish Meteorological Institute Contributions</em>, No. 22, Helsinki, Finland.</li>
+<li>Lange, A. A. (2001): "Simultaneous Statistical Calibration of the GPS signal delay measurements with related meteorological data", <em>Physics and Chemistry of the Earth, Part A: Solid Earth and Geodesy</em>, Vol. 26, No. 6-8, pp. 471–473.</li>
+<li><a href="http://www.fkf.net/LangeA2003.PDF">Lange, A. A. (2003)</a>: "Optimal Kalman Filtering for ultra-reliable Tracking", ESA CD-ROM WPP-237, <em>Atmospheric Remote Sensing using Satellite Navigation Systems</em>, Special Symposium of the URSI Joint Working Group FG, 13–15 October 2003, Matera, Italy.</li>
+<li><a href="http://www.ssc.se/data/content/DOCUMENTS/20049612942476Star%20Tracker,%20Gyro%20Calibration%20and%20Attitude%20Reconstruction.pdf">Olsson, T. et al. (2001)</a>: "Star Tracker/Gyro Calibration and Attitude Reconstruction for the Scientific Satellite ODIN - In Flight Results."</li>
+<li>Wolf, H. (1978): "The Helmert block method, its origin and development", <em>Proceedings of the Second International Symposium on Problems Related to the Redefinition of North American Geodetic Networks</em>, Arlington, Va. April 24–28, pp. 319–326.</li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://portal.acm.org/citation.cfm?id=200979.200987">BBD</a> - software</li>
+<li><a href="http://www.fkf.net/FKFformula.html">FKF</a> - formulas</li>
+<li><a href="http://www.fkf.net/Wolf.html">HWB</a> - formulas</li>
+<li><a href="http://www.fkf.net/Langesformula.html">The error covariance matrix of FKF</a> - formulas</li>
+<li>There are other Fast Kalman Algorithms designed for special signal processing purposes, see e.g. <a href="http://ieeexplore.ieee.org/xpl/abs_free.jsp?arNumber=31289">Stabilizing the Fast Kalman Algorithms</a> on IEEE Xplore</li>
+<li><a href="http://portal.acm.org/citation.cfm?id=982359">Kalman filter recipes for real-time image processing</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Signal_estimation" title="wikilink">Category:Signal estimation</a> <a href="Category:Linear_filters" title="wikilink">Category:Linear filters</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"></li>
+<li id="fn2"></li>
+<li id="fn3"></li>
+<li id="fn4"></li>
+<li id="fn5"></li>
+<li id="fn6"></li>
+</ol>
+</section>
+</body>
+</html>

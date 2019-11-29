@@ -1,0 +1,1833 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="846">Distributed hash table</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Distributed hash table</h1>
+<hr/>
+
+<p>A <strong>distributed hash table</strong> (<strong>DHT</strong>) is a class of a decentralized <a href="Distributed_computing" title="wikilink">distributed system</a> that provides a lookup service similar to a <a href="hash_table" title="wikilink">hash table</a>: (<em>key</em>, <em>value</em>) pairs are stored in a DHT, and any participating <a href="node_(networking)" title="wikilink">node</a> can efficiently retrieve the value associated with a given key. Responsibility for maintaining the mapping from keys to values is distributed among the nodes, in such a way that a change in the set of participants causes a minimal amount of disruption. This allows a DHT to <a href="scale_(computing)" title="wikilink">scale</a> to extremely large numbers of nodes and to handle continual node arrivals, departures, and failures.</p>
+
+<p>DHTs form an infrastructure that can be used to build more complex services, such as <a class="uri" href="anycast" title="wikilink">anycast</a>, cooperative <a href="Web_cache" title="wikilink">Web caching</a>, <a href="distributed_file_system" title="wikilink">distributed file systems</a>, <a href="Domain_name_system" title="wikilink">domain name services</a>, <a href="instant_messaging" title="wikilink">instant messaging</a>, <a class="uri" href="multicast" title="wikilink">multicast</a>, and also <a class="uri" href="peer-to-peer" title="wikilink">peer-to-peer</a> <a href="file_sharing" title="wikilink">file sharing</a> and <a href="content_distribution" title="wikilink">content distribution</a> systems. Notable distributed networks that use DHTs include <a href="BitTorrent_(protocol)" title="wikilink">BitTorrent</a>'s distributed tracker, the <a href="Coral_Content_Distribution_Network" title="wikilink">Coral Content Distribution Network</a>, the <a href="Kad_network" title="wikilink">Kad network</a>, the <a href="Storm_botnet" title="wikilink">Storm botnet</a>, the <a href="Tox_(software)" title="wikilink">Tox instant messenger</a>, <a class="uri" href="Freenet" title="wikilink">Freenet</a> and the <a class="uri" href="YaCy" title="wikilink">YaCy</a> search engine.</p>
+<figure><b>(Figure)</b>
+<figcaption>Distributed hash tables</figcaption>
+</figure>
+<h2 id="history">History</h2>
+
+<p>DHT research was originally motivated, in part, by <a class="uri" href="peer-to-peer" title="wikilink">peer-to-peer</a> systems such as <a class="uri" href="Freenet" title="wikilink">Freenet</a>, <a class="uri" href="gnutella" title="wikilink">gnutella</a>, <a href="BitTorrent_(software)" title="wikilink">BitTorrent</a> and <a class="uri" href="Napster" title="wikilink">Napster</a>, which took advantage of resources distributed across the Internet to provide a single useful application. In particular, they took advantage of increased <a href="Bandwidth_(computing)" title="wikilink">bandwidth</a> and <a href="hard_disk" title="wikilink">hard disk</a> capacity to provide a file-sharing service.</p>
+
+<p>These systems differed in how they <em>found</em> the data their peers contained:</p>
+<ul>
+<li>Napster, the first large-scale P2P content delivery system, required a central index server: each node, upon joining, would send a list of locally held files to the server, which would perform searches and refer the querier to the nodes that held the results. This central component left the system vulnerable to attacks and lawsuits. <em>(See <a class="uri" href="Napster" title="wikilink">Napster</a> for details.)</em></li>
+<li>Gnutella and similar networks moved to a flooding query model in essence, each search would result in a message being broadcast to every other machine in the network. While avoiding a <a href="single_point_of_failure" title="wikilink">single point of failure</a>, this method was significantly less efficient than Napster. Later versions of Gnutella clients moved to a dynamic querying model which vastly improved efficiency.</li>
+<li>Finally, <a class="uri" href="Freenet" title="wikilink">Freenet</a> is fully distributed, but employs a heuristic <a href="key-based_routing" title="wikilink">key-based routing</a> in which each file is associated with a key, and files with similar keys tend to cluster on a similar set of nodes. Queries are likely to be routed through the network to such a cluster without needing to visit many peers.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> However, Freenet does not guarantee that data will be found.</li>
+</ul>
+
+<p>Distributed hash tables use a more structured key-based routing in order to attain both the decentralization of Freenet and gnutella, and the efficiency and guaranteed results of Napster. One drawback is that, like Freenet, DHTs only directly support exact-match search, rather than keyword search, although Freenet's routing algorithm can be generalized to any key type where a closeness operation can be defined.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+
+<p>In 2001, four systems—<a href="Content_addressable_network" title="wikilink">CAN</a>,<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> <a href="Chord_(peer-to-peer)" title="wikilink">Chord</a>,<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> <a href="Pastry_(DHT)" title="wikilink">Pastry</a>, and <a href="Tapestry_(DHT)" title="wikilink">Tapestry</a>—ignited DHTs as a popular research topic. A project called the Infrastructure for Resilient Internet Systems (Iris) was funded by a $12 million grant from the US <a href="National_Science_Foundation" title="wikilink">National Science Foundation</a> in 2002.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> Researchers included <a href="Hari_Balakrishnan" title="wikilink">Hari Balakrishnan</a> and <a href="Scott_Shenker" title="wikilink">Scott Shenker</a>.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> Outside academia, DHT technology has been adopted as a component of <a href="BitTorrent_(protocol)" title="wikilink">BitTorrent</a> and in the <a href="Coral_Content_Distribution_Network" title="wikilink">Coral Content Distribution Network</a>.</p>
+<h2 id="properties">Properties</h2>
+
+<p>DHTs characteristically emphasize the following properties:</p>
+<ul>
+<li><a href="Decentralized_computing" title="wikilink">Autonomy and Decentralization</a>: the nodes collectively form the system without any central coordination.</li>
+<li><a href="Fault_tolerance" title="wikilink">Fault tolerance</a>: the system should be reliable (in some sense) even with nodes continuously joining, leaving, and failing.</li>
+<li><a href="scale_(computing)" title="wikilink">Scalability</a>: the system should function efficiently even with thousands or millions of nodes.</li>
+</ul>
+
+<p>A key technique used to achieve these goals is that any one node needs to coordinate with only a few other nodes in the system – most commonly, <a href="Big_O_notation" title="wikilink">O</a>(log <em>n</em>) of the 
+
+<math display="inline" id="Distributed_hash_table:0">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ participants (see below) – so that only a limited amount of work needs to be done for each change in membership.</p>
+
+<p>Some DHT designs seek to be <a href="secure_communication" title="wikilink">secure</a> against malicious participants<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> and to allow participants to remain <a href="anonymity" title="wikilink">anonymous</a>, though this is less common than in many other <a class="uri" href="peer-to-peer" title="wikilink">peer-to-peer</a> (especially <a href="file_sharing" title="wikilink">file sharing</a>) systems; see <a href="anonymous_P2P" title="wikilink">anonymous P2P</a>.</p>
+
+<p>Finally, DHTs must deal with more traditional distributed systems issues such as <a href="Load_balancing_(computing)" title="wikilink">load balancing</a>, <a href="data_integrity" title="wikilink">data integrity</a>, and performance (in particular, ensuring that operations such as routing and data storage or retrieval complete quickly).</p>
+<h2 id="structure">Structure</h2>
+
+<p>The structure of a DHT can be decomposed into several main components.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a><a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> The foundation is an abstract <strong>keyspace</strong>, such as the set of 160-bit <a href="string_(computer_science)" title="wikilink">strings</a>. A <strong>keyspace partitioning</strong> scheme splits ownership of this keyspace among the participating nodes. An <strong>overlay network</strong> then connects the nodes, allowing them to find the owner of any given key in the keyspace.</p>
+
+<p>Once these components are in place, a typical use of the DHT for storage and retrieval might proceed as follows. Suppose the keyspace is the set of 160-bit strings. To store a file with given 
+
+<math display="inline" id="Distributed_hash_table:1">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mi>i</mi>
+   <mi>l</mi>
+   <mi>e</mi>
+   <mi>n</mi>
+   <mi>a</mi>
+   <mi>m</mi>
+   <mi>e</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>f</ci>
+    <ci>i</ci>
+    <ci>l</ci>
+    <ci>e</ci>
+    <ci>n</ci>
+    <ci>a</ci>
+    <ci>m</ci>
+    <ci>e</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   filename
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Distributed_hash_table:2">
+ <semantics>
+  <mrow>
+   <mi>d</mi>
+   <mi>a</mi>
+   <mi>t</mi>
+   <mi>a</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>d</ci>
+    <ci>a</ci>
+    <ci>t</ci>
+    <ci>a</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   data
+  </annotation>
+ </semantics>
+</math>
+
+ in the DHT, the <a class="uri" href="SHA-1" title="wikilink">SHA-1</a> hash of 
+
+<math display="inline" id="Distributed_hash_table:3">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mi>i</mi>
+   <mi>l</mi>
+   <mi>e</mi>
+   <mi>n</mi>
+   <mi>a</mi>
+   <mi>m</mi>
+   <mi>e</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>f</ci>
+    <ci>i</ci>
+    <ci>l</ci>
+    <ci>e</ci>
+    <ci>n</ci>
+    <ci>a</ci>
+    <ci>m</ci>
+    <ci>e</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   filename
+  </annotation>
+ </semantics>
+</math>
+
+ is generated, producing a 160-bit key 
+
+<math display="inline" id="Distributed_hash_table:4">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+, and a message 
+
+<math display="inline" id="Distributed_hash_table:5">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mi>u</mi>
+   <mi>t</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo>,</mo>
+    <mrow>
+     <mi>d</mi>
+     <mi>a</mi>
+     <mi>t</mi>
+     <mi>a</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>u</ci>
+    <ci>t</ci>
+    <interval closure="open">
+     <ci>k</ci>
+     <apply>
+      <times></times>
+      <ci>d</ci>
+      <ci>a</ci>
+      <ci>t</ci>
+      <ci>a</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   put(k,data)
+  </annotation>
+ </semantics>
+</math>
+
+ is sent to any node participating in the DHT. The message is forwarded from node to node through the overlay network until it reaches the single node responsible for key 
+
+<math display="inline" id="Distributed_hash_table:6">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ as specified by the keyspace partitioning. That node then stores the key and the data. Any other client can then retrieve the contents of the file by again hashing 
+
+<math display="inline" id="Distributed_hash_table:7">
+ <semantics>
+  <mrow>
+   <mi>f</mi>
+   <mi>i</mi>
+   <mi>l</mi>
+   <mi>e</mi>
+   <mi>n</mi>
+   <mi>a</mi>
+   <mi>m</mi>
+   <mi>e</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>f</ci>
+    <ci>i</ci>
+    <ci>l</ci>
+    <ci>e</ci>
+    <ci>n</ci>
+    <ci>a</ci>
+    <ci>m</ci>
+    <ci>e</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   filename
+  </annotation>
+ </semantics>
+</math>
+
+ to produce 
+
+<math display="inline" id="Distributed_hash_table:8">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ and asking any DHT node to find the data associated with 
+
+<math display="inline" id="Distributed_hash_table:9">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ with a message 
+
+<math display="inline" id="Distributed_hash_table:10">
+ <semantics>
+  <mrow>
+   <mi>g</mi>
+   <mi>e</mi>
+   <mi>t</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>g</ci>
+    <ci>e</ci>
+    <ci>t</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   get(k)
+  </annotation>
+ </semantics>
+</math>
+
+. The message will again be routed through the overlay to the node responsible for 
+
+<math display="inline" id="Distributed_hash_table:11">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+, which will reply with the stored 
+
+<math display="inline" id="Distributed_hash_table:12">
+ <semantics>
+  <mrow>
+   <mi>d</mi>
+   <mi>a</mi>
+   <mi>t</mi>
+   <mi>a</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>d</ci>
+    <ci>a</ci>
+    <ci>t</ci>
+    <ci>a</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   data
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The keyspace partitioning and overlay network components are described below with the goal of capturing the principal ideas common to most DHTs; many designs differ in the details.</p>
+<h3 id="keyspace-partitioning">Keyspace partitioning</h3>
+
+<p>Most DHTs use some variant of <a href="consistent_hashing" title="wikilink">consistent hashing</a> or <a href="rendezvous_hashing" title="wikilink">rendezvous hashing</a> to map keys to nodes. The two algorithms appear to have been devised independently and simultaneously to solve the distributed hash table problem.</p>
+
+<p>Both consistent hashing and rendezvous hashing have the essential property that removal or addition of one node changes only the set of keys owned by the nodes with adjacent IDs, and leaves all other nodes unaffected. Contrast this with a traditional <a href="hash_table" title="wikilink">hash table</a> in which addition or removal of one bucket causes nearly the entire keyspace to be remapped. Since any change in ownership typically corresponds to <a href="Bandwidth_(computing)" title="wikilink">bandwidth</a>-intensive movement of objects stored in the DHT from one node to another, minimizing such reorganization is required to efficiently support high rates of churn (node arrival and failure).</p>
+<h4 id="consistent-hashing">Consistent Hashing</h4>
+
+<p>This technique employs a function 
+
+<math display="inline" id="Distributed_hash_table:13">
+ <semantics>
+  <mrow>
+   <mi>δ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>k</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>k</mi>
+     <mn>2</mn>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>δ</ci>
+    <interval closure="open">
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>k</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \delta(k_{1},k_{2})
+  </annotation>
+ </semantics>
+</math>
+
+ that defines an abstract notion of the <em>distance</em> between the keys 
+
+<math display="inline" id="Distributed_hash_table:14">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Distributed_hash_table:15">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, which is unrelated to geographical <a class="uri" href="distance" title="wikilink">distance</a> or network <a href="Latency_(engineering)" title="wikilink">latency</a>. Each node is assigned a single key called its <em>identifier</em> (ID). A node with ID 
+
+<math display="inline" id="Distributed_hash_table:16">
+ <semantics>
+  <msub>
+   <mi>i</mi>
+   <mi>x</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>i</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i_{x}
+  </annotation>
+ </semantics>
+</math>
+
+ owns all the keys 
+
+<math display="inline" id="Distributed_hash_table:17">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mi>m</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <ci>m</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{m}
+  </annotation>
+ </semantics>
+</math>
+
+ for which 
+
+<math display="inline" id="Distributed_hash_table:18">
+ <semantics>
+  <msub>
+   <mi>i</mi>
+   <mi>x</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>i</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i_{x}
+  </annotation>
+ </semantics>
+</math>
+
+ is the closest ID, measured according to 
+
+<math display="inline" id="Distributed_hash_table:19">
+ <semantics>
+  <mrow>
+   <mi>δ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>k</mi>
+     <mi>m</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>i</mi>
+     <mi>x</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>δ</ci>
+    <interval closure="open">
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>k</ci>
+      <ci>m</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>i</ci>
+      <ci>x</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \delta(k_{m},i_{x})
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<blockquote>
+
+<p><strong>Example.</strong> The <a href="Chord_(peer-to-peer)" title="wikilink">Chord DHT</a> uses consistent hashing, which treats keys as points on a circle, and 
+
+<math display="inline" id="Distributed_hash_table:20">
+ <semantics>
+  <mrow>
+   <mi>δ</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>k</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>k</mi>
+     <mn>2</mn>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>δ</ci>
+    <interval closure="open">
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>k</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \delta(k_{1},k_{2})
+  </annotation>
+ </semantics>
+</math>
+
+ is the distance traveling clockwise around the circle from 
+
+<math display="inline" id="Distributed_hash_table:21">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Distributed_hash_table:22">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{2}
+  </annotation>
+ </semantics>
+</math>
+
+. Thus, the circular keyspace is split into contiguous segments whose endpoints are the node identifiers. If 
+
+<math display="inline" id="Distributed_hash_table:23">
+ <semantics>
+  <msub>
+   <mi>i</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>i</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Distributed_hash_table:24">
+ <semantics>
+  <msub>
+   <mi>i</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>i</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ are two adjacent IDs, with a shorter clockwise distance from 
+
+<math display="inline" id="Distributed_hash_table:25">
+ <semantics>
+  <msub>
+   <mi>i</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>i</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ to 
+
+<math display="inline" id="Distributed_hash_table:26">
+ <semantics>
+  <msub>
+   <mi>i</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>i</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i_{2}
+  </annotation>
+ </semantics>
+</math>
+
+, then the node with ID 
+
+<math display="inline" id="Distributed_hash_table:27">
+ <semantics>
+  <msub>
+   <mi>i</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>i</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ owns all the keys that fall between 
+
+<math display="inline" id="Distributed_hash_table:28">
+ <semantics>
+  <msub>
+   <mi>i</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>i</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Distributed_hash_table:29">
+ <semantics>
+  <msub>
+   <mi>i</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>i</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i_{2}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+</blockquote>
+<h4 id="rendezvous-hashing">Rendezvous hashing</h4>
+
+<p>In rendezvous hashing, also called highest random weight hashing, all clients use the same hash function <em>h()</em> (chosen ahead of time) to associate a key to one of the <em>n</em> available servers. Each client has the same list of identifiers ''{S<sub>1</sub>, S<sub>2</sub>, ..., S<sub>n</sub> } '', one for each server. Given some key <em>k</em>, a client computes <em>n</em> hash weights <em>w<sub>1</sub> = h(S<sub>1</sub>, k), w<sub>2</sub> = h(S<sub>2</sub>, k), ..., w<sub>n</sub> = h(S<sub>n</sub>, k)</em>. The client associates that key with the server corresponding to the highest hash weight for that key. A server with ID 
+
+<math display="inline" id="Distributed_hash_table:30">
+ <semantics>
+  <msub>
+   <mi>S</mi>
+   <mi>x</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>S</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S_{x}
+  </annotation>
+ </semantics>
+</math>
+
+ owns all the keys 
+
+<math display="inline" id="Distributed_hash_table:31">
+ <semantics>
+  <msub>
+   <mi>k</mi>
+   <mi>m</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>k</ci>
+    <ci>m</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{m}
+  </annotation>
+ </semantics>
+</math>
+
+ for which the hash weight 
+
+<math display="inline" id="Distributed_hash_table:32">
+ <semantics>
+  <mrow>
+   <mi>h</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>S</mi>
+     <mi>x</mi>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>k</mi>
+     <mi>m</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>h</ci>
+    <interval closure="open">
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>S</ci>
+      <ci>x</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>k</ci>
+      <ci>m</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h(S_{x},k_{m})
+  </annotation>
+ </semantics>
+</math>
+
+ is higher than the hash weight of any other node for that key.</p>
+<h4 id="locality-preserving-hashing">Locality-preserving hashing</h4>
+
+<p><a href="Locality-preserving_hashing" title="wikilink">Locality-preserving hashing</a> ensures that similar keys are assigned to similar objects. This can enable a more efficient execution of range queries. Self-Chord <a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> decouples object keys from peer IDs and sorts keys along the ring with a statistical approach based on the <a href="swarm_intelligence" title="wikilink">swarm intelligence</a> paradigm. Sorting ensures that similar keys are stored by neighbour nodes and that discovery procedures, including range queries, can be performed in logarithmic time.</p>
+<h3 id="overlay-network">Overlay network</h3>
+
+<p>Each node maintains a set of <a href="Data_link" title="wikilink">links</a> to other nodes (its <em>neighbors</em> or <a href="routing_table" title="wikilink">routing table</a>) . Together, these links form the <a href="overlay_network" title="wikilink">overlay network</a>. A node picks its neighbors according to a certain structure, called the <a href="network_topology" title="wikilink">network's topology</a>.</p>
+
+<p>All DHT topologies share some variant of the most essential property: for any key 
+
+<math display="inline" id="Distributed_hash_table:33">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+, each node either has a node ID that owns 
+
+<math display="inline" id="Distributed_hash_table:34">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ or has a link to a node whose node ID is <em>closer</em> to 
+
+<math display="inline" id="Distributed_hash_table:35">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+, in terms of the keyspace distance defined above. It is then easy to route a message to the owner of any key 
+
+<math display="inline" id="Distributed_hash_table:36">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ using the following <a href="greedy_algorithm" title="wikilink">greedy algorithm</a> (that is not necessarily globally optimal): at each step, forward the message to the neighbor whose ID is closest to 
+
+<math display="inline" id="Distributed_hash_table:37">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+. When there is no such neighbor, then we must have arrived at the closest node, which is the owner of 
+
+<math display="inline" id="Distributed_hash_table:38">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ as defined above. This style of routing is sometimes called <a href="key-based_routing" title="wikilink">key-based routing</a>.</p>
+
+<p>Beyond basic routing correctness, two important constraints on the topology are to guarantee that the maximum number of <a href="Hop_(networking)" title="wikilink">hops</a> in any route (route length) is low, so that requests complete quickly; and that the maximum number of neighbors of any node (maximum node <a href="Degree_(graph_theory)" title="wikilink">degree</a>) is low, so that maintenance overhead is not excessive. Of course, having shorter routes requires higher <a href="maximum_degree" title="wikilink">maximum degree</a>. Some common choices for maximum degree and route length are as follows, where 
+
+<math display="inline" id="Distributed_hash_table:39">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ is the number of nodes in the DHT, using <a href="Big_O_notation" title="wikilink">Big O notation</a>:</p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">
+<p>Max. degree</p></th>
+<th style="text-align: left;">
+<p>Route length</p></th>
+<th style="text-align: left;">
+<p>Used in</p></th>
+<th style="text-align: left;">
+<p>Note</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:40">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:41">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:42">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>log</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:43">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>log</mi>
+     <mrow>
+      <mi>n</mi>
+      <mo>/</mo>
+      <mrow>
+       <mi>log</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mi>log</mi>
+         <mi>n</mi>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <log></log>
+     <apply>
+      <divide></divide>
+      <ci>n</ci>
+      <apply>
+       <log></log>
+       <apply>
+        <log></log>
+        <ci>n</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log n/\log(\log n))
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="Koorde" title="wikilink">Koorde</a></p></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:44">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>log</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:45">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>log</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p><a href="Chord_(peer-to-peer)" title="wikilink">Chord</a></p></td>
+<td style="text-align: left;">
+<p>most common, but not optimal (degree/route length)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:46">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:47">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>log</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log n)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:48">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msqrt>
+     <mi>n</mi>
+    </msqrt>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <root></root>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\sqrt{n})
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Distributed_hash_table:49">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+</tbody>
+</table>
+
+<p>The most common choice, 
+
+<math display="inline" id="Distributed_hash_table:50">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>log</mi>
+     <mi>n</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <log></log>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(\log n)
+  </annotation>
+ </semantics>
+</math>
+
+ degree/route length, is not optimal in terms of degree/route length tradeoff, as such topologies typically allow more flexibility in choice of neighbors. Many DHTs use that flexibility to pick neighbors that are close in terms of latency in the physical underlying network.</p>
+
+<p>Maximum route length is closely related to <a href="Diameter_(graph_theory)" title="wikilink">diameter</a>: the maximum number of hops in any shortest path between nodes. Clearly, the network's worst case route length is at least as large as its diameter, so DHTs are limited by the degree/diameter tradeoff<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> that is fundamental in <a href="graph_theory" title="wikilink">graph theory</a>. Route length can be greater than diameter, since the greedy routing algorithm may not find shortest paths.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+<h3 id="algorithms-for-overlay-networks">Algorithms for overlay networks</h3>
+
+<p>Aside from routing, there exist many algorithms that exploit the structure of the overlay network for sending a message to all nodes, or a subset of nodes, in a DHT.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> These algorithms are used by applications to do <a href="overlay_multicast" title="wikilink">overlay multicast</a>, range queries, or to collect statistics. Two systems that are based on this approach are Structella,<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> which implements flooding and random walks on a Pastry overlay, and DQ-DHT,<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> which implements a dynamic querying search algorithm over a Chord network.</p>
+<h2 id="dht-implementations">DHT implementations</h2>
+
+<p>Most notable differences encountered in practical instances of DHT implementations include at least the following:</p>
+<ul>
+<li>The address space is a parameter of DHT. Several real world DHTs use 128-bit or 160-bit key space</li>
+<li>Some real-world DHTs use hash functions other than SHA-1.</li>
+<li>In the real world the key 
+
+<math display="inline" id="Distributed_hash_table:51">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ could be a hash of a file's <em>content</em> rather than a hash of a file's <em>name</em> to provide <a href="content-addressable_storage" title="wikilink">content-addressable storage</a>, so that renaming of the file does not prevent users from finding it.</li>
+<li>Some DHTs may also publish objects of different types. For example, key 
+
+<math display="inline" id="Distributed_hash_table:52">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ could be the node 
+
+<math display="inline" id="Distributed_hash_table:53">
+ <semantics>
+  <mrow>
+   <mi>I</mi>
+   <mi>D</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>I</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ID
+  </annotation>
+ </semantics>
+</math>
+
+ and associated data could describe how to contact this node. This allows publication-of-presence information and often used in IM applications, etc. In the simplest case, 
+
+<math display="inline" id="Distributed_hash_table:54">
+ <semantics>
+  <mrow>
+   <mi>I</mi>
+   <mi>D</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>I</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ID
+  </annotation>
+ </semantics>
+</math>
+
+ is just a random number that is directly used as key 
+
+<math display="inline" id="Distributed_hash_table:55">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ (so in a 160-bit DHT 
+
+<math display="inline" id="Distributed_hash_table:56">
+ <semantics>
+  <mrow>
+   <mi>I</mi>
+   <mi>D</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>I</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ID
+  </annotation>
+ </semantics>
+</math>
+
+ will be a 160-bit number, usually randomly chosen). In some DHTs, publishing of nodes IDs is also used to optimize DHT operations.</li>
+<li>Redundancy can be added to improve reliability. The 
+
+<math display="inline" id="Distributed_hash_table:57">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mi>k</mi>
+   <mo>,</mo>
+   <mrow>
+    <mi>d</mi>
+    <mi>a</mi>
+    <mi>t</mi>
+    <mi>a</mi>
+   </mrow>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <interval closure="open">
+    <ci>k</ci>
+    <apply>
+     <times></times>
+     <ci>d</ci>
+     <ci>a</ci>
+     <ci>t</ci>
+     <ci>a</ci>
+    </apply>
+   </interval>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (k,data)
+  </annotation>
+ </semantics>
+</math>
+
+ key pair can be stored in more than one node corresponding to the key. Usually, rather than selecting just one node, real world DHT algorithms select 
+
+<math display="inline" id="Distributed_hash_table:58">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+ suitable nodes, with 
+
+<math display="inline" id="Distributed_hash_table:59">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+ being an implementation-specific parameter of the DHT. In some DHT designs, nodes agree to handle a certain keyspace range, the size of which may be chosen dynamically, rather than hard-coded.</li>
+<li>Some advanced DHTs like <a class="uri" href="Kademlia" title="wikilink">Kademlia</a> perform iterative lookups through the DHT first in order to select a set of suitable nodes and send 
+
+<math display="inline" id="Distributed_hash_table:60">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mi>u</mi>
+   <mi>t</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo>,</mo>
+    <mrow>
+     <mi>d</mi>
+     <mi>a</mi>
+     <mi>t</mi>
+     <mi>a</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>u</ci>
+    <ci>t</ci>
+    <interval closure="open">
+     <ci>k</ci>
+     <apply>
+      <times></times>
+      <ci>d</ci>
+      <ci>a</ci>
+      <ci>t</ci>
+      <ci>a</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   put(k,data)
+  </annotation>
+ </semantics>
+</math>
+
+ messages only to those nodes, thus drastically reducing useless traffic, since published messages are only sent to nodes that seem suitable for storing the key 
+
+<math display="inline" id="Distributed_hash_table:61">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+; and iterative lookups cover just a small set of nodes rather than the entire DHT, reducing useless forwarding. In such DHTs, forwarding of 
+
+<math display="inline" id="Distributed_hash_table:62">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mi>u</mi>
+   <mi>t</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo>,</mo>
+    <mrow>
+     <mi>d</mi>
+     <mi>a</mi>
+     <mi>t</mi>
+     <mi>a</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>u</ci>
+    <ci>t</ci>
+    <interval closure="open">
+     <ci>k</ci>
+     <apply>
+      <times></times>
+      <ci>d</ci>
+      <ci>a</ci>
+      <ci>t</ci>
+      <ci>a</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   put(k,data)
+  </annotation>
+ </semantics>
+</math>
+
+ messages may only occur as part of a self-healing algorithm: if a target node receives a 
+
+<math display="inline" id="Distributed_hash_table:63">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mi>u</mi>
+   <mi>t</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>k</mi>
+    <mo>,</mo>
+    <mrow>
+     <mi>d</mi>
+     <mi>a</mi>
+     <mi>t</mi>
+     <mi>a</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <ci>u</ci>
+    <ci>t</ci>
+    <interval closure="open">
+     <ci>k</ci>
+     <apply>
+      <times></times>
+      <ci>d</ci>
+      <ci>a</ci>
+      <ci>t</ci>
+      <ci>a</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   put(k,data)
+  </annotation>
+ </semantics>
+</math>
+
+ message, but believes that 
+
+<math display="inline" id="Distributed_hash_table:64">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ is out of its handled range and a closer node (in terms of DHT keyspace) is known, the message is forwarded to that node. Otherwise, data are indexed locally. This leads to a somewhat self-balancing DHT behavior. Of course, such an algorithm requires nodes to publish their presence data in the DHT so the iterative lookups can be performed.</li>
+</ul>
+<h2 id="examples">Examples</h2>
+<ul>
+<li>DHT protocols and implementations
+<ul>
+<li><a href="Aerospike_database" title="wikilink">Aerospike</a></li>
+<li><a href="Apache_Cassandra" title="wikilink">Apache Cassandra</a></li>
+<li><a href="BATON_Overlay" title="wikilink">BATON Overlay</a></li>
+<li><a href="Mainline_DHT" title="wikilink">Mainline DHT</a> - Standard DHT used by BitTorrent (based on <a class="uri" href="Kademlia" title="wikilink">Kademlia</a> as provided by Khashmir<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a>)</li>
+<li><a href="Content_Addressable_Network" title="wikilink">CAN</a> (Content Addressable Network)</li>
+<li><a href="Chord_(DHT)" title="wikilink">Chord</a></li>
+<li><a class="uri" href="Koorde" title="wikilink">Koorde</a></li>
+<li><a class="uri" href="Kademlia" title="wikilink">Kademlia</a></li>
+<li><a href="Pastry_(DHT)" title="wikilink">Pastry</a></li>
+<li><a class="uri" href="P-Grid" title="wikilink">P-Grid</a></li>
+<li><a class="uri" href="Riak" title="wikilink">Riak</a></li>
+<li><a href="Tapestry_(DHT)" title="wikilink">Tapestry</a></li>
+<li><a class="uri" href="TomP2P" title="wikilink">TomP2P</a></li>
+</ul></li>
+</ul>
+<ul>
+<li>Applications employing DHTs</li>
+</ul>
+<ul>
+<li><ul>
+<li><a class="uri" href="BTDigg" title="wikilink">BTDigg</a>: <a href="BitTorrent_(protocol)" title="wikilink">BitTorrent</a> DHT search engine</li>
+<li><a class="uri" href="cjdns" title="wikilink">cjdns</a>: routing engine for mesh-based networks</li>
+<li><a class="uri" href="CloudSNAP" title="wikilink">CloudSNAP</a>: a decentralized web application deployment platform</li>
+<li><a class="uri" href="Codeen" title="wikilink">Codeen</a>: web caching</li>
+<li><a href="Coral_Content_Distribution_Network" title="wikilink">Coral Content Distribution Network</a></li>
+<li><a class="uri" href="FAROO" title="wikilink">FAROO</a>: peer-to-peer Web search engine</li>
+<li><a class="uri" href="Freenet" title="wikilink">Freenet</a>: a censorship-resistant anonymous network</li>
+<li><a class="uri" href="GlusterFS" title="wikilink">GlusterFS</a>: a distributed file system used for storage virtualization</li>
+<li><a class="uri" href="GNUnet" title="wikilink">GNUnet</a>: Freenet-like distribution network including a DHT implementation</li>
+<li><a class="uri" href="I2P" title="wikilink">I2P</a>: An open-source anonymous <a class="uri" href="peer-to-peer" title="wikilink">peer-to-peer</a> network.</li>
+<li><a href="I2P" title="wikilink"> I2P-Bote</a>: serverless secure anonymous e-mail.</li>
+<li><a class="uri" href="JXTA" title="wikilink">JXTA</a>: open-source P2P platform</li>
+<li><a href="Oracle_Coherence" title="wikilink">Oracle Coherence</a>: an in-memory data grid built on top of a Java DHT implementation</li>
+<li><a class="uri" href="Retroshare" title="wikilink">Retroshare</a>: a <a class="uri" href="Friend-to-friend" title="wikilink">Friend-to-friend</a> network<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></li>
+<li><a class="uri" href="YaCy" title="wikilink">YaCy</a>: a distributed <a href="Web_search_engine" title="wikilink">search engine</a></li>
+<li><a href="Tox_(software)" title="wikilink">Tox</a>: an <a href="instant_messaging" title="wikilink">instant messaging</a> system intended to function as a <a class="uri" href="Skype" title="wikilink">Skype</a> replacement</li>
+<li><a href="Twister_(software)" title="wikilink">Twister</a>: a <a class="uri" href="microblogging" title="wikilink">microblogging</a> <a class="uri" href="peer-to-peer" title="wikilink">peer-to-peer</a> platform</li>
+<li><a href="Perfect_Dark_(P2P)" title="wikilink">Perfect Dark</a>: a <a class="uri" href="peer-to-peer" title="wikilink">peer-to-peer</a> <a class="uri" href="file-sharing" title="wikilink">file-sharing</a> application from Japan</li>
+</ul></li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Couchbase_Server" title="wikilink">Couchbase Server</a>: a persistent, replicated, clustered distributed object storage system compatible with memcached protocol.</li>
+<li><a class="uri" href="Memcached" title="wikilink">Memcached</a>: a high-performance, distributed memory object caching system.</li>
+<li><a href="Prefix_hash_tree" title="wikilink">Prefix hash tree</a>: sophisticated querying over DHTs.</li>
+<li><a href="Merkle_tree" title="wikilink">Merkle tree</a>: tree having every non-leaf node labelled with the hash of the labels of its children nodes.</li>
+<li>Most <a href="distributed_data_store" title="wikilink">distributed data stores</a> employ some form of DHT for lookup.</li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://linuxjournal.com/article/6797">Distributed Hash Tables, Part 1</a> by Brandon Wiley.</li>
+<li><a href="http://ast-deim.urv.cat/cpairot/dhts.html">Distributed Hash Tables links</a> Carles Pairot's Page on DHT and P2P research</li>
+<li><a href="http://web.archive.org/web/*/http://kademlia.scs.cs.nyu.edu/">kademlia.scs.cs.nyu.edu</a> Archive.org snapshots of kademlia.scs.cs.nyu.edu</li>
+<li><a href="http://hazelcast.com">Hazelcast</a>: open source DHT implementation</li>
+<li>
+
+<p>covering unstructured and structured decentralized overlay networks including DHTs (Chord, Pastry, Tapestry and others).</p></li>
+<li><a href="http://www.cs.helsinki.fi/u/jakangas/MLDHT/">Mainline DHT Measurement</a> at Department of Computer Science, University of Helsinki, Finland.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Distributed_data_storage" title="wikilink">Category:Distributed data storage</a> <a href="Category:File_sharing" title="wikilink">Category:File sharing</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="Hari_Balakrishnan" title="wikilink">Hari Balakrishnan</a>, <a href="M._Frans_Kaashoek" title="wikilink">M. Frans Kaashoek</a>, David Karger, <a href="Robert_Tappan_Morris" title="wikilink">Robert Morris</a>, and Ion Stoica. <a href="http://www.cs.berkeley.edu/~istoica/papers/2003/cacm03.pdf">Looking up data in P2P systems</a>. In <a href="Communications_of_the_ACM" title="wikilink">Communications of the ACM</a>, February 2003.<a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7">Guido Urdaneta, Guillaume Pierre and Maarten van Steen. <a href="http://www.globule.org/publi/SDST_acmcs2009.html">A Survey of DHT Security Techniques</a>. ACM Computing Surveys 43(2), January 2011.<a href="#fnref7">↩</a></li>
+<li id="fn8">Moni Naor and Udi Wieder. <a href="http://www.wisdom.weizmann.ac.il/~naor/PAPERS/dh.pdf">Novel Architectures for P2P Applications: the Continuous-Discrete Approach</a>. Proc. SPAA, 2003.<a href="#fnref8">↩</a></li>
+<li id="fn9">Gurmeet Singh Manku. <a href="http://www-db.stanford.edu/~manku/phd/index.html">Dipsea: A Modular Distributed Hash Table</a>. Ph. D. Thesis (Stanford University), August 2004.<a href="#fnref9">↩</a></li>
+<li id="fn10">Agostino Forestiero, Emilio Leonardi, Carlo Mastroianni and Michela Meo. <a href="http://dx.doi.org/10.1109/TNET.2010.2046745">Self-Chord: a Bio-Inspired P2P Framework for Self-Organizing Distributed Systems</a>. IEEE/ACM Transactions on Networking, 2010.<a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12">Gurmeet Singh Manku, Moni Naor, and Udi Wieder. <a href="http://citeseer.ist.psu.edu/naor04know.html">Know thy Neighbor's Neighbor: the Power of Lookahead in Randomized P2P Networks</a>. Proc. STOC, 2004.<a href="#fnref12">↩</a></li>
+<li id="fn13">Ali Ghodsi. <a href="http://www.sics.se/~ali/thesis/">Distributed k-ary System: Algorithms for Distributed Hash Tables</a>. KTH-Royal Institute of Technology, 2006.<a href="#fnref13">↩</a></li>
+<li id="fn14">Miguel Castro, Manuel Costa, and Antony Rowstron. <a href="http://dx.doi.org/10.1145/972374.972397">Should we build Gnutella on a structured overlay?</a>. Computer Communication Review, 2004.<a href="#fnref14">↩</a></li>
+<li id="fn15">Domenico Talia and Paolo Trunfio. <a href="http://dx.doi.org/10.1016/j.jpdc.2010.08.012">Enabling Dynamic Querying over Distributed Hash Tables</a>. Journal of Parallel and Distributed Computing, 2010.<a href="#fnref15">↩</a></li>
+<li id="fn16"><a href="http://www.tribler.org/trac/wiki/Khashmir">Tribler wiki</a> retrieved January 2010.<a href="#fnref16">↩</a></li>
+<li id="fn17"><a href="http://retroshare.sourceforge.net/wiki/index.php/Frequently_Asked_Questions#4-1_How_does_RetroShare_know_my_friend.27s_IP_address_and_port.3F_Why_don.27t_I_need_a_static_IP_address.3F_What_is_DHT_for.3F">Retroshare FAQ</a> retrieved December 2011<a href="#fnref17">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1988">Polytope model</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Polytope model</h1>
+<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</body></html>
+<body>
+<hr/>
+
+<p>The <strong>polyhedral model</strong> (also called the <strong>polytope method</strong>) is a mathematical framework for <a href="loop_nest_optimization" title="wikilink">loop nest optimization</a> in <a href="program_optimization" title="wikilink">program optimization</a>. The polytope method treats each loop iteration within nested loops as lattice points inside mathematical objects called <a href="polytope" title="wikilink">polytopes</a>, performs <a href="affine_transformation" title="wikilink">affine transformations</a> or more general non-affine transformations such as tiling on the polytopes, and then converts the transformed polytopes into equivalent, but optimized (depending on targeted optimization goal), loop nests through polyhedra scanning.</p>
+<h2 id="detailed-example">Detailed example</h2>
+
+<p> The following <a href="C_(programming_language)" title="wikilink">C</a> code implements a form of error-distribution <a href="dither" title="wikilink">dithering</a> similar to <a href="Floyd–Steinberg_dithering" title="wikilink">Floyd–Steinberg dithering</a>, but modified for pedagogical reasons. The two-dimensional array <code>src</code> contains <code>h</code> rows of <code>w</code> pixels, each pixel having a <a class="uri" href="grayscale" title="wikilink">grayscale</a> value between 0 and 255 inclusive. After the routine has finished, the output array <code>dst</code> will contain only pixels with value 0 or value 255. During the computation, each pixel's dithering error is collected by adding it back into the <code>src</code> array. (Notice that <code>src</code> and <code>dst</code> are both read and written during the computation; <code>src</code> is not read-only, and <code>dst</code> is not write-only.)</p>
+
+<p>Each iteration of the <a href="inner_loop" title="wikilink">inner loop</a> modifies the values in <code>src[i][j]</code> based on the values of <code>src[i-1][j]</code>, <code>src[i][j-1]</code>, and <code>src[i+1][j-1]</code>. (The same dependencies apply to <code>dst[i][j]</code>. For the purposes of <a href="Loop_optimization#Common_loop_transformations" title="wikilink">loop skewing</a>, we can think of <code>src[i][j]</code> and <code>dst[i][j]</code> as the same element.) We can illustrate the dependencies of <code>src[i][j]</code> graphically, as in the diagram on the right.</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><div class="sourceCode"><pre class="sourceCode C"><code class="sourceCode c"> <span class="ot">#define ERR(x,y) (dst[x][y] - src[x][y])</span>
+ <span class="dt">void</span> dither(<span class="dt">unsigned</span> <span class="dt">char</span> **src, <span class="dt">unsigned</span> <span class="dt">char</span> **dst, <span class="dt">int</span> w, <span class="dt">int</span> h)  
+ {
+     <span class="dt">int</span> i, j;
+     <span class="kw">for</span> (j = <span class="dv">0</span>; j &lt; h; ++j) {
+         <span class="kw">for</span> (i = <span class="dv">0</span>; i &lt; w; ++i) {
+             <span class="dt">int</span> v = src[i][j];
+             <span class="kw">if</span> (i &gt; <span class="dv">0</span>)
+               v -= ERR(i - <span class="dv">1</span>, j) /<span class="dv">2</span>;
+             <span class="kw">if</span> (j &gt; <span class="dv">0</span>)
+               v -= ERR(i, j - <span class="dv">1</span>) / <span class="dv">4</span>;
+             <span class="kw">if</span> (j &gt; <span class="dv">0</span> &amp;&amp; i &lt; w - <span class="dv">1</span>)
+               v -= ERR(i + <span class="dv">1</span>, j - <span class="dv">1</span>) / <span class="dv">4</span>;
+             dst[i][j] = (v &lt; <span class="dv">128</span>) ? <span class="dv">0</span> : <span class="dv">255</span>;
+             src[i][j] = (v &lt; <span class="dv">0</span>) ? <span class="dv">0</span> : (v &lt; <span class="dv">255</span>) ? v : <span class="dv">255</span>;
+         }
+     }
+ }</code></pre></div></td>
+</tr>
+</tbody>
+</table>
+<figure><b>(Figure)</b>
+<figcaption>The dependencies of <code>src</code>, after loop skewing. The array elements will be processed in the order <em>gray, red, green, blue, yellow...</em></figcaption>
+</figure>
+
+<p>Performing the affine transformation 
+
+<math display="inline" id="Polytope_model:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>p</mi>
+    <mo rspace="4.2pt">,</mo>
+    <mi>t</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>i</mi>
+    <mo>,</mo>
+    <mrow>
+     <mrow>
+      <mn>2</mn>
+      <mi>j</mi>
+     </mrow>
+     <mo>+</mo>
+     <mi>i</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <interval closure="open">
+     <ci>p</ci>
+     <ci>t</ci>
+    </interval>
+    <interval closure="open">
+     <ci>i</ci>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <cn type="float">2</cn>
+       <ci>j</ci>
+      </apply>
+      <ci>i</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (p,\,t)=(i,\,2j+i)
+  </annotation>
+ </semantics>
+</math>
+
+ on the original dependency diagram gives us a new diagram, which is shown in the next image. We can then rewrite the code to loop on <code>p</code> and <code>t</code> instead of <code>i</code> and <code>j</code>, obtaining the following "skewed" routine.</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><div class="sourceCode"><pre class="sourceCode C"><code class="sourceCode c"> <span class="dt">void</span> dither_skewed(<span class="dt">unsigned</span> <span class="dt">char</span> **src, <span class="dt">unsigned</span> <span class="dt">char</span> **dst, <span class="dt">int</span> w, <span class="dt">int</span> h)  
+ {
+     <span class="dt">int</span> t, p;
+     <span class="kw">for</span> (t = <span class="dv">0</span>; t &lt; (w + (<span class="dv">2</span> * h)); ++t) {
+         <span class="dt">int</span> pmin = max(t % <span class="dv">2</span>, t - (<span class="dv">2</span> * h) + <span class="dv">2</span>);
+         <span class="dt">int</span> pmax = min(t, w - <span class="dv">1</span>);
+         <span class="kw">for</span> (p = pmin; p &lt;= pmax; p += <span class="dv">2</span>) {
+             <span class="dt">int</span> i = p;
+             <span class="dt">int</span> j = (t - p) / <span class="dv">2</span>;
+             <span class="dt">int</span> v = src[i][j];
+             <span class="kw">if</span> (i &gt; <span class="dv">0</span>)
+               v -= ERR(i - <span class="dv">1</span>, j) / <span class="dv">2</span>;
+             <span class="kw">if</span> (j &gt; <span class="dv">0</span>)
+               v -= ERR(i, j - <span class="dv">1</span>) / <span class="dv">4</span>;
+             <span class="kw">if</span> (j &gt; <span class="dv">0</span> &amp;&amp; i &lt; w - <span class="dv">1</span>)
+               v -= ERR(i + <span class="dv">1</span>, j - <span class="dv">1</span>) / <span class="dv">4</span>;
+             dst[i][j] = (v &lt; <span class="dv">128</span>) ? <span class="dv">0</span> : <span class="dv">255</span>;
+             src[i][j] = (v &lt; <span class="dv">0</span>) ? <span class="dv">0</span> : (v &lt; <span class="dv">255</span>) ? v : <span class="dv">255</span>;
+         }
+     }
+ }</code></pre></div></td>
+</tr>
+</tbody>
+</table>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Frameworks_supporting_the_polyhedral_model" title="wikilink">Frameworks supporting the polyhedral model</a></li>
+<li><a href="Loop_nest_optimization" title="wikilink">Loop nest optimization</a></li>
+<li><a href="Loop_unrolling" title="wikilink">Loop unrolling</a></li>
+<li><a href="Loop_reversal" title="wikilink">Loop reversal</a></li>
+<li><a href="Loop_tiling" title="wikilink">Loop tiling</a></li>
+</ul>
+<h2 id="external-links-and-references">External links and references</h2>
+<ul>
+<li><a href="http://www.infosun.fmi.uni-passau.de/cl/loopo/doc/loopo_doc/node3.html">"The basic polytope method"</a>, tutorial by Martin Griebl containing diagrams of the pseudocode example above</li>
+<li><a href="Frameworks_supporting_the_polyhedral_model#Transitive_closure_operation" title="wikilink">"Framework for polyhedral model"</a></li>
+<li><a href="http://citeseer.ist.psu.edu/viewdoc/summary?doi=10.1.1.30.5675">"Code Generation in the Polytope Model"</a> (1998). Martin Griebl, Christian Lengauer, and Sabine Wetzel</li>
+<li><a href="http://www.cloog.org/">"The CLooG Polyhedral Code Generator"</a></li>
+<li><a href="http://www.chunchen.info/omega">"CodeGen+: Z-polyhedra scanning"</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Compiler_optimizations" title="wikilink">Category:Compiler optimizations</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a> <a href="Category:Articles_with_example_C_code" title="wikilink">Category:Articles with example C code</a></p>
+</body>
+

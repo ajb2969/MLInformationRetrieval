@@ -1,0 +1,1967 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1409">Naive Bayes spam filtering</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Naive Bayes spam filtering</h1>
+<hr/>
+
+<p><a href="Naive_Bayes_classifier" title="wikilink">Naive Bayes classifiers</a> are a popular <a href="statistics" title="wikilink">statistical</a> <a href="scientific_technique" title="wikilink">technique</a> of <a href="e-mail_filtering" title="wikilink">e-mail filtering</a>. They typically use <a href="bag_of_words" title="wikilink">bag of words</a> features to identify <a href="Spam_(electronic)" title="wikilink">spam</a> e-mail, an approach commonly used in <a href="Document_classification" title="wikilink">text classification</a>.</p>
+
+<p>Naive Bayes classifiers work by correlating the use of tokens (typically words, or sometimes other things), with spam and non-spam e-mails and then using <a href="Bayesian_inference" title="wikilink">Bayesian inference</a> to calculate a probability that an email is or is not spam.</p>
+
+<p><strong>Naive Bayes spam filtering</strong> is a baseline technique for dealing with spam that can tailor itself to the email needs of individual users and give low <a href="false_positive" title="wikilink">false positive</a> spam detection rates that are generally acceptable to users. It is one of the oldest ways of doing spam filtering, with roots in the 1990s.</p>
+<h2 id="history">History</h2>
+
+<p>The first known mail-filtering <a href="computer_program" title="wikilink">program</a> to use a naive Bayes classifier was Jason Rennie's ifile program, released in 1996. The program was used to sort mail into <a href="Directory_(file_systems)" title="wikilink">folders</a>.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> The first scholarly publication on Bayesian spam filtering was by Sahami et al. in 1998.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> That work was soon thereafter deployed in commercial spam filters. However, in 2002 <a href="Paul_Graham_(computer_programmer)" title="wikilink">Paul Graham</a> greatly decreased the false positive rate, so that it could be used on its own as a single spam filter.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a><a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>Variants of the basic technique have been implemented in a number of research works and commercial <a href="Computer_software" title="wikilink">software</a> products.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> Many modern mail <a href="Client_(computing)" title="wikilink">clients</a> implement Bayesian spam filtering. Users can also install separate <a href="E-mail_filtering" title="wikilink">email filtering programs</a>. <a class="uri" href="Server-side" title="wikilink">Server-side</a> email filters, such as <a href="CRM114_(program)" title="wikilink">CRM114</a>, <a class="uri" href="DSPAM" title="wikilink">DSPAM</a>, <a class="uri" href="SpamAssassin" title="wikilink">SpamAssassin</a>,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> <a class="uri" href="SpamBayes" title="wikilink">SpamBayes</a>,<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> <a class="uri" href="Bogofilter" title="wikilink">Bogofilter</a> and <a href="Anti-Spam_SMTP_Proxy" title="wikilink">ASSP</a>, make use of Bayesian spam filtering techniques, and the functionality is sometimes embedded within <a href="mail_server" title="wikilink">mail server</a> software itself.</p>
+<h2 id="process">Process</h2>
+
+<p>Particular words have particular <a href="probability" title="wikilink">probabilities</a> of occurring in spam email and in legitimate email. For instance, most email users will frequently encounter the word "<a class="uri" href="Viagra" title="wikilink">Viagra</a>" in spam email, but will seldom see it in other email. The filter doesn't know these probabilities in advance, and must first be trained so it can build them up. To train the filter, the user must manually indicate whether a new email is spam or not. For all words in each training email, the filter will adjust the probabilities that each word will appear in spam or legitimate email in its database. For instance, Bayesian spam filters will typically have learned a very high spam probability for the words "Viagra" and "refinance", but a very low spam probability for words seen only in legitimate email, such as the names of friends and family members.</p>
+
+<p>After training, the word probabilities (also known as <a href="likelihood_function" title="wikilink">likelihood functions</a>) are used to compute the probability that an email with a particular set of words in it belongs to either category. Each word in the email contributes to the email's spam probability, or only the most interesting words. This contribution is called the <a href="posterior_probability" title="wikilink">posterior probability</a> and is computed using <a href="Bayes'_theorem" title="wikilink">Bayes' theorem</a>. Then, the email's spam probability is computed over all words in the email, and if the total exceeds a certain threshold (say 95%), the filter will mark the email as a spam.</p>
+
+<p>As in any other <a href="spam_filtering" title="wikilink">spam filtering</a> technique, email marked as spam can then be automatically moved to a "Junk" email folder, or even deleted outright. Some software implement <a class="uri" href="quarantine" title="wikilink">quarantine</a> mechanisms that define a time frame during which the user is allowed to review the software's decision.</p>
+
+<p>The initial training can usually be refined when wrong judgements from the software are identified (false positives or false negatives). That allows the software to dynamically adapt to the ever evolving nature of spam.</p>
+
+<p>Some spam filters combine the results of both Bayesian spam filtering and other <a href="metaheuristic" title="wikilink">heuristics</a> (pre-defined rules about the contents, looking at the message's envelope, etc.), resulting in even higher filtering accuracy, sometimes at the cost of adaptiveness.</p>
+<h2 id="mathematical-foundation">Mathematical foundation</h2>
+
+<p>Bayesian <a href="email_filter" title="wikilink">email filters</a> utilize <a href="Bayes'_theorem" title="wikilink">Bayes' theorem</a>. Bayes' theorem is used several times in the context of spam:</p>
+<ul>
+<li>a first time, to compute the probability that the message is spam, knowing that a given word appears in this message;</li>
+<li>a second time, to compute the probability that the message is spam, taking into consideration all of its words (or a relevant subset of them);</li>
+<li>sometimes a third time, to deal with rare words.</li>
+</ul>
+<h3 id="computing-the-probability-that-a-message-containing-a-given-word-is-spam">Computing the probability that a message containing a given word is spam</h3>
+
+<p>Let's suppose the suspected message contains the word "<a class="uri" href="replica" title="wikilink">replica</a>". Most people who are used to receiving e-mail know that this message is likely to be spam, more precisely a proposal to sell counterfeit copies of well-known brands of watches. The spam detection software, however, does not "know" such facts; all it can do is compute probabilities.</p>
+
+<p>The formula used by the software to determine that is derived from <a href="Bayes'_theorem" title="wikilink">Bayes' theorem</a></p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>Pr</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>S</mi>
+     <mo stretchy="false">|</mo>
+     <mi>W</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mrow>
+      <mi>Pr</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>W</mi>
+       <mo stretchy="false">|</mo>
+       <mi>S</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>⋅</mo>
+     <mrow>
+      <mi>Pr</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>S</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mi>Pr</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>W</mi>
+        <mo stretchy="false">|</mo>
+        <mi>S</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>⋅</mo>
+      <mrow>
+       <mi>Pr</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>S</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mrow>
+       <mi>Pr</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>W</mi>
+        <mo stretchy="false">|</mo>
+        <mi>H</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>⋅</mo>
+      <mrow>
+       <mi>Pr</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>H</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>Pr</ci>
+     <ci>S</ci>
+     <ci>W</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <ci>normal-⋅</ci>
+      <apply>
+       <ci>Pr</ci>
+       <ci>W</ci>
+       <ci>S</ci>
+      </apply>
+      <apply>
+       <ci>Pr</ci>
+       <ci>S</ci>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <ci>normal-⋅</ci>
+       <apply>
+        <ci>Pr</ci>
+        <ci>W</ci>
+        <ci>S</ci>
+       </apply>
+       <apply>
+        <ci>Pr</ci>
+        <ci>S</ci>
+       </apply>
+      </apply>
+      <apply>
+       <ci>normal-⋅</ci>
+       <apply>
+        <ci>Pr</ci>
+        <ci>W</ci>
+        <ci>H</ci>
+       </apply>
+       <apply>
+        <ci>Pr</ci>
+        <ci>H</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(S|W)=\frac{\Pr(W|S)\cdot\Pr(S)}{\Pr(W|S)\cdot\Pr(S)+\Pr(W|H)\cdot\Pr(H)}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where:</p>
+<ul>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:1">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">|</mo>
+    <mi>W</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>S</ci>
+    <ci>W</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(S|W)
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability that a message is a spam, knowing that the word "replica" is in it;</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:2">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(S)
+  </annotation>
+ </semantics>
+</math>
+
+ is the overall probability that any given message is spam;</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:3">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>W</mi>
+    <mo stretchy="false">|</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>W</ci>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(W|S)
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability that the word "replica" appears in spam messages;</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:4">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>H</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>H</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(H)
+  </annotation>
+ </semantics>
+</math>
+
+ is the overall probability that any given message is not spam (is "ham");</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:5">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>W</mi>
+    <mo stretchy="false">|</mo>
+    <mi>H</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>W</ci>
+    <ci>H</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(W|H)
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability that the word "replica" appears in ham messages.</li>
+</ul>
+
+<p>(For a full demonstration, see <a href="Bayes'_theorem#Extended_form" title="wikilink">Bayes' theorem#Extended form</a>.)</p>
+<h3 id="the-spamicity-of-a-word">The spamicity of a word</h3>
+
+<p>Recent statistics<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> show that the current probability of any message being spam is 80%, at the very least:</p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>Pr</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>S</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mn>0.8</mn>
+   </mrow>
+   <mo>;</mo>
+   <mrow>
+    <mrow>
+     <mi>Pr</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>H</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mn>0.2</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <ci>Pr</ci>
+      <ci>S</ci>
+     </apply>
+     <cn type="float">0.8</cn>
+    </apply>
+    <apply>
+     <eq></eq>
+     <apply>
+      <ci>Pr</ci>
+      <ci>H</ci>
+     </apply>
+     <cn type="float">0.2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(S)=0.8;\Pr(H)=0.2
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>However, most bayesian spam detection software makes the assumption that there is no <em>a priori</em> reason for any incoming message to be spam rather than ham, and considers both cases to have equal probabilities of 50%:</p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:7">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>Pr</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>S</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mn>0.5</mn>
+   </mrow>
+   <mo>;</mo>
+   <mrow>
+    <mrow>
+     <mi>Pr</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>H</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mn>0.5</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <ci>Pr</ci>
+      <ci>S</ci>
+     </apply>
+     <cn type="float">0.5</cn>
+    </apply>
+    <apply>
+     <eq></eq>
+     <apply>
+      <ci>Pr</ci>
+      <ci>H</ci>
+     </apply>
+     <cn type="float">0.5</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(S)=0.5;\Pr(H)=0.5
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The filters that use this hypothesis are said to be "not biased", meaning that they have no prejudice regarding the incoming email. This assumption permits simplifying the general formula to:</p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>Pr</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>S</mi>
+     <mo stretchy="false">|</mo>
+     <mi>W</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mi>Pr</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>W</mi>
+      <mo stretchy="false">|</mo>
+      <mi>S</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mrow>
+      <mi>Pr</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>W</mi>
+       <mo stretchy="false">|</mo>
+       <mi>S</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mi>Pr</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>W</mi>
+       <mo stretchy="false">|</mo>
+       <mi>H</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>Pr</ci>
+     <ci>S</ci>
+     <ci>W</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <ci>Pr</ci>
+      <ci>W</ci>
+      <ci>S</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <ci>Pr</ci>
+       <ci>W</ci>
+       <ci>S</ci>
+      </apply>
+      <apply>
+       <ci>Pr</ci>
+       <ci>W</ci>
+       <ci>H</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(S|W)=\frac{\Pr(W|S)}{\Pr(W|S)+\Pr(W|H)}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This is functionally equivalent to asking, "what percentage of occurrences of the word "replica" appear in spam messages?"</p>
+
+<p>This quantity is called "spamicity" (or "spaminess") of the word "replica", and can be computed. The number 
+
+<math display="inline" id="Naive_Bayes_spam_filtering:9">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>W</mi>
+    <mo stretchy="false">|</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>W</ci>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(W|S)
+  </annotation>
+ </semantics>
+</math>
+
+ used in this formula is approximated to the frequency of messages containing "replica" in the messages identified as spam during the learning phase. Similarly, 
+
+<math display="inline" id="Naive_Bayes_spam_filtering:10">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>W</mi>
+    <mo stretchy="false">|</mo>
+    <mi>H</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>W</ci>
+    <ci>H</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(W|H)
+  </annotation>
+ </semantics>
+</math>
+
+ is approximated to the frequency of messages containing "replica" in the messages identified as ham during the learning phase. For these approximations to make sense, the set of learned messages needs to be big and representative enough. It is also advisable that the learned set of messages conforms to the 50% hypothesis about repartition between spam and ham, i.e. that the datasets of spam and ham are of same size.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+
+<p>Of course, determining whether a message is spam or ham based only on the presence of the word "replica" is error-prone, which is why bayesian spam software tries to consider several words and combine their spamicities to determine a message's overall probability of being spam.</p>
+<h3 id="combining-individual-probabilities">Combining individual probabilities</h3>
+
+<p>Most bayesian spam filtering algorithms are based on formulas that are strictly valid (from a probabilistic standpoint) only if the words present in the message are <a href="Statistical_independence" title="wikilink">independent events</a>. This condition is not generally satisfied (for example, in natural languages like English the probability of finding an adjective is affected by the probability of having a noun), but it is a useful idealization, especially since the statistical correlations between individual words are usually not known. On this basis, one can derive the following formula from Bayes' theorem:<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:11">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msub>
+      <mi>p</mi>
+      <mn>1</mn>
+     </msub>
+     <msub>
+      <mi>p</mi>
+      <mn>2</mn>
+     </msub>
+     <mi mathvariant="normal">⋯</mi>
+     <msub>
+      <mi>p</mi>
+      <mi>N</mi>
+     </msub>
+    </mrow>
+    <mrow>
+     <mrow>
+      <msub>
+       <mi>p</mi>
+       <mn>1</mn>
+      </msub>
+      <msub>
+       <mi>p</mi>
+       <mn>2</mn>
+      </msub>
+      <mi mathvariant="normal">⋯</mi>
+      <msub>
+       <mi>p</mi>
+       <mi>N</mi>
+      </msub>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mn>1</mn>
+        <mo>-</mo>
+        <msub>
+         <mi>p</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mn>1</mn>
+        <mo>-</mo>
+        <msub>
+         <mi>p</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mi mathvariant="normal">⋯</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mn>1</mn>
+        <mo>-</mo>
+        <msub>
+         <mi>p</mi>
+         <mi>N</mi>
+        </msub>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>p</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>normal-⋯</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <ci>N</ci>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>p</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>p</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <ci>normal-⋯</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>p</ci>
+        <ci>N</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <ci>normal-⋯</ci>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <ci>N</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p=\frac{p_{1}p_{2}\cdots p_{N}}{p_{1}p_{2}\cdots p_{N}+(1-p_{1})(1-p_{2})%
+\cdots(1-p_{N})}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where:</p>
+<ul>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:12">
+ <semantics>
+  <mi>p</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>p</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability that the suspect message is spam;</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:13">
+ <semantics>
+  <msub>
+   <mi>p</mi>
+   <mn>1</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>p</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p_{1}
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability 
+
+<math display="inline" id="Naive_Bayes_spam_filtering:14">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>W</mi>
+     <mn>1</mn>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">S</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>W</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(S|W_{1})
+  </annotation>
+ </semantics>
+</math>
+
+ that it is a spam knowing it contains a first word (for example "replica");</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:15">
+ <semantics>
+  <msub>
+   <mi>p</mi>
+   <mn>2</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>p</ci>
+    <cn type="integer">2</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability 
+
+<math display="inline" id="Naive_Bayes_spam_filtering:16">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>W</mi>
+     <mn>2</mn>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">S</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>W</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(S|W_{2})
+  </annotation>
+ </semantics>
+</math>
+
+ that it is a spam knowing it contains a second word (for example "watches");</li>
+<li>etc...</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:17">
+ <semantics>
+  <msub>
+   <mi>p</mi>
+   <mi>N</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>p</ci>
+    <ci>N</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p_{N}
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability 
+
+<math display="inline" id="Naive_Bayes_spam_filtering:18">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>W</mi>
+     <mi>N</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">S</csymbol>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>W</ci>
+      <ci>N</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(S|W_{N})
+  </annotation>
+ </semantics>
+</math>
+
+ that it is a spam knowing it contains an <em>N</em>th word (for example "home").</li>
+</ul>
+
+<p>This is the formula referenced by Paul Graham in his 2002 article. Some early commentators stated that "Graham pulled his formulas out of thin air",<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> but Graham had actually referenced his source,<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> which included a detailed explanation of the formula, and the idealizations on which it is based.</p>
+
+<p>Spam filtering software based on this formula is sometimes referred to as a <a href="naive_Bayes_classifier" title="wikilink">naive Bayes classifier</a>. The result <em>p</em> is typically compared to a given threshold to decide whether the message is spam or not. If <em>p</em> is lower than the threshold, the message is considered as likely ham, otherwise it is considered as likely spam.</p>
+<h3 id="other-expression-of-the-formula-for-combining-individual-probabilities">Other expression of the formula for combining individual probabilities</h3>
+
+<p>Usually <em>p</em> is not directly computed using the above formula due to <a href="Arithmetic_underflow" title="wikilink">floating-point underflow</a>. Instead, <em>p</em> can be computed in the log domain by rewriting the original equation as follows:</p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:19">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>p</mi>
+    </mfrac>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>-</mo>
+       <msub>
+        <mi>p</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>-</mo>
+       <msub>
+        <mi>p</mi>
+        <mn>2</mn>
+       </msub>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi mathvariant="normal">…</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>-</mo>
+       <msub>
+        <mi>p</mi>
+        <mi>N</mi>
+       </msub>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <msub>
+      <mi>p</mi>
+      <mn>1</mn>
+     </msub>
+     <msub>
+      <mi>p</mi>
+      <mn>2</mn>
+     </msub>
+     <mi mathvariant="normal">…</mi>
+     <msub>
+      <mi>p</mi>
+      <mi>N</mi>
+     </msub>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <minus></minus>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>p</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>p</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>p</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>p</ci>
+        <ci>N</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <cn type="integer">1</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>normal-…</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>p</ci>
+       <ci>N</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{1}{p}-1=\frac{(1-p_{1})(1-p_{2})\dots(1-p_{N})}{p_{1}p_{2}\dots p_{N}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Taking logs on both sides:</p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:20">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>ln</mi>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mfrac>
+       <mn>1</mn>
+       <mi>p</mi>
+      </mfrac>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>N</mi>
+    </munderover>
+    <mrow>
+     <mo>[</mo>
+     <mrow>
+      <mrow>
+       <mi>ln</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>-</mo>
+         <msub>
+          <mi>p</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>-</mo>
+      <mrow>
+       <mi>ln</mi>
+       <msub>
+        <mi>p</mi>
+        <mi>i</mi>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo>]</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ln></ln>
+     <apply>
+      <minus></minus>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>p</ci>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>N</ci>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <minus></minus>
+       <apply>
+        <ln></ln>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>p</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <ln></ln>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \ln\left(\frac{1}{p}-1\right)=\sum_{i=1}^{N}\left[\ln(1-p_{i})-\ln p_{i}\right]
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Let 
+
+<math display="inline" id="Naive_Bayes_spam_filtering:21">
+ <semantics>
+  <mrow>
+   <mi>η</mi>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>N</mi>
+    </msubsup>
+    <mrow>
+     <mo>[</mo>
+     <mrow>
+      <mrow>
+       <mi>ln</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>-</mo>
+         <msub>
+          <mi>p</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>-</mo>
+      <mrow>
+       <mi>ln</mi>
+       <msub>
+        <mi>p</mi>
+        <mi>i</mi>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo>]</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>η</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>N</ci>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <minus></minus>
+       <apply>
+        <ln></ln>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>p</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <ln></ln>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>p</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \eta=\sum_{i=1}^{N}\left[\ln(1-p_{i})-\ln p_{i}\right]
+  </annotation>
+ </semantics>
+</math>
+
+. Therefore,</p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>p</mi>
+    </mfrac>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+   <mo>=</mo>
+   <msup>
+    <mi>e</mi>
+    <mi>η</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <minus></minus>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>p</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>e</ci>
+     <ci>η</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \frac{1}{p}-1=e^{\eta}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Hence the alternate formula for computing the combined probability:</p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:23">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mn>1</mn>
+    <mrow>
+     <mn>1</mn>
+     <mo>+</mo>
+     <msup>
+      <mi>e</mi>
+      <mi>η</mi>
+     </msup>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>p</ci>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <apply>
+      <plus></plus>
+      <cn type="integer">1</cn>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>e</ci>
+       <ci>η</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p=\frac{1}{1+e^{\eta}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h3 id="dealing-with-rare-words">Dealing with rare words</h3>
+
+<p>In the case a word has never been met during the learning phase, both the numerator and the denominator are equal to zero, both in the general formula and in the spamicity formula. The software can decide to discard such words for which there is no information available.</p>
+
+<p>More generally, the words that were encountered only a few times during the learning phase cause a problem, because it would be an error to trust blindly the information they provide. A simple solution is to simply avoid taking such unreliable words into account as well.</p>
+
+<p>Applying again Bayes' theorem, and assuming the classification between spam and ham of the emails containing a given word ("replica") is a <a href="random_variable" title="wikilink">random variable</a> with <a href="beta_distribution" title="wikilink">beta distribution</a>, some programs decide to use a corrected probability:</p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:24">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mover>
+     <mi>Pr</mi>
+     <mo>′</mo>
+    </mover>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>S</mi>
+     <mo stretchy="false">|</mo>
+     <mi>W</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mrow>
+      <mi>s</mi>
+      <mo>⋅</mo>
+      <mrow>
+       <mi>Pr</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>S</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo>+</mo>
+     <mrow>
+      <mi>n</mi>
+      <mo>⋅</mo>
+      <mrow>
+       <mi>Pr</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>S</mi>
+        <mo stretchy="false">|</mo>
+        <mi>W</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mi>s</mi>
+     <mo>+</mo>
+     <mi>n</mi>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>Pr</ci>
+      <ci>normal-′</ci>
+     </apply>
+     <ci>S</ci>
+     <ci>W</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <plus></plus>
+      <apply>
+       <ci>normal-⋅</ci>
+       <ci>s</ci>
+       <apply>
+        <ci>Pr</ci>
+        <ci>S</ci>
+       </apply>
+      </apply>
+      <apply>
+       <ci>normal-⋅</ci>
+       <ci>n</ci>
+       <apply>
+        <ci>Pr</ci>
+        <ci>S</ci>
+        <ci>W</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <ci>s</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr^{\prime}(S|W)=\frac{s\cdot\Pr(S)+n\cdot\Pr(S|W)}{s+n}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where:</p>
+<ul>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:25">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>Pr</mi>
+    <mo>′</mo>
+   </msup>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">|</mo>
+    <mi>W</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>Pr</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <ci>S</ci>
+    <ci>W</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr^{\prime}(S|W)
+  </annotation>
+ </semantics>
+</math>
+
+ is the corrected probability for the message to be spam, knowing that it contains a given word ;</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:26">
+ <semantics>
+  <mi>s</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>s</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s
+  </annotation>
+ </semantics>
+</math>
+
+ is the <em>strength</em> we give to background information about incoming spam ;</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:27">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(S)
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability of any incoming message to be spam ;</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:28">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ is the number of occurrences of this word during the learning phase ;</li>
+<li>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:29">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">|</mo>
+    <mi>W</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>S</ci>
+    <ci>W</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(S|W)
+  </annotation>
+ </semantics>
+</math>
+
+ is the spamicity of this word.</li>
+</ul>
+
+<p>(Demonstration:<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a>)</p>
+
+<p>This corrected probability is used instead of the spamicity in the combining formula.</p>
+
+<p>
+
+<math display="inline" id="Naive_Bayes_spam_filtering:30">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(S)
+  </annotation>
+ </semantics>
+</math>
+
+ can again be taken equal to 0.5, to avoid being too suspicious about incoming email. 3 is a good value for <em>s</em>, meaning that the learned corpus must contain more than 3 messages with that word to put more confidence in the spamicity value than in the default value.</p>
+
+<p>This formula can be extended to the case where <em>n</em> is equal to zero (and where the spamicity is not defined), and evaluates in this case to 
+
+<math display="inline" id="Naive_Bayes_spam_filtering:31">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mi>r</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>S</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>P</ci>
+    <ci>r</ci>
+    <ci>S</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Pr(S)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h3 id="other-heuristics">Other heuristics</h3>
+
+<p>"Neutral" words like "the", "a", "some", or "is" (in English), or their equivalents in other languages, can be ignored. More generally, some bayesian filtering filters simply ignore all the words which have a spamicity next to 0.5, as they contribute little to a good decision. The words taken into consideration are those whose spamicity is next to 0.0 (distinctive signs of legitimate messages), or next to 1.0 (distinctive signs of spam). A method can be for example to keep only those ten words, in the examined message, which have the greatest <a href="absolute_value" title="wikilink">absolute value</a> |0.5 − <em>pI</em>|.</p>
+
+<p>Some software products take into account the fact that a given word appears several times in the examined message,<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> others don't.</p>
+
+<p>Some software products use <em>patterns</em> (sequences of words) instead of isolated natural languages words.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> For example, with a "context window" of four words, they compute the spamicity of "Viagra is good for", instead of computing the spamicities of "Viagra", "is", "good", and "for". This method gives more sensitivity to context and eliminates the <a href="Bayesian_noise" title="wikilink">Bayesian noise</a> better, at the expense of a bigger database.</p>
+<h3 id="mixed-methods">Mixed methods</h3>
+
+<p>There are other ways of combining individual probabilities for different words than using the "naive" approach. These methods differ from it on the assumptions they make on the statistical properties of the input data. These different hypotheses result in radically different formulas for combining the individual probabilities.</p>
+
+<p>For example, assuming the individual probabilities follow a <a href="chi-squared_distribution" title="wikilink">chi-squared</a> distribution with 2<em>N</em> degrees of freedom, one could use the formula:</p>
+
+<p>
+
+<math display="block" id="Naive_Bayes_spam_filtering:32">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>C</mi>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mo>-</mo>
+      <mrow>
+       <mn>2</mn>
+       <mrow>
+        <mi>ln</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <msub>
+           <mi>p</mi>
+           <mn>1</mn>
+          </msub>
+          <msub>
+           <mi>p</mi>
+           <mn>2</mn>
+          </msub>
+          <mi mathvariant="normal">⋯</mi>
+          <msub>
+           <mi>p</mi>
+           <mi>N</mi>
+          </msub>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo>,</mo>
+     <mrow>
+      <mn>2</mn>
+      <mi>N</mi>
+     </mrow>
+     <mo rspace="4.2pt" stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>p</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>C</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <interval closure="open">
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <apply>
+         <ln></ln>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>p</ci>
+           <cn type="integer">1</cn>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>p</ci>
+           <cn type="integer">2</cn>
+          </apply>
+          <ci>normal-⋯</ci>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>p</ci>
+           <ci>N</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <ci>N</ci>
+      </apply>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p=C^{-1}(-2\ln(p_{1}p_{2}\cdots p_{N}),2N)\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where <em>C</em><sup>−1</sup> is the <a href="Inverse-chi-squared_distribution" title="wikilink">inverse of the chi-squared function</a>.</p>
+
+<p>Individual probabilities can be combined with the techniques of the <a href="Markovian_discrimination" title="wikilink">Markovian discrimination</a> too.</p>
+<h2 id="discussion">Discussion</h2>
+<h3 id="advantages">Advantages</h3>
+
+<p>One of the main advantages of Bayesian spam filtering is that it can be trained on a per-user basis.</p>
+
+<p>The spam that a user receives is often related to the online user's activities. For example, a user may have been subscribed to an online newsletter that the user considers to be spam. This online newsletter is likely to contain words that are common to all newsletters, such as the name of the newsletter and its originating email address. A Bayesian spam filter will eventually assign a higher probability based on the user's specific patterns.</p>
+
+<p>The legitimate e-mails a user receives will tend to be different. For example, in a corporate environment, the company name and the names of clients or customers will be mentioned often. The filter will assign a lower spam probability to emails containing those names.</p>
+
+<p>The word probabilities are unique to each user and can evolve over time with corrective training whenever the filter incorrectly classifies an email. As a result, Bayesian spam filtering accuracy after training is often superior to pre-defined rules.</p>
+
+<p>It can perform particularly well in avoiding false positives, where legitimate email is incorrectly classified as spam. For example, if the email contains the word "Nigeria", which is frequently used in <a href="Advance_fee_fraud" title="wikilink">Advance fee fraud</a> spam, a pre-defined rules filter might reject it outright. A Bayesian filter would mark the word "Nigeria" as a probable spam word, but would take into account other important words that usually indicate legitimate e-mail. For example, the name of a spouse may strongly indicate the e-mail is not spam, which could overcome the use of the word "Nigeria."</p>
+<h3 id="disadvantages">Disadvantages</h3>
+
+<p>Depending on the implementation, Bayesian spam filtering may be susceptible to <a href="Bayesian_poisoning" title="wikilink">Bayesian poisoning</a>, a technique used by spammers in an attempt to degrade the effectiveness of spam filters that rely on Bayesian filtering. A spammer practicing Bayesian poisoning will send out emails with large amounts of legitimate text (gathered from legitimate news or literary sources). <a href="e-mail_spam" title="wikilink">Spammer</a> tactics include insertion of random innocuous words that are not normally associated with spam, thereby decreasing the email's spam score, making it more likely to slip past a Bayesian spam filter. However with (for example) Paul Graham's scheme only the most significant probabilities are used, so that padding the text out with non-spam-related words does not affect the detection probability significantly.</p>
+
+<p>Words that normally appear in large quantities in spam may also be transformed by spammers. For example, «Viagra» would be replaced with «Viaagra» or «V!agra» in the spam message. The recipient of the message can still read the changed words, but each of these words is met more rarely by the Bayesian filter, which hinders its learning process. As a general rule, this spamming technique does not work very well, because the derived words end up recognized by the filter just like the normal ones.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a></p>
+
+<p>Another technique used to try to defeat Bayesian spam filters is to replace text with pictures, either directly included or linked. The whole text of the message, or some part of it, is replaced with a picture where the same text is "drawn". The spam filter is usually unable to analyze this picture, which would contain the sensitive words like «Viagra». However, since many mail clients disable the display of linked pictures for security reasons, the spammer sending links to distant pictures might reach fewer targets. Also, a picture's size in bytes is bigger than the equivalent text's size, so the spammer needs more bandwidth to send messages directly including pictures. Some filters are more inclined to decide that a message is spam if it has mostly graphical contents. Finally, a probably more efficient solution has been proposed by Google and is used by its <a class="uri" href="Gmail" title="wikilink">Gmail</a> email system, performing an <a href="Optical_character_recognition" title="wikilink">OCR (Optical Character Recognition)</a> to every mid to large size image, analyzing the text inside.<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a></p>
+<h2 id="general-applications-of-bayesian-filtering">General applications of Bayesian filtering</h2>
+
+<p>While Bayesian filtering is used widely to identify spam email, the technique can classify (or "cluster") almost any sort of data. It has uses in science, medicine, and engineering. One example is a general purpose classification program called <a href="http://ti.arc.nasa.gov/tech/rse/synthesis-projects-applications/autoclass/">AutoClass</a> which was originally used to classify stars according to spectral characteristics that were otherwise too subtle to notice.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Bayesian_poisoning" title="wikilink">Bayesian poisoning</a></li>
+<li><a href="Bayesian_programming" title="wikilink">Bayesian programming</a></li>
+<li><a href="Bayesian_inference" title="wikilink">Bayesian inference</a></li>
+<li><a href="Bayes's_theorem" title="wikilink">Bayes's theorem</a></li>
+<li><a href="Email_filtering" title="wikilink">Email filtering</a></li>
+<li><a href="Markovian_discrimination" title="wikilink">Markovian discrimination</a></li>
+<li><a href="Naive_Bayes_classifier" title="wikilink">Naive Bayes classifier</a></li>
+<li><a href="Recursive_Bayesian_estimation" title="wikilink">Recursive Bayesian estimation</a></li>
+<li><a href="Anti-spam_techniques" title="wikilink">Anti-spam techniques</a></li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li>Guide to Bayesian spam filters: <a href="http://lwn.net/Articles/172491/">part 1</a>, <a href="http://lwn.net/Articles/173910/">part 2</a>.</li>
+<li><a href="http://radio.weblogs.com/0101454/stories/2002/09/16/spamDetection.html">Gary Robinson's spam blog</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Estimation_theory" title="wikilink">Category:Estimation theory</a> <a href="Category:Spam_filtering" title="wikilink">Category:Spam filtering</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3">Paul Graham (2003), <a href="http://www.paulgraham.com/better.html">Better Bayesian filtering</a><a href="#fnref3">↩</a></li>
+<li id="fn4">Brian Livingston (2002), <a href="http://www.infoworld.com/t/business/paul-graham-provides-stunning-answer-spam-e-mails-295">Paul Graham provides stunning answer to spam e-mails</a><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9">Process Software, <a href="http://www.process.com/precisemail/bayesian_filtering.htm">Introduction to Bayesian Filtering</a><a href="#fnref9">↩</a></li>
+<li id="fn10"> at MathPages<a href="#fnref10">↩</a></li>
+<li id="fn11"><a class="uri" href="http://mail.python.org/pipermail/python-dev/2002-August/028216.html">http://mail.python.org/pipermail/python-dev/2002-August/028216.html</a> Tim Peter's comment on the algorithm used by Graham<a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+<li id="fn14"><a href="#fnref14">↩</a></li>
+<li id="fn15"><a href="#fnref15">↩</a></li>
+<li id="fn16">Paul Graham (2002), <a href="http://www.paulgraham.com/spam.html">A Plan for Spam</a><a href="#fnref16">↩</a></li>
+<li id="fn17"><a href="#fnref17">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

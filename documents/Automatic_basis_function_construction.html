@@ -1,0 +1,2328 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1724">Automatic basis function construction</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Automatic basis function construction</h1>
+<hr/>
+
+<p><strong>Automatic basis function construction</strong> (or <strong>basis discovery</strong>) is the method of looking for a set of task-independent <a href="basis_function" title="wikilink">basis functions</a> that map the state space to a lower-dimensional embedding, while still representing the <a href="Bellman_equation" title="wikilink">value function</a> accurately. Automatic basis construction is independent of prior knowledge of the domain, which allows it to perform well where expert-constructed basis functions are difficult or impossible to create.</p>
+<h2 id="motivation">Motivation</h2>
+
+<p>In <a href="reinforcement_learning" title="wikilink">reinforcement learning</a> (RL), most real-world <a href="Markov_Decision_Process" title="wikilink">Markov Decision Process</a> (MDP) problems have large or continuous state spaces, which typically require some sort of approximation to be represented efficiently.</p>
+
+<p>Linear function approximators<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a>(LFAs) are widely adopted for their low theoretical complexity. Two subproblems needs to be solved for better approximation: weight optimization and basis construction. To solve the second problem, one way is to design special basis functions. Those basis functions work well in specific tasks but are significantly restricted to domains. Thus constructing basis construction functions automatically is preferred for broader applications.</p>
+<h2 id="problem-definition">Problem definition</h2>
+
+<p>A Markov decision process with finite state space and fixed policy is defined with a 4-tuple 
+
+<math display="inline" id="Automatic_basis_function_construction:0">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mo>,</mo>
+   <mi>p</mi>
+   <mo>,</mo>
+   <mi>γ</mi>
+   <mo>,</mo>
+   <mi>r</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>s</ci>
+    <ci>p</ci>
+    <ci>γ</ci>
+    <ci>r</ci>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {s,p,\gamma,r}
+  </annotation>
+ </semantics>
+</math>
+
+, which includes the finite state space 
+
+<math display="inline" id="Automatic_basis_function_construction:1">
+ <semantics>
+  <mrow>
+   <mi>S</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mn>2</mn>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mi>s</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>S</ci>
+    <list>
+     <cn type="integer">1</cn>
+     <cn type="integer">2</cn>
+     <ci>normal-…</ci>
+     <ci>s</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S={{1,2,\ldots,s}}
+  </annotation>
+ </semantics>
+</math>
+
+
+, the reward function 
+
+<math display="inline" id="Automatic_basis_function_construction:2">
+ <semantics>
+  <mi>r</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>r</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r
+  </annotation>
+ </semantics>
+</math>
+
+, discount factor 
+
+<math display="inline" id="Automatic_basis_function_construction:3">
+ <semantics>
+  <mrow>
+   <mi>γ</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>0</mn>
+    <mo>,</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>γ</ci>
+    <interval closure="closed-open">
+     <cn type="integer">0</cn>
+     <cn type="integer">1</cn>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma\in[0,1)
+  </annotation>
+ </semantics>
+</math>
+
+, and the transition model 
+
+<math display="inline" id="Automatic_basis_function_construction:4">
+ <semantics>
+  <mi>P</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>P</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Bellman equation is defined as:</p>
+
+<p>
+
+<math display="block" id="Automatic_basis_function_construction:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>v</mi>
+    <mo>=</mo>
+    <mrow>
+     <mi>r</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi>γ</mi>
+      <mi>P</mi>
+      <mi>v</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>v</ci>
+    <apply>
+     <plus></plus>
+     <ci>r</ci>
+     <apply>
+      <times></times>
+      <ci>γ</ci>
+      <ci>P</ci>
+      <ci>v</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v=r+\gamma Pv.\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>When the number of elements in 
+
+<math display="inline" id="Automatic_basis_function_construction:6">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+
+ is small, 
+
+<math display="inline" id="Automatic_basis_function_construction:7">
+ <semantics>
+  <mi>v</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>v</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v
+  </annotation>
+ </semantics>
+</math>
+
+ is usually maintained as tabular form. While 
+
+<math display="inline" id="Automatic_basis_function_construction:8">
+ <semantics>
+  <mi>S</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>S</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S
+  </annotation>
+ </semantics>
+</math>
+
+ grows too large for this kind of representation. 
+
+<math display="inline" id="Automatic_basis_function_construction:9">
+ <semantics>
+  <mi>v</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>v</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v
+  </annotation>
+ </semantics>
+</math>
+
+ is commonly being approximated via a linear combination of basis function 
+
+<math display="inline" id="Automatic_basis_function_construction:10">
+ <semantics>
+  <mrow>
+   <mi mathvariant="normal">Φ</mi>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>ϕ</mi>
+     <mn>1</mn>
+    </msub>
+    <mo>,</mo>
+    <msub>
+     <mi>ϕ</mi>
+     <mn>2</mn>
+    </msub>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>ϕ</mi>
+     <mi>n</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>normal-Φ</ci>
+    <list>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ϕ</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ϕ</ci>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ϕ</ci>
+      <ci>n</ci>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Phi={\phi_{1},\phi_{2},\ldots,\phi_{n}}
+  </annotation>
+ </semantics>
+</math>
+
+,<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> so that we have:</p>
+
+<p>
+
+<math display="block" id="Automatic_basis_function_construction:11">
+ <semantics>
+  <mrow>
+   <mi>v</mi>
+   <mo>≈</mo>
+   <mover accent="true">
+    <mi>v</mi>
+    <mo stretchy="false">^</mo>
+   </mover>
+   <mo>=</mo>
+   <mrow>
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>n</mi>
+    </munderover>
+    <mrow>
+     <msub>
+      <mi>θ</mi>
+      <mi>n</mi>
+     </msub>
+     <msub>
+      <mi>ϕ</mi>
+      <mi>n</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <approx></approx>
+     <ci>v</ci>
+     <apply>
+      <ci>normal-^</ci>
+      <ci>v</ci>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>ϕ</ci>
+        <ci>n</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v\approx\hat{v}=\sum_{i=1}^{n}\theta_{n}\phi_{n}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Here 
+
+<math display="inline" id="Automatic_basis_function_construction:12">
+ <semantics>
+  <mi mathvariant="normal">Φ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-Φ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Phi
+  </annotation>
+ </semantics>
+</math>
+
+ is a 
+
+<math display="inline" id="Automatic_basis_function_construction:13">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <mi>S</mi>
+    <mo stretchy="false">|</mo>
+   </mrow>
+   <mo>×</mo>
+   <mi>n</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <abs></abs>
+     <ci>S</ci>
+    </apply>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   |S|\times n
+  </annotation>
+ </semantics>
+</math>
+
+ matrix in which every row contains a feature vector for corresponding row, 
+
+<math display="inline" id="Automatic_basis_function_construction:14">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ is a weight vector with n parameters and usually 
+
+<math display="inline" id="Automatic_basis_function_construction:15">
+ <semantics>
+  <mrow>
+   <mi>n</mi>
+   <mo>≪</mo>
+   <mrow>
+    <mo stretchy="false">|</mo>
+    <mi>s</mi>
+    <mo stretchy="false">|</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">much-less-than</csymbol>
+    <ci>n</ci>
+    <apply>
+     <abs></abs>
+     <ci>s</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n\ll|s|
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Basis construction looks for ways to automatically construct better basis function 
+
+<math display="inline" id="Automatic_basis_function_construction:16">
+ <semantics>
+  <mi mathvariant="normal">Φ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-Φ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Phi
+  </annotation>
+ </semantics>
+</math>
+
+
+ which can represent the value function well. A good construction method should have the following characteristics:</p>
+<ul>
+<li>Small error bounds between the estimate and real value function</li>
+<li>Form orthogonal basis in the value function space</li>
+<li>Converge to stationary value function fast</li>
+</ul>
+<h2 id="popular-methods">Popular methods</h2>
+<h3 id="proto-value-basis">Proto-value basis</h3>
+
+<p>In this approach, Mahadevan analyzes the connectivity graph between states to determine a set of basis functions.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>The normalized graph Laplacian is defined as:</p>
+
+<p>
+
+<math display="block" id="Automatic_basis_function_construction:17">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>I</mi>
+    <mo>-</mo>
+    <mrow>
+     <msup>
+      <mi>D</mi>
+      <mrow>
+       <mo>-</mo>
+       <mfrac>
+        <mn>1</mn>
+        <mn>2</mn>
+       </mfrac>
+      </mrow>
+     </msup>
+     <mi>W</mi>
+     <msup>
+      <mi>D</mi>
+      <mrow>
+       <mo>-</mo>
+       <mfrac>
+        <mn>1</mn>
+        <mn>2</mn>
+       </mfrac>
+      </mrow>
+     </msup>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>L</ci>
+    <apply>
+     <minus></minus>
+     <ci>I</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>D</ci>
+       <apply>
+        <minus></minus>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <ci>W</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>D</ci>
+       <apply>
+        <minus></minus>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L=I-D^{-\frac{1}{2}}WD^{-\frac{1}{2}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Here W is an adjacency matrix which represents the states of fixed policy MDP which forms an undirected graph (N,E). D is a diagonal matrix related to nodes' degrees.</p>
+
+<p>In discrete state space, the adjacency matrix 
+
+<math display="inline" id="Automatic_basis_function_construction:18">
+ <semantics>
+  <mi>W</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>W</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W
+  </annotation>
+ </semantics>
+</math>
+
+ could be constructed by simply checking whether two states are connected, and D could be calculated by summing up every row of W. In continuous state space, we could take random walk Laplacian of W.</p>
+
+<p>This spectral framework can be used for value function approximation(VFA). Given the fixed policy, the edge weights are determined by corresponding states' transition probability. To get smooth value approximation, diffusion wavelets are used.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<h3 id="krylov-basis">Krylov basis</h3>
+
+<p>Krylov basis construction uses the actual transition matrix instead of random walk Laplacian. The assumption of this method is that transition model <em>P</em> and reward r are available.</p>
+
+<p>The vectors in Neumann series are denoted as 
+
+<math display="inline" id="Automatic_basis_function_construction:19">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>y</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>P</mi>
+     <mi>i</mi>
+    </msup>
+    <mi>r</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>y</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>P</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>r</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y_{i}=P^{i}r
+  </annotation>
+ </semantics>
+</math>
+
+ for all 
+
+<math display="inline" id="Automatic_basis_function_construction:20">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>0</mn>
+    <mo>,</mo>
+    <mrow>
+     <mi>i</mi>
+     <mi>n</mi>
+     <mi>f</mi>
+     <mi>t</mi>
+     <mi>y</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>i</ci>
+    <interval closure="closed-open">
+     <cn type="integer">0</cn>
+     <apply>
+      <times></times>
+      <ci>i</ci>
+      <ci>n</ci>
+      <ci>f</ci>
+      <ci>t</ci>
+      <ci>y</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i\in[0,infty)
+  </annotation>
+ </semantics>
+</math>
+
+. It shows that Krylov space spanned by 
+
+<math display="inline" id="Automatic_basis_function_construction:21">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>y</mi>
+    <mn>0</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>y</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <mi mathvariant="normal">…</mi>
+   <mo>,</mo>
+   <msub>
+    <mi>y</mi>
+    <mrow>
+     <mi>m</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>y</ci>
+     <cn type="integer">0</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>y</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>normal-…</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>y</ci>
+     <apply>
+      <minus></minus>
+      <ci>m</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y_{0},y_{1},\ldots,y_{m-1}
+  </annotation>
+ </semantics>
+</math>
+
+
+ is enough to represent any value function,<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> and m is the degree of minimal polynomial of 
+
+<math display="inline" id="Automatic_basis_function_construction:22">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mrow>
+    <mi>I</mi>
+    <mo>-</mo>
+    <mrow>
+     <mi>γ</mi>
+     <mi>P</mi>
+    </mrow>
+   </mrow>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <ci>I</ci>
+    <apply>
+     <times></times>
+     <ci>γ</ci>
+     <ci>P</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (I-\gamma P)
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Suppose the minimal polynomial is 
+
+<math display="inline" id="Automatic_basis_function_construction:23">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>p</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>A</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <msub>
+      <mi>α</mi>
+      <mn>0</mn>
+     </msub>
+    </mfrac>
+    <mrow>
+     <msubsup>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <mi>m</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </msubsup>
+     <mrow>
+      <msub>
+       <mi>α</mi>
+       <mrow>
+        <mi>i</mi>
+        <mo>+</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+      <msup>
+       <mi>A</mi>
+       <mi>i</mi>
+      </msup>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>p</ci>
+     <ci>A</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>α</ci>
+       <cn type="integer">0</cn>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <ci>m</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <apply>
+         <plus></plus>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>A</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(A)=\frac{1}{\alpha_{0}}\sum_{i=0}^{m-1}\alpha_{i+1}A^{i}
+  </annotation>
+ </semantics>
+</math>
+
+, and we have 
+
+<math display="inline" id="Automatic_basis_function_construction:24">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>B</mi>
+    <mi>A</mi>
+   </mrow>
+   <mo>=</mo>
+   <mi>I</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <ci>A</ci>
+    </apply>
+    <ci>I</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   BA=I
+  </annotation>
+ </semantics>
+</math>
+
+, the value function can be written as:</p>
+
+<p>
+
+<math display="block" id="Automatic_basis_function_construction:25">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>v</mi>
+    <mo>=</mo>
+    <mrow>
+     <mi>B</mi>
+     <mi>r</mi>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <msub>
+       <mi>α</mi>
+       <mn>0</mn>
+      </msub>
+     </mfrac>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>0</mn>
+       </mrow>
+       <mrow>
+        <mi>m</mi>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </munderover>
+      <mrow>
+       <msub>
+        <mi>α</mi>
+        <mrow>
+         <mi>i</mi>
+         <mo>+</mo>
+         <mn>1</mn>
+        </mrow>
+       </msub>
+       <msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mi>I</mi>
+          <mo>-</mo>
+          <mrow>
+           <mi>γ</mi>
+           <mi>P</mi>
+          </mrow>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mi>i</mi>
+       </msup>
+       <mi>r</mi>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <mi>m</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </munderover>
+     <mrow>
+      <msub>
+       <mi>α</mi>
+       <mrow>
+        <mi>i</mi>
+        <mo>+</mo>
+        <mn>1</mn>
+       </mrow>
+      </msub>
+      <msub>
+       <mi>β</mi>
+       <mi>i</mi>
+      </msub>
+      <msub>
+       <mi>y</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>v</ci>
+     <apply>
+      <times></times>
+      <ci>B</ci>
+      <ci>r</ci>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">0</cn>
+         </apply>
+        </apply>
+        <apply>
+         <minus></minus>
+         <ci>m</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>α</ci>
+         <apply>
+          <plus></plus>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <minus></minus>
+          <ci>I</ci>
+          <apply>
+           <times></times>
+           <ci>γ</ci>
+           <ci>P</ci>
+          </apply>
+         </apply>
+         <ci>i</ci>
+        </apply>
+        <ci>r</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <ci>m</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <apply>
+         <plus></plus>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>β</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>y</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v=Br=\frac{1}{\alpha_{0}}\sum_{i=0}^{m-1}\alpha_{i+1}(I-\gamma P)^{i}r=\sum_{i%
+=0}^{m-1}\alpha_{i+1}\beta_{i}y_{i}.
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+<dl>
+<dd><strong>Algorithm</strong> Augmented Krylov Method<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a>
+</dd>
+<dd>
+
+<math display="inline" id="Automatic_basis_function_construction:26">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>z</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <msub>
+    <mi>z</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>,</mo>
+   <mi mathvariant="normal">…</mi>
+   <mo>,</mo>
+   <msub>
+    <mi>z</mi>
+    <mi>k</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>z</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>z</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <ci>normal-…</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>z</ci>
+     <ci>k</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z_{1},z_{2},\ldots,z_{k}
+  </annotation>
+ </semantics>
+</math>
+
+
+ are top real eigenvectors of P
+</dd>
+<dd>
+
+<math display="inline" id="Automatic_basis_function_construction:27">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>z</mi>
+    <mrow>
+     <mi>k</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mo>:=</mo>
+   <mi>r</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">assign</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>z</ci>
+     <apply>
+      <plus></plus>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <ci>r</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z_{k+1}:=r
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+<dd><em>for</em> 
+
+<math display="inline" id="Automatic_basis_function_construction:28">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>i</mi>
+    <mo>:=</mo>
+    <mn>1</mn>
+   </mrow>
+   <mo>:</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>l</mi>
+     <mo>+</mo>
+     <mi>k</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <apply>
+     <csymbol cd="latexml">assign</csymbol>
+     <ci>i</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>l</ci>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i:=1:(l+k)
+  </annotation>
+ </semantics>
+</math>
+
+ <em>do</em>
+<dl>
+<dd><em>if</em> 
+
+<math display="inline" id="Automatic_basis_function_construction:29">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>></mo>
+   <mrow>
+    <mi>k</mi>
+    <mo>+</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <ci>i</ci>
+    <apply>
+     <plus></plus>
+     <ci>k</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i>k+1
+  </annotation>
+ </semantics>
+</math>
+
+ <em>then</em>
+
+<p>
+
+<math display="block" id="Automatic_basis_function_construction:30">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>z</mi>
+    <mi>i</mi>
+   </msub>
+   <mo>:=</mo>
+   <mrow>
+    <mi>P</mi>
+    <msub>
+     <mi>z</mi>
+     <mrow>
+      <mi>i</mi>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">assign</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>z</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>P</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>z</ci>
+      <apply>
+       <minus></minus>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z_{i}:=Pz_{i-1}
+  </annotation>
+ </semantics>
+</math>
+
+;</p>
+</dd>
+<dd><em>end if</em>
+</dd>
+<dd><em>for</em> 
+
+<math display="inline" id="Automatic_basis_function_construction:31">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>j</mi>
+    <mo>:=</mo>
+    <mn>1</mn>
+   </mrow>
+   <mo>:</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <apply>
+     <csymbol cd="latexml">assign</csymbol>
+     <ci>j</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>i</ci>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j:=1:(i-1)
+  </annotation>
+ </semantics>
+</math>
+
+
+ <em>do</em>
+
+<p>
+
+<math display="inline" id="Automatic_basis_function_construction:32">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mo>∥</mo>
+    <msub>
+     <mi>z</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>∥</mo>
+   </mrow>
+   <mo>≈</mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <approx></approx>
+    <apply>
+     <csymbol cd="latexml">norm</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>z</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \parallel z_{i}\parallel\approx 0
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+</dd>
+<dd><em>end for</em>
+</dd>
+<dd><em>if</em> 
+
+<math display="block" id="Automatic_basis_function_construction:33">
+ <semantics>
+  <mrow>
+   <mi>ε</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>r</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi>γ</mi>
+      <mi>P</mi>
+      <mover accent="true">
+       <mi>v</mi>
+       <mo stretchy="false">^</mo>
+      </mover>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mover accent="true">
+     <mi>v</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>r</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi>γ</mi>
+      <mi>P</mi>
+      <mi mathvariant="normal">Φ</mi>
+      <mi>θ</mi>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <mi mathvariant="normal">Φ</mi>
+     <mi>θ</mi>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <ci>ε</ci>
+     <apply>
+      <minus></minus>
+      <apply>
+       <plus></plus>
+       <ci>r</ci>
+       <apply>
+        <times></times>
+        <ci>γ</ci>
+        <ci>P</ci>
+        <apply>
+         <ci>normal-^</ci>
+         <ci>v</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <ci>normal-^</ci>
+       <ci>v</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <minus></minus>
+      <apply>
+       <plus></plus>
+       <ci>r</ci>
+       <apply>
+        <times></times>
+        <ci>γ</ci>
+        <ci>P</ci>
+        <ci>normal-Φ</ci>
+        <ci>θ</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>normal-Φ</ci>
+       <ci>θ</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varepsilon=r+\gamma P\hat{v}-\hat{v}=r+\gamma P\Phi\theta-\Phi\theta
+  </annotation>
+ </semantics>
+</math>
+
+ <em>then</em>
+<dl>
+<dd><em>break</em>;
+</dd>
+</dl>
+</dd>
+<dd><em>end if</em>
+</dd>
+</dl>
+</dd>
+<dd><em>end for</em>
+<ul>
+<li>k: number of eigenvectors in basis</li>
+<li>l: total number of vectors</li>
+</ul>
+</dd>
+</dl>
+<h3 id="bellman-error-basis">Bellman error basis</h3>
+
+<p>Bellman error(or BEBFs) is defined as
+
+<math display="inline" id="Automatic_basis_function_construction:34">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>ϕ</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <mi>r</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>ϕ</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>r</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \phi_{1}=r
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>Loosely speaking, Bellman error points towards the optimal value function.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> The sequence of BEBF form a basis space which is orthogonal to the real value function space; thus with sufficient number of BEBFs, any value function can be represented exactly.</p>
+<dl>
+<dd><strong>Algorithm</strong> BEBF
+</dd>
+<dd>stage stage i=1, 
+
+<math display="inline" id="Automatic_basis_function_construction:35">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>2</mn>
+    <mo>,</mo>
+    <mi>N</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>i</ci>
+    <interval closure="closed">
+     <cn type="integer">2</cn>
+     <ci>N</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i\in[2,N]
+  </annotation>
+ </semantics>
+</math>
+
+;
+</dd>
+<dd>stage 
+
+<math display="inline" id="Automatic_basis_function_construction:36">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{i}
+  </annotation>
+ </semantics>
+</math>
+
+
+
+<dl>
+<dd>compute the weight vector 
+
+<math display="inline" id="Automatic_basis_function_construction:37">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Φ</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Φ</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Phi_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ according to current basis function 
+
+<math display="inline" id="Automatic_basis_function_construction:38">
+ <semantics>
+  <mrow>
+   <mi>ε</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>r</mi>
+     <mo>+</mo>
+     <mrow>
+      <mi>γ</mi>
+      <mi>P</mi>
+      <msub>
+       <mi mathvariant="normal">Φ</mi>
+       <mi>i</mi>
+      </msub>
+      <msub>
+       <mi>θ</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+    <mo>-</mo>
+    <mrow>
+     <msub>
+      <mi mathvariant="normal">Φ</mi>
+      <mi>i</mi>
+     </msub>
+     <msub>
+      <mi>θ</mi>
+      <mi>i</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>ε</ci>
+    <apply>
+     <minus></minus>
+     <apply>
+      <plus></plus>
+      <ci>r</ci>
+      <apply>
+       <times></times>
+       <ci>γ</ci>
+       <ci>P</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>normal-Φ</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>normal-Φ</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>θ</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varepsilon=r+\gamma P\Phi_{i}\theta_{i}-\Phi_{i}\theta_{i}
+  </annotation>
+ </semantics>
+</math>
+
+;
+</dd>
+<dd>compute new bellman error by 
+
+<math display="block" id="Automatic_basis_function_construction:39">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi mathvariant="normal">Φ</mi>
+    <mrow>
+     <mi>i</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <msub>
+     <mi mathvariant="normal">Φ</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>:</mo>
+    <mi>ε</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-Φ</ci>
+     <apply>
+      <plus></plus>
+      <ci>i</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <eq></eq>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Φ</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-:</ci>
+     <csymbol cd="unknown">ε</csymbol>
+     <ci>normal-]</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Phi_{i+1}=[\Phi_{i}:\varepsilon]
+  </annotation>
+ </semantics>
+</math>
+
+;
+</dd>
+<dd>add bellman error to form new basis function
+
+<math display="inline" id="Automatic_basis_function_construction:40">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mo>-</mo>
+   <msup>
+    <mi>P</mi>
+    <mo>*</mo>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <ci>P</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>P</ci>
+     <times></times>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P-P^{*}
+  </annotation>
+ </semantics>
+</math>
+
+;
+</dd>
+</dl>
+<ul>
+<li>N represents the number of iterations till convergence.</li>
+<li>":" means juxtaposing matrices or vectors.</li>
+</ul>
+</dd>
+</dl>
+<h3 id="bellman-average-reward-bases">Bellman average reward bases</h3>
+
+<p>Bellman Average Reward Bases(or BARBs)<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> is similar to Krylov Bases, but the reward function is being dilated by the average adjusted transition matrix 
+
+<math display="inline" id="Automatic_basis_function_construction:41">
+ <semantics>
+  <msup>
+   <mi>P</mi>
+   <mo>*</mo>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>P</ci>
+    <times></times>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P^{*}
+  </annotation>
+ </semantics>
+</math>
+
+
+. Here 
+
+<math display="inline" id="Automatic_basis_function_construction:42">
+ <semantics>
+  <mi>γ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>γ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma
+  </annotation>
+ </semantics>
+</math>
+
+ can be calculated by many methods in.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>BARBs converges faster than BEBFs and Krylov when 
+
+<math display="inline" id="Automatic_basis_function_construction:43">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>P</mi>
+    <mo>*</mo>
+   </msup>
+   <mi>r</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>P</ci>
+     <times></times>
+    </apply>
+    <ci>r</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P^{*}r
+  </annotation>
+ </semantics>
+</math>
+
+ is close to 1.</p>
+<dl>
+<dd><strong>Algorithm</strong> BARBs
+</dd>
+<dd>stage stage i=1, 
+
+<math display="inline" id="Automatic_basis_function_construction:44">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <mn>2</mn>
+    <mo>,</mo>
+    <mi>N</mi>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>i</ci>
+    <interval closure="closed">
+     <cn type="integer">2</cn>
+     <ci>N</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i\in[2,N]
+  </annotation>
+ </semantics>
+</math>
+
+;
+</dd>
+<dd>stage 
+
+<math display="inline" id="Automatic_basis_function_construction:45">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{i}
+  </annotation>
+ </semantics>
+</math>
+
+
+<dl>
+<dd>compute the weight vector 
+
+<math display="inline" id="Automatic_basis_function_construction:46">
+ <semantics>
+  <msub>
+   <mi mathvariant="normal">Φ</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>normal-Φ</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Phi_{i}
+  </annotation>
+ </semantics>
+</math>
+
+
+ according to current basis function 
+
+<math display="block" id="Automatic_basis_function_construction:47">
+ <semantics>
+  <mrow>
+   <mi></mi>
+   <mo>:</mo>
+   <mrow>
+    <msub>
+     <mi>ϕ</mi>
+     <mrow>
+      <mi>i</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mi>r</mi>
+       <mo>-</mo>
+       <mrow>
+        <msup>
+         <mi>P</mi>
+         <mo>*</mo>
+        </msup>
+        <mi>r</mi>
+       </mrow>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <mi>P</mi>
+       <msub>
+        <mi mathvariant="normal">Φ</mi>
+        <mi>i</mi>
+       </msub>
+       <msub>
+        <mi>θ</mi>
+        <mi>i</mi>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo>-</mo>
+     <mrow>
+      <msub>
+       <mi mathvariant="normal">Φ</mi>
+       <mi>i</mi>
+      </msub>
+      <msub>
+       <mi>θ</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <csymbol cd="latexml">absent</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ϕ</ci>
+      <apply>
+       <plus></plus>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <plus></plus>
+       <apply>
+        <minus></minus>
+        <ci>r</ci>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>P</ci>
+          <times></times>
+         </apply>
+         <ci>r</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>P</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>normal-Φ</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>normal-Φ</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>θ</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   :\phi_{i+1}=r-P^{*}r+P\Phi_{i}\theta_{i}-\Phi_{i}\theta_{i}
+  </annotation>
+ </semantics>
+</math>
+
+;
+</dd>
+<dd>compute new basis
+
+<math display="inline" id="Automatic_basis_function_construction:48">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi mathvariant="normal">Φ</mi>
+    <mrow>
+     <mi>i</mi>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mo stretchy="false">[</mo>
+    <msub>
+     <mi mathvariant="normal">Φ</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>:</mo>
+    <msub>
+     <mi>ϕ</mi>
+     <mrow>
+      <mi>i</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+    </msub>
+    <mo stretchy="false">]</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>normal-Φ</ci>
+     <apply>
+      <plus></plus>
+      <ci>i</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <eq></eq>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-[</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>normal-Φ</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-:</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ϕ</ci>
+      <apply>
+       <plus></plus>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>normal-]</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Phi_{i+1}=[\Phi_{i}:\phi_{i+1}]
+  </annotation>
+ </semantics>
+</math>
+
+, and add it to form new bases matrix
+
+<math display="inline" id="Automatic_basis_function_construction:49">
+ <semantics>
+  <mi>γ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>γ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma
+  </annotation>
+ </semantics>
+</math>
+
+;
+</dd>
+</dl>
+<ul>
+<li>N represents the number of iterations till convergence.</li>
+<li>":" means juxtaposing matrices or vectors.</li>
+</ul>
+</dd>
+</dl>
+<h2 id="discussion-and-analysis">Discussion and analysis</h2>
+
+<p>There are two principal types of basis construction methods.</p>
+
+<p>The first type of methods are reward-sensitive, like Krylov and BEBFs, they dilate the reward function geometrically through transition matrix. However, when discount factor 
+
+<math display="inline" id="Automatic_basis_function_construction:50">
+ <semantics>
+  <mi>γ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>γ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \gamma
+  </annotation>
+ </semantics>
+</math>
+
+ approaches to 1, Krylov and BEBFs converge slowly. This is because the error Krylov based methods are restricted by Chebyshev polynomial bound.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> To solve this problem, some methods, like BARBs are proposed. BARBs is an incremental variant of Drazin bases, and converges faster than Krylov and BEBFs when <span class="LaTeX">$\gamma$</span> becomes large.</p>
+
+<p>Another one  is reward-insensitive proto value basis function derived from graph Lapalacian. This method uses graph information, but the construction of adjacency matrix makes this method hard to analyze.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Dynamic_programming" title="wikilink">Dynamic programming</a></li>
+<li><a href="Bellman_equation" title="wikilink">Bellman equation</a></li>
+<li><a href="Optimal_control" title="wikilink">Optimal control</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://www-anw.cs.umass.edu/index.shtml">1</a> UMASS ALL lab</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Optimal_decisions" title="wikilink">Category:Optimal decisions</a> <a href="Category:Dynamic_programming" title="wikilink">Category:Dynamic programming</a> <a href="Category:Stochastic_control" title="wikilink">Category:Stochastic control</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Keller,Philipp;Mannor,Shie;Precup,Doina. (2006) Automatic Basis Function Construction for Approximate Dynamic Programming and Reinforcement Learning. Proceedings of the 23rd International Conference on Machine Learning, Pittsburgh, PA.<a href="#fnref1">↩</a></li>
+<li id="fn2">Richard S. Sutton and Andrew G. Barto. Reinforcement Learning: An Introduction.(1998) MIT Press, Cambridge, MA, chapter 8<a href="#fnref2">↩</a></li>
+<li id="fn3"></li>
+<li id="fn4">Mahadevan,Sridhar;Maggioni,Mauro. (2005) Value function approximation with diffusion wavelets and Laplacian eigenfuctions. Proceedings of Advances in Neural Information Processing Systems.<a href="#fnref4">↩</a></li>
+<li id="fn5">Ilse C. F. Ipsen and Carl D. Meyer. The idea behind Krylov methods. American Mathematical Monthly, 105(10):889–899, 1998.<a href="#fnref5">↩</a></li>
+<li id="fn6"></li>
+<li id="fn7">M. Petrik. An analysis of Laplacian methods for value function approximation in MDPs. In Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), pages 2574–2579, 2007<a href="#fnref7">↩</a></li>
+<li id="fn8">R. Parr, C. Painter-Wakefield, L.-H. Li, and M. Littman. Analyzing feature generation for value-function approximation. In ICML’07, 2007.<a href="#fnref8">↩</a></li>
+<li id="fn9">S. Mahadevan and B. Liu. Basis construction from power series expansions of value functions. In NIPS’10, 2010<a href="#fnref9">↩</a></li>
+<li id="fn10">William J. Stewart. Numerical methods for computing stationary distributions of finite irreducible markov chains. In Advances in Computational Probability. Kluwer Academic Publishers, 1997.<a href="#fnref10">↩</a></li>
+<li id="fn11">M. Petrik. An analysis of Laplacian methods for value function approximation in MDPs.In Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), pages 2574–2579, 2007.<a href="#fnref11">↩</a></li>
+<li id="fn12"></li>
+</ol>
+</section>
+</body>
+</html>

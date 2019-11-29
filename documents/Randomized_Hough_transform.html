@@ -1,0 +1,603 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1919">Randomized Hough transform</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Randomized Hough transform</h1>
+<hr>Hough transforms are techniques for [<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</hr></body></html>
+<body>
+
+<p>[object detection]], a critical step in many implementations of <a href="computer_vision" title="wikilink">computer vision</a>, or <a href="data_mining" title="wikilink">data mining</a> from images. Specifically, the <strong>Randomized Hough transform</strong> is a probabilistic variant to the classical <a href="Hough_transform" title="wikilink">Hough transform</a>, and is commonly used to detect curves (straight line, circle, ellipse, etc.)<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> The basic idea of Hough transform (HT) is to implement a voting procedure for all potential curves in the image, and at the termination of the <a class="uri" href="algorithm" title="wikilink">algorithm</a>, curves that do exist in the image will have relatively high voting scores. Randomized Hough transform (RHT) is different from HT in that it tries to avoid conducting the computationally expensive voting process for every nonzero pixel in the image by taking advantage of the geometric properties of analytical curves, and thus improve the time efficiency and reduce the storage requirement of the original algorithm.</p>
+<h2 id="motivation">Motivation</h2>
+
+<p>Although Hough transform (HT) has been widely used in <a href="Edge_detection" title="wikilink">curve detection</a>, it has two major drawbacks:<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> First, for each nonzero pixel in the image, the parameters for the existing curve and redundant ones are both accumulated during the voting procedure. Second, the accumulator array (or Hough space) is predefined in a heuristic way. The more accuracy needed, the higher parameter resolution should be defined. These two needs usually result in a large storage requirement and low speed for real applications. Therefore, RHT was brought up to tackle this problem.</p>
+<h2 id="implementation">Implementation</h2>
+
+<p>In comparison with HT, RHT takes advantage of the fact that some <a href="analytic_variety" title="wikilink">analytical</a> curves can be fully determined by a certain number of points on the curve. For example, a straight line can be determined by two points, and an <a class="uri" href="ellipse" title="wikilink">ellipse</a> (or a circle) can be determined by three points. The case of ellipse detection can be used to illustrate the basic idea of RHT. The whole process generally consists of three steps:</p>
+<ol>
+<li>Fit ellipses with randomly selected points.</li>
+<li>Update the accumulator array and corresponding scores.</li>
+<li>Output the ellipses with scores higher than some predefined threshold.</li>
+</ol>
+<h3 id="ellipse-fitting">Ellipse fitting</h3>
+
+<p>One general equation for defining <a href="ellipse" title="wikilink">ellipses</a> is: 
+
+<math display="inline" id="Randomized_Hough_transform:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>a</mi>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>x</mi>
+        <mo>-</mo>
+        <mi>p</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mn>2</mn>
+     <mi>b</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>x</mi>
+       <mo>-</mo>
+       <mi>p</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>y</mi>
+       <mo>-</mo>
+       <mi>q</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>c</mi>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>y</mi>
+        <mo>-</mo>
+        <mi>q</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>a</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <minus></minus>
+        <ci>x</ci>
+        <ci>p</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>b</ci>
+      <apply>
+       <minus></minus>
+       <ci>x</ci>
+       <ci>p</ci>
+      </apply>
+      <apply>
+       <minus></minus>
+       <ci>y</ci>
+       <ci>q</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <minus></minus>
+        <ci>y</ci>
+        <ci>q</ci>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a(x-p)^{2}+2b(x-p)(y-q)+c(y-q)^{2}=1
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>with restriction
+
+<math display="block" id="Randomized_Hough_transform:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>a</mi>
+     <mi>c</mi>
+    </mrow>
+    <mo>-</mo>
+    <msup>
+     <mi>b</mi>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+   <mo>></mo>
+   <mn>0</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <gt></gt>
+    <apply>
+     <minus></minus>
+     <apply>
+      <times></times>
+      <ci>a</ci>
+      <ci>c</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>b</ci>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ac-b^{2}>0
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>However, an ellipse can be fully determined if one knows three points on it and the tangents in these points.</p>
+
+<p>RHT starts by randomly selecting three points on the ellipse. Let them be X<sub>1</sub>, X<sub>2</sub> and X<sub>3</sub>. The first step is to find the tangents of these three points. They can be found by fitting a straight line using <a href="least_squares" title="wikilink">least squares</a> technique for a small window of neighboring pixels.</p>
+
+<p>The next step is to find the intersection points of the tangent lines. This can be easily done by solving the line equations found in the previous step. Then let the intersection points be T<sub>12</sub> and T<sub>23</sub>, the midpoints of line segments 
+
+<math display="inline" id="Randomized_Hough_transform:2">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>X</mi>
+    <mn>1</mn>
+   </msub>
+   <msub>
+    <mi>X</mi>
+    <mn>2</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>X</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>X</ci>
+     <cn type="integer">2</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{1}X_{2}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Randomized_Hough_transform:3">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>X</mi>
+    <mn>2</mn>
+   </msub>
+   <msub>
+    <mi>X</mi>
+    <mn>3</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>X</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>X</ci>
+     <cn type="integer">3</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{2}X_{3}
+  </annotation>
+ </semantics>
+</math>
+
+ be M<sub>12</sub> and M<sub>23</sub>. Then the center of the ellipse will lie in the intersection of 
+
+<math display="inline" id="Randomized_Hough_transform:4">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mn>12</mn>
+   </msub>
+   <msub>
+    <mi>M</mi>
+    <mn>12</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">12</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>M</ci>
+     <cn type="integer">12</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{12}M_{12}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Randomized_Hough_transform:5">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mn>23</mn>
+   </msub>
+   <msub>
+    <mi>M</mi>
+    <mn>23</mn>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <cn type="integer">23</cn>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>M</ci>
+     <cn type="integer">23</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{23}M_{23}
+  </annotation>
+ </semantics>
+</math>
+
+. Again, the coordinates of the intersected point can be determined by solving line equations and the detailed process is skipped here for conciseness.</p>
+
+<p>Let the coordinates of ellipse center found in previous step be (x<sub>0</sub>, y<sub>0</sub>). Then the center can be translated to the origin with 
+
+<math display="inline" id="Randomized_Hough_transform:6">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>x</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mi>x</mi>
+    <mo>-</mo>
+    <msub>
+     <mi>x</mi>
+     <mn>0</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>x</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>x</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <cn type="integer">0</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x^{\prime}=x-x_{0}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Randomized_Hough_transform:7">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>y</mi>
+    <mo>′</mo>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <mi>y</mi>
+    <mo>-</mo>
+    <msub>
+     <mi>y</mi>
+     <mn>0</mn>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>y</ci>
+     <ci>normal-′</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <ci>y</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>y</ci>
+      <cn type="integer">0</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y^{\prime}=y-y_{0}
+  </annotation>
+ </semantics>
+</math>
+
+ so that the ellipse equation can be simplified to:</p>
+
+<p>
+
+<math display="inline" id="Randomized_Hough_transform:8">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>a</mi>
+     <msup>
+      <mi>x</mi>
+      <mrow>
+       <mi mathvariant="normal">′</mi>
+       <mn>2</mn>
+      </mrow>
+     </msup>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mn>2</mn>
+     <mi>b</mi>
+     <msup>
+      <mi>x</mi>
+      <mo>′</mo>
+     </msup>
+     <msup>
+      <mi>y</mi>
+      <mo>′</mo>
+     </msup>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>c</mi>
+     <msup>
+      <mi>y</mi>
+      <mrow>
+       <mi mathvariant="normal">′</mi>
+       <mn>2</mn>
+      </mrow>
+     </msup>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>a</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>x</ci>
+       <list>
+        <ci>normal-′</ci>
+        <cn type="integer">2</cn>
+       </list>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <ci>b</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>x</ci>
+       <ci>normal-′</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>y</ci>
+       <ci>normal-′</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>y</ci>
+       <list>
+        <ci>normal-′</ci>
+        <cn type="integer">2</cn>
+       </list>
+      </apply>
+     </apply>
+    </apply>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   ax^{\prime 2}+2bx^{\prime}y^{\prime}+cy^{\prime 2}=1
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Now we can solve for the rest of ellipse parameters: a, b and c by substituting the coordinates of X<sub>1</sub>, X<sub>2</sub> and X<sub>3</sub> into the equation above.</p>
+<h3 id="accumulating">Accumulating</h3>
+
+<p>With the ellipse parameters determined from previous stage, the <a href="accumulator_(computing)" title="wikilink">accumulator</a> array can be updated correspondingly. Different from classical Hough transform, RHT does not keep "grid of buckets" as the accumulator array. Rather, it first calculates the similarities between the newly detected ellipse and the ones already stored in accumulator array. Different metrics can be used to calculate the similarity. As long as the similarity exceeds some predefined threshold, replace the one in the accumulator with the average of both ellipses and add 1 to its score. Otherwise, initialize this ellipse to an empty position in the accumulator and assign a score of 1.</p>
+<h3 id="termination">Termination</h3>
+
+<p>Once the score of one candidate ellipse exceeds the threshold, it is determined as existing in the image (in other words, this ellipse is detected), and should be removed from the image and accumulator array so that the algorithm can detect other potential ellipses faster. The algorithm terminates when the number of iterations reaches a maximum limit or all the ellipses have been detected.</p>
+
+<p>Pseudo code for RHT:<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+<div class="sourceCode"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span class="kw">while</span> (we find ellipses OR <span class="kw">not</span> reached the maximum epoch) {
+    <span class="kw">for</span>(a fixed number of iterations) {
+        Find a potential ellipse.
+        <span class="kw">if</span>(the ellipse is similar to an ellipse in the accumulator)
+            Replace the one in the accumulator with the average of two ellipses <span class="kw">and</span> add <span class="dv">1</span> to the score;
+        <span class="kw">else</span>
+            Insert the ellipse into an empty position in the accumulator with a score of <span class="dv">1</span>;
+    }
+    Select the ellipse with the best score <span class="kw">and</span> save it in a best ellipse table;
+    Eliminate the pixels of the best ellipse from the image;
+    Empty the accumulator;
+}</code></pre></div>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Image_processing" title="wikilink">Category:Image processing</a> <a href="Category:Computer_vision" title="wikilink">Category:Computer vision</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">D.H. Ballard, "Generalizing the Hough Transform to Detect Arbitrary Shapes", Pattern Recognition, Vol.13, No.2, p.111-122, 1981<a href="#fnref1">↩</a></li>
+<li id="fn2">L. Xu, E. Oja, and P. Kultanan, "A new curve detection method: Randomized Hough transform (RHT)", <em>Pattern Recog. Lett.</em> 11, 1990, 331-338.<a href="#fnref2">↩</a></li>
+<li id="fn3">S. Inverso, “Ellipse Detection Using Randomized Hough Transform”, www.saminverso.com/res/vision/EllipseDetectionOld.pdf, May 20, 2002<a href="#fnref3">↩</a></li>
+</ol>
+</section>
+</body>
+

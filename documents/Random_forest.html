@@ -1,0 +1,1474 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="418">Random forest</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Random forest</h1>
+<hr/>
+
+<p><strong>Random forests</strong> are an <a href="ensemble_learning" title="wikilink">ensemble learning</a> method for <a href="statistical_classification" title="wikilink">classification</a>, <a href="regression_analysis" title="wikilink">regression</a> and other tasks, that operate by constructing a multitude of <a href="decision_tree_learning" title="wikilink">decision trees</a> at training time and outputting the class that is the <a href="mode_(statistics)" title="wikilink">mode</a> of the classes (classification) or mean prediction (regression) of the individual trees. Random forests correct for decision trees' habit of <a class="uri" href="overfitting" title="wikilink">overfitting</a> to their training set.</p>
+
+<p>The algorithm for inducing a random forest was developed by <a href="Leo_Breiman" title="wikilink">Leo Breiman</a><a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> and Adele Cutler,<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> and "Random Forests" is their <a class="uri" href="trademark" title="wikilink">trademark</a>. The method combines Breiman's "<a href="Bootstrap_aggregating" title="wikilink">bagging</a>" idea and the random selection of features, introduced independently by Ho<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a><a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> and Amit and <a href="Donald_Geman" title="wikilink">Geman</a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> in order to construct a collection of decision trees with controlled variance.</p>
+
+<p>The selection of a random subset of features is an example of the <a href="random_subspace_method" title="wikilink">random subspace method</a>, which, in Ho's formulation, is a way to implement classification proposed by Eugene Kleinberg.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+<h2 id="history">History</h2>
+
+<p>The early development of random forests was influenced by the work of Amit and Geman<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> who introduced the idea of searching over a random subset of the available decisions when splitting a node, in the context of growing a single <a href="Decision_tree" title="wikilink">tree</a>. The idea of random subspace selection from Ho<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> was also influential in the design of random forests. In this method a forest of trees is grown, and variation among the trees is introduced by projecting the training data into a randomly chosen <a href="Linear_subspace" title="wikilink">subspace</a> before fitting each tree. Finally, the idea of randomized node optimization, where the decision at each node is selected by a randomized procedure, rather than a deterministic optimization was first introduced by Dietterich.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+
+<p>The introduction of random forests proper was first made in a paper by <a href="Leo_Breiman" title="wikilink">Leo Breiman</a>.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> This paper describes a method of building a forest of uncorrelated trees using a <a href="Classification_and_regression_tree" title="wikilink">CART</a> like procedure, combined with randomized node optimization and <a href="Bootstrap_aggregating" title="wikilink">bagging</a>. In addition, this paper combines several ingredients, some previously known and some novel, which form the basis of the modern practice of random forests, in particular:</p>
+<ol>
+<li>Using out-of-bag error as an estimate of the <a href="generalization_error" title="wikilink">generalization error</a>.</li>
+<li>Measuring variable importance through permutation.</li>
+</ol>
+
+<p>The report also offers the first theoretical result for random forests in the form of a bound on the <a href="generalization_error" title="wikilink">generalization error</a> which depends on the strength of the trees in the forest and their <a class="uri" href="correlation" title="wikilink">correlation</a>.</p>
+<h2 id="algorithm">Algorithm</h2>
+<h3 id="preliminaries-decision-tree-learning">Preliminaries: decision tree learning</h3>
+
+<p>Decision trees are a popular method for various machine learning tasks. Tree learning "come[s] closest to meeting the requirements for serving as an off-the-shelf procedure for data mining", say <a href="Trevor_Hastie" title="wikilink">Hastie</a> <em>et al.</em>, because it is invariant under scaling and various other transformations of feature values, is robust to inclusion of irrelevant features, and produces inspectable models. However, they are seldom accurate.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+
+<p>In particular, trees that are grown very deep tend to learn highly irregular patterns: they <a href="overfitting" title="wikilink">overfit</a> their training sets, because they have <a href="Bias–variance_tradeoff" title="wikilink">low bias, but very high variance</a>. Random forests are a way of averaging multiple deep decision trees, trained on different parts of the same training set, with the goal of reducing the variance.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> This comes at the expense of a small increase in the bias and some loss of interpretability, but generally greatly boosts the performance of the final model.</p>
+<h3 id="tree-bagging">Tree bagging</h3>
+
+<p>The training algorithm for random forests applies the general technique of <a href="bootstrap_aggregating" title="wikilink">bootstrap aggregating</a>, or bagging, to tree learners. Given a training set 
+
+<math display="inline" id="Random_forest:0">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+ = <mtpl></mtpl>, …, <mtpl></mtpl> with responses 
+
+<math display="inline" id="Random_forest:1">
+ <semantics>
+  <mi>Y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y
+  </annotation>
+ </semantics>
+</math>
+
+ = <mtpl></mtpl>, …, <mtpl></mtpl>, bagging repeatedly (<em>B</em> times) selects a <a href="Bootstrapping_(statistics)" title="wikilink">random sample with replacement</a> of the training set and fits trees to these samples:</p>
+<dl>
+<dd>For 
+
+<math display="inline" id="Random_forest:2">
+ <semantics>
+  <mi>b</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>b</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b
+  </annotation>
+ </semantics>
+</math>
+
+ = 1, …, 
+
+<math display="inline" id="Random_forest:3">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+:
+<ol>
+<li>Sample, with replacement, 
+
+<math display="inline" id="Random_forest:4">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ training examples from 
+
+<math display="inline" id="Random_forest:5">
+ <semantics>
+  <mi>X</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>X</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X
+  </annotation>
+ </semantics>
+</math>
+
+, 
+
+<math display="inline" id="Random_forest:6">
+ <semantics>
+  <mi>Y</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Y</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y
+  </annotation>
+ </semantics>
+</math>
+
+; call these <mtpl></mtpl>, <mtpl></mtpl>.</li>
+<li>Train a decision or regression tree <mtpl></mtpl> on <mtpl></mtpl>, <mtpl></mtpl>.</li>
+</ol>
+</dd>
+</dl>
+
+<p>After training, predictions for unseen samples 
+
+<math display="inline" id="Random_forest:7">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ can be made by averaging the predictions from all the individual regression trees on 
+
+<math display="inline" id="Random_forest:8">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="block" id="Random_forest:9">
+ <semantics>
+  <mrow>
+   <mover accent="true">
+    <mi>f</mi>
+    <mo stretchy="false">^</mo>
+   </mover>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mn>1</mn>
+     <mi>B</mi>
+    </mfrac>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>b</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>B</mi>
+     </munderover>
+     <mrow>
+      <msub>
+       <mover accent="true">
+        <mi>f</mi>
+        <mo stretchy="false">^</mo>
+       </mover>
+       <mi>b</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msup>
+        <mi>x</mi>
+        <mo>′</mo>
+       </msup>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-^</ci>
+     <ci>f</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <cn type="integer">1</cn>
+      <ci>B</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>b</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>B</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <apply>
+         <ci>normal-^</ci>
+         <ci>f</ci>
+        </apply>
+        <ci>b</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>x</ci>
+        <ci>normal-′</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{f}=\frac{1}{B}\sum_{b=1}^{B}\hat{f}_{b}(x^{\prime})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>or by taking the majority vote in the case of decision trees.</p>
+
+<p>This bootstrapping procedure leads to better model performance because it decreases the <a href="Bias–variance_dilemma" title="wikilink">variance</a> of the model, without increasing the bias. This means that while the predictions of a single tree are highly sensitive to noise in its training set, the average of many trees is not, as long as the trees are not correlated. Simply training many trees on a single training set would give strongly correlated trees (or even the same tree many times, if the training algorithm is deterministic); bootstrap sampling is a way of de-correlating the trees by showing them different training sets.</p>
+
+<p>The number of samples/trees, 
+
+<math display="inline" id="Random_forest:10">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+, is a free parameter. Typically, a few hundred to several thousand trees are used, depending on the size and nature of the training set. An optimal number of trees 
+
+<math display="inline" id="Random_forest:11">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+ can be found using cross-validation, or by observing the <em>out-of-bag error</em>: the mean prediction error on each training sample 
+
+<math display="inline" id="Random_forest:12">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mi>ᵢ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>x</ci>
+    <ci>ᵢ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   xᵢ
+  </annotation>
+ </semantics>
+</math>
+
+, using only the trees that did not have 
+
+<math display="inline" id="Random_forest:13">
+ <semantics>
+  <mrow>
+   <mi>x</mi>
+   <mi>ᵢ</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>x</ci>
+    <ci>ᵢ</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   xᵢ
+  </annotation>
+ </semantics>
+</math>
+
+ in their bootstrap sample.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> The training and test error tend to level off after some number of trees have been fit.</p>
+<h3 id="from-bagging-to-random-forests">From bagging to random forests</h3>
+
+<p>The above procedure describes the original bagging algorithm for trees. Random forests differ in only one way from this general scheme: they use a modified tree learning algorithm that selects, at each candidate split in the learning process, a <a href="Random_subspace_method" title="wikilink">random subset of the features</a>. This process is sometimes called "feature bagging". The reason for doing this is the correlation of the trees in an ordinary bootstrap sample: if one or a few features are very strong predictors for the response variable (target output), these features will be selected in many of the 
+
+<math display="inline" id="Random_forest:14">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+ trees, causing them to become correlated.</p>
+
+<p>Typically, for a classification problem with 
+
+<math display="inline" id="Random_forest:15">
+ <semantics>
+  <mi>p</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>p</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p
+  </annotation>
+ </semantics>
+</math>
+
+ features, 
+
+<math display="inline" id="Random_forest:16">
+ <semantics>
+  <msqrt>
+   <mi>p</mi>
+  </msqrt>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <root></root>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sqrt{p}
+  </annotation>
+ </semantics>
+</math>
+
+ features are used in each split. Regression problems have different defaults (see Hastie, et al.)</p>
+<h3 id="extensions">Extensions</h3>
+
+<p>Adding one further step of randomization yields <em>extremely randomized trees</em>, or ExtraTrees. These are trained using bagging and the random subspace method, like in an ordinary random forest, but additionally the top-down splitting in the tree learner is randomized. Instead of computing the locally <em>optimal</em> feature/split combination (based on, e.g., <a href="information_gain" title="wikilink">information gain</a> or the <a href="Gini_impurity" title="wikilink">Gini impurity</a>), for each feature under consideration a random value is selected in the feature's empirical range (in the tree's training set, i.e., the bootstrap sample). The best of these is then chosen as the split.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a></p>
+<h2 id="properties">Properties</h2>
+<h3 id="variable-importance">Variable importance</h3>
+
+<p>Random forests can be used to rank the importance of variables in a regression or classification problem in a natural way. The following technique was described in Breiman's original paper<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> and is implemented in the <a href="R_(programming_language)" title="wikilink">R</a> package randomForest.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a></p>
+
+<p>The first step in measuring the variable importance in a data set 
+
+<math display="inline" id="Random_forest:17">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi class="ltx_font_mathcaligraphic">𝒟</mi>
+    <mi>n</mi>
+   </msub>
+   <mo>=</mo>
+   <msubsup>
+    <mrow>
+     <mo stretchy="false">{</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>X</mi>
+       <mi>i</mi>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>Y</mi>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mo stretchy="false">}</mo>
+    </mrow>
+    <mrow>
+     <mi>i</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>n</mi>
+   </msubsup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>𝒟</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <set>
+       <interval closure="open">
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>X</ci>
+         <ci>i</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>Y</ci>
+         <ci>i</ci>
+        </apply>
+       </interval>
+      </set>
+      <apply>
+       <eq></eq>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathcal{D}_{n}=\{(X_{i},Y_{i})\}_{i=1}^{n}
+  </annotation>
+ </semantics>
+</math>
+
+ is to fit a random forest to the data. During the fitting process the out-of-bag error for each data point is recorded and averaged over the forest (errors on an independent test set can be substituted if bagging is not used during training).</p>
+
+<p>To measure the importance of the 
+
+<math display="inline" id="Random_forest:18">
+ <semantics>
+  <mi>j</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>j</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j
+  </annotation>
+ </semantics>
+</math>
+
+-th feature after training, the values of the 
+
+<math display="inline" id="Random_forest:19">
+ <semantics>
+  <mi>j</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>j</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j
+  </annotation>
+ </semantics>
+</math>
+
+-th feature are permuted among the training data and the out-of-bag error is again computed on this perturbed data set. The importance score for the 
+
+<math display="inline" id="Random_forest:20">
+ <semantics>
+  <mi>j</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>j</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j
+  </annotation>
+ </semantics>
+</math>
+
+-th feature is computed by averaging the difference in out-of-bag error before and after the permutation over all trees. The score is normalized by the standard deviation of these differences.</p>
+
+<p>Features which produce large values for this score are ranked as more important than features which produce small values.</p>
+
+<p>This method of determining variable importance has some drawbacks. For data including categorical variables with different number of levels, random forests are biased in favor of those attributes with more levels. Methods such as <a href="partial_permutation" title="wikilink">partial permutations</a><a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a><a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> and growing unbiased trees<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a> can be used to solve the problem. If the data contain groups of correlated features of similar relevance for the output, then smaller groups are favored over larger groups.<a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a></p>
+<h3 id="relationship-to-nearest-neighbors">Relationship to nearest neighbors</h3>
+
+<p>A relationship between random forests and the <a href="K-nearest_neighbor_algorithm" title="wikilink">
+
+<math display="inline" id="Random_forest:21">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+-nearest neighbor algorithm</a> (
+
+<math display="inline" id="Random_forest:22">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+-NN) was pointed out by Lin and Jeon in 2002.<a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a> It turns out that both can be viewed as so-called <em>weighted neighborhoods schemes</em>. These are models built from a training set 
+
+<math display="inline" id="Random_forest:23">
+ <semantics>
+  <msubsup>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>x</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>y</mi>
+      <mi>i</mi>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo stretchy="false">}</mo>
+   </mrow>
+   <mrow>
+    <mi>i</mi>
+    <mo>=</mo>
+    <mn>1</mn>
+   </mrow>
+   <mi>n</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <set>
+      <interval closure="open">
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>y</ci>
+        <ci>i</ci>
+       </apply>
+      </interval>
+     </set>
+     <apply>
+      <eq></eq>
+      <ci>i</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{(x_{i},y_{i})\}_{i=1}^{n}
+  </annotation>
+ </semantics>
+</math>
+
+ that make predictions 
+
+<math display="inline" id="Random_forest:24">
+ <semantics>
+  <mover accent="true">
+   <mi>y</mi>
+   <mo stretchy="false">^</mo>
+  </mover>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-^</ci>
+    <ci>y</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{y}
+  </annotation>
+ </semantics>
+</math>
+
+ for new points 
+
+<math display="inline" id="Random_forest:25">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ by looking at the "neighborhood" of the point, formalized by a weight function 
+
+<math display="inline" id="Random_forest:26">
+ <semantics>
+  <mi>W</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>W</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>
+
+<math display="block" id="Random_forest:27">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mover accent="true">
+     <mi>y</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </munderover>
+     <mrow>
+      <mi>W</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>x</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>,</mo>
+       <msup>
+        <mi>x</mi>
+        <mo>′</mo>
+       </msup>
+       <mo rspace="4.2pt" stretchy="false">)</mo>
+      </mrow>
+      <msub>
+       <mi>y</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <ci>normal-^</ci>
+     <ci>y</ci>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>i</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>W</ci>
+      <interval closure="open">
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>x</ci>
+        <ci>normal-′</ci>
+       </apply>
+      </interval>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>y</ci>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{y}=\sum_{i=1}^{n}W(x_{i},x^{\prime})\,y_{i}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Here, 
+
+<math display="inline" id="Random_forest:28">
+ <semantics>
+  <mrow>
+   <mi>W</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>,</mo>
+    <msup>
+     <mi>x</mi>
+     <mo>′</mo>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>W</ci>
+    <interval closure="open">
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <ci>normal-′</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W(x_{i},x^{\prime})
+  </annotation>
+ </semantics>
+</math>
+
+ is the non-negative weight of the 
+
+<math display="inline" id="Random_forest:29">
+ <semantics>
+  <mi>i</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>i</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i
+  </annotation>
+ </semantics>
+</math>
+
+'th training point relative to the new point 
+
+<math display="inline" id="Random_forest:30">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+. For any particular 
+
+<math display="inline" id="Random_forest:31">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+, the weights must sum to one. Weight functions are given as follows:</p>
+<ul>
+<li>In 
+
+<math display="inline" id="Random_forest:32">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+-NN, the weights are 
+
+<math display="inline" id="Random_forest:33">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>W</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>x</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>,</mo>
+     <msup>
+      <mi>x</mi>
+      <mo>′</mo>
+     </msup>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mn>1</mn>
+    <mi>k</mi>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>W</ci>
+     <interval closure="open">
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>x</ci>
+       <ci>normal-′</ci>
+      </apply>
+     </interval>
+    </apply>
+    <apply>
+     <divide></divide>
+     <cn type="integer">1</cn>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W(x_{i},x^{\prime})=\frac{1}{k}
+  </annotation>
+ </semantics>
+</math>
+
+ if <mtpl></mtpl> is one of the 
+
+<math display="inline" id="Random_forest:34">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ points closest to 
+
+<math display="inline" id="Random_forest:35">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+, and zero otherwise.</li>
+<li>In a tree, 
+
+<math display="inline" id="Random_forest:36">
+ <semantics>
+  <mrow>
+   <mi>W</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>x</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>,</mo>
+    <msup>
+     <mi>x</mi>
+     <mo>′</mo>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>W</ci>
+    <interval closure="open">
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>x</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>x</ci>
+      <ci>normal-′</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W(x_{i},x^{\prime})
+  </annotation>
+ </semantics>
+</math>
+
+ is the fraction of the training data that falls into the same leaf as 
+
+<math display="inline" id="Random_forest:37">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+.</li>
+</ul>
+
+<p>Since a forest averages the predictions of a set of 
+
+<math display="inline" id="Random_forest:38">
+ <semantics>
+  <mi>m</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>m</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m
+  </annotation>
+ </semantics>
+</math>
+
+ trees with individual weight functions 
+
+<math display="inline" id="Random_forest:39">
+ <semantics>
+  <msub>
+   <mi>W</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>W</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W_{j}
+  </annotation>
+ </semantics>
+</math>
+
+, its predictions are</p>
+
+<p>
+
+<math display="block" id="Random_forest:40">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mover accent="true">
+     <mi>y</mi>
+     <mo stretchy="false">^</mo>
+    </mover>
+    <mo>=</mo>
+    <mrow>
+     <mfrac>
+      <mn>1</mn>
+      <mi>m</mi>
+     </mfrac>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+       <mrow>
+        <mi>j</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>m</mi>
+      </munderover>
+      <mrow>
+       <munderover>
+        <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+        <mrow>
+         <mi>i</mi>
+         <mo>=</mo>
+         <mn>1</mn>
+        </mrow>
+        <mi>n</mi>
+       </munderover>
+       <mrow>
+        <msub>
+         <mi>W</mi>
+         <mi>j</mi>
+        </msub>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msub>
+          <mi>x</mi>
+          <mi>i</mi>
+         </msub>
+         <mo>,</mo>
+         <msup>
+          <mi>x</mi>
+          <mo>′</mo>
+         </msup>
+         <mo rspace="4.2pt" stretchy="false">)</mo>
+        </mrow>
+        <msub>
+         <mi>y</mi>
+         <mi>i</mi>
+        </msub>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mn>1</mn>
+      </mrow>
+      <mi>n</mi>
+     </munderover>
+     <mrow>
+      <mrow>
+       <mo>(</mo>
+       <mrow>
+        <mfrac>
+         <mn>1</mn>
+         <mi>m</mi>
+        </mfrac>
+        <mrow>
+         <munderover>
+          <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+          <mrow>
+           <mi>j</mi>
+           <mo>=</mo>
+           <mn>1</mn>
+          </mrow>
+          <mi>m</mi>
+         </munderover>
+         <mrow>
+          <msub>
+           <mi>W</mi>
+           <mi>j</mi>
+          </msub>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <msub>
+            <mi>x</mi>
+            <mi>i</mi>
+           </msub>
+           <mo>,</mo>
+           <msup>
+            <mi>x</mi>
+            <mo>′</mo>
+           </msup>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo rspace="4.2pt">)</mo>
+      </mrow>
+      <msub>
+       <mi>y</mi>
+       <mi>i</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <ci>normal-^</ci>
+      <ci>y</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <cn type="integer">1</cn>
+       <ci>m</ci>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>j</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>m</ci>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <sum></sum>
+          <apply>
+           <eq></eq>
+           <ci>i</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>n</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>W</ci>
+          <ci>j</ci>
+         </apply>
+         <interval closure="open">
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>x</ci>
+           <ci>i</ci>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <ci>x</ci>
+           <ci>normal-′</ci>
+          </apply>
+         </interval>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>y</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>n</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <ci>m</ci>
+        </apply>
+        <apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <sum></sum>
+           <apply>
+            <eq></eq>
+            <ci>j</ci>
+            <cn type="integer">1</cn>
+           </apply>
+          </apply>
+          <ci>m</ci>
+         </apply>
+         <apply>
+          <times></times>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>W</ci>
+           <ci>j</ci>
+          </apply>
+          <interval closure="open">
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>x</ci>
+            <ci>i</ci>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <ci>x</ci>
+            <ci>normal-′</ci>
+           </apply>
+          </interval>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>y</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \hat{y}=\frac{1}{m}\sum_{j=1}^{m}\sum_{i=1}^{n}W_{j}(x_{i},x^{\prime})\,y_{i}=%
+\sum_{i=1}^{n}\left(\frac{1}{m}\sum_{j=1}^{m}W_{j}(x_{i},x^{\prime})\right)\,y%
+_{i}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This shows that the whole forest is again a weighted neighborhood scheme, with weights that average those of the individual trees. The neighbors of 
+
+<math display="inline" id="Random_forest:41">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ in this interpretation are the points 
+
+<math display="inline" id="Random_forest:42">
+ <semantics>
+  <msub>
+   <mi>x</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>x</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ which fall in the same leaf as 
+
+<math display="inline" id="Random_forest:43">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ in at least one tree of the forest. In this way, the neighborhood of 
+
+<math display="inline" id="Random_forest:44">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ depends in a complex way on the structure of the trees, and thus on the structure of the training set. Lin and Jeon show that the shape of the neighborhood used by a random forest adapts to the local importance of each feature.<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a></p>
+<h2 id="unsupervised-learning-with-random-forests">Unsupervised learning with random forests</h2>
+
+<p>As part of their construction, RF predictors naturally lead to a dissimilarity measure between the observations. One can also define an RF dissimilarity measure between unlabeled data: the idea is to construct an RF predictor that distinguishes the “observed” data from suitably generated synthetic data.<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a><a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a> The observed data are the original unlabeled data and the synthetic data are drawn from a reference distribution. An RF dissimilarity can be attractive because it handles mixed variable types well, is invariant to monotonic transformations of the input variables, and is robust to outlying observations. The RF dissimilarity easily deals with a large number of semi-continuous variables due to its intrinsic variable selection; for example, the "Addcl 1" RF dissimilarity weighs the contribution of each variable according to how dependent it is on other variables. The RF dissimilarity has been used in a variety of applications, e.g. to find clusters of patients based on tissue marker data.<a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a></p>
+<h2 id="variants">Variants</h2>
+
+<p>Instead of decision trees, linear models have been proposed and evaluated as base estimators in random forests, in particular <a href="multinomial_logistic_regression" title="wikilink">multinomial logistic regression</a> and <a href="naive_Bayes_classifier" title="wikilink">naive Bayes classifiers</a>.<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a><a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Decision_tree_learning" title="wikilink">Decision tree learning</a></li>
+<li><a href="Gradient_boosting" title="wikilink">Gradient boosting</a></li>
+<li><a href="Randomized_algorithm" title="wikilink">Randomized algorithm</a></li>
+<li><a href="Bootstrap_aggregating" title="wikilink">Bootstrap aggregating</a> (bagging)</li>
+<li><a href="Ensemble_learning" title="wikilink">Ensemble learning</a></li>
+<li><a href="Boosting_(machine_learning)" title="wikilink">Boosting</a></li>
+<li><a href="Non-parametric_statistics" title="wikilink">Non-parametric statistics</a></li>
+<li><a href="Kernel_random_forest" title="wikilink">Kernel random forest</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://stat-www.berkeley.edu/users/breiman/RandomForests/cc_home.htm">Random Forests classifier description</a> (Site of Leo Breiman)</li>
+<li><a href="http://cran.r-project.org/doc/Rnews/Rnews_2002-3.pdf">Liaw, Andy &amp; Wiener, Matthew "Classification and Regression by randomForest" R News (2002) Vol. 2/3 p. 18</a> (Discussion of the use of the random forest package for <a href="R_programming_language" title="wikilink">R</a>)</li>
+<li><a href="http://cm.bell-labs.com/cm/cs/who/tkh/papers/compare.pdf">Ho, Tin Kam (2002). "A Data Complexity Analysis of Comparative Advantages of Decision Forest Constructors". Pattern Analysis and Applications 5, p. 102-112</a> (Comparison of bagging and random subspace method)</li>
+<li></li>
+<li><a href="http://semanticquery.com/archive/semanticsearchart/researchRF.html">C# implementation</a> of random forest algorithm for categorization of text documents supporting reading of documents, making dictionaries, filtering stop words, stemming, counting words, making document-term matrix and its usage for building random forest and further categorization.</li>
+<li>A <a href="http://scikit-learn.org/stable/modules/ensemble.html">python implementation</a> of the random forest algorithm working in regression, classification with multi-output support.</li>
+<li><a href="http://jiwonkim.org/awesome-random-forest">AwesomeRandomForest - A list of random forest resources</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Classification_algorithms" title="wikilink">Category:Classification algorithms</a> <a href="Category:Ensemble_learning" title="wikilink">Category:Ensemble learning</a> <a href="Category:Decision_trees" title="wikilink">Category:Decision trees</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"></li>
+<li id="fn8"></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+<li id="fn14"><a href="#fnref14">↩</a></li>
+<li id="fn15"></li>
+<li id="fn16"><a href="#fnref16">↩</a></li>
+<li id="fn17"><a href="#fnref17">↩</a></li>
+<li id="fn18"><a href="#fnref18">↩</a></li>
+<li id="fn19"><a href="#fnref19">↩</a></li>
+<li id="fn20"><a href="#fnref20">↩</a></li>
+<li id="fn21"><a href="#fnref21">↩</a></li>
+<li id="fn22"></li>
+<li id="fn23"></li>
+<li id="fn24"><a href="#fnref24">↩</a></li>
+<li id="fn25"><a href="#fnref25">↩</a></li>
+<li id="fn26"><a href="#fnref26">↩</a></li>
+<li id="fn27"><a href="http://dx.doi.org/10.1007/978-3-540-74469-6_35">Prinzie, A., Van den Poel, D. (2007). Random Multiclass Classification: Generalizing Random Forests to Random MNL and Random NB, Dexa 2007, Lecture Notes in Computer Science, 4653, 349–358.</a><a href="#fnref27">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

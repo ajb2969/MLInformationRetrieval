@@ -1,0 +1,703 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1634">RANSAC</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>RANSAC</h1>
+<hr/>
+
+<p><strong>Random sample consensus</strong> (<strong>RANSAC</strong>) is an <a href="iterative_method" title="wikilink">iterative method</a> to estimate parameters of a mathematical model from a set of observed data which contains <a class="uri" href="outliers" title="wikilink">outliers</a>. It is a non-deterministic algorithm in the sense that it produces a reasonable result only with a certain probability, with this probability increasing as more iterations are allowed. The algorithm was first published by Fischler and Bolles at <a href="SRI_International" title="wikilink">SRI International</a> in 1981.They used RANSAC to solve the Location Determination Problem (LDP), where the goal is to determine the points in the space that project onto an image into a set of landmarks with known locations.</p>
+
+<p>A basic assumption is that the data consists of "inliers", i.e., data whose distribution can be explained by some set of model parameters, though may be subject to noise, and "outliers" which are data that do not fit the model. The outliers can come, e.g., from extreme values of the noise or from erroneous measurements or incorrect hypotheses about the interpretation of data. RANSAC also assumes that, given a (usually small) set of inliers, there exists a procedure which can estimate the parameters of a model that optimally explains or fits this data.</p>
+<h2 id="example">Example</h2>
+
+<p>A simple example is <a href="Regression_analysis" title="wikilink">fitting of a line</a> in two dimensions to a set of observations. Assuming that this set contains both inliers, i.e., points which approximately can be fitted to a line, and outliers, points which cannot be fitted to this line, a <a href="Ordinary_least_squares" title="wikilink">simple least squares method</a> for line fitting will generally produce a line with a bad fit to the inliers. The reason is that it is optimally fitted to all points, including the outliers. RANSAC, on the other hand, can produce a model which is only computed from the inliers, provided that the probability of choosing only inliers in the selection of data is sufficiently high. There is no guarantee for this situation, however, and there are a number of algorithm parameters which must be carefully chosen to keep the level of probability reasonably high.</p>
+
+<p>Image:Line_with_outliers.svg|A data set with many outliers for which a line has to be fitted. Image:Fitted_line.svg|Fitted line with RANSAC; outliers have no influence on the result.</p>
+<h2 id="overview">Overview</h2>
+
+<p>The RANSAC algorithm is a learning technique to estimate parameters of a model by random sampling of observed data. Given a dataset whose data elements contain both inliers and outliers, RANSAC uses the voting scheme to find the optimal fitting result. Data elements in the dataset are used to vote for one or multiple models. The implementation of this voting scheme is based on two assumptions: that the noisy features will not vote consistently for any single model (few outliers) and there are enough features to agree on a good model (few missing data). The RANSAC algorithm is essentially composed of two steps that are iteratively repeated:</p>
+<ol>
+<li>In the first step, a sample subset containing minimal data items is randomly selected from the input dataset. A fitting model and the corresponding model parameters are computed using only the elements of this sample subset. The cardinality of the sample subset is the smallest sufficient to determine the model parameters.</li>
+<li>In the second step, the algorithm checks which elements of the entire dataset are consistent with the model instantiated by the estimated model parameters obtained from the first step. A data element will be considered as an outlier if it does not fit the fitting model instantiated by the set of estimated model parameters within some error threshold that defines the maximum deviation attributable to the effect of noise.</li>
+</ol>
+
+<p>The set of inliers obtained for the fitting model is called consensus set. The RANSAC algorithm will iteratively repeat the above two steps until the obtained consensus set in certain iteration has enough inliers.</p>
+
+<p>The input to the RANSAC algorithm is a set of observed data values, a way of fitting some kind of model to the observations, and some <a href="confidence_interval" title="wikilink">confidence</a> parameters. RANSAC achieves its goal by repeating the following steps:</p>
+<ol>
+<li>Select a random subset of the original data. Call this subset the <em>hypothetical inliers</em>.</li>
+<li>A model is fitted to the set of hypothetical inliers.</li>
+<li>All other data are then tested against the fitted model. Those points that fit the estimated model well, according to some model-specific <a href="loss_function" title="wikilink">loss function</a>, are considered as part of the <em>consensus set</em>.</li>
+<li>The estimated model is reasonably good if sufficiently many points have been classified as part of the consensus set.</li>
+<li>Afterwards, the model may be improved by reestimating it using all members of the consensus set.</li>
+</ol>
+
+<p>This procedure is repeated a fixed number of times, each time producing either a model which is rejected because too few points are part of the consensus set, or a refined model together with a corresponding consensus set size. In the latter case, we keep the refined model if its consensus set is larger than the previously saved model.</p>
+
+<p>Image:RANSAC Inliers and Outliers.png|RANSAC: Inliers and Outliers.</p>
+<h2 id="algorithm">Algorithm</h2>
+
+<p>The generic RANSAC algorithm works as follows:</p>
+
+<p><code>Given:</code><br/>
+<code>    data - a set of observed data points</code><br/>
+<code>    model - a model that can be fitted to data points</code><br/>
+<code>    n - the minimum number of data values required to fit the model</code><br/>
+<code>    k - the maximum number of iterations allowed in the algorithm</code><br/>
+<code>    t - a threshold value for determining when a data point fits a model</code><br/>
+<code>    d - the number of close data values required to assert that a model fits well to data</code><br/>
+<code>Return:</code><br/>
+<code>    bestfit - model parameters which best fit the data (or nil if no good model is found)</code><br/>
+<code>iterations = 0</code><br/>
+<code>bestfit = nil</code><br/>
+<code>besterr = something really large</code><br/>
+<code>while iterations </code><code> d {</code><br/>
+<code>        % this implies that we may have found a good model</code><br/>
+<code>        % now test how good it is</code><br/>
+<code>        bettermodel = model parameters fitted to all points in maybeinliers and alsoinliers</code><br/>
+<code>        thiserr = a measure of how well model fits these points</code><br/>
+<code>        if thiserr </code></p>
+
+<p><code>function [bestParameter1,bestParameter2] = ransac_demo(data,num,iter,threshDist,inlierRatio)</code><br/>
+<code>% data: a 2xn dataset with #n data points</code><br/>
+<code>% num: the minimum number of points. For line fitting problem, num=2</code><br/>
+<code>% iter: the number of iterations</code><br/>
+<code>% threshDist: the threshold of the distances between points and the fitting line</code><br/>
+<code>% inlierRatio: the threshold of the number of inliers </code><br/>
+<br/>
+<code>%% Plot the data points</code><br/>
+<code>figure;plot(data(1,:),data(2,:),'o');hold on;</code><br/>
+<code>number = size(data,2); % Total number of points</code><br/>
+<code>bestInNum = 0; % Best fitting line with largest number of inliers</code><br/>
+<code>bestParameter1=0;bestParameter2=0; % parameters for best fitting line</code><br/>
+<code>for i=1:iter</code><br/>
+<code>%% Randomly select 2 points</code><br/>
+<code>    idx = randperm(number,num); sample = data(:,idx);   </code><br/>
+<code>%% Compute the distances between all points with the fitting line </code><br/>
+<code>    kLine = sample(:,2)-sample(:,1);</code><br/>
+<code>    kLineNorm = kLine/norm(kLine);</code><br/>
+<code>    normVector = [-kLineNorm(2),kLineNorm(1)];</code><br/>
+<code>    distance = normVector*(data - repmat(sample(:,1),1,number));</code><br/>
+<code>%% Compute the inliers with distances smaller than the threshold</code><br/>
+<code>    inlierIdx = find(abs(distance)</code><code>=round(inlierRatio*number) &amp;&amp; inlierNum&gt;bestInNum</code><br/>
+<code>        bestInNum = inlierNum;</code><br/>
+<code>        parameter1 = (sample(2,2)-sample(2,1))/(sample(1,2)-sample(1,1));</code><br/>
+<code>        parameter2 = sample(2,1)-parameter1*sample(1,1);</code><br/>
+<code>        bestParameter1=parameter1; bestParameter2=parameter2;</code><br/>
+<code>    end</code><br/>
+<code>end</code><br/>
+<br/>
+<code>%% Plot the best fitting line</code><br/>
+<code>xAxis = -number/2:number/2; </code><br/>
+<code>yAxis = bestParameter1*xAxis + bestParameter2;</code><br/>
+<code>plot(xAxis,yAxis,'r-','LineWidth',2);</code></p>
+<h2 id="parameters">Parameters</h2>
+
+<p>The values of parameters 
+
+<math display="inline" id="RANSAC:0">
+ <semantics>
+  <mi>t</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>t</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   t
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="RANSAC:1">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+ have to be determined from specific requirements related to the application and the data set, possibly based on experimental evaluation. The parameter 
+
+<math display="inline" id="RANSAC:2">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ (the number of iterations), however, can be determined from a theoretical result. Let 
+
+<math display="inline" id="RANSAC:3">
+ <semantics>
+  <mi>p</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>p</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p
+  </annotation>
+ </semantics>
+</math>
+
+ be the probability that the RANSAC algorithm in some iteration selects only inliers from the input data set when it chooses the 
+
+<math display="inline" id="RANSAC:4">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ points from which the model parameters are estimated. When this happens, the resulting model is likely to be useful so 
+
+<math display="inline" id="RANSAC:5">
+ <semantics>
+  <mi>p</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>p</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p
+  </annotation>
+ </semantics>
+</math>
+
+ gives the probability that the algorithm produces a useful result. Let 
+
+<math display="inline" id="RANSAC:6">
+ <semantics>
+  <mi>w</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>w</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w
+  </annotation>
+ </semantics>
+</math>
+
+ be the probability of choosing an inlier each time a single point is selected, that is,</p>
+<dl>
+<dd>
+
+<math display="inline" id="RANSAC:7">
+ <semantics>
+  <mi>w</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>w</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w
+  </annotation>
+ </semantics>
+</math>
+
+ = number of inliers in data / number of points in data
+</dd>
+</dl>
+
+<p>A common case is that 
+
+<math display="inline" id="RANSAC:8">
+ <semantics>
+  <mi>w</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>w</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w
+  </annotation>
+ </semantics>
+</math>
+
+ is not well known beforehand, but some rough value can be given. Assuming that the 
+
+<math display="inline" id="RANSAC:9">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ points needed for estimating a model are selected independently, 
+
+<math display="inline" id="RANSAC:10">
+ <semantics>
+  <msup>
+   <mi>w</mi>
+   <mi>n</mi>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>w</ci>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w^{n}
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability that all <em>n</em> points are inliers and 
+
+<math display="inline" id="RANSAC:11">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>-</mo>
+   <msup>
+    <mi>w</mi>
+    <mi>n</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <cn type="integer">1</cn>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>w</ci>
+     <ci>n</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1-w^{n}
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability that at least one of the 
+
+<math display="inline" id="RANSAC:12">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ points is an outlier, a case which implies that a bad model will be estimated from this point set. That probability to the power of 
+
+<math display="inline" id="RANSAC:13">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ is the probability that the algorithm never selects a set of 
+
+<math display="inline" id="RANSAC:14">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ points which all are inliers and this must be the same as 
+
+<math display="inline" id="RANSAC:15">
+ <semantics>
+  <mrow>
+   <mn>1</mn>
+   <mo>-</mo>
+   <mi>p</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <minus></minus>
+    <cn type="integer">1</cn>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1-p
+  </annotation>
+ </semantics>
+</math>
+
+. Consequently,</p>
+
+<p>
+
+<math display="block" id="RANSAC:16">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mn>1</mn>
+    <mo>-</mo>
+    <mi>p</mi>
+   </mrow>
+   <mo>=</mo>
+   <msup>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mn>1</mn>
+      <mo>-</mo>
+      <msup>
+       <mi>w</mi>
+       <mi>n</mi>
+      </msup>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mi>k</mi>
+   </msup>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+     <ci>p</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>w</ci>
+       <ci>n</ci>
+      </apply>
+     </apply>
+     <ci>k</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   1-p=(1-w^{n})^{k}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>which, after taking the logarithm of both sides, leads to</p>
+
+<p>
+
+<math display="block" id="RANSAC:17">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mi>log</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>-</mo>
+       <mi>p</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mi>log</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>-</mo>
+       <msup>
+        <mi>w</mi>
+        <mi>n</mi>
+       </msup>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>k</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <log></log>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <ci>p</ci>
+      </apply>
+     </apply>
+     <apply>
+      <log></log>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>w</ci>
+        <ci>n</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k=\frac{\log(1-p)}{\log(1-w^{n})}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>This result assumes that the 
+
+<math display="inline" id="RANSAC:18">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ data points are selected independently, that is, a point which has been selected once is replaced and can be selected again in the same iteration. This is often not a reasonable approach and the derived value for 
+
+<math display="inline" id="RANSAC:19">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ should be taken as an upper limit in the case that the points are selected without replacement. For example, in the case of finding a line which fits the data set illustrated in the above figure, the RANSAC algorithm typically chooses two points in each iteration and computes <code>maybe_model</code> as the line between the points and it is then critical that the two points are distinct.</p>
+
+<p>To gain additional confidence, the <a href="standard_deviation" title="wikilink">standard deviation</a> or multiples thereof can be added to 
+
+<math display="inline" id="RANSAC:20">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+. The standard deviation of 
+
+<math display="inline" id="RANSAC:21">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+ is defined as</p>
+
+<p>
+
+<math display="block" id="RANSAC:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>S</mi>
+    <mi>D</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>k</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <msqrt>
+     <mrow>
+      <mn>1</mn>
+      <mo>-</mo>
+      <msup>
+       <mi>w</mi>
+       <mi>n</mi>
+      </msup>
+     </mrow>
+    </msqrt>
+    <msup>
+     <mi>w</mi>
+     <mi>n</mi>
+    </msup>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>S</ci>
+     <ci>D</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <root></root>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>w</ci>
+        <ci>n</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>w</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   SD(k)=\frac{\sqrt{1-w^{n}}}{w^{n}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="advantages-and-disadvantages">Advantages and disadvantages</h2>
+
+<p>An advantage of RANSAC is its ability to do <a href="robust_statistics" title="wikilink">robust estimation</a><a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> of the model parameters, i.e., it can estimate the parameters with a high degree of accuracy even when a significant number of <a href="outlier" title="wikilink">outliers</a> are present in the data set. A disadvantage of RANSAC is that there is no upper bound on the time it takes to compute these parameters (except exhaustion). When the number of iterations computed is limited the solution obtained may not be optimal, and it may not even be one that fits the data in a good way. In this way RANSAC offers a trade-off; by computing a greater number of iterations the probability of a reasonable model being produced is increased. Moreover, RANSAC is not always able to find the optimal set even for moderately contaminated sets and it usually performs badly when the number of inliers is less than 50%. Optimal RANSAC <a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> was proposed to handle both these problems and is capable of finding the optimal set for heavily contaminated sets, even for an inlier ratio under 5%. Another disadvantage of RANSAC is that it requires the setting of problem-specific thresholds.</p>
+
+<p>RANSAC can only estimate one model for a particular data set. As for any one-model approach when two (or more) model instances exist, RANSAC may fail to find either one. The <a href="Hough_transform" title="wikilink">Hough transform</a> is one alternative robust estimation technique that may be useful when more than one model instance is present. Another approach for multi model fitting is known as PEARL,<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> which combines model sampling from data points as in RANSAC with iterative re-estimation of inliers and the multi-model fitting being formulated as an optimization problem with a global energy functional describing the quality of the overall solution.</p>
+<h2 id="applications">Applications</h2>
+
+<p>The RANSAC algorithm is often used in <a href="computer_vision" title="wikilink">computer vision</a>, e.g., to simultaneously solve the <a href="correspondence_problem" title="wikilink">correspondence problem</a> and estimate the <a href="fundamental_matrix_(computer_vision)" title="wikilink">fundamental matrix</a> related to a pair of stereo cameras.</p>
+<h2 id="development-and-improvements">Development and improvements</h2>
+
+<p>Since 1981 RANSAC has become a fundamental tool in the <a href="computer_vision" title="wikilink">computer vision</a> and image processing community. In 2006, for the 25th anniversary of the algorithm, a workshop was organized at the International <a href="Conference_on_Computer_Vision_and_Pattern_Recognition" title="wikilink">Conference on Computer Vision and Pattern Recognition</a> (CVPR) to summarize the most recent contributions and variations to the original algorithm, mostly meant to improve the speed of the algorithm, the robustness and accuracy of the estimated solution and to decrease the dependency from user defined constants.</p>
+
+<p>As pointed out by Torr et al. , RANSAC can be sensitive to the choice of the correct noise threshold that defines which data points fit a model instantiated with a certain set of parameters. If such threshold is too large, then all the hypotheses tend to be ranked equally (good). On the other hand, when the noise threshold is too small, the estimated parameters tend to be unstable ( i.e. by simply adding or removing a datum to the set of inliers, the estimate of the parameters may fluctuate). To partially compensate for this undesirable effect, Torr et al. proposed two modification of RANSAC called MSAC (M-estimator SAmple and Consensus) and MLESAC (Maximum Likelihood Estimation SAmple and Consensus).<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> The main idea is to evaluate the quality of the consensus set ( i.e. the data that fit a model and a certain set of parameters) calculating its likelihood (whereas in the original formulation by Fischler and Bolles the rank was the cardinality of such set). An extension to MLESAC which takes into account the prior probabilities associated to the input dataset is proposed by Tordoff.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> The resulting algorithm is dubbed Guided-MLESAC. Along similar lines, Chum proposed to guide the sampling procedure if some a priori information regarding the input data is known, i.e. whether a datum is likely to be an inlier or an outlier. The proposed approach is called PROSAC, PROgressive SAmple Consensus.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+
+<p>Chum et al. also proposed a randomized version of RANSAC called R-RANSAC <a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> to reduce the computational burden to identify a good CS. The basic idea is to initially evaluate the goodness of the currently instantiated model using only a reduced set of points instead of the entire dataset. A sound strategy will tell with high confidence when it is the case to evaluate the fitting of the entire dataset or when the model can be readily discarded. It is reasonable to think that the impact of this approach is more relevant in cases where the percentage of inliers is large. The type of strategy proposed by Chum et al. is called preemption scheme. Nistér proposed a paradigm called Preemptive RANSAC<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> that allows real time robust estimation of the structure of a scene and of the motion of the camera. The core idea of the approach consists in generating a fixed number of hypothesis so that the comparison happens with respect to the quality of the generated hypothesis rather than against some absolute quality metric.</p>
+
+<p>Other researchers tried to cope with difficult situations where the noise scale is not know and/or multiple model instances are present. The first problem has been tackled in the work by Wang and Suter.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> Toldo et al. represent each datum with the characteristic function of the set of random models that fit the point. Then multiple models are revealed as clusters which group the points supporting the same model. The clustering algorithm, called J-linkage, does not require prior specification of the number of models, nor it necessitate manual parameters tuning.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+
+<p>RANSAC has also been tailored for recursive state estimation applications, where the input measurements are corrupted by outliers and Kalman filter approaches, which rely on a Gaussian distribution of the measurement error, are doomed to fail. Such an approach, it is dubbed KALMANSAC.<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+<h2 id="notes">Notes</h2>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+<ul>
+<li></li>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://stackoverflow.com/questions/16002709/how-to-apply-ransac-on-surf-sift-and-orb-mathing-results">OpenCV function: cv::findHomography</a>. OpenCV function: cv::findHomography --- Using RANSAC to find the homography matrix relating two images.</li>
+<li><a href="http://vgl-ait.org/cvwiki/doku.php?id=opencv:tutorial:fitting_ellipse_using_ransac_algorithm">Fitting ellipses with RANSAC</a>. OpenCV: Fitting ellipses using RANSAC algorithm.</li>
+<li><a href="http://www.programdevelop.com/3975975/">OpenCV: RANSAC affine transformation</a>. The OpenCV using RANSAC affine transformation estimated estimateAffine2D.</li>
+<li><a href="http://ramsrigoutham.com/tag/ransac/">RANSAC: Homography matrix in Image Stitching</a>. RANSAC is used to estimate the homography matrix in Image Stitching.</li>
+<li><a href="http://vision.ece.ucsb.edu/~zuliani/Code/Code.html">RANSAC Toolbox for MATLAB</a>. A research (and didactic) oriented toolbox to explore the RANSAC algorithm in <a class="uri" href="MATLAB" title="wikilink">MATLAB</a>. It is highly configurable and contains the routines to solve a few relevant estimation problems.</li>
+<li><a href="http://www.csse.uwa.edu.au/~pk/research/matlabfns/">ransac.m</a> The RANSAC algorithm in MATLAB.</li>
+<li><a href="http://www.cb.uu.se/~aht/code.html">optimalRansac.m</a> The Optimal RANSAC algorithm in MATLAB.</li>
+<li><a href="http://www.mrpt.org/RANSAC_C++_examples">Implementation in C++</a> as a generic template.</li>
+<li><a href="http://www.insight-journal.org/browse/publication/769">Implementation in C++</a> as a generic template with hyperplane and hypersphere examples.</li>
+<li><a href="http://vision.ece.ucsb.edu/~zuliani/Research/RANSAC/docs/RANSAC4Dummies.pdf">RANSAC for Dummies</a> A simple tutorial with many examples that uses the RANSAC Toolbox for MATLAB.</li>
+<li><a href="http://www.csse.uwa.edu.au/~pk/Research/MatlabFns/#robust">Source code for RANSAC in </a><a class="uri" href="MATLAB" title="wikilink">MATLAB</a></li>
+<li><a href="http://www.visual-experiments.com/demo/ransac.js/">Ransac.js</a> Javascript implementation with visual representation of the iterations (Example of 2D Line fitting).</li>
+<li><a href="http://www.scipy.org/Cookbook/RANSAC">ransac.py</a> Python implementation for Scipy/Numpy.</li>
+<li><a href="http://scikit-learn.org">Scikit-learn</a> and <a href="http://scikit-image.org">Scikit-image</a> contains Python implementations.</li>
+<li><a href="http://graphics.cs.msu.ru/en/science/research/machinelearning/ransactoolbox">GML RANSAC Matlab Toolbox</a> – a set of MATLAB scripts, implementing RANSAC algorithm family.</li>
+<li><a href="http://www.mathworks.com/discovery/ransac.html">RANSAC for estimation of geometric transforms</a> - MATLAB examples and help on using RANSAC in Computer Vision applications</li>
+<li><a href="http://www.cse.yorku.ca/~kosta/CompVis_Notes/ransac.pdf">RANSAC Algorithm</a> - Overview of the RANSAC Algorithm</li>
+<li><a href="http://www.cs.columbia.edu/~belhumeur/courses/compPhoto/ransac.pdf">Random Sample Consensus</a> - Random Sample Consensus: A Paradigm for Model Fitting with Applications to Image Analysis and Automated Cartography</li>
+<li><a href="http://dl.acm.org/citation.cfm?id=358692">ACM Digital Library</a> - Library to buy the original article</li>
+<li><a href="http://pointclouds.org/documentation/tutorials/random_sample_consensus.php#id1">PCL</a> - How to use Random Sample Consensus model</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Geometry_in_computer_vision" title="wikilink">Category:Geometry in computer vision</a> <a href="Category:Statistical_algorithms" title="wikilink">Category:Statistical algorithms</a> <a href="Category:Statistical_outliers" title="wikilink">Category:Statistical outliers</a> <a href="Category:Robust_statistics" title="wikilink">Category:Robust statistics</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a> <a href="Category:SRI_International" title="wikilink">Category:SRI International</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Robust Statistics, Peter. J. Huber, Wiley, 1981 (republished in paperback, 2004), page 1.<a href="#fnref1">↩</a></li>
+<li id="fn2">Anders Hast, Johan Nysjö, Andrea Marchetti (2013). "Optimal RANSAC – Towards a Repeatable Algorithm for Finding the Optimal Set". Journal of WSCG 21 (1): 21–30.<a href="#fnref2">↩</a></li>
+<li id="fn3">Hossam Isack, Yuri Boykov (2012). "Energy-based Geometric Multi-Model Fitting". International Journal of Computer Vision 97 (2: 1): 23–147. <a class="uri" href="doi:10.1007/s11263-011-0474-7">doi:10.1007/s11263-011-0474-7</a>.<a href="#fnref3">↩</a></li>
+<li id="fn4">P.H.S. Torr and A. Zisserman, MLESAC: A new robust estimator with application to estimating image geometry, Journal of Computer Vision and Image Understanding 78 (2000), no. 1, 138–156.<a href="#fnref4">↩</a></li>
+<li id="fn5">B. J. Tordoff and D. W. Murray, Guided-MLESAC: Faster image transform estimation by using matching priors, IEEE Transactions on Pattern Analysis and Machine Intelligence 27 (2005), no. 10, 1523–1535.<a href="#fnref5">↩</a></li>
+<li id="fn6">Matching with PROSAC - progressive sample consensus, Proceedings of Conference on Computer Vision and Pattern Recognition (San Diego), vol. 1, June 2005, pp. 220–226<a href="#fnref6">↩</a></li>
+<li id="fn7">O. Chum and J. Matas, Randomized RANSAC with Td,d test, 13th British Machine Vision Conference, September 2002.<a href="#fnref7">↩</a></li>
+<li id="fn8">D. Nistér, Preemptive RANSAC for live structure and motion estimation, IEEE International Conference on Computer Vision (Nice, France), October 2003, pp. 199–206.<a href="#fnref8">↩</a></li>
+<li id="fn9">H. Wang and D. Suter, Robust adaptive-scale parametric model estimation for computer vision., IEEE Transactions on Pattern Analysis and Machine Intelligence 26 (2004), no. 11, 1459-1474<a href="#fnref9">↩</a></li>
+<li id="fn10">R. Toldo and A. Fusiello, Robust multiple structures estimation with jlinkage, European Conference on Computer Vision (Marseille, France), October 2008, pp. 537–547.<a href="#fnref10">↩</a></li>
+<li id="fn11">A. Vedaldi, H. Jin, P. Favaro, and S. Soatto, KALMANSAC: Robust filtering by consensus, Proceedings of the International Conference on Computer Vision (ICCV), vol. 1, 2005, pp. 633–640<a href="#fnref11">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

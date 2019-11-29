@@ -1,0 +1,1187 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="897">Address space layout randomization</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Address space layout randomization</h1>
+<hr/>
+
+<p><strong>Address space layout randomization</strong> (<strong>ASLR</strong>) is a <a href="computer_security" title="wikilink">computer security</a> technique involved in <a href="buffer_overflow_protection" title="wikilink">protection from buffer overflow attacks</a>. In order to prevent an attacker from reliably jumping to, for example, a particular exploited function in memory, ASLR randomly arranges the <a href="address_space" title="wikilink">address space</a> positions of key data areas of a <a href="process_(computer_science)" title="wikilink">process</a>, including the base of the <a class="uri" href="executable" title="wikilink">executable</a> and the positions of the <a href="stack-based_memory_allocation" title="wikilink">stack</a>, <a href="dynamic_memory_allocation" title="wikilink">heap</a> and <a href="library_(computer_science)" title="wikilink">libraries</a>.</p>
+<h2 id="history">History</h2>
+
+<p>In 1997 <a href="Platinum_Technology#Memco_Software" title="wikilink">Memco Software</a> implemented a limited form of stack randomization as part of its SeOS Access Control product.</p>
+
+<p>The Linux <a class="uri" href="PaX" title="wikilink">PaX</a> project first coined the term "ASLR", and published the first design and implementation of ASLR in July 2001. It is seen as the most complete implementation, providing also kernel stack randomization since October 2002. Compared to other implementations, it is also seen to provide the best layout randomization.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h2 id="benefits">Benefits</h2>
+
+<p>Address space randomization hinders some types of security attacks by making it more difficult for an attacker to predict target addresses. For example, attackers trying to execute <a href="return-to-libc_attack" title="wikilink">return-to-libc attacks</a> must locate the code to be executed, while other attackers trying to execute <a class="uri" href="shellcode" title="wikilink">shellcode</a> injected on the stack have to find the stack first. In both cases, the system obscures related memory-addresses from the attackers. These values have to be guessed, and a mistaken guess is not usually recoverable due to the application crashing.</p>
+<h3 id="effectiveness">Effectiveness</h3>
+
+<p>Address space layout randomization is based upon the low chance of an attacker guessing the locations of randomly placed areas. Security is increased by increasing the search space. Thus, address space randomization is more effective when more <a href="information_entropy" title="wikilink">entropy</a> is present in the random offsets. Entropy is increased by either raising the amount of <a href="virtual_memory" title="wikilink">virtual memory</a> area space over which the randomization occurs or reducing the period over which the randomization occurs. The period is typically implemented as small as possible, so most systems must increase VMA space randomization.</p>
+
+<p>To defeat the randomization, attackers must successfully guess the positions of all areas they wish to attack. For data areas such as stack and heap, where custom code or useful data can be loaded, more than one state can be attacked by using <a href="NOP_slide" title="wikilink">NOP slides</a> for code or repeated copies of data. This allows an attack to succeed if the area is randomized to one of a handful of values. In contrast, code areas such as library base and main executable need to be discovered exactly. Often these areas are mixed, for example <a href="stack_frame" title="wikilink">stack frames</a> are injected onto the stack and a library is returned into.</p>
+
+<p>To begin, let us declare the following variables:</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:0">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>s</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{s}
+  </annotation>
+ </semantics>
+</math>
+
+ entropy bits of stack top</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:1">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>m</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>m</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{m}
+  </annotation>
+ </semantics>
+</math>
+
+ entropy bits of mmap() base</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:2">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>x</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{x}
+  </annotation>
+ </semantics>
+</math>
+
+ entropy bits of main executable base</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:3">
+ <semantics>
+  <msub>
+   <mi>E</mi>
+   <mi>h</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>E</ci>
+    <ci>h</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{h}
+  </annotation>
+ </semantics>
+</math>
+
+ entropy bits of heap base</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:4">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>s</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>s</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{s}
+  </annotation>
+ </semantics>
+</math>
+
+ attacked bits per attempt of stack entropy</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:5">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>m</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>m</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{m}
+  </annotation>
+ </semantics>
+</math>
+
+ attacked bits per attempt of mmap() base entropy</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:6">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>x</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{x}
+  </annotation>
+ </semantics>
+</math>
+
+ attacked bits per attempt of main executable entropy</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:7">
+ <semantics>
+  <msub>
+   <mi>A</mi>
+   <mi>h</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>A</ci>
+    <ci>h</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A_{h}
+  </annotation>
+ </semantics>
+</math>
+
+ attacked bits per attempt of heap base entropy</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:8">
+ <semantics>
+  <mi>α</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha
+  </annotation>
+ </semantics>
+</math>
+
+ attempts made</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:9">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+ total amount of entropy
+
+<math display="block" id="Address_space_layout_randomization:10">
+ <semantics>
+  <mrow>
+   <mi>N</mi>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mrow>
+       <mrow>
+        <mrow>
+         <mrow>
+          <msub>
+           <mi>E</mi>
+           <mi>s</mi>
+          </msub>
+          <mo>-</mo>
+          <msub>
+           <mi>A</mi>
+           <mi>s</mi>
+          </msub>
+         </mrow>
+         <mo>+</mo>
+         <msub>
+          <mi>E</mi>
+          <mi>m</mi>
+         </msub>
+        </mrow>
+        <mo>-</mo>
+        <msub>
+         <mi>A</mi>
+         <mi>m</mi>
+        </msub>
+       </mrow>
+       <mo>+</mo>
+       <msub>
+        <mi>E</mi>
+        <mi>x</mi>
+       </msub>
+      </mrow>
+      <mo>-</mo>
+      <msub>
+       <mi>A</mi>
+       <mi>x</mi>
+      </msub>
+     </mrow>
+     <mo>+</mo>
+     <msub>
+      <mi>E</mi>
+      <mi>h</mi>
+     </msub>
+    </mrow>
+    <mo>-</mo>
+    <mpadded width="+1.7pt">
+     <msub>
+      <mi>A</mi>
+      <mi>h</mi>
+     </msub>
+    </mpadded>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>N</ci>
+    <apply>
+     <minus></minus>
+     <apply>
+      <plus></plus>
+      <apply>
+       <minus></minus>
+       <apply>
+        <plus></plus>
+        <apply>
+         <minus></minus>
+         <apply>
+          <plus></plus>
+          <apply>
+           <minus></minus>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>E</ci>
+            <ci>s</ci>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>A</ci>
+            <ci>s</ci>
+           </apply>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>E</ci>
+           <ci>m</ci>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>A</ci>
+          <ci>m</ci>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>E</ci>
+         <ci>x</ci>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>A</ci>
+        <ci>x</ci>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>E</ci>
+       <ci>h</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>A</ci>
+      <ci>h</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N=E_{s}-A_{s}+E_{m}-A_{m}+E_{x}-A_{x}+E_{h}-A_{h}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>To calculate the probability of an attacker succeeding, we have to assume a number of attempts 
+
+<math display="inline" id="Address_space_layout_randomization:11">
+ <semantics>
+  <mi>α</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha
+  </annotation>
+ </semantics>
+</math>
+
+ carried out without being interrupted by a signature-based IPS, law enforcement, or other factor; in the case of brute forcing, the daemon cannot be restarted. We also have to figure out how many bits are relevant and how many are being attacked in each attempt, leaving however many bits the attacker has to defeat.</p>
+
+<p>The following formulas represent the probability of success for a given set of 
+
+<math display="inline" id="Address_space_layout_randomization:12">
+ <semantics>
+  <mpadded width="+1.7pt">
+   <mi>α</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha\,
+  </annotation>
+ </semantics>
+</math>
+
+ attempts on 
+
+<math display="inline" id="Address_space_layout_randomization:13">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+ bits of entropy.</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:14">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>g</mi>
+    <mrow>
+     <mo>(</mo>
+     <mpadded width="+1.7pt">
+      <mi>α</mi>
+     </mpadded>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mpadded width="+1.7pt">
+    <mtext>isolated guessing; address space is re-randomized after each attempt</mtext>
+   </mpadded>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>g</ci>
+     <ci>α</ci>
+    </apply>
+    <mtext>isolated guessing; address space is re-randomized after each attempt</mtext>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g\left(\alpha\,\right)=\mbox{isolated guessing; address space is re-randomized%
+ after each attempt}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:15">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>g</mi>
+     <mrow>
+      <mo>(</mo>
+      <mpadded width="+1.7pt">
+       <mi>α</mi>
+      </mpadded>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mo>-</mo>
+     <mpadded width="+1.7pt">
+      <msup>
+       <mrow>
+        <mo>(</mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>-</mo>
+         <msup>
+          <mn>2</mn>
+          <mrow>
+           <mo>-</mo>
+           <mi>N</mi>
+          </mrow>
+         </msup>
+        </mrow>
+        <mo>)</mo>
+       </mrow>
+       <mi>α</mi>
+      </msup>
+     </mpadded>
+    </mrow>
+   </mrow>
+   <mo>:</mo>
+   <mrow>
+    <mn>0</mn>
+    <mo rspace="4.2pt">≤</mo>
+    <mpadded width="+1.7pt">
+     <mi>α</mi>
+    </mpadded>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>g</ci>
+      <ci>α</ci>
+     </apply>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <cn type="integer">2</cn>
+         <apply>
+          <minus></minus>
+          <ci>N</ci>
+         </apply>
+        </apply>
+       </apply>
+       <ci>α</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <leq></leq>
+     <cn type="integer">0</cn>
+     <ci>α</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   g\left(\alpha\,\right)=1-{\left(1-{2^{-N}}\right)^{\alpha}\,}:0\leq\,\alpha\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:16">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>b</mi>
+    <mrow>
+     <mo>(</mo>
+     <mpadded width="+1.7pt">
+      <mi>α</mi>
+     </mpadded>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mtext>systematic brute forcing on copies of the program with the same address space</mtext>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>b</ci>
+     <ci>α</ci>
+    </apply>
+    <mtext>systematic brute forcing on copies of the program with the same address space</mtext>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b\left(\alpha\,\right)=\mbox{systematic brute forcing on copies of the program%
+ with the same address space}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:17">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <mi>b</mi>
+     <mrow>
+      <mo>(</mo>
+      <mpadded width="+1.7pt">
+       <mi>α</mi>
+      </mpadded>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mfrac>
+     <mpadded width="+1.7pt">
+      <mi>α</mi>
+     </mpadded>
+     <msup>
+      <mn>2</mn>
+      <mi>N</mi>
+     </msup>
+    </mfrac>
+   </mrow>
+   <mo>:</mo>
+   <mrow>
+    <mn>0</mn>
+    <mo rspace="4.2pt">≤</mo>
+    <mpadded width="+1.7pt">
+     <mi>α</mi>
+    </mpadded>
+    <mo>≤</mo>
+    <msup>
+     <mn>2</mn>
+     <mi>N</mi>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>b</ci>
+      <ci>α</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <ci>α</ci>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="integer">2</cn>
+       <ci>N</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <and></and>
+     <apply>
+      <leq></leq>
+      <cn type="integer">0</cn>
+      <ci>α</ci>
+     </apply>
+     <apply>
+      <leq></leq>
+      <share href="#.cmml">
+      </share>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cn type="float">2</cn>
+       <ci>N</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   b\left(\alpha\,\right)=\frac{\alpha\,}{{2^{N}}}:0\leq\,\alpha\,\leq\,{2^{N}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>In many systems, 
+
+<math display="inline" id="Address_space_layout_randomization:18">
+ <semantics>
+  <msup>
+   <mn>2</mn>
+   <mi>N</mi>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <cn type="integer">2</cn>
+    <ci>N</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   2^{N}
+  </annotation>
+ </semantics>
+</math>
+
+ can be in the thousands or millions; on  <a class="uri" href="64-bit" title="wikilink">64-bit</a> systems, these numbers typically reach the millions at least. For 32-bit systems at 2004 computer speeds which have 16 bits for address randomization, Shacham and co-workers state "… 16 bits of address randomization can be defeated by a <a href="brute_force_attack" title="wikilink">brute force attack</a> within minutes."<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> It should be noted that the authors' statement depends on the ability to attack the same application multiple times without any delay. Proper implementations of ASLR, like that included in <a class="uri" href="grsecurity" title="wikilink">grsecurity</a>, provide several methods to make such brute force attacks infeasible. One method involves preventing an executable from executing for a configurable amount of time if it has crashed a certain number of times.</p>
+
+<p>Some systems implement <em>Library Load Order Randomization</em>, a form of ASLR which randomizes the order in which libraries are loaded. This supplies very little entropy. An approximation of the number of bits of entropy supplied per needed library appears below; this does not yet account for varied library sizes, so the actual entropy gained is really somewhat higher. Note that attackers usually need only one library; the math is more complex with multiple libraries, and shown below as well. Note that the case of an attacker using only one library is a simplification of the more complex formula for 
+
+<math display="inline" id="Address_space_layout_randomization:19">
+ <semantics>
+  <mrow>
+   <mi>l</mi>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>l</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l=1
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:20">
+ <semantics>
+  <mi>l</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>l</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l
+  </annotation>
+ </semantics>
+</math>
+
+ = number of libraries loaded</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:21">
+ <semantics>
+  <mpadded width="+1.7pt">
+   <mi>β</mi>
+  </mpadded>
+  <annotation-xml encoding="MathML-Content">
+   <ci>β</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta\,
+  </annotation>
+ </semantics>
+</math>
+
+ = number of libraries used by the attacker</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:22">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>m</mi>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <msub>
+      <mi>log</mi>
+      <mn>2</mn>
+     </msub>
+     <mrow>
+      <mo>(</mo>
+      <mi>l</mi>
+      <mo>)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>:</mo>
+   <mrow>
+    <mrow>
+     <mpadded width="+1.7pt">
+      <mi>β</mi>
+     </mpadded>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi>l</mi>
+     <mo>≥</mo>
+     <mn>1</mn>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>m</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <log></log>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>l</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <ci>β</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <geq></geq>
+      <ci>l</ci>
+      <cn type="float">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{m}=\log_{2}\left(l\right):\beta\,=1,l\geq\,1
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Address_space_layout_randomization:23">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>E</mi>
+     <mi>m</mi>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>=</mo>
+       <mi>l</mi>
+      </mrow>
+      <mrow>
+       <mi>l</mi>
+       <mo>-</mo>
+       <mrow>
+        <mo>(</mo>
+        <mrow>
+         <mpadded width="+1.7pt">
+          <mi>β</mi>
+         </mpadded>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+        <mo>)</mo>
+       </mrow>
+      </mrow>
+     </munderover>
+     <mrow>
+      <msub>
+       <mi>log</mi>
+       <mn>2</mn>
+      </msub>
+      <mrow>
+       <mo>(</mo>
+       <mi>i</mi>
+       <mo>)</mo>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>:</mo>
+   <mrow>
+    <mrow>
+     <mpadded width="+1.7pt">
+      <mi>β</mi>
+     </mpadded>
+     <mo>≥</mo>
+     <mn>1</mn>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi>l</mi>
+     <mo>≥</mo>
+     <mn>1</mn>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>normal-:</ci>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>E</ci>
+      <ci>m</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <ci>l</ci>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <ci>l</ci>
+        <apply>
+         <minus></minus>
+         <ci>β</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <log></log>
+        <cn type="integer">2</cn>
+       </apply>
+       <ci>i</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <geq></geq>
+      <ci>β</ci>
+      <cn type="float">1</cn>
+     </apply>
+     <apply>
+      <geq></geq>
+      <ci>l</ci>
+      <cn type="float">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   E_{m}=\sum_{i=l}^{l-\left(\beta\,-1\right)}\log_{2}\left(i\right):\beta\,\geq%
+\,1,l\geq\,1
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>These values tend to be low even for large values of 
+
+<math display="inline" id="Address_space_layout_randomization:24">
+ <semantics>
+  <mi>l</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>l</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   l
+  </annotation>
+ </semantics>
+</math>
+
+, most importantly since attackers typically can use only the <a href="C_standard_library" title="wikilink">C standard library</a> and thus one can often assume that 
+
+<math display="inline" id="Address_space_layout_randomization:25">
+ <semantics>
+  <mrow>
+   <mpadded width="+1.7pt">
+    <mi>β</mi>
+   </mpadded>
+   <mo>=</mo>
+   <mn>1</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>β</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta\,=1
+  </annotation>
+ </semantics>
+</math>
+
+. Interestingly, however, even for a small number of libraries there are a few bits of entropy gained here; it is thus potentially interesting to combine library load order randomization with VMA address randomization to gain a few extra bits of entropy. Note that these extra bits of entropy will not apply to other mmap() segments, only libraries.</p>
+<h4 id="reducing-entropy">Reducing entropy</h4>
+
+<p>Attackers may make use of several methods to reduce the entropy present in a randomized address space, ranging from simple information leaks to attacking multiple bits of entropy per attack (such as by <a href="heap_spraying" title="wikilink">heap spraying</a>). There is little that can be done about this.</p>
+
+<p>It is possible to leak information about memory layout using <a href="format_string_vulnerability" title="wikilink">format string vulnerabilities</a>. Format string functions such as <a class="uri" href="printf" title="wikilink">printf</a> use a <a href="variable_argument_list" title="wikilink">variable argument list</a> to do their job; format specifiers describe what the argument list looks like. Because of the way arguments are typically passed, each format specifier moves closer to the top of the stack frame. Eventually, the return pointer and stack frame pointer can be extracted, revealing the address of a vulnerable library and the address of a known stack frame; this can completely eliminate library and stack randomization as an obstacle to an attacker.</p>
+
+<p>One can also decrease entropy in the stack or heap. The stack typically must be aligned to 16 bytes, and so this is the smallest possible randomization interval; while the heap must be page-aligned, typically 4096 bytes. When attempting an attack, it is possible to align duplicate attacks with these intervals; a <a href="NOP_slide" title="wikilink">NOP slide</a> may be used with shellcode injection, and the string '/bin/sh' can be replaced with '////////bin/sh' for an arbitrary number of slashes when attempting to return to <em>system</em>. The number of bits removed is exactly 
+
+<math display="inline" id="Address_space_layout_randomization:26">
+ <semantics>
+  <mrow>
+   <mpadded width="-1.7pt">
+    <msub>
+     <mi>log</mi>
+     <mn>2</mn>
+    </msub>
+   </mpadded>
+   <mrow>
+    <mo>(</mo>
+    <mi>n</mi>
+    <mo>)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <log></log>
+     <cn type="integer">2</cn>
+    </apply>
+    <ci>n</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log_{2}\!\left(n\right)
+  </annotation>
+ </semantics>
+</math>
+
+ for 
+
+<math display="inline" id="Address_space_layout_randomization:27">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+ intervals attacked.</p>
+
+<p>Such decreases are limited due to the amount of data in the stack or heap. The stack, for example, is typically limited to 8 <a href="megabyte" title="wikilink">MB</a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> and grows to much less; this allows for at most 19 bits, although a more conservative estimate would be around 8–10 bits corresponding to 4–16 <a href="kilobyte" title="wikilink">KB</a><a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> of stack stuffing. The heap on the other hand is limited by the behavior of the memory allocator; in the case of <a class="uri" href="glibc" title="wikilink">glibc</a>, allocations above 128 KB are created using <a class="uri" href="mmap" title="wikilink">mmap</a>, limiting attackers to 5 bits of reduction. This is also a limiting factor when brute forcing; although the number of attacks to perform can be reduced, the size of the attacks is increased enough that the behavior could in some circumstances become apparent to <a href="intrusion_detection_system" title="wikilink">intrusion detection systems</a>.</p>
+<h2 id="implementations">Implementations</h2>
+
+<p>Several mainstream, general-purpose operating systems implement ASLR.</p>
+<h3 id="android">Android</h3>
+
+<p><a href="Android_(operating_system)" title="wikilink">Android</a> 4.0 Ice Cream Sandwich provides address space layout randomization (ASLR) to help protect system and third party applications from exploits due to memory-management issues. Position-independent executable support was added in Android 4.1.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+<h3 id="dragonfly-bsd">DragonFly BSD</h3>
+
+<p><a href="DragonFly_BSD" title="wikilink">DragonFly BSD</a> has an implementation of ASLR based upon OpenBSD's model, added in 2010.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> It is off by default, and can be enabled by setting the sysctl vm.randomize_mmap to 1.</p>
+<h3 id="freebsd">FreeBSD</h3>
+
+<p>In 2013, Oliver Pinter started an implementation of basic ASLR support in FreeBSD. In 2014, Shawn Webb picked up the patch and started enhancing it to include per-jail support and mac_bsdextended/ugidfw integration. Oliver and Shawn have teamed up to create <em>HardenedBSD</em>, in which further ASLR development and exploit mitigation development are performed in preparation for <a href="Upstream_(software_development)" title="wikilink">software upstreaming</a> to FreeBSD.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a><a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> They are in cooperation with the <a class="uri" href="OPNsense" title="wikilink">OPNsense</a> project.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a><a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a></p>
+<h3 id="ios-iphone-ipod-touch-ipad">iOS (iPhone, iPod touch, iPad)</h3>
+
+<p><a href="Apple_Inc." title="wikilink">Apple</a> introduced ASLR in <a class="uri" href="iOS" title="wikilink">iOS</a> 4.3 (released March 2011).<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+<h3 id="linux">Linux</h3>
+
+<p><a href="Linux_kernel" title="wikilink">Linux kernel</a> enabled a weak form of ASLR by default since the kernel version 2.6.12, released in June 2005.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> The <a class="uri" href="PaX" title="wikilink">PaX</a> and <a href="Exec_Shield" title="wikilink">Exec Shield</a> patchsets to the Linux kernel provide more complete implementations. The Exec Shield patch for <a class="uri" href="Linux" title="wikilink">Linux</a> supplies 19 bits of stack entropy on a period of 16 bytes; and 8 bits of mmap base randomization on a period of 1 page of 4096 bytes. This places the stack base in an area 8 MB wide containing 524 288 possible positions; and the mmap base in an area 1 MB wide containing 256 possible positions. Various Linux distributionsincluding <a class="uri" href="Adamantix" title="wikilink">Adamantix</a>, <a href="Alpine_Linux" title="wikilink">Alpine Linux</a>, <a href="Hardened_Gentoo" title="wikilink">Hardened Gentoo</a>, and <a href="Hardened_Linux_From_Scratch" title="wikilink">Hardened Linux From Scratch</a>come with PaX's implementation of ASLR by default.</p>
+
+<p><a href="Position-independent_executable" title="wikilink">Position-independent executable</a> (PIE) implements a random base address for the main executable binary and has been in place since 2003. It provides the same address randomness to the main executable as being used for the shared libraries. The PIE feature is in use only for the network facing daemons – the PIE feature cannot be used together with the <a class="uri" href="prelink" title="wikilink">prelink</a> feature for the same executable. The <a class="uri" href="prelink" title="wikilink">prelink</a> tool implements randomization at prelink time rather than runtime, because by design prelink aims to handle relocating libraries before the dynamic linker has to, which allows the relocation to occur once for many runs of the program. As a result, real address space randomization would defeat the purpose of prelinking.</p>
+
+<p><em>Kernel address space layout randomization</em> (KASLR), bringing support for address space randomization to running Linux kernel images by randomizing where the kernel code is placed at boot time,<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> was merged into the <a href="Linux_kernel_mainline" title="wikilink">Linux kernel mainline</a> in kernel version 3.14, released on 30 March 2014.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a> When compiled in, it can be disabled at boot time by specifying  as one of the kernel's boot parameters.<a class="footnoteRef" href="#fn15" id="fnref15"><sup>15</sup></a> KASLR was sharply criticized by Brad Spengler, primary developer of <a class="uri" href="grsecurity" title="wikilink">grsecurity</a>, to be providing very limited additional levels of security.<a class="footnoteRef" href="#fn16" id="fnref16"><sup>16</sup></a></p>
+<h3 id="microsoft-windows">Microsoft Windows</h3>
+
+<p>Microsoft's <a href="Windows_Vista" title="wikilink">Windows Vista</a> (released January 2007) and later have ASLR enabled for only those executables and <a href="dynamic_link_library" title="wikilink">dynamic link libraries</a> specifically linked to be ASLR-enabled.<a class="footnoteRef" href="#fn17" id="fnref17"><sup>17</sup></a> For compatibility, it is not enabled by default for other applications. Typically, only older software is incompatible and ASLR can be fully enabled by editing a registry entry "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\MoveImages",<a class="footnoteRef" href="#fn18" id="fnref18"><sup>18</sup></a> or by installing Microsoft's <a href="Enhanced_Mitigation_Experience_Toolkit" title="wikilink">Enhanced Mitigation Experience Toolkit</a>.</p>
+
+<p>The locations of the <a href="dynamic_memory_allocation" title="wikilink">heap</a>, <a href="call_stack" title="wikilink">stack</a>, Process Environment Block, and <a href="Win32_Thread_Information_Block" title="wikilink">Thread Environment Block</a> are also randomized. A security whitepaper from Symantec noted that ASLR in 32-bit Windows Vista may not be as robust as expected, and Microsoft has acknowledged a weakness in its implementation.<a class="footnoteRef" href="#fn19" id="fnref19"><sup>19</sup></a></p>
+
+<p>Host-based <a href="intrusion_prevention_system" title="wikilink">intrusion prevention systems</a> such as <em>WehnTrust</em><a class="footnoteRef" href="#fn20" id="fnref20"><sup>20</sup></a> and <em>Ozone</em><a class="footnoteRef" href="#fn21" id="fnref21"><sup>21</sup></a> also offer ASLR for <a href="Windows_XP" title="wikilink">Windows XP</a> and <a href="Windows_Server_2003" title="wikilink">Windows Server 2003</a> operating systems. WehnTrust is open-source.<a class="footnoteRef" href="#fn22" id="fnref22"><sup>22</sup></a> Complete details of Ozone's implementation is not available.<a class="footnoteRef" href="#fn23" id="fnref23"><sup>23</sup></a></p>
+
+<p>It was noted in February 2012<a class="footnoteRef" href="#fn24" id="fnref24"><sup>24</sup></a> that ASLR on 32-bit Windows systems prior to <a href="Windows_8" title="wikilink">Windows 8</a> can have its effectiveness reduced in low memory situations. Similar effect also had been achieved on Linux in the same research. The test code caused the Mac OS X 10.7.3 system to <a href="kernel_panic" title="wikilink">kernel panic</a>, so it was left unclear about its ASLR behavior in this scenario.</p>
+<h3 id="openbsd">OpenBSD</h3>
+
+<p>In 2003, <a class="uri" href="OpenBSD" title="wikilink">OpenBSD</a> became the first mainstream operating system to support partial ASLR and to activate it by default.<a class="footnoteRef" href="#fn25" id="fnref25"><sup>25</sup></a> OpenBSD completed its ASLR support in 2008 when it added support for PIE binaries.<a class="footnoteRef" href="#fn26" id="fnref26"><sup>26</sup></a></p>
+<h3 id="os-x">OS X</h3>
+
+<p>In <a href="Mac_OS_X_Leopard" title="wikilink">Mac OS X Leopard</a> 10.5 (released October 2007), Apple introduced randomization for system libraries.<a class="footnoteRef" href="#fn27" id="fnref27"><sup>27</sup></a></p>
+
+<p>In <a href="Mac_OS_X_Lion" title="wikilink">Mac OS X Lion</a> 10.7 (released July 2011), Apple expanded their implementation to cover all applications, stating "address space layout randomization (ASLR) has been improved for all applications. It is now available for 32-bit apps (as are heap memory protections), making 64-bit and 32-bit applications more resistant to attack."<a class="footnoteRef" href="#fn28" id="fnref28"><sup>28</sup></a></p>
+
+<p>As of <a href="OS_X_Mountain_Lion" title="wikilink">OS X Mountain Lion</a> 10.8 (released July 2012) and later, the entire system including the kernel as well as <a href="loadable_kernel_module" title="wikilink">kexts</a> and zones are randomly relocated during system boot.<a class="footnoteRef" href="#fn29" id="fnref29"><sup>29</sup></a></p>
+<h3 id="solaris">Solaris</h3>
+
+<p>ASLR has been introduced in <a href="Solaris_(operating_system)" title="wikilink">Solaris</a> beginning with Solaris 11.1. ASLR in Solaris 11.1 can be set system-wide, per zone, or on a per-binary basis.<a class="footnoteRef" href="#fn30" id="fnref30"><sup>30</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Buffer_overflow" title="wikilink">Buffer overflow</a></li>
+<li><a href="Stack_buffer_overflow" title="wikilink">Stack buffer overflow</a></li>
+<li><a href="Stack-smashing_protection" title="wikilink">Stack-smashing protection</a></li>
+<li><a href="NX_bit" title="wikilink">NX bit</a></li>
+</ul>
+<h2 id="references">References</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li>More about <a href="http://tech.yandex.com/events/ruBSD/2013/talks/103/">Exploit Mitigation Techniques: an Update After 10 Years</a> in <a class="uri" href="OpenBSD" title="wikilink">OpenBSD</a>.</li>
+<li><a href="https://www.htbridge.com/publications/defeating_data_execution_prevention_and_aslr_in_windows_xp_sp3.html">ASLR Bypass in Windows - Brian Mariani</a></li>
+<li><a href="http://pax.grsecurity.net/docs/aslr.txt">PaX documentation on ASLR</a></li>
+<li><a href="http://grsecurity.net/PaX-presentation_files/frame.htm">Comparison of PaX to Exec Shield and W^X</a></li>
+<li><a href="http://blogs.msdn.com/michael_howard/archive/2006/05/26/608315.aspx">ASLR for Windows Vista beta 2</a></li>
+<li><a href="http://www.wehnus.com">ASLR for Windows 2000/XP/2003 (WehnTrust)</a></li>
+<li>[<a class="uri" href="http://www.phrack.org/issues.html?issue=59&amp;id">http://www.phrack.org/issues.html?issue=59&amp;id;</a>;=9#article Bypassing PaX ASLR protection]</li>
+<li>[<a class="uri" href="http://portal.acm.org/citation.cfm?id=1030124&amp;dl">http://portal.acm.org/citation.cfm?id=1030124&amp;dl;</a>;=ACM&amp;coll;=&amp;CFID;=15151515&amp;CFTOKEN;=6184618 On the effectiveness of address space layout randomization]</li>
+<li><a href="http://www.winitor.com">Test Applications (or libraries) for their ASLR and DEP support</a></li>
+<li><a href="http://www.ece.cmu.edu/~dbrumley/courses/18739c-s11/docs/aslr.pdf">ASLR Smack &amp; Laugh Reference</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Operating_system_security" title="wikilink">Category:Operating system security</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Comparison of PaX to Exec Shield and W^X<a href="#fnref1">↩</a></li>
+<li id="fn2">On the Effectiveness of Address-Space Randomization, Shacham, H. and Page, M. and Pfaff, B. and Goh, E.J. and Modadugu, N. and Boneh, D, Proceedings of the 11th ACM conference on Computer and communications security, pp 298—307, 2004<a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="http://gitweb.dragonflybsd.org/dragonfly.git/commit/911e30e25724984efec56accba87f739cfca2937">mmap - add mmap offset randomization</a>, DragonFly Gitweb, 25 November 2010.<a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="http://arstechnica.com/security/news/2011/03/pwn2own-day-2-iphone-blackberry-beaten-chrome-firefox-no-shows.ars">Pwn2Own day 2: iPhone, BlackBerry beaten; Chrome, Firefox no-shows</a>, <a href="Ars_Technica" title="wikilink">Ars Technica</a>, 11 March 2011<a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="http://www.tomshardware.com/reviews/pwn2own-mac-hack,2254-4.html">The NX Bit And ASLR</a>, <a href="Tom's_Hardware" title="wikilink">Tom's Hardware</a>, 25 March 2009.<a href="#fnref12">↩</a></li>
+<li id="fn13"><a href="#fnref13">↩</a></li>
+<li id="fn14"><a href="#fnref14">↩</a></li>
+<li id="fn15"><a href="#fnref15">↩</a></li>
+<li id="fn16"><a href="#fnref16">↩</a></li>
+<li id="fn17"><a href="#fnref17">↩</a></li>
+<li id="fn18">Windows Internals: Including Windows Server 2008 and Windows Vista, Fifth Edition (PRO-Developer) ISBN 978-0-7356-2530-3<a href="#fnref18">↩</a></li>
+<li id="fn19"><a href="#fnref19">↩</a></li>
+<li id="fn20"><a href="#fnref20">↩</a></li>
+<li id="fn21"><a href="#fnref21">↩</a></li>
+<li id="fn22"><a href="#fnref22">↩</a></li>
+<li id="fn23"><a href="#fnref23">↩</a></li>
+<li id="fn24"><a href="#fnref24">↩</a></li>
+<li id="fn25"><a href="#fnref25">↩</a></li>
+<li id="fn26"><a href="#fnref26">↩</a></li>
+<li id="fn27"><a href="#fnref27">↩</a></li>
+<li id="fn28"><a href="#fnref28">↩</a></li>
+<li id="fn29"><a href="#fnref29">↩</a></li>
+<li id="fn30"><a href="http://docs.oracle.com/cd/E26502_01/html/E29015/concept-13.html#concept-aslr-1">Controlling Access to Machine Resources</a>, Oracle Information Library, 26 October 2012.<a href="#fnref30">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

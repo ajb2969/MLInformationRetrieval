@@ -1,0 +1,222 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title offset="1864">Extendible hashing</title>
+   <script type="text/javascript"
+      src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js">
+    </script>
+</head>
+<body>
+<h1>Extendible hashing</h1>
+<style>
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+<style>
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</head>
+<body>
+<hr/>
+<p><strong>Extendible hashing</strong> is a type of <a href="hash_function" title="wikilink">hash</a> system which treats a hash as a bit string, and uses a <a class="uri" href="trie" title="wikilink">trie</a> for bucket lookup.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Because of the hierarchical nature of the system, re-hashing is an incremental operation (done one bucket at a time, as needed). This means that time-sensitive applications are less affected by table growth than by standard full-table rehashes.</p>
+<h2 id="example">Example</h2>
+<p>This is an example from .</p>
+<p>Assume that the hash function <span class="LaTeX">$h(k)$</span> returns a binary number. The first i bits of each string will be used as indices to figure out where they will go in the "directory" (hash table). Additionally, i is the smallest number such that the first i bits of all keys are different.</p>
+<p>Keys to be used:</p>
+<p><span class="LaTeX">$h(k_1)$</span> = 100100<br/>
+<span class="LaTeX">$h(k_2)$</span> = 010110<br/>
+<span class="LaTeX">$h(k_3)$</span> = 110110</p>
+<p>Let's assume that for this particular example, the bucket size is 1. The first two keys to be inserted, k<sub>1</sub> and k<sub>2</sub>, can be distinguished by the most significant bit, and would be inserted into the table as follows:</p>
+<figure><b>(Figure)</b>
+<figcaption>Extendible hashing 1.svg</figcaption>
+</figure>
+<p>Now, if k<sub>3</sub> were to be hashed to the table, it wouldn't be enough to distinguish all three keys by one bit (because k<sub>3</sub> and k<sub>1</sub> have 1 as their leftmost bit. Also, because the bucket size is one, the table would overflow. Because comparing the first two most significant bits would give each key a unique location, the directory size is doubled as follows:</p>
+<figure><b>(Figure)</b>
+<figcaption>Extendible hashing 2.svg</figcaption>
+</figure>
+<p>And so now k<sub>1</sub> and k<sub>3</sub> have a unique location, being distinguished by the first two leftmost bits. Because k<sub>2</sub> is in the top half of the table, both 00 and 01 point to it because there is no other key to compare to that begins with a 0.</p>
+<h3 id="further-detail">Further detail</h3>
+<p><span class="LaTeX">$h(k_4)$</span> = 011110</p>
+<p>Now, k<sub>4</sub> needs to be inserted, and it has the first two bits as 01..(1110), and using a 2 bit depth in the directory, this maps from 01 to Bucket A. Bucket A is full (max size 1), so it must be split; because there is more than one pointer to Bucket A, there is no need to increase the directory size.</p>
+<p>What is needed is information about:</p>
+<ol>
+<li>The key size that maps the directory (the global depth), and</li>
+<li>The key size that has previously mapped the bucket (the local depth)</li>
+</ol>
+<p>In order to distinguish the two action cases:</p>
+<ol>
+<li>Doubling the directory when a bucket becomes full</li>
+<li>Creating a new bucket, and re-distributing the entries between the old and the new bucket</li>
+</ol>
+<p>Examining the initial case of an extendible hash structure, if each directory entry points to one bucket, then the local depth should be equal to the global depth.</p>
+<p>The number of directory entries is equal to 2<sup>global depth</sup>, and the initial number of buckets is equal to 2<sup>local depth</sup>.</p>
+<p>Thus if global depth = local depth = 0, then 2<sup>0</sup> = 1, so an initial directory of one pointer to one bucket.</p>
+<p>Back to the two action cases:</p>
+<p>If the local depth is equal to the global depth, then there is only one pointer to the bucket, and there is no other directory pointers that can map to the bucket, so the directory must be doubled (case1).</p>
+<p>If the bucket is full, if the local depth is less than the global depth, then there exists more than one pointer from the directory to the bucket, and the bucket can be split (case 2).</p>
+<figure><b>(Figure)</b>
+<figcaption>Extendible hashing 3.svg</figcaption>
+</figure>
+<p>Key 01 points to Bucket A, and Bucket A's local depth of 1 is less than the directory's global depth of 2, which means keys hashed to Bucket A have only used a 1 bit prefix (i.e. 0), and the bucket needs to have its contents split using keys 1 + 1 = 2 bits in length; in general, for any local depth d where d is less than D, the global depth, then d must be incremented after a bucket split, and the new d used as the number of bits of each entry's key to redistribute the entries of the former bucket into the new buckets.</p>
+<figure><b>(Figure)</b>
+<figcaption>Extendible hashing 4.svg</figcaption>
+</figure>
+<p>Now, <span class="LaTeX">$h(k_4)$</span> = 011110<br/>
+is tried again, with 2 bits 01.., and now key 01 points to a new bucket but there is still k2 in it (<span class="LaTeX">$h(k2)$</span> = 010110 and also begins with 01).</p>
+<p>If k2 had been 000110, with key 00, there would have been no problem, because k2 would have remained in the new bucket A' and bucket D would have been empty.</p>
+<p>(This would have been the most likely case by far when buckets are of greater size than 1 and the newly split buckets would be exceedingly unlikely to overflow, unless all the entries were all rehashed to one bucket again. But just to emphasize the role of the depth information, the example will be pursued logically to the end.)</p>
+<p>So Bucket D needs to be split, but a check of its local depth, which is 2, is the same as the global depth, which is 2, so the directory must be split again, in order to hold keys of sufficient detail, e.g. 3 bits.</p>
+<figure><b>(Figure)</b>
+<figcaption>Extendible hashing 5.svg</figcaption>
+</figure>
+<ol>
+<li>Bucket D needs to split due to being full.</li>
+<li>As D's local depth = the global depth, the directory must double to increase bit detail of keys.</li>
+<li>Global depth has incremented after directory split to 3.</li>
+<li>The new entry k4 is rekeyed with global depth 3 bits and ends up in D which has local depth 2, which can now be incremented to 3 and D can be split to D' and E.</li>
+<li>The contents of the split bucket D, k2, has been re-keyed with 3 bits, and it ends up in D.</li>
+<li>K4 is retried and it ends up in E which has a spare slot.</li>
+</ol>
+<figure><b>(Figure)</b>
+<figcaption>Extendible hashing 6.svg</figcaption>
+</figure>
+<p>Now, <span class="LaTeX">$h(k2)$</span> = 010110 is in D and <span class="LaTeX">$h(k_4)$</span> = 011110 is tried again, with 3 bits 011.., and it points to bucket D which already contains k2 so is full; D's local depth is 2 but now the global depth is 3 after the directory doubling, so now D can be split into bucket's D' and E, the contents of D, k2 has its <span class="LaTeX">$h(k2)$</span> retried with a new global depth bitmask of 3 and k2 ends up in D', then the new entry k4 is retried with <span class="LaTeX">$h(k_4)$</span> bitmasked using the new global depth bit count of 3 and this gives 011 which now points to a new bucket E which is empty. So K4 goes in Bucket E.</p>
+<h2 id="example-implementation">Example implementation</h2>
+<p>Below is the extendible hashing algorithm in <a href="Python_(programming_language)" title="wikilink">Python</a>, with the disc block / memory page association, caching and consistency issues removed. Note a problem exists if the depth exceeds the bit size of an integer, because then doubling of the directory or splitting of a bucket won't allow entries to be rehashed to different buckets.</p>
+<p>The code uses the <em>least significant bits</em>, which makes it more efficient to expand the table, as the entire directory can be copied as one block ().</p>
+<h3 id="python-example">Python example</h3>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">PAGE_SZ <span class="op">=</span> <span class="dv">20</span>
+
+<span class="kw">class</span> Page(<span class="bu">object</span>):
+
+    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>):
+        <span class="va">self</span>.m <span class="op">=</span> {}
+        <span class="va">self</span>.d <span class="op">=</span> <span class="dv">0</span>
+
+    <span class="kw">def</span> full(<span class="va">self</span>):
+        <span class="cf">return</span> <span class="bu">len</span>(<span class="va">self</span>.m) <span class="op">>=</span> PAGE_SZ
+
+    <span class="kw">def</span> put(<span class="va">self</span>,k,v):
+        <span class="va">self</span>.m[k] <span class="op">=</span> v
+
+    <span class="kw">def</span> get(<span class="va">self</span>,k):
+        <span class="cf">return</span> <span class="va">self</span>.m.get(k)
+
+<span class="kw">class</span> EH(<span class="bu">object</span>):
+
+    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>):
+        <span class="va">self</span>.gd <span class="op">=</span> <span class="dv">0</span> 
+        p <span class="op">=</span> Page()
+        <span class="va">self</span>.pp<span class="op">=</span> [p]
+
+    <span class="kw">def</span> get_page(<span class="va">self</span>,k):
+        h <span class="op">=</span> <span class="bu">hash</span>(k) 
+        p <span class="op">=</span> <span class="va">self</span>.pp[ h <span class="op">&</span> (( <span class="dv">1</span> <span class="op"><<</span> <span class="va">self</span>.gd) <span class="op">-</span><span class="dv">1</span>)]
+        <span class="cf">return</span> p
+
+    <span class="kw">def</span>  put(<span class="va">self</span>, k, v):
+        p <span class="op">=</span> <span class="va">self</span>.get_page(k)
+        <span class="cf">if</span> p.full() <span class="op">and</span> p.d <span class="op">==</span> <span class="va">self</span>.gd:
+            <span class="va">self</span>.pp <span class="op">*=</span> <span class="dv">2</span>
+            <span class="va">self</span>.gd <span class="op">+=</span> <span class="dv">1</span>
+        
+        <span class="cf">if</span> p.full() <span class="op">and</span> p.d <span class="op"><</span> <span class="va">self</span>.gd:
+            p.put(k,v)<span class="op">;</span>
+            p1 <span class="op">=</span> Page()
+            p2 <span class="op">=</span> Page()
+            <span class="cf">for</span> k2,v2 <span class="op">in</span> p.m.items():
+                h <span class="op">=</span> <span class="bu">hash</span>(k2)
+                h <span class="op">=</span> h <span class="op">&</span> ((<span class="dv">1</span> <span class="op"><<</span> <span class="va">self</span>.gd) <span class="op">-</span><span class="dv">1</span>)
+                <span class="cf">if</span> (h <span class="op">>></span> p.d) <span class="op">&</span> <span class="dv">1</span> <span class="op">==</span> <span class="dv">1</span>:
+                    p2.put(k2,v2)
+                <span class="cf">else</span>:
+                    p1.put(k2,v2)
+            <span class="cf">for</span> i,x <span class="op">in</span> <span class="bu">enumerate</span>(<span class="va">self</span>.pp):
+                <span class="cf">if</span> x <span class="op">==</span> p:
+                    <span class="cf">if</span> (i <span class="op">>></span> p.d) <span class="op">&</span> <span class="dv">1</span> <span class="op">==</span> <span class="dv">1</span>:
+                        <span class="va">self</span>.pp[i] <span class="op">=</span> p2
+                    <span class="cf">else</span>:
+                        <span class="va">self</span>.pp[i] <span class="op">=</span> p1
+
+            p2.d <span class="op">=</span> p1.d <span class="op">=</span> p.d <span class="op">+</span> <span class="dv">1</span>
+        <span class="cf">else</span>:    
+            p.put(k,  v)
+
+    <span class="kw">def</span> get(<span class="va">self</span>, k):
+        p <span class="op">=</span> <span class="va">self</span>.get_page(k)
+        <span class="cf">return</span> p.get(k)
+
+<span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:
+    eh <span class="op">=</span> EH()
+    N <span class="op">=</span> <span class="dv">10088</span>
+    l <span class="op">=</span> <span class="bu">list</span>(<span class="bu">range</span>(N))
+
+    <span class="im">import</span> random
+    random.shuffle(l)
+    <span class="cf">for</span> x <span class="op">in</span> l:
+        eh.put(x,x)
+    <span class="bu">print</span> l
+
+    <span class="cf">for</span> i <span class="op">in</span> <span class="bu">range</span>(N):
+        <span class="bu">print</span> eh.get(i)</code></pre></div>
+<h2 id="notes">Notes</h2>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a class="uri" href="Trie" title="wikilink">Trie</a></li>
+<li><a href="Hash_table" title="wikilink">Hash table</a></li>
+<li><a href="Stable_hashing" title="wikilink">Stable hashing</a></li>
+<li><a href="Consistent_hashing" title="wikilink">Consistent hashing</a></li>
+<li><a href="Linear_hashing" title="wikilink">Linear hashing</a></li>
+</ul>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li></li>
+<li><a href="http://www.isqa.unomaha.edu/haworth/isqa3300/fs009.htm">Extendible Hashing</a> at University of Nebraska</li>
+<li><a href="http://www.csm.astate.edu/~rossa/datastruc/Extend.html">Extendible Hashing notes</a> at Arkansas State University</li>
+<li><a href="http://www.smckearney.com/adb/notes/lecture.extendible.hashing.pdf">Extendible hashing notes</a></li>
+</ul>
+<p>"</p>
+<p><a href="Category:Search_algorithms" title="wikilink">Category:Search algorithms</a> <a class="uri" href="Category:Hashing" title="wikilink">Category:Hashing</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

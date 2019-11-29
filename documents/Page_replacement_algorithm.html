@@ -1,0 +1,587 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="484">Page replacement algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Page replacement algorithm</h1>
+<hr/>
+
+<p>In a <a class="uri" href="computer" title="wikilink">computer</a> <a href="operating_system" title="wikilink">operating system</a> that uses <a class="uri" href="paging" title="wikilink">paging</a> for <a href="virtual_memory" title="wikilink">virtual memory</a> <a href="memory_management" title="wikilink">management</a>, <strong>page replacement algorithms</strong> decide which memory pages to page out (swap out, write to disk) when a page of memory needs to be allocated. Paging happens when a <a href="page_fault" title="wikilink">page fault</a> occurs and a free page cannot be used to satisfy the allocation, either because there are none, or because the number of free pages is lower than some threshold.</p>
+
+<p>When the page that was selected for replacement and paged out is referenced again it has to be paged in (read in from disk), and this involves waiting for I/O completion. This determines the <em>quality</em> of the page replacement algorithm: the less time waiting for page-ins, the better the algorithm. A page replacement algorithm looks at the limited information about accesses to the pages provided by hardware, and tries to guess which pages should be replaced to minimize the total number of page misses, while balancing this with the costs (primary storage and processor time) of the algorithm itself.</p>
+
+<p>The page replacing problem is a typical <a href="online_problem" title="wikilink">online problem</a> from the competitive analysis perspective in the sense that the optimal deterministic algorithm is known.</p>
+<h2 id="history">History</h2>
+
+<p>Page replacement algorithms were a hot topic of research and debate in the 1960s and 1970s. That mostly ended with the development of sophisticated <a href="Page_replacement_algorithm#Least_recently_used" title="wikilink">LRU</a> (least recently used) approximations and working set algorithms. Since then, some basic assumptions made by the traditional page replacement algorithms were invalidated, resulting in a revival of research. In particular, the following trends in the behavior of underlying hardware and user-level software have affected the performance of page replacement algorithms:</p>
+<ul>
+<li>Size of primary storage has increased by multiple orders of magnitude. With several gigabytes of primary memory, algorithms that require a periodic check of each and every memory frame are becoming less and less practical.</li>
+<li>Memory hierarchies have grown taller. The cost of a CPU cache miss is far more expensive. This exacerbates the previous problem.</li>
+<li><a href="Locality_of_reference" title="wikilink">Locality of reference</a> of user software has weakened. This is mostly attributed to the spread of <a href="object-oriented_programming" title="wikilink">object-oriented programming</a> techniques that favor large numbers of small functions, use of sophisticated data structures like <a href="Tree_data_structure" title="wikilink">trees</a> and <a href="hash_table" title="wikilink">hash tables</a> that tend to result in chaotic memory reference patterns, and the advent of <a href="garbage_collection_(computer_science)" title="wikilink">garbage collection</a> that drastically changed memory access behavior of applications.</li>
+</ul>
+
+<p>Requirements for page replacement algorithms have changed due to differences in operating system <a href="Kernel_(computer_science)" title="wikilink">kernel</a> architectures. In particular, most modern OS kernels have unified virtual memory and file system caches, requiring the page replacement algorithm to select a page from among the pages of both user program virtual address spaces and cached files. The latter pages have specific properties. For example, they can be locked, or can have write ordering requirements imposed by <a href="journaling_file_system" title="wikilink">journaling</a>. Moreover, as the goal of page replacement is to minimize total time waiting for memory, it has to take into account memory requirements imposed by other kernel sub-systems that allocate memory. As a result, page replacement in modern kernels (<a class="uri" href="Linux" title="wikilink">Linux</a>, <a class="uri" href="FreeBSD" title="wikilink">FreeBSD</a>, and <a href="Solaris_(operating_system)" title="wikilink">Solaris</a>) tends to work at the level of a general purpose kernel memory allocator, rather than at the higher level of a virtual memory subsystem.</p>
+<h2 id="local-vs.-global-replacement">Local vs. global replacement</h2>
+
+<p>Replacement algorithms can be <em>local</em> or <em>global</em>.</p>
+
+<p>When a process incurs a page fault, a local page replacement algorithm selects for replacement some page that belongs to that same process (or a group of processes sharing a <a href="Memory_management_(operating_systems)#Partitioned_allocation" title="wikilink">memory partition</a>). A global replacement algorithm is free to select any page in memory.</p>
+
+<p>Local page replacement assumes some form of memory partitioning that determines how many pages are to be assigned to a given process or a group of processes. Most popular forms of partitioning are <em>fixed partitioning</em> and <em>balanced set</em> algorithms based on the <a href="working_set" title="wikilink">working set</a> model. The advantage of local page replacement is its scalability: each process can handle its page faults independently without contending for some shared global data structure.</p>
+<h2 id="precleaning">Precleaning</h2>
+
+<p>Most replacement algorithms simply return the target page as their result. This means that if target page is <em>dirty</em> (that is, contains data that have to be written to the stable storage before page can be reclaimed), I/O has to be initiated to send that page to the stable storage (to <em>clean</em> the page). In the early days of virtual memory, time spent on cleaning was not of much concern, because virtual memory was first implemented on systems with <a href="full_duplex" title="wikilink">full duplex</a> channels to the stable storage, and cleaning was customarily overlapped with paging. Contemporary commodity hardware, on the other hand, does not support full duplex transfers, and cleaning of target pages becomes an issue.</p>
+
+<p>To deal with this situation, various <em>precleaning</em> policies are implemented. Precleaning is the mechanism that starts I/O on dirty pages that are (likely) to be replaced soon. The idea is that by the time the precleaned page is actually selected for the replacement, the I/O will complete and the page will be clean. Precleaning assumes that it is possible to identify pages that will be replaced <em>next</em>. Precleaning that is too eager can waste I/O bandwidth by writing pages that manage to get re-dirtied before being selected for replacement.</p>
+<h2 id="anticipatory-paging">Anticipatory paging</h2>
+
+<p>Some systems use <a href="demand_paging" title="wikilink">demand paging</a>—waiting until a page is actually requested before loading it into RAM.</p>
+
+<p>Other systems attempt to reduce latency by guessing which pages not in RAM are likely to be needed soon, and pre-loading such pages into RAM, before that page is requested. (This is often in combination with pre-cleaning, which guesses which pages currently in RAM are not likely to be needed soon, and pre-writing them out to storage).</p>
+
+<p>When a page fault occurs, "anticipatory paging" systems will not only bring in the referenced page, but also the next few consecutive pages (analogous to a <a href="prefetch_input_queue" title="wikilink">prefetch input queue</a> in a CPU).</p>
+
+<p>The <a href="Paging#Swap_prefetch" title="wikilink">swap prefetch</a> mechanism goes even further in loading pages (even if they are not consecutive) that are likely to be needed soon.</p>
+<h2 id="the-hk-paging-problem">The (h,k)-paging problem</h2>
+
+<p>The (h,k)-paging problem is a generalization of the model of paging problem: Let h,k be positive integers that 
+
+<math display="inline" id="Page_replacement_algorithm:0">
+ <semantics>
+  <mrow>
+   <mi>h</mi>
+   <mo>≤</mo>
+   <mi>k</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <ci>h</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h\leq k
+  </annotation>
+ </semantics>
+</math>
+
+. We measure the performance of an algorithm with cache of size 
+
+<math display="inline" id="Page_replacement_algorithm:1">
+ <semantics>
+  <mrow>
+   <mi>h</mi>
+   <mo>≤</mo>
+   <mi>k</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <ci>h</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h\leq k
+  </annotation>
+ </semantics>
+</math>
+
+ relative to <a href="Page_replacement_algorithm#The_theoretically_optimal_page_replacement_algorithm" title="wikilink">the theoretically optimal page replacement algorithm</a>. If 
+
+<math display="inline" id="Page_replacement_algorithm:2">
+ <semantics>
+  <mstyle displaystyle="true">
+   <mfrac>
+    <mi>k</mi>
+    <mrow>
+     <mrow>
+      <mi>k</mi>
+      <mo>-</mo>
+      <mi>h</mi>
+     </mrow>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+  </mstyle>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>k</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <ci>h</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dfrac{k}{k-h+1}
+  </annotation>
+ </semantics>
+</math>
+
+, then ALG is 
+
+<math display="inline" id="Page_replacement_algorithm:3">
+ <semantics>
+  <mstyle displaystyle="true">
+   <mfrac>
+    <mi>k</mi>
+    <mrow>
+     <mrow>
+      <mi>k</mi>
+      <mo>-</mo>
+      <mi>h</mi>
+     </mrow>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+  </mstyle>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>k</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <ci>h</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dfrac{k}{k-h+1}
+  </annotation>
+ </semantics>
+</math>
+
+-competitive. So every marking algorithm attains the 
+
+<math display="inline" id="Page_replacement_algorithm:4">
+ <semantics>
+  <mrow>
+   <mi>h</mi>
+   <mo>≤</mo>
+   <mi>k</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <leq></leq>
+    <ci>h</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   h\leq k
+  </annotation>
+ </semantics>
+</math>
+
+-competitive ratio.</p>
+
+<p>LRU is a marking algorithm while FIFO is not a marking algorithm.</p>
+<h2 id="conservative-algorithms">Conservative algorithms</h2>
+
+<p>An algorithm is conservative, if on any consecutive request sequence containing k or fewer distinct page references, the algorithm will incur k or fewer page faults.</p>
+
+<p>If ALG is a conservative algorithm with a cache of size k, and OPT is the optimal algorithm with a cache of 
+
+<math display="inline" id="Page_replacement_algorithm:5">
+ <semantics>
+  <mstyle displaystyle="true">
+   <mfrac>
+    <mi>k</mi>
+    <mrow>
+     <mrow>
+      <mi>k</mi>
+      <mo>-</mo>
+      <mi>h</mi>
+     </mrow>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+  </mstyle>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>k</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <ci>h</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dfrac{k}{k-h+1}
+  </annotation>
+ </semantics>
+</math>
+
+, then ALG is 
+
+<math display="inline" id="Page_replacement_algorithm:6">
+ <semantics>
+  <mstyle displaystyle="true">
+   <mfrac>
+    <mi>k</mi>
+    <mrow>
+     <mrow>
+      <mi>k</mi>
+      <mo>-</mo>
+      <mi>h</mi>
+     </mrow>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+  </mstyle>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>k</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <ci>h</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dfrac{k}{k-h+1}
+  </annotation>
+ </semantics>
+</math>
+
+-competitive. So every conservative algorithm attains the 
+
+<math display="inline" id="Page_replacement_algorithm:7">
+ <semantics>
+  <mstyle displaystyle="true">
+   <mfrac>
+    <mi>k</mi>
+    <mrow>
+     <mrow>
+      <mi>k</mi>
+      <mo>-</mo>
+      <mi>h</mi>
+     </mrow>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+  </mstyle>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>k</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <ci>h</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dfrac{k}{k-h+1}
+  </annotation>
+ </semantics>
+</math>
+
+-competitive ratio.</p>
+
+<p>LRU, FIFO and CLOCK are conservative algorithms.</p>
+<h2 id="page-replacement-algorithms">Page replacement algorithms</h2>
+
+<p>There are a variety of page replacement algorithms:<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h3 id="the-theoretically-optimal-page-replacement-algorithm">The theoretically optimal page replacement algorithm</h3>
+
+<p>The theoretically optimal page replacement algorithm (also known as OPT, <a href="Clairvoyance" title="wikilink">clairvoyant</a> replacement algorithm, or <a href="László_Bélády" title="wikilink">Bélády's</a> optimal page replacement policy)<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a><a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> is an algorithm that works as follows: when a page needs to be swapped in, the <a href="operating_system" title="wikilink">operating system</a> swaps out the page whose next use will occur farthest in the future. For example, a page that is not going to be used for the next 6 seconds will be swapped out over a page that is going to be used within the next 0.4 seconds.</p>
+
+<p>This algorithm cannot be implemented in a general purpose operating system because it is impossible to compute reliably how long it will be before a page is going to be used, except when all software that will run on a system is either known beforehand and is amenable to static analysis of its memory reference patterns, or only a class of applications allowing run-time analysis. Despite this limitation, algorithms exist that can offer near-optimal performance — the operating system keeps track of all pages referenced by the program, and it uses those data to decide which pages to swap in and out on subsequent runs. This algorithm can offer near-optimal performance, but not on the first run of a program, and only if the program's memory reference pattern is relatively consistent each time it runs.</p>
+
+<p>Analysis of the paging problem has also been done in the field of <a href="online_algorithm" title="wikilink">online algorithms</a>. Efficiency of randomized online algorithms for the paging problem is measured using <a href="amortized_analysis" title="wikilink">amortized analysis</a>.</p>
+<h3 id="not-recently-used">Not recently used</h3>
+
+<p>The not recently used (NRU) page replacement algorithm is an algorithm that favours keeping pages in memory that have been recently used. This algorithm works on the following principle: when a page is referenced, a referenced bit is set for that page, marking it as referenced. Similarly, when a page is modified (written to), a modified bit is set. The setting of the bits is usually done by the hardware, although it is possible to do so on the software level as well.</p>
+
+<p>At a certain fixed time interval, the clock interrupt triggers and clears the referenced bit of all the pages, so only pages referenced within the current clock interval are marked with a referenced bit. When a page needs to be replaced, the <a href="operating_system" title="wikilink">operating system</a> divides the pages into four classes:<br/>
+:3. referenced, modified</p>
+<dl>
+<dd>2. referenced, not modified
+</dd>
+<dd>1. not referenced, modified
+</dd>
+<dd>0. not referenced, not modified
+</dd>
+</dl>
+
+<p>Although it does not seem possible for a page to be not referenced yet modified, this happens when a class 3 page has its referenced bit cleared by the clock interrupt. The NRU algorithm picks a random page from the lowest category for removal. So out of the above four pages, the NRU algorithm will replace the not referenced, not modified. Note that this algorithm implies that a modified but not referenced (within last clock interval) page is less important than a not modified page that is intensely referenced.</p>
+
+<p>NRU is a marking algorithm, so it is 
+
+<math display="inline" id="Page_replacement_algorithm:8">
+ <semantics>
+  <mstyle displaystyle="true">
+   <mfrac>
+    <mi>k</mi>
+    <mrow>
+     <mrow>
+      <mi>k</mi>
+      <mo>-</mo>
+      <mi>h</mi>
+     </mrow>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+  </mstyle>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>k</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <ci>h</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dfrac{k}{k-h+1}
+  </annotation>
+ </semantics>
+</math>
+
+-competitive.</p>
+<h3 id="first-in-first-out">First-in, first-out</h3>
+
+<p>The simplest page-replacement algorithm is a FIFO algorithm. The first-in, first-out (FIFO) page replacement algorithm is a low-overhead algorithm that requires little bookkeeping on the part of the <a href="operating_system" title="wikilink">operating system</a>. The idea is obvious from the name – the operating system keeps track of all the pages in memory in a queue, with the most recent arrival at the back, and the oldest arrival in front. When a page needs to be replaced, the page at the front of the queue (the oldest page) is selected. While FIFO is cheap and intuitive, it performs poorly in practical application. Thus, it is rarely used in its unmodified form. This algorithm experiences <a href="Bélády's_anomaly" title="wikilink">Bélády's anomaly</a>.</p>
+
+<p>FIFO page replacement algorithm is used by the <a class="uri" href="VAX/VMS" title="wikilink">VAX/VMS</a> operating system, with some modifications.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> Partial second chance is provided by skipping a limited number of entries with valid translation table references,<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a> and additionally, pages are displaced from process working set to a systemwide pool from which they can be recovered if not already re-used.</p>
+
+<p>FIFO is a conservative algorithm, so it is 
+
+<math display="inline" id="Page_replacement_algorithm:9">
+ <semantics>
+  <mstyle displaystyle="true">
+   <mfrac>
+    <mi>k</mi>
+    <mrow>
+     <mrow>
+      <mi>k</mi>
+      <mo>-</mo>
+      <mi>h</mi>
+     </mrow>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+  </mstyle>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>k</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <ci>h</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dfrac{k}{k-h+1}
+  </annotation>
+ </semantics>
+</math>
+
+-competitive.</p>
+<h3 id="second-chance">Second-chance</h3>
+
+<p>A modified form of the FIFO page replacement algorithm, known as the Second-chance page replacement algorithm, fares relatively better than FIFO at little cost for the improvement. It works by looking at the front of the queue as FIFO does, but instead of immediately paging out that page, it checks to see if its referenced bit is set. If it is not set, the page is swapped out. Otherwise, the referenced bit is cleared, the page is inserted at the back of the queue (as if it were a new page) and this process is repeated. This can also be thought of as a circular queue. If all the pages have their referenced bit set, on the second encounter of the first page in the list, that page will be swapped out, as it now has its referenced bit cleared. If all the pages have their reference bit set then second chance algorithm degenerates into pure FIFO.</p>
+
+<p>As its name suggests, Second-chance gives every page a "second-chance" – an old page that has been referenced is probably in use, and should not be swapped out over a new page that has not been referenced.</p>
+<h3 id="clock">Clock</h3>
+
+<p>Clock is a more efficient version of FIFO than Second-chance because pages don't have to be constantly pushed to the back of the list, but it performs the same general function as Second-Chance. The clock algorithm keeps a circular list of pages in memory, with the "hand" (iterator) pointing to the last examined page frame in the list. When a page fault occurs and no empty frames exist, then the R (referenced) bit is inspected at the hand's location. If R is 0, the new page is put in place of the page the "hand" points to, otherwise the R bit is cleared. Then, the clock hand is incremented and the process is repeated until a page is replaced.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+<h4 id="variants-of-clock">Variants of Clock</h4>
+<ul>
+<li>GCLOCK: Generalized clock page replacement algorithm.<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></li>
+<li>Clock-Pro keeps a circular list of information about recently referenced pages, including all M pages in memory as well as the most recent M pages that have been paged out. This extra information on paged-out pages, like the similar information maintained by <a href="adaptive_replacement_cache" title="wikilink">ARC</a>, helps it work better than LRU on large loops and one-time scans.<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></li>
+<li>WSclock.<ref></ref></li>
+</ul>
+
+<p>"WSCLOCK—a simple and effective algorithm for virtual memory management" by Richard W. Carr and John L. Hennessy, 1981 <a href="http://portal.acm.org/citation.cfm?id=806596">1</a> <a href="http://infolab.stanford.edu/~manku/quals/zpapers/81-wsclock.pdf.gz">2</a>  The "aging" algorithm and the "WSClock" algorithm are probably the most important page replacement algorithms in practice.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a><a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a></p>
+<ul>
+<li>Clock with Adaptive Replacement (CAR) is a page replacement algorithm that has performance comparable to <a href="Adaptive_Replacement_Cache" title="wikilink">ARC</a>, and substantially outperforms both LRU and CLOCK.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a> The algorithm CAR is self-tuning and requires no user-specified magic parameters.</li>
+</ul>
+
+<p>CLOCK is a conservative algorithm, so it is 
+
+<math display="inline" id="Page_replacement_algorithm:10">
+ <semantics>
+  <mstyle displaystyle="true">
+   <mfrac>
+    <mi>k</mi>
+    <mrow>
+     <mrow>
+      <mi>k</mi>
+      <mo>-</mo>
+      <mi>h</mi>
+     </mrow>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+  </mstyle>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <divide></divide>
+    <ci>k</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <minus></minus>
+      <ci>k</ci>
+      <ci>h</ci>
+     </apply>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \dfrac{k}{k-h+1}
+  </annotation>
+ </semantics>
+</math>
+
+-competitive.</p>
+<h3 id="least-recently-used">Least recently used</h3>
+
+<p>The least recently used (LRU) page replacement algorithm, though similar in name to NRU, differs in the fact that LRU keeps track of page usage over a short period of time, while NRU just looks at the usage in the last clock interval. LRU works on the idea that pages that have been most heavily used in the past few instructions are most likely to be used heavily in the next few instructions too. While LRU can provide near-optimal performance in theory (almost as good as <a href="Adaptive_Replacement_Cache" title="wikilink">Adaptive Replacement Cache</a>), it is rather expensive to implement in practice. There are a few implementation methods for this algorithm that try to reduce the cost yet keep as much of the performance as possible.</p>
+
+<p>The most expensive method is the linked list method, which uses a linked list containing all the pages in memory. At the back of this list is the least recently used page, and at the front is the most recently used page. The cost of this implementation lies in the fact that items in the list will have to be moved about every memory reference, which is a very time-consuming process.</p>
+
+<p>Another method that requires hardware support is as follows: suppose the hardware has a 64-bit counter that is incremented at every instruction. Whenever a page is accessed, it acquires the value equal to the counter at the time of page access. Whenever a page needs to be replaced, the <a href="operating_system" title="wikilink">operating system</a> selects the page with the lowest counter and swaps it out. With present hardware, this is not feasible because the OS needs to examine the counter for every page in the cache memory.</p>
+
+<p>Because of implementation costs, one may consider algorithms (like those that follow) that are similar to LRU, but which offer cheaper implementations.</p>
+
+<p>One important advantage of the LRU algorithm is that it is amenable to full statistical analysis. It has been proven, for example, that LRU can never result in more than N-times more page faults than OPT algorithm, where N is proportional to the number of pages in the managed pool.</p>
+
+<p>On the other hand, LRU's weakness is that its performance tends to degenerate under many quite common reference patterns. For example, if there are N pages in the LRU pool, an application executing a loop over array of N + 1 pages will cause a page fault on each and every access. As loops over large arrays are common, much effort has been put into modifying LRU to work better in such situations. Many of the proposed LRU modifications try to detect looping reference patterns and to switch into suitable replacement algorithm, like Most Recently Used (MRU).</p>
+<h4 id="variants-on-lru">Variants on LRU</h4>
+<ol>
+<li><a href="http://www.ics.forth.gr/dcs/Activities/papers/2000.WCW.caching_search.pdf">LRU-K</a> evicts the page whose K-th most recent access is furthest in the past. For example, LRU-1 is simply LRU whereas LRU-2 evicts pages according to the time of their penultimate access. LRU-K improves greatly on LRU with regards to locality in time.</li>
+<li>The <a href="Adaptive_Replacement_Cache" title="wikilink">ARC</a><a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a> algorithm extends LRU by maintaining a history of recently evicted pages and uses this to change preference to recent or frequent access. It is particularly resistant to sequential scans.</li>
+</ol>
+
+<p>A comparison of ARC with other algorithms (LRU, MQ, 2Q, LRU-2, LRFU, <a href="The_LIRS_caching_algorithm" title="wikilink">LIRS</a>) can be found in Megiddo &amp; Modha.<a class="footnoteRef" href="#fn14" id="fnref14"><sup>14</sup></a></p>
+
+<p>LRU is a marking algorithm, so it is <span class="LaTeX">$\dfrac{k}{k-h+1}$</span>-competitive.</p>
+<h3 id="random">Random</h3>
+
+<p>Random replacement algorithm replaces a random page in memory. This eliminates the overhead cost of tracking page references. Usually it fares better than FIFO, and for looping memory references it is better than LRU, although generally LRU performs better in practice. <a class="uri" href="OS/390" title="wikilink">OS/390</a> uses global LRU approximation and falls back to random replacement when LRU performance degenerates, and the <a href="Intel_i860" title="wikilink">Intel i860</a> processor used a random replacement policy (Rhodehamel 1989).</p>
+<h3 id="not-frequently-used">Not frequently used</h3>
+
+<p>The not frequently used (NFU) page replacement algorithm requires a counter, and every page has one counter of its own which is initially set to 0. At each clock interval, all pages that have been referenced within that interval will have their counter incremented by 1. In effect, the counters keep track of how frequently a page has been used. Thus, the page with the lowest counter can be swapped out when necessary.</p>
+
+<p>The main problem with NFU is that it keeps track of the frequency of use without regard to the time span of use. Thus, in a multi-pass compiler, pages which were heavily used during the first pass, but are not needed in the second pass will be favoured over pages which are comparably lightly used in the second pass, as they have higher frequency counters. This results in poor performance. Other common scenarios exist where NFU will perform similarly, such as an OS boot-up. Thankfully, a similar and better algorithm exists, and its description follows.</p>
+
+<p>The not frequently used page-replacement algorithm generates fewer page faults than the least recently used page replacement algorithm when the page table contains null pointer values.</p>
+<h3 id="aging">Aging</h3>
+
+<p>The aging algorithm is a descendant of the NFU algorithm, with modifications to make it aware of the time span of use. Instead of just incrementing the counters of pages referenced, putting equal emphasis on page references regardless of the time, the reference counter on a page is first shifted right (divided by 2), before adding the referenced bit to the left of that binary number. For instance, if a page has referenced bits 1,0,0,1,1,0 in the past 6 clock ticks, its referenced counter will look like this: 10000000, 01000000, 00100000, 10010000, 11001000, 01100100. Page references closer to the present time have more impact than page references long ago. This ensures that pages referenced more recently, though less frequently referenced, will have higher priority over pages more frequently referenced in the past. Thus, when a page needs to be swapped out, the page with the lowest counter will be chosen.</p>
+
+<p>Note that aging differs from LRU in the sense that aging can only keep track of the references in the latest 16/32 (depending on the bit size of the processor's integers) time intervals. Consequently, two pages may have referenced counters of 00000000, even though one page was referenced 9 intervals ago and the other 1000 intervals ago. Generally speaking, knowing the usage within the past 16 intervals is sufficient for making a good decision as to which page to swap out. Thus, aging can offer near-optimal performance for a moderate price.</p>
+<h3 id="techniques-for-hardware-with-no-reference-bit">Techniques for hardware with no reference bit</h3>
+
+<p>Many of the techniques discussed above assume the presence of a reference bit associated with each page. Some hardware has no such bit, so its efficient use requires techniques that operate well without one.</p>
+
+<p>One notable example is <a class="uri" href="VAX" title="wikilink">VAX</a> hardware running <a class="uri" href="OpenVMS" title="wikilink">OpenVMS</a>. This system knows if a page has been modified, but not necessarily if a page has been read. Its approach is known as Secondary Page Caching. Pages removed from working sets (process-private memory, generally) are placed on special-purpose lists while remaining in physical memory for some time. Removing a page from a working set is not technically a page-replacement operation, but effectively identifies that page as a candidate. A page whose backing store is still valid (whose contents are not dirty, or otherwise do not need to be preserved) is placed on the tail of the Free Page List. A page that requires writing to backing store will be placed on the Modified Page List. These actions are typically triggered when the size of the Free Page List falls below an adjustable threshold.</p>
+
+<p>Pages may be selected for working set removal in an essentially random fashion, with the expectation that if a poor choice is made, a future reference may retrieve that page from the Free or Modified list before it is removed from physical memory. A page referenced this way will be removed from the Free or Modified list and placed back into a process working set. The Modified Page List additionally provides an opportunity to write pages out to backing store in groups of more than one page, increasing efficiency. These pages can then be placed on the Free Page List. The sequence of pages that works its way to the head of the Free Page List resembles the results of a LRU or NRU mechanism and the overall effect has similarities to the Second-Chance algorithm described earlier.</p>
+
+<p>Another example is used by the <a href="Linux_kernel" title="wikilink">Linux kernel</a> on <a href="ARM_architecture" title="wikilink">ARM</a>. The lack of hardware functionality is made up for by providing two page tables – the processor-native page tables, with neither referenced bits nor <a href="dirty_bit" title="wikilink">dirty bits</a>, and software-maintained page tables with the required bits present. The emulated bits in the software-maintained table are set by page faults. In order to get the page faults, clearing emulated bits in the second table revokes some of the access rights to the corresponding page, which is implemented by altering the native table.</p>
+<h2 id="working-set">Working set</h2>
+
+<p>The working set of a process is the set of pages expected to be used by that process during some time interval.</p>
+
+<p>The "working set model" isn't a page replacement algorithm in the strict sense (it's actually a kind of <a href="scheduling_(computing)#Medium-term_scheduling" title="wikilink">medium-term scheduler</a>)</p>
+<h2 id="references">References</h2>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li>K. Y. Wong, "<a href="http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=1580916">Web Cache Replacement Policies: A Pragmatic Approach</a>" IEEE Network, vol. 20, iss. 2, Jan–Feb. 2006, pp. 28–34.</li>
+<li>Aho, Denning and Ullman, <em>[<a class="uri" href="http://portal.acm.org/citation.cfm?id=321632&amp;coll">http://portal.acm.org/citation.cfm?id=321632&amp;coll;</a>;=portal&amp;dl;=ACM Principles of Optimal Page Replacement]</em>, Journal of the ACM, Vol. 18, Issue 1,January 1971, pp 80–93</li>
+<li>Rhodehamel, Michael W. "<a href="http://ieeexplore.ieee.org/xpl/abs_free.jsp?arNumber=63392">The Bus Interface and Paging Units of the i860(tm) Microprocessor</a>". In Proc. IEEE International Conference on Computer Design, p. 380–384, 1989.</li>
+<li>Tanenbaum, Andrew S. <em>Operating Systems: Design and Implementation (Second Edition)</em>. New Jersey: Prentice-Hall 1997.</li>
+<li>Tanenbaum, Andrew S. <em>Modern Operating Systems (Second Edition)</em>. New Jersey: Prentice-Hall 2001. Online excerpt on page replacement algorithms: <a href="http://www.informit.com/articles/article.aspx?p=25260">Page Replacement Algorithms</a>.</li>
+<li>Johnson and Shasha, <em></em> <a href="http://www.vldb.org/dblp/db/conf/vldb/vldb94-439.html">abstract</a></li>
+<li>Gideon Glass and Pei Cao [<a class="uri" href="http://portal.acm.org/citation.cfm?id=258681&amp;jmp">http://portal.acm.org/citation.cfm?id=258681&amp;jmp;</a>;=abstract&amp;coll;=portal&amp;dl;=ACM&amp;CFID;=12125227&amp;CFTOKEN;=21656990#abstract Adaptive-Page-Replacement-Based-on-Memory-Reference-Behavior]. Also available in extended form as <a href="http://www.cs.wisc.edu/techreports/viewreport.php?report=1338">Technical Report 1338</a> at www.cs.wisc.edu</li>
+<li>Jongmin Kim and others, <em></em>, <a href="http://www.usenix.org/events/osdi2000/">Usenix Symposium on Operating System Design and Implementation (OSDI'2000)</a>, San Diego, CA, 17–21 October 2000</li>
+<li>Sorav Bansal and Dharmendra S. Modha, <em></em></li>
+<li>Smaragdakis, Kaplan, and Wilson, <em></em></li>
+<li>Song Jiang and Xiaodong Zhang, <em></em>, SIGMETRICS 2002</li>
+<li>D. Lee and others, <em>[<a class="uri" href="http://csdl2.computer.org/persagen/DLAbsToc.jsp?resourcePath=/dl/proceedings/&amp;toc">http://csdl2.computer.org/persagen/DLAbsToc.jsp?resourcePath=/dl/proceedings/&amp;toc;</a>;=comp/proceedings/euromicro/1997/8215/00/8215toc.xml&amp;DOI;=10.1109/EMSCNT.1997.658446 Implementation and Performance Evaluation of the LRFU Replacement Policy]</em>, p. 0106, 23rd [<a class="uri" href="http://csdl2.computer.org/persagen/DLAbsToc.jsp?resourcePath=/dl/proceedings/euromicro/&amp;toc">http://csdl2.computer.org/persagen/DLAbsToc.jsp?resourcePath=/dl/proceedings/euromicro/&amp;toc;</a>;=comp/proceedings/euromicro/1997/8215/00/8215toc.xml Euromicro Conference: New Frontiers of Information Technology-Short Contributions], 1997</li>
+<li>Elizabeth J. O'Neil and others, <em></em>, <a href="http://portal.acm.org/citation.cfm?id=170036.170081">ACM SIGMOD Conf.</a>, pp. 297–306, 1993.</li>
+<li>Y. Zhou and J.F. Philbin, <em><a href="http://www.usenix.org/events/usenix01/full_papers/zhou/">The Multi-Queue Replacement Algorithm for Second-Level Buffer Caches</a></em>, Proc. Usenix Ann. Tech. Conf. (Usenix 2001), pp. 91–104.</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Virtual_memory" title="wikilink">Category:Virtual memory</a> <a href="Category:Memory_management_algorithms" title="wikilink">Category:Memory management algorithms</a> <a href="Category:Online_algorithms" title="wikilink">Category:Online algorithms</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="http://www.cs.uiowa.edu/~jones/opsys/fall95/notes/0908.html">"Lecture Notes"</a> by Douglas W. Jones 1995<a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="http://www.read.cs.ucla.edu/111/2006fall/notes/lec11">2006fall:</a><a class="uri" href="notes:lec11">notes:lec11</a> [CS111]<a href="#fnref2">↩</a></li>
+<li id="fn3">[<a class="uri" href="http://cat.inist.fr/?aModele=afficheN&amp;cpsidt">http://cat.inist.fr/?aModele=afficheN&amp;cpsidt;</a>;=15530156 Characterization of Web reference behavior revisited: Evidence for Dichotomized Cache management]<a href="#fnref3">↩</a></li>
+<li id="fn4"><a href="http://www.cs.uiowa.edu/~jones/opsys/fall95/notes/0908.html">22C:116, Notes, 8 September 1995</a><a href="#fnref4">↩</a></li>
+<li id="fn5">Abraham Silberschatz, Peter Baer Galvin, Greg Gagne. <em>Operating Systems Concepts (Seventh Edition).</em>: Wiley 2005. p. 339.<a href="#fnref5">↩</a></li>
+<li id="fn6">[<a class="uri" href="http://mx.isti.cnr.it/cgi-bin/conan?key=Sys_Parameters~TBSKIPWSL&amp;title">http://mx.isti.cnr.it/cgi-bin/conan?key=Sys_Parameters~TBSKIPWSL&amp;title;</a>;=VMS%20Help&amp;referer;= VMS Help]<a href="#fnref6">↩</a></li>
+<li id="fn7">Andrew S. Tanenbaum. <em>Modern Operating Systems (Second Edition)</em>. pp. 218 (4.4.5). 2001.<a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="http://portal.acm.org/citation.cfm?id=320276">Sequentiality and prefetching in database systems</a><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="http://www.cse.ohio-state.edu/hpcs/WWW/HTML/publications/papers/TR-05-3.pdf">"CLOCK-Pro: An Effective Improvement of the CLOCK Replacement" by Song Jiang, Feng Chen, and Xiaodong Zhang, 2005</a><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="http://www.cs.nyu.edu/courses/spring09/V22.0202-002/wsclock-davis.html">"WSClock"</a> by Allan Gottlieb<a href="#fnref10">↩</a></li>
+<li id="fn11">[<a class="uri" href="http://www.informit.com/articles/article.aspx?p=25260&amp;seqNum">http://www.informit.com/articles/article.aspx?p=25260&amp;seqNum;</a>;=11 "Page Replacement Algorithms"] by Andrew S. Tanenbaum 2002<a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+<li id="fn13">Megiddo, Nimrod and Modha, Dharmendra S. (2003) <em><a href="http://web.archive.org/web/20100208162647/http://www.almaden.ibm.com/cs/people/dmodha/arcfast.pdf">ARC: A Self-tuning, low overhead replacement cache</a></em>. Proceedings of FAST ’03: 2nd USENIX Conference on File and Storage Technologies<a href="#fnref13">↩</a></li>
+<li id="fn14"><a href="#fnref14">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

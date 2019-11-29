@@ -1,0 +1,6819 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1612">Latent Dirichlet allocation</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Latent Dirichlet allocation</h1>
+<hr/>
+
+<p>In <a href="natural_language_processing" title="wikilink">natural language processing</a>, <strong>Latent Dirichlet allocation</strong> (<strong>LDA</strong>) is a <a href="generative_model" title="wikilink">generative model</a> that allows sets of observations to be explained by <a href="Latent_variable" title="wikilink">unobserved</a> groups that explain why some parts of the data are similar. For example, if observations are words collected into documents, it posits that each document is a mixture of a small number of topics and that each word's creation is attributable to one of the document's topics. LDA is an example of a <a href="topic_model" title="wikilink">topic model</a> and was first presented as a <a href="graphical_models" title="wikilink">graphical model</a> for topic discovery by <a href="David_Blei" title="wikilink">David Blei</a>, <a href="Andrew_Ng" title="wikilink">Andrew Ng</a>, and <a href="Michael_I._Jordan" title="wikilink">Michael Jordan</a> in 2003.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+<h2 id="topics-in-lda">Topics in LDA</h2>
+
+<p>In LDA, each document may be viewed as a <a href="mixture_model" title="wikilink">mixture</a> of various topics. This is similar to <a href="PLSA" title="wikilink">probabilistic latent semantic analysis</a> (pLSA), except that in LDA the topic distribution is assumed to have a <a href="Dirichlet_distribution" title="wikilink">Dirichlet</a> <a href="Prior_probability" title="wikilink">prior</a>. In practice, this results in more reasonable mixtures of topics in a document. It has been noted, however, that the <a class="uri" href="pLSA" title="wikilink">pLSA</a> model is equivalent to the LDA model under a uniform Dirichlet prior distribution.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a></p>
+
+<p>For example, an LDA model might have topics that can be classified as <strong>CAT_related</strong> and <strong>DOG_related</strong>. A topic has probabilities of generating various words, such as <em>milk</em>, <em>meow</em>, and <em>kitten</em>, which can be classified and interpreted by the viewer as "CAT_related". Naturally, the word <em>cat</em> itself will have high probability given this topic. The <strong>DOG_related</strong> topic likewise has probabilities of generating each word: <em>puppy</em>, <em>bark</em>, and <em>bone</em> might have high probability. Words without special relevance, such as <em>the</em> (see <a href="function_word" title="wikilink">function word</a>), will have roughly even probability between classes (or can be placed into a separate category). A topic is not strongly defined, neither <a href="semantics" title="wikilink">semantically</a> nor <a href="epistemology" title="wikilink">epistemologically</a>. It is identified on the basis of <a href="supervised_learning" title="wikilink">supervised</a> labeling and (manual) pruning on the basis of their likelihood of co-occurrence. A lexical word may occur in several topics with a different probability, however, with a different typical set of neighboring words in each topic.</p>
+
+<p>Each document is assumed to be characterized by a particular set of topics. This is akin to the standard <a href="bag_of_words_model" title="wikilink">bag of words model</a> assumption, and makes the individual words <a href="De_Finetti's_theorem" title="wikilink">exchangeable</a>.</p>
+<h2 id="intuitive-explanation">Intuitive Explanation <a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></h2>
+
+<p>Suppose you have the following set of sentences:</p>
+<ul>
+<li>I <strong>eat</strong> <strong>fish</strong> and <strong>vegetables</strong>.</li>
+<li><em>Fish</em> are <em>pets</em>.</li>
+<li>My <em>kitten</em> <strong>eats fish</strong>.</li>
+</ul>
+
+<p>LDA is a technique that automatically discovers topics that these documents contain.</p>
+
+<p>Given the above sentences, LDA might classify the <strong>bold</strong> words under the <strong>Topic F</strong>, which we might label as “<strong>food</strong>“. Similarly, words in <em>italics</em> might be classified under a separate <em>Topic P</em>, which we might label as “<em>pets</em>“. LDA defines each topic as a bag of words, and you have to label the topics as you deem fit.</p>
+
+<p>There are 2 benefits from LDA defining topics on a word-level:</p>
+
+<p>1) We can infer the content spread of each sentence by a word count:</p>
+<ul>
+<li><strong>Sentence 1</strong>: 100% Topic F</li>
+<li><strong>Sentence 2</strong>: 100% Topic P</li>
+<li><strong>Sentence 3</strong>: 33% Topic P and 67% Topic F</li>
+</ul>
+
+<p>2) We can derive the proportions that each word constitutes in given topics. For example, Topic F might comprise words in the following proportions: 40% eat, 40% fish, 20% vegetables, …</p>
+
+<p>LDA achieves the above results in 3 steps.</p>
+
+<p>To illustrate these steps, imagine that you are now discovering topics in documents instead of sentences. Imagine you have 2 documents with the following words in Figure 1.</p>
+<figure><b>(Figure)</b>
+<figcaption>Figure 1: Classifying these documents into topics</figcaption>
+</figure>
+
+<p><strong>Step 1</strong> You tell the algorithm how many topics you think there are. You can either use an informed estimate (e.g. results from a previous analysis), or simply trial-and-error. In trying different estimates, you may pick the one that generates topics to your desired level of interpretability, or the one yielding the highest statistical certainty (i.e. log likelihood). In our example above, the number of topics might be inferred just by eyeballing the documents.</p>
+
+<p><strong>Step 2</strong> The algorithm will assign every word to a temporary topic. Topic assignments are temporary as they will be updated in Step 3. Temporary topics are assigned to each word in a semi-random manner (according to a Dirichlet distribution, to be exact). This also means that if a word appears twice, each word may be assigned to different topics. Note that in analyzing actual documents, function words (e.g. “the”, “and”, “my”) are removed and not assigned to any topics.</p>
+
+<p><strong>Step 3</strong> <em>(iterative)</em> The algorithm will check and update topic assignments, looping through each word in every document. For each word, its topic assignment is updated based on two criteria: </p>
+<ul>
+<li>How prevalent is that word across topics?</li>
+</ul>
+<figure><b>(Figure)</b>
+<figcaption>Words in Doc Y are assigned to Topic F and Topic P in a 50-50 ratio</figcaption>
+</figure>
+<ul>
+<li>How prevalent are topics in the document?</li>
+</ul>
+
+<p>To understand how these two criteria work, imagine that we are now checking the topic assignment for the word “fish” in Doc Y.</p>
+<ul>
+<li><strong>How prevalent is that word across topics?</strong> Since “fish” words across both documents comprise nearly half of remaining Topic F words but 0% of remaining Topic P words, a “fish” word picked at random would more likely be about Topic F.</li>
+</ul>
+<ul>
+<li><strong>How prevalent are topics in the document?</strong> Since the words in Doc Y are assigned to Topic F and Topic P in a 50-50 ratio, the remaining “fish” word seems equally likely to be about either topic.</li>
+</ul>
+
+<p>Weighing conclusions from the two criteria, we would assign the “fish” word of Doc Y to Topic F. Doc Y might then be a document on what to feed kittens.</p>
+
+<p>The process of checking topic assignment is repeated for each word in every document, cycling through the entire collection of documents multiple times. This iterative updating is the key feature of LDA that generates a final solution with coherent topics.</p>
+
+<p>For an example application of topic modeling on news articles, see <a href="http://annalyn-ng.com/sg50/">Automated Biography of a Nation</a>.</p>
+<h2 id="model">Model</h2>
+
+<p> With <a href="plate_notation" title="wikilink">plate notation</a>, the dependencies among the many variables can be captured concisely. The boxes are “plates” representing replicates. The outer plate represents documents, while the inner plate represents the repeated choice of topics and words within a document. M denotes the number of documents, N the number of words in a document. Thus:</p>
+<dl>
+<dd><em>α</em> is the parameter of the Dirichlet prior on the per-document topic distributions,
+</dd>
+<dd><em>β</em> is the parameter of the Dirichlet prior on the per-topic word distribution,
+</dd>
+<dd>
+
+<math display="inline" id="Latent_Dirichlet_allocation:0">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ is the topic distribution for document <em>i</em>,
+</dd>
+<dd>
+
+<math display="inline" id="Latent_Dirichlet_allocation:1">
+ <semantics>
+  <msub>
+   <mi>ϕ</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>ϕ</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \phi_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ is the word distribution for topic <em>k</em>,
+</dd>
+<dd>
+
+<math display="inline" id="Latent_Dirichlet_allocation:2">
+ <semantics>
+  <msub>
+   <mi>z</mi>
+   <mrow>
+    <mi>i</mi>
+    <mi>j</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>z</ci>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <ci>j</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z_{ij}
+  </annotation>
+ </semantics>
+</math>
+
+ is the topic for the <em>j</em>th word in document <em>i</em>, and
+</dd>
+<dd>
+
+<math display="inline" id="Latent_Dirichlet_allocation:3">
+ <semantics>
+  <msub>
+   <mi>w</mi>
+   <mrow>
+    <mi>i</mi>
+    <mi>j</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>w</ci>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <ci>j</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{ij}
+  </annotation>
+ </semantics>
+</math>
+
+ is the specific word.
+</dd>
+</dl>
+<figure><b>(Figure)</b>
+<figcaption>Plate notation for smoothed LDA</figcaption>
+</figure>
+
+<p>The 
+
+<math display="inline" id="Latent_Dirichlet_allocation:4">
+ <semantics>
+  <msub>
+   <mi>w</mi>
+   <mrow>
+    <mi>i</mi>
+    <mi>j</mi>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>w</ci>
+    <apply>
+     <times></times>
+     <ci>i</ci>
+     <ci>j</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{ij}
+  </annotation>
+ </semantics>
+</math>
+
+ are the only <a href="observable_variable" title="wikilink">observable variables</a>, and the other variables are <a href="latent_variable" title="wikilink">latent variables</a>. Mostly, the basic LDA model will be extended to a smoothed version to gain better results . The plate notation is shown on the right, where <em>K</em> denotes the number of topics considered in the model and:</p>
+
+<p>
+
+<math display="block" id="Latent_Dirichlet_allocation:5">
+ <semantics>
+  <mi>ϕ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϕ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \phi
+  </annotation>
+ </semantics>
+</math>
+
+ is a <em>K*V</em> (<em>V</em> is the dimension of the vocabulary) <a href="Markov_matrix" title="wikilink">Markov matrix</a> (transition matrix), and each row of which denotes the word distribution of a topic.</p>
+
+<p>The generative process is as follows. Documents are represented as random mixtures over latent topics, where each topic is characterized by a distribution over words. LDA assumes the following generative process for a corpus 
+
+<math display="inline" id="Latent_Dirichlet_allocation:6">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ consisting of 
+
+<math display="inline" id="Latent_Dirichlet_allocation:7">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+ documents each of length 
+
+<math display="inline" id="Latent_Dirichlet_allocation:8">
+ <semantics>
+  <msub>
+   <mi>N</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>N</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N_{i}
+  </annotation>
+ </semantics>
+</math>
+
+:</p>
+
+<p>1. Choose 
+
+<math display="inline" id="Latent_Dirichlet_allocation:9">
+ <semantics>
+  <mrow>
+   <mpadded width="+1.7pt">
+    <msub>
+     <mi>θ</mi>
+     <mi>i</mi>
+    </msub>
+   </mpadded>
+   <mo rspace="4.2pt">∼</mo>
+   <mrow>
+    <mi>Dir</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>α</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>θ</ci>
+     <ci>i</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>Dir</ci>
+     <ci>α</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{i}\,\sim\,\mathrm{Dir}(\alpha)
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Latent_Dirichlet_allocation:10">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mi>M</mi>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>i</ci>
+    <set>
+     <cn type="integer">1</cn>
+     <ci>normal-…</ci>
+     <ci>M</ci>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i\in\{1,\dots,M\}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Latent_Dirichlet_allocation:11">
+ <semantics>
+  <mrow>
+   <mi>Dir</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>α</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>Dir</ci>
+    <ci>α</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathrm{Dir}(\alpha)
+  </annotation>
+ </semantics>
+</math>
+
+ is the <a href="Dirichlet_distribution" title="wikilink">Dirichlet distribution</a> for parameter 
+
+<math display="inline" id="Latent_Dirichlet_allocation:12">
+ <semantics>
+  <mi>α</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>2. Choose 
+
+<math display="inline" id="Latent_Dirichlet_allocation:13">
+ <semantics>
+  <mrow>
+   <mpadded width="+1.7pt">
+    <msub>
+     <mi>ϕ</mi>
+     <mi>k</mi>
+    </msub>
+   </mpadded>
+   <mo rspace="4.2pt">∼</mo>
+   <mrow>
+    <mi>Dir</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>β</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>ϕ</ci>
+     <ci>k</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>Dir</ci>
+     <ci>β</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \phi_{k}\,\sim\,\mathrm{Dir}(\beta)
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Latent_Dirichlet_allocation:14">
+ <semantics>
+  <mrow>
+   <mi>k</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mi>K</mi>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>k</ci>
+    <set>
+     <cn type="integer">1</cn>
+     <ci>normal-…</ci>
+     <ci>K</ci>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k\in\{1,\dots,K\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>3. For each of the word positions 
+
+<math display="inline" id="Latent_Dirichlet_allocation:15">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>,</mo>
+   <mi>j</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>i</ci>
+    <ci>j</ci>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i,j
+  </annotation>
+ </semantics>
+</math>
+
+, where 
+
+<math display="inline" id="Latent_Dirichlet_allocation:16">
+ <semantics>
+  <mrow>
+   <mi>j</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>N</mi>
+     <mi>i</mi>
+    </msub>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>j</ci>
+    <set>
+     <cn type="integer">1</cn>
+     <ci>normal-…</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>N</ci>
+      <ci>i</ci>
+     </apply>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j\in\{1,\dots,N_{i}\}
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Latent_Dirichlet_allocation:17">
+ <semantics>
+  <mrow>
+   <mi>i</mi>
+   <mo>∈</mo>
+   <mrow>
+    <mo stretchy="false">{</mo>
+    <mn>1</mn>
+    <mo>,</mo>
+    <mi mathvariant="normal">…</mi>
+    <mo>,</mo>
+    <mi>M</mi>
+    <mo stretchy="false">}</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <in></in>
+    <ci>i</ci>
+    <set>
+     <cn type="integer">1</cn>
+     <ci>normal-…</ci>
+     <ci>M</ci>
+    </set>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i\in\{1,\dots,M\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<dl>
+<dd>(a) Choose a topic 
+
+<math display="inline" id="Latent_Dirichlet_allocation:18">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mpadded width="+1.7pt">
+     <msub>
+      <mi>z</mi>
+      <mrow>
+       <mi>i</mi>
+       <mo>,</mo>
+       <mi>j</mi>
+      </mrow>
+     </msub>
+    </mpadded>
+    <mo rspace="4.2pt">∼</mo>
+    <mrow>
+     <mi>Multinomial</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>θ</mi>
+       <mi>i</mi>
+      </msub>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>z</ci>
+     <list>
+      <ci>i</ci>
+      <ci>j</ci>
+     </list>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>Multinomial</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>i</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z_{i,j}\,\sim\,\mathrm{Multinomial}(\theta_{i}).
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+<dl>
+<dd>(b) Choose a word 
+
+<math display="inline" id="Latent_Dirichlet_allocation:19">
+ <semantics>
+  <mrow>
+   <mpadded width="+1.7pt">
+    <msub>
+     <mi>w</mi>
+     <mrow>
+      <mi>i</mi>
+      <mo>,</mo>
+      <mi>j</mi>
+     </mrow>
+    </msub>
+   </mpadded>
+   <mo rspace="4.2pt">∼</mo>
+   <mrow>
+    <mi>Multinomial</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <msub>
+      <mi>ϕ</mi>
+      <msub>
+       <mi>z</mi>
+       <mrow>
+        <mi>i</mi>
+        <mo>,</mo>
+        <mi>j</mi>
+       </mrow>
+      </msub>
+     </msub>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>w</ci>
+     <list>
+      <ci>i</ci>
+      <ci>j</ci>
+     </list>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>Multinomial</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>ϕ</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>z</ci>
+       <list>
+        <ci>i</ci>
+        <ci>j</ci>
+       </list>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{i,j}\,\sim\,\mathrm{Multinomial}(\phi_{z_{i,j}})
+  </annotation>
+ </semantics>
+</math>
+
+.
+</dd>
+</dl>
+
+<p>(Note that the <a href="Multinomial_distribution" title="wikilink">Multinomial distribution</a> here refers to the Multinomial with only one trial. It is formally equivalent to the <a href="categorical_distribution" title="wikilink">categorical distribution</a>.)</p>
+
+<p>The lengths 
+
+<math display="inline" id="Latent_Dirichlet_allocation:20">
+ <semantics>
+  <msub>
+   <mi>N</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>N</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ are treated as independent of all the other data generating variables (
+
+<math display="inline" id="Latent_Dirichlet_allocation:21">
+ <semantics>
+  <mi>q</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>q</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   q
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Latent_Dirichlet_allocation:22">
+ <semantics>
+  <mi>z</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>z</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z
+  </annotation>
+ </semantics>
+</math>
+
+). The subscript is often dropped, as in the plate diagrams shown here.</p>
+<h3 id="mathematical-definition">Mathematical definition</h3>
+
+<p>A formal description of smoothed LDA is as follows:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p>Definition of variables in the model</p></td>
+<td style="text-align: left;">
+<p>Variable</p></td>
+<td style="text-align: left;">
+<p>Type</p></td>
+<td style="text-align: left;">
+<p>Meaning</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:23">
+ <semantics>
+  <mi>K</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>K</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>integer</p></td>
+<td style="text-align: left;">
+<p>number of topics (e.g. 50)</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:24">
+ <semantics>
+  <mi>V</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>V</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   V
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>integer</p></td>
+<td style="text-align: left;">
+<p>number of words in the vocabulary (e.g. 50,000 or 1,000,000)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:25">
+ <semantics>
+  <mi>M</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>M</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   M
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>integer</p></td>
+<td style="text-align: left;">
+<p>number of documents</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:26">
+ <semantics>
+  <msub>
+   <mi>N</mi>
+   <mrow>
+    <mi>d</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>M</mi>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>N</ci>
+    <apply>
+     <eq></eq>
+     <ci>d</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>M</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N_{d=1\dots M}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>integer</p></td>
+<td style="text-align: left;">
+<p>number of words in document <em>d</em></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:27">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>integer</p></td>
+<td style="text-align: left;">
+<p>total number of words in all documents; sum of all 
+
+<math display="inline" id="Latent_Dirichlet_allocation:28">
+ <semantics>
+  <msub>
+   <mi>N</mi>
+   <mi>d</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>N</ci>
+    <ci>d</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N_{d}
+  </annotation>
+ </semantics>
+</math>
+
+ values, i.e. 
+
+<math display="inline" id="Latent_Dirichlet_allocation:29">
+ <semantics>
+  <mrow>
+   <mi>N</mi>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>d</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>M</mi>
+    </msubsup>
+    <msub>
+     <mi>N</mi>
+     <mi>d</mi>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>N</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>d</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>M</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>N</ci>
+      <ci>d</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N=\sum_{d=1}^{M}N_{d}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:30">
+ <semantics>
+  <msub>
+   <mi>α</mi>
+   <mrow>
+    <mi>k</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>K</mi>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>α</ci>
+    <apply>
+     <eq></eq>
+     <ci>k</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>K</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha_{k=1\dots K}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>positive real</p></td>
+<td style="text-align: left;">
+<p>prior weight of topic <em>k</em> in a document; usually the same for all topics; normally a number less than 1, e.g. 0.1, to prefer sparse topic distributions, i.e. few topics per document</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:31">
+ <semantics>
+  <mi>𝜶</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜶</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\alpha}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p><em>K</em>-dimension vector of positive reals</p></td>
+<td style="text-align: left;">
+<p>collection of all 
+
+<math display="inline" id="Latent_Dirichlet_allocation:32">
+ <semantics>
+  <msub>
+   <mi>α</mi>
+   <mi>k</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>α</ci>
+    <ci>k</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha_{k}
+  </annotation>
+ </semantics>
+</math>
+
+ values, viewed as a single vector</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:33">
+ <semantics>
+  <msub>
+   <mi>β</mi>
+   <mrow>
+    <mi>w</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>V</mi>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>β</ci>
+    <apply>
+     <eq></eq>
+     <ci>w</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>V</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta_{w=1\dots V}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>positive real</p></td>
+<td style="text-align: left;">
+<p>prior weight of word <em>w</em> in a topic; usually the same for all words; normally a number much less than 1, e.g. 0.001, to strongly prefer sparse word distributions, i.e. few words per topic</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:34">
+ <semantics>
+  <mi>𝜷</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜷</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\beta}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p><em>V</em>-dimension vector of positive reals</p></td>
+<td style="text-align: left;">
+<p>collection of all 
+
+<math display="inline" id="Latent_Dirichlet_allocation:35">
+ <semantics>
+  <msub>
+   <mi>β</mi>
+   <mi>w</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>β</ci>
+    <ci>w</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta_{w}
+  </annotation>
+ </semantics>
+</math>
+
+ values, viewed as a single vector</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:36">
+ <semantics>
+  <msub>
+   <mi>ϕ</mi>
+   <mrow>
+    <mrow>
+     <mi>k</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <mi>K</mi>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi>w</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <mi>V</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>ϕ</ci>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <ci>k</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>normal-…</ci>
+       <ci>K</ci>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <ci>w</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>normal-…</ci>
+       <ci>V</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \phi_{k=1\dots K,w=1\dots V}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>probability (real number between 0 and 1)</p></td>
+<td style="text-align: left;">
+<p>probability of word <em>w</em> occurring in topic <em>k</em></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:37">
+ <semantics>
+  <msub>
+   <mi mathvariant="bold-italic">ϕ</mi>
+   <mrow>
+    <mi>k</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>K</mi>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>bold-italic-ϕ</ci>
+    <apply>
+     <eq></eq>
+     <ci>k</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>K</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\phi}_{k=1\dots K}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p><em>V</em>-dimension vector of probabilities, which must sum to 1</p></td>
+<td style="text-align: left;">
+<p>distribution of words in topic <em>k</em></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:38">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mrow>
+    <mrow>
+     <mi>d</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <mi>M</mi>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi>k</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <mi>K</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <ci>d</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>normal-…</ci>
+       <ci>M</ci>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <ci>k</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>normal-…</ci>
+       <ci>K</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{d=1\dots M,k=1\dots K}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>probability (real number between 0 and 1)</p></td>
+<td style="text-align: left;">
+<p>probability of topic <em>k</em> occurring in document <em>d</em> for any given word</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:39">
+ <semantics>
+  <msub>
+   <mi>𝜽</mi>
+   <mrow>
+    <mi>d</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>M</mi>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝜽</ci>
+    <apply>
+     <eq></eq>
+     <ci>d</ci>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>M</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}_{d=1\dots M}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p><em>K</em>-dimension vector of probabilities, which must sum to 1</p></td>
+<td style="text-align: left;">
+<p>distribution of topics in document <em>d</em></p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:40">
+ <semantics>
+  <msub>
+   <mi>z</mi>
+   <mrow>
+    <mrow>
+     <mi>d</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <mi>M</mi>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi>w</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <msub>
+       <mi>N</mi>
+       <mi>d</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>z</ci>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <ci>d</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>normal-…</ci>
+       <ci>M</ci>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <ci>w</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>normal-…</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <ci>d</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   z_{d=1\dots M,w=1\dots N_{d}}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>integer between 1 and <em>K</em></p></td>
+<td style="text-align: left;">
+<p>identity of topic of word <em>w</em> in document <em>d</em></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:41">
+ <semantics>
+  <mi>𝐙</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐙</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{Z}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p><em>N</em>-dimension vector of integers between 1 and <em>K</em></p></td>
+<td style="text-align: left;">
+<p>identity of topic of all words in all documents</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:42">
+ <semantics>
+  <msub>
+   <mi>w</mi>
+   <mrow>
+    <mrow>
+     <mi>d</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <mi>M</mi>
+     </mrow>
+    </mrow>
+    <mo>,</mo>
+    <mrow>
+     <mi>w</mi>
+     <mo>=</mo>
+     <mrow>
+      <mn>1</mn>
+      <mi mathvariant="normal">…</mi>
+      <msub>
+       <mi>N</mi>
+       <mi>d</mi>
+      </msub>
+     </mrow>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>w</ci>
+    <apply>
+     <csymbol cd="ambiguous">formulae-sequence</csymbol>
+     <apply>
+      <eq></eq>
+      <ci>d</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>normal-…</ci>
+       <ci>M</ci>
+      </apply>
+     </apply>
+     <apply>
+      <eq></eq>
+      <ci>w</ci>
+      <apply>
+       <times></times>
+       <cn type="integer">1</cn>
+       <ci>normal-…</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <ci>d</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w_{d=1\dots M,w=1\dots N_{d}}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p>integer between 1 and <em>V</em></p></td>
+<td style="text-align: left;">
+<p>identity of word <em>w</em> in document <em>d</em></p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:43">
+ <semantics>
+  <mi>𝐖</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝐖</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mathbf{W}
+  </annotation>
+ </semantics>
+</math>
+
+</p></td>
+<td style="text-align: left;">
+<p><em>N</em>-dimension vector of integers between 1 and <em>V</em></p></td>
+<td style="text-align: left;">
+<p>identity of all words in all documents</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>We can then mathematically describe the random variables as follows:</p>
+
+<p>
+
+<math display="block" id="Latent_Dirichlet_allocation:44">
+ <semantics>
+  <mtable displaystyle="true">
+   <mtr>
+    <mtd columnalign="left">
+     <msub>
+      <mi mathvariant="bold-italic">ϕ</mi>
+      <mrow>
+       <mi>k</mi>
+       <mo>=</mo>
+       <mrow>
+        <mn>1</mn>
+        <mi mathvariant="normal">…</mi>
+        <mi>K</mi>
+       </mrow>
+      </mrow>
+     </msub>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>∼</mo>
+    </mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <msub>
+       <mo>Dirichlet</mo>
+       <mi>V</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝜷</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd columnalign="left">
+     <msub>
+      <mi>𝜽</mi>
+      <mrow>
+       <mi>d</mi>
+       <mo>=</mo>
+       <mrow>
+        <mn>1</mn>
+        <mi mathvariant="normal">…</mi>
+        <mi>M</mi>
+       </mrow>
+      </mrow>
+     </msub>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>∼</mo>
+    </mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <msub>
+       <mo>Dirichlet</mo>
+       <mi>K</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝜶</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd columnalign="left">
+     <msub>
+      <mi>z</mi>
+      <mrow>
+       <mrow>
+        <mi>d</mi>
+        <mo>=</mo>
+        <mrow>
+         <mn>1</mn>
+         <mi mathvariant="normal">…</mi>
+         <mi>M</mi>
+        </mrow>
+       </mrow>
+       <mo>,</mo>
+       <mrow>
+        <mi>w</mi>
+        <mo>=</mo>
+        <mrow>
+         <mn>1</mn>
+         <mi mathvariant="normal">…</mi>
+         <msub>
+          <mi>N</mi>
+          <mi>d</mi>
+         </msub>
+        </mrow>
+       </mrow>
+      </mrow>
+     </msub>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>∼</mo>
+    </mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <msub>
+       <mo>Categorical</mo>
+       <mi>K</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>𝜽</mi>
+        <mi>d</mi>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+   <mtr>
+    <mtd columnalign="left">
+     <msub>
+      <mi>w</mi>
+      <mrow>
+       <mrow>
+        <mi>d</mi>
+        <mo>=</mo>
+        <mrow>
+         <mn>1</mn>
+         <mi mathvariant="normal">…</mi>
+         <mi>M</mi>
+        </mrow>
+       </mrow>
+       <mo>,</mo>
+       <mrow>
+        <mi>w</mi>
+        <mo>=</mo>
+        <mrow>
+         <mn>1</mn>
+         <mi mathvariant="normal">…</mi>
+         <msub>
+          <mi>N</mi>
+          <mi>d</mi>
+         </msub>
+        </mrow>
+       </mrow>
+      </mrow>
+     </msub>
+    </mtd>
+    <mtd columnalign="center">
+     <mo>∼</mo>
+    </mtd>
+    <mtd columnalign="left">
+     <mrow>
+      <msub>
+       <mo>Categorical</mo>
+       <mi>V</mi>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi mathvariant="bold-italic">ϕ</mi>
+        <msub>
+         <mi>z</mi>
+         <mrow>
+          <mi>d</mi>
+          <mi>w</mi>
+         </mrow>
+        </msub>
+       </msub>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mtd>
+   </mtr>
+  </mtable>
+  <annotation-xml encoding="MathML-Content">
+   <matrix>
+    <matrixrow>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>bold-italic-ϕ</ci>
+      <apply>
+       <eq></eq>
+       <ci>k</ci>
+       <apply>
+        <times></times>
+        <cn type="integer">1</cn>
+        <ci>normal-…</ci>
+        <ci>K</ci>
+       </apply>
+      </apply>
+     </apply>
+     <csymbol cd="latexml">similar-to</csymbol>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>Dirichlet</ci>
+       <ci>V</ci>
+      </apply>
+      <ci>𝜷</ci>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝜽</ci>
+      <apply>
+       <eq></eq>
+       <ci>d</ci>
+       <apply>
+        <times></times>
+        <cn type="integer">1</cn>
+        <ci>normal-…</ci>
+        <ci>M</ci>
+       </apply>
+      </apply>
+     </apply>
+     <csymbol cd="latexml">similar-to</csymbol>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>Dirichlet</ci>
+       <ci>K</ci>
+      </apply>
+      <ci>𝜶</ci>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>z</ci>
+      <apply>
+       <csymbol cd="ambiguous">formulae-sequence</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>d</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">1</cn>
+         <ci>normal-…</ci>
+         <ci>M</ci>
+        </apply>
+       </apply>
+       <apply>
+        <eq></eq>
+        <ci>w</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">1</cn>
+         <ci>normal-…</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>N</ci>
+          <ci>d</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <csymbol cd="latexml">similar-to</csymbol>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>Categorical</ci>
+       <ci>K</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>𝜽</ci>
+       <ci>d</ci>
+      </apply>
+     </apply>
+    </matrixrow>
+    <matrixrow>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>w</ci>
+      <apply>
+       <csymbol cd="ambiguous">formulae-sequence</csymbol>
+       <apply>
+        <eq></eq>
+        <ci>d</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">1</cn>
+         <ci>normal-…</ci>
+         <ci>M</ci>
+        </apply>
+       </apply>
+       <apply>
+        <eq></eq>
+        <ci>w</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">1</cn>
+         <ci>normal-…</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>N</ci>
+          <ci>d</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <csymbol cd="latexml">similar-to</csymbol>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>Categorical</ci>
+       <ci>V</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>bold-italic-ϕ</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>z</ci>
+        <apply>
+         <times></times>
+         <ci>d</ci>
+         <ci>w</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </matrixrow>
+   </matrix>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \begin{array}[]{lcl}\boldsymbol{\phi}_{k=1\dots K}&\sim&\operatorname{%
+Dirichlet}_{V}(\boldsymbol{\beta})\\
+\boldsymbol{\theta}_{d=1\dots M}&\sim&\operatorname{Dirichlet}_{K}(\boldsymbol%
+{\alpha})\\
+z_{d=1\dots M,w=1\dots N_{d}}&\sim&\operatorname{Categorical}_{K}(\boldsymbol{%
+\theta}_{d})\\
+w_{d=1\dots M,w=1\dots N_{d}}&\sim&\operatorname{Categorical}_{V}(\boldsymbol{%
+\phi}_{z_{dw}})\\
+\end{array}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="inference">Inference</h2>
+
+<p>Learning the various distributions (the set of topics, their associated word probabilities, the topic of each word, and the particular topic mixture of each document) is a problem of <a href="Bayesian_inference" title="wikilink">Bayesian inference</a>. The original paper used a <a href="variational_Bayes" title="wikilink">variational Bayes</a> approximation of the <a href="posterior_distribution" title="wikilink">posterior distribution</a>;<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> alternative inference techniques use <a href="Gibbs_sampling" title="wikilink">Gibbs sampling</a><a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a> and <a href="expectation_propagation" title="wikilink">expectation propagation</a>.<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+
+<p>Following is the derivation of the equations for <a href="collapsed_Gibbs_sampling" title="wikilink">collapsed Gibbs sampling</a>, which means 
+
+<math display="inline" id="Latent_Dirichlet_allocation:45">
+ <semantics>
+  <mi>φ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>φ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varphi
+  </annotation>
+ </semantics>
+</math>
+
+s and 
+
+<math display="inline" id="Latent_Dirichlet_allocation:46">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+s will be integrated out. For simplicity, in this derivation the documents are all assumed to have the same length 
+
+<math display="inline" id="Latent_Dirichlet_allocation:47">
+ <semantics>
+  <mi>N</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>N</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N
+  </annotation>
+ </semantics>
+</math>
+
+. The derivation is equally valid if the document lengths vary.</p>
+
+<p>According to the model, the total probability of the model is:</p>
+
+<p>
+
+<math display="block" id="Latent_Dirichlet_allocation:48">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝑾</mi>
+    <mo>,</mo>
+    <mi>𝒁</mi>
+    <mo>,</mo>
+    <mi>𝜽</mi>
+    <mo>,</mo>
+    <mi>𝝋</mi>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo>,</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>K</mi>
+   </munderover>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>φ</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>;</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>j</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>M</mi>
+   </munderover>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>N</mi>
+   </munderover>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>W</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo stretchy="false">|</mo>
+    <msub>
+     <mi>φ</mi>
+     <msub>
+      <mi>Z</mi>
+      <mrow>
+       <mi>j</mi>
+       <mo>,</mo>
+       <mi>t</mi>
+      </mrow>
+     </msub>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">W</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">Z</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">θ</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">φ</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">β</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>K</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>φ</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">β</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>M</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <list>
+       <ci>j</ci>
+       <ci>t</ci>
+      </list>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>W</ci>
+      <list>
+       <ci>j</ci>
+       <ci>t</ci>
+      </list>
+     </apply>
+     <ci>normal-|</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>φ</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>Z</ci>
+       <list>
+        <ci>j</ci>
+        <ci>t</ci>
+       </list>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <ci>normal-,</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(\boldsymbol{W},\boldsymbol{Z},\boldsymbol{\theta},\boldsymbol{\varphi};%
+\alpha,\beta)=\prod_{i=1}^{K}P(\varphi_{i};\beta)\prod_{j=1}^{M}P(\theta_{j};%
+\alpha)\prod_{t=1}^{N}P(Z_{j,t}|\theta_{j})P(W_{j,t}|\varphi_{Z_{j,t}}),
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where the bold-font variables denote the vector version of the variables. First of all, 
+
+<math display="inline" id="Latent_Dirichlet_allocation:49">
+ <semantics>
+  <mi>𝝋</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝝋</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\varphi}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Latent_Dirichlet_allocation:50">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+ need to be integrated out.</p>
+
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:51">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>P</mi>
+    <mo>;</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>𝒁</mi>
+     <mo>,</mo>
+     <mi>𝑾</mi>
+     <mo>;</mo>
+     <mi>α</mi>
+     <mo>,</mo>
+     <mi>β</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mstyle displaystyle="true">
+     <msub>
+      <mo largeop="true" symmetric="true">∫</mo>
+      <mi>𝜽</mi>
+     </msub>
+    </mstyle>
+    <mrow>
+     <mstyle displaystyle="true">
+      <msub>
+       <mo largeop="true" symmetric="true">∫</mo>
+       <mi>𝝋</mi>
+      </msub>
+     </mstyle>
+     <mrow>
+      <mi>P</mi>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mi>𝑾</mi>
+       <mo>,</mo>
+       <mi>𝒁</mi>
+       <mo>,</mo>
+       <mi>𝜽</mi>
+       <mo>,</mo>
+       <mi>𝝋</mi>
+       <mo>;</mo>
+       <mi>α</mi>
+       <mo>,</mo>
+       <mi>β</mi>
+       <mo rspace="4.2pt" stretchy="false">)</mo>
+      </mrow>
+      <mi>d</mi>
+      <mpadded width="+1.7pt">
+       <mi>𝝋</mi>
+      </mpadded>
+      <mi>d</mi>
+      <mi>𝜽</mi>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <list>
+     <ci>P</ci>
+     <vector>
+      <ci>𝒁</ci>
+      <ci>𝑾</ci>
+      <ci>α</ci>
+      <ci>β</ci>
+     </vector>
+    </list>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <int></int>
+      <ci>𝜽</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <int></int>
+       <ci>𝝋</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>P</ci>
+       <vector>
+        <ci>𝑾</ci>
+        <ci>𝒁</ci>
+        <ci>𝜽</ci>
+        <ci>𝝋</ci>
+        <ci>α</ci>
+        <ci>β</ci>
+       </vector>
+       <ci>d</ci>
+       <ci>𝝋</ci>
+       <ci>d</ci>
+       <ci>𝜽</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle P;(\boldsymbol{Z},\boldsymbol{W};\alpha,\beta)=\int_{\boldsymbol%
+{\theta}}\int_{\boldsymbol{\varphi}}P(\boldsymbol{W},\boldsymbol{Z},%
+\boldsymbol{\theta},\boldsymbol{\varphi};\alpha,\beta)\,d\boldsymbol{\varphi}%
+\,d\boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>All the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:52">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+
+s are independent to each other and the same to all the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:53">
+ <semantics>
+  <mi>φ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>φ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varphi
+  </annotation>
+ </semantics>
+</math>
+
+s. So we can treat each 
+
+<math display="inline" id="Latent_Dirichlet_allocation:54">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ and each 
+
+<math display="inline" id="Latent_Dirichlet_allocation:55">
+ <semantics>
+  <mi>φ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>φ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \varphi
+  </annotation>
+ </semantics>
+</math>
+
+ separately. We now focus only on the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:56">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ part.</p>
+
+<p>
+
+<math display="block" id="Latent_Dirichlet_allocation:57">
+ <semantics>
+  <mrow>
+   <msub>
+    <mo largeop="true" symmetric="true">∫</mo>
+    <mi>𝜽</mi>
+   </msub>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>j</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>M</mi>
+   </munderover>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>N</mi>
+   </munderover>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <mi>𝜽</mi>
+   <mo>=</mo>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>j</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>M</mi>
+   </munderover>
+   <msub>
+    <mo largeop="true" symmetric="true">∫</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+   </msub>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>N</mi>
+   </munderover>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo rspace="4.2pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <msub>
+    <mi>θ</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <int></int>
+     <ci>𝜽</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>M</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <list>
+       <ci>j</ci>
+       <ci>t</ci>
+      </list>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <csymbol cd="unknown">θ</csymbol>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>M</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <int></int>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <list>
+       <ci>j</ci>
+       <ci>t</ci>
+      </list>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>θ</ci>
+     <ci>j</ci>
+    </apply>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \int_{\boldsymbol{\theta}}\prod_{j=1}^{M}P(\theta_{j};\alpha)\prod_{t=1}^{N}P(%
+Z_{j,t}\mid\theta_{j})d\boldsymbol{\theta}=\prod_{j=1}^{M}\int_{\theta_{j}}P(%
+\theta_{j};\alpha)\prod_{t=1}^{N}P(Z_{j,t}\mid\theta_{j})\,d\theta_{j}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>We can further focus on only one 
+
+<math display="inline" id="Latent_Dirichlet_allocation:58">
+ <semantics>
+  <mi>θ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>θ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta
+  </annotation>
+ </semantics>
+</math>
+
+ as the following:</p>
+
+<p>
+
+<math display="block" id="Latent_Dirichlet_allocation:59">
+ <semantics>
+  <mrow>
+   <msub>
+    <mo largeop="true" symmetric="true">∫</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+   </msub>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>N</mi>
+   </munderover>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo rspace="4.2pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <msub>
+    <mi>θ</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <int></int>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <list>
+       <ci>j</ci>
+       <ci>t</ci>
+      </list>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>θ</ci>
+     <ci>j</ci>
+    </apply>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \int_{\theta_{j}}P(\theta_{j};\alpha)\prod_{t=1}^{N}P(Z_{j,t}\mid\theta_{j})\,%
+d\theta_{j}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Actually, it is the hidden part of the model for the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:60">
+ <semantics>
+  <msup>
+   <mi>j</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>j</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ document. Now we replace the probabilities in the above equation by the true distribution expression to write out the explicit equation.</p>
+
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:61">
+ <semantics>
+  <mrow>
+   <mstyle displaystyle="true">
+    <msub>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <msub>
+      <mi>θ</mi>
+      <mi>j</mi>
+     </msub>
+    </msub>
+   </mstyle>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mstyle displaystyle="true">
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>N</mi>
+    </munderover>
+   </mstyle>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo rspace="4.2pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <msub>
+    <mi>θ</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>=</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <int></int>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <list>
+       <ci>j</ci>
+       <ci>t</ci>
+      </list>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>θ</ci>
+     <ci>j</ci>
+    </apply>
+    <eq></eq>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\int_{\theta_{j}}P(\theta_{j};\alpha)\prod_{t=1}^{N}P(Z_{j,t}\mid%
+\theta_{j})\,d\theta_{j}=
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>Let 
+
+<math display="inline" id="Latent_Dirichlet_allocation:62">
+ <semantics>
+  <msubsup>
+   <mi>n</mi>
+   <mrow>
+    <mi>j</mi>
+    <mo>,</mo>
+    <mi>r</mi>
+   </mrow>
+   <mi>i</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <list>
+      <ci>j</ci>
+      <ci>r</ci>
+     </list>
+    </apply>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{j,r}^{i}
+  </annotation>
+ </semantics>
+</math>
+
+ be the number of word tokens in the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:63">
+ <semantics>
+  <msup>
+   <mi>j</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>j</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ document with the same word symbol (the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:64">
+ <semantics>
+  <msup>
+   <mi>r</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>r</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   r^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ word in the vocabulary) assigned to the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:65">
+ <semantics>
+  <msup>
+   <mi>i</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>i</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ topic. So, 
+
+<math display="inline" id="Latent_Dirichlet_allocation:66">
+ <semantics>
+  <msubsup>
+   <mi>n</mi>
+   <mrow>
+    <mi>j</mi>
+    <mo>,</mo>
+    <mi>r</mi>
+   </mrow>
+   <mi>i</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <list>
+      <ci>j</ci>
+      <ci>r</ci>
+     </list>
+    </apply>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{j,r}^{i}
+  </annotation>
+ </semantics>
+</math>
+
+
+ is three dimensional. If any of the three dimensions is not limited to a specific value, we use a parenthesized point 
+
+<math display="inline" id="Latent_Dirichlet_allocation:67">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">(</mo>
+   <mo>⋅</mo>
+   <mo stretchy="false">)</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <ci>normal-⋅</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   (\cdot)
+  </annotation>
+ </semantics>
+</math>
+
+ to denote. For example, 
+
+<math display="inline" id="Latent_Dirichlet_allocation:68">
+ <semantics>
+  <msubsup>
+   <mi>n</mi>
+   <mrow>
+    <mi>j</mi>
+    <mo>,</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mo>⋅</mo>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mi>i</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <list>
+      <ci>j</ci>
+      <ci>normal-⋅</ci>
+     </list>
+    </apply>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{j,(\cdot)}^{i}
+  </annotation>
+ </semantics>
+</math>
+
+ denotes the number of word tokens in the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:69">
+ <semantics>
+  <msup>
+   <mi>j</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>j</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   j^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ document assigned to the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:70">
+ <semantics>
+  <msup>
+   <mi>i</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>i</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   i^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ topic. Thus, the right most part of the above equation can be rewritten as:</p>
+
+<p>
+
+<math display="block" id="Latent_Dirichlet_allocation:71">
+ <semantics>
+  <mrow>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>t</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>N</mi>
+   </munderover>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <munderover>
+    <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+    <mrow>
+     <mi>i</mi>
+     <mo>=</mo>
+     <mn>1</mn>
+    </mrow>
+    <mi>K</mi>
+   </munderover>
+   <msubsup>
+    <mi>θ</mi>
+    <mrow>
+     <mi>j</mi>
+     <mo>,</mo>
+     <mi>i</mi>
+    </mrow>
+    <msubsup>
+     <mi>n</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mo>⋅</mo>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mi>i</mi>
+    </msubsup>
+   </msubsup>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <list>
+       <ci>j</ci>
+       <ci>t</ci>
+      </list>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>K</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <list>
+       <ci>j</ci>
+       <ci>i</ci>
+      </list>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>n</ci>
+       <list>
+        <ci>j</ci>
+        <ci>normal-⋅</ci>
+       </list>
+      </apply>
+      <ci>i</ci>
+     </apply>
+    </apply>
+    <ci>normal-.</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \prod_{t=1}^{N}P(Z_{j,t}\mid\theta_{j})=\prod_{i=1}^{K}\theta_{j,i}^{n_{j,(%
+\cdot)}^{i}}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>So the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:72">
+ <semantics>
+  <msub>
+   <mi>θ</mi>
+   <mi>j</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>θ</ci>
+    <ci>j</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \theta_{j}
+  </annotation>
+ </semantics>
+</math>
+
+ integration formula can be changed to:</p>
+
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:73">
+ <semantics>
+  <mrow>
+   <mstyle displaystyle="true">
+    <msub>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <msub>
+      <mi>θ</mi>
+      <mi>j</mi>
+     </msub>
+    </msub>
+   </mstyle>
+   <mrow>
+    <mstyle displaystyle="true">
+     <mfrac>
+      <mrow>
+       <mi mathvariant="normal">Γ</mi>
+       <mrow>
+        <mo maxsize="120%" minsize="120%">(</mo>
+        <mrow>
+         <msubsup>
+          <mo largeop="true" symmetric="true">∑</mo>
+          <mrow>
+           <mi>i</mi>
+           <mo>=</mo>
+           <mn>1</mn>
+          </mrow>
+          <mi>K</mi>
+         </msubsup>
+         <msub>
+          <mi>α</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+        <mo maxsize="120%" minsize="120%">)</mo>
+       </mrow>
+      </mrow>
+      <mrow>
+       <msubsup>
+        <mo largeop="true" symmetric="true">∏</mo>
+        <mrow>
+         <mi>i</mi>
+         <mo>=</mo>
+         <mn>1</mn>
+        </mrow>
+        <mi>K</mi>
+       </msubsup>
+       <mrow>
+        <mi mathvariant="normal">Γ</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msub>
+          <mi>α</mi>
+          <mi>i</mi>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mfrac>
+    </mstyle>
+    <mrow>
+     <mstyle displaystyle="true">
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>K</mi>
+      </munderover>
+     </mstyle>
+     <mrow>
+      <msubsup>
+       <mi>θ</mi>
+       <mrow>
+        <mi>j</mi>
+        <mo>,</mo>
+        <mi>i</mi>
+       </mrow>
+       <mrow>
+        <msub>
+         <mi>α</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msubsup>
+      <mrow>
+       <mstyle displaystyle="true">
+        <munderover>
+         <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+         <mrow>
+          <mi>i</mi>
+          <mo>=</mo>
+          <mn>1</mn>
+         </mrow>
+         <mi>K</mi>
+        </munderover>
+       </mstyle>
+       <mrow>
+        <mpadded width="+1.7pt">
+         <msubsup>
+          <mi>θ</mi>
+          <mrow>
+           <mi>j</mi>
+           <mo>,</mo>
+           <mi>i</mi>
+          </mrow>
+          <msubsup>
+           <mi>n</mi>
+           <mrow>
+            <mi>j</mi>
+            <mo>,</mo>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mo>⋅</mo>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+           <mi>i</mi>
+          </msubsup>
+         </msubsup>
+        </mpadded>
+        <mi>d</mi>
+        <msub>
+         <mi>θ</mi>
+         <mi>j</mi>
+        </msub>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <int></int>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <ci>normal-Γ</ci>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <sum></sum>
+          <apply>
+           <eq></eq>
+           <ci>i</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>K</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>α</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <csymbol cd="latexml">product</csymbol>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>K</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>normal-Γ</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>α</ci>
+         <ci>i</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <csymbol cd="latexml">product</csymbol>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>K</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <list>
+          <ci>j</ci>
+          <ci>i</ci>
+         </list>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>α</ci>
+          <ci>i</ci>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <csymbol cd="latexml">product</csymbol>
+          <apply>
+           <eq></eq>
+           <ci>i</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>K</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>θ</ci>
+           <list>
+            <ci>j</ci>
+            <ci>i</ci>
+           </list>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>n</ci>
+            <list>
+             <ci>j</ci>
+             <ci>normal-⋅</ci>
+            </list>
+           </apply>
+           <ci>i</ci>
+          </apply>
+         </apply>
+         <ci>d</ci>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>θ</ci>
+          <ci>j</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\int_{\theta_{j}}\frac{\Gamma\bigl(\sum_{i=1}^{K}\alpha_{i}\bigr)%
+}{\prod_{i=1}^{K}\Gamma(\alpha_{i})}\prod_{i=1}^{K}\theta_{j,i}^{\alpha_{i}-1}%
+\prod_{i=1}^{K}\theta_{j,i}^{n_{j,(\cdot)}^{i}}\,d\theta_{j}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>Clearly, the equation inside the integration has the same form as the <a href="Dirichlet_distribution" title="wikilink">Dirichlet distribution</a>. According to the <a href="Dirichlet_distribution" title="wikilink">Dirichlet distribution</a>,</p>
+
+<p>
+
+<math display="block" id="Latent_Dirichlet_allocation:74">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <msub>
+      <mi>θ</mi>
+      <mi>j</mi>
+     </msub>
+    </msub>
+    <mrow>
+     <mfrac>
+      <mrow>
+       <mi mathvariant="normal">Γ</mi>
+       <mrow>
+        <mo maxsize="120%" minsize="120%">(</mo>
+        <mrow>
+         <mrow>
+          <msubsup>
+           <mo largeop="true" symmetric="true">∑</mo>
+           <mrow>
+            <mi>i</mi>
+            <mo>=</mo>
+            <mn>1</mn>
+           </mrow>
+           <mi>K</mi>
+          </msubsup>
+          <msubsup>
+           <mi>n</mi>
+           <mrow>
+            <mi>j</mi>
+            <mo>,</mo>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mo>⋅</mo>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+           <mi>i</mi>
+          </msubsup>
+         </mrow>
+         <mo>+</mo>
+         <msub>
+          <mi>α</mi>
+          <mi>i</mi>
+         </msub>
+        </mrow>
+        <mo maxsize="120%" minsize="120%">)</mo>
+       </mrow>
+      </mrow>
+      <mrow>
+       <msubsup>
+        <mo largeop="true" symmetric="true">∏</mo>
+        <mrow>
+         <mi>i</mi>
+         <mo>=</mo>
+         <mn>1</mn>
+        </mrow>
+        <mi>K</mi>
+       </msubsup>
+       <mrow>
+        <mi mathvariant="normal">Γ</mi>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <msubsup>
+           <mi>n</mi>
+           <mrow>
+            <mi>j</mi>
+            <mo>,</mo>
+            <mrow>
+             <mo stretchy="false">(</mo>
+             <mo>⋅</mo>
+             <mo stretchy="false">)</mo>
+            </mrow>
+           </mrow>
+           <mi>i</mi>
+          </msubsup>
+          <mo>+</mo>
+          <msub>
+           <mi>α</mi>
+           <mi>i</mi>
+          </msub>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mfrac>
+     <mrow>
+      <munderover>
+       <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>K</mi>
+      </munderover>
+      <mrow>
+       <mpadded width="+1.7pt">
+        <msubsup>
+         <mi>θ</mi>
+         <mrow>
+          <mi>j</mi>
+          <mo>,</mo>
+          <mi>i</mi>
+         </mrow>
+         <mrow>
+          <mrow>
+           <msubsup>
+            <mi>n</mi>
+            <mrow>
+             <mi>j</mi>
+             <mo>,</mo>
+             <mrow>
+              <mo stretchy="false">(</mo>
+              <mo>⋅</mo>
+              <mo stretchy="false">)</mo>
+             </mrow>
+            </mrow>
+            <mi>i</mi>
+           </msubsup>
+           <mo>+</mo>
+           <msub>
+            <mi>α</mi>
+            <mi>i</mi>
+           </msub>
+          </mrow>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </msubsup>
+       </mpadded>
+       <mi>d</mi>
+       <msub>
+        <mi>θ</mi>
+        <mi>j</mi>
+       </msub>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mn>1.</mn>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <int></int>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>θ</ci>
+       <ci>j</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <ci>normal-Γ</ci>
+        <apply>
+         <plus></plus>
+         <apply>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <sum></sum>
+            <apply>
+             <eq></eq>
+             <ci>i</ci>
+             <cn type="integer">1</cn>
+            </apply>
+           </apply>
+           <ci>K</ci>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>n</ci>
+            <list>
+             <ci>j</ci>
+             <ci>normal-⋅</ci>
+            </list>
+           </apply>
+           <ci>i</ci>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>α</ci>
+          <ci>i</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <csymbol cd="latexml">product</csymbol>
+          <apply>
+           <eq></eq>
+           <ci>i</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <ci>K</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <ci>normal-Γ</ci>
+         <apply>
+          <plus></plus>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>n</ci>
+            <list>
+             <ci>j</ci>
+             <ci>normal-⋅</ci>
+            </list>
+           </apply>
+           <ci>i</ci>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>α</ci>
+           <ci>i</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <csymbol cd="latexml">product</csymbol>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>K</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>θ</ci>
+          <list>
+           <ci>j</ci>
+           <ci>i</ci>
+          </list>
+         </apply>
+         <apply>
+          <minus></minus>
+          <apply>
+           <plus></plus>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>n</ci>
+             <list>
+              <ci>j</ci>
+              <ci>normal-⋅</ci>
+             </list>
+            </apply>
+            <ci>i</ci>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>α</ci>
+            <ci>i</ci>
+           </apply>
+          </apply>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>d</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>θ</ci>
+         <ci>j</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <cn type="float">1.</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \int_{\theta_{j}}\frac{\Gamma\bigl(\sum_{i=1}^{K}n_{j,(\cdot)}^{i}+\alpha_{i}%
+\bigr)}{\prod_{i=1}^{K}\Gamma(n_{j,(\cdot)}^{i}+\alpha_{i})}\prod_{i=1}^{K}%
+\theta_{j,i}^{n_{j,(\cdot)}^{i}+\alpha_{i}-1}\,d\theta_{j}=1.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Thus,</p>
+
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:75">
+ <semantics>
+  <mrow>
+   <mstyle displaystyle="true">
+    <msub>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <msub>
+      <mi>θ</mi>
+      <mi>j</mi>
+     </msub>
+    </msub>
+   </mstyle>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mstyle displaystyle="true">
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>N</mi>
+    </munderover>
+   </mstyle>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>θ</mi>
+     <mi>j</mi>
+    </msub>
+    <mo rspace="4.2pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <msub>
+    <mi>θ</mi>
+    <mi>j</mi>
+   </msub>
+   <mo>=</mo>
+   <mstyle displaystyle="true">
+    <msub>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <msub>
+      <mi>θ</mi>
+      <mi>j</mi>
+     </msub>
+    </msub>
+   </mstyle>
+   <mstyle displaystyle="true">
+    <mfrac>
+     <mrow>
+      <mi mathvariant="normal">Γ</mi>
+      <mrow>
+       <mo maxsize="120%" minsize="120%">(</mo>
+       <mrow>
+        <msubsup>
+         <mo largeop="true" symmetric="true">∑</mo>
+         <mrow>
+          <mi>i</mi>
+          <mo>=</mo>
+          <mn>1</mn>
+         </mrow>
+         <mi>K</mi>
+        </msubsup>
+        <msub>
+         <mi>α</mi>
+         <mi>i</mi>
+        </msub>
+       </mrow>
+       <mo maxsize="120%" minsize="120%">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msubsup>
+       <mo largeop="true" symmetric="true">∏</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>=</mo>
+        <mn>1</mn>
+       </mrow>
+       <mi>K</mi>
+      </msubsup>
+      <mrow>
+       <mi mathvariant="normal">Γ</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>α</mi>
+         <mi>i</mi>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mstyle>
+   <mstyle displaystyle="true">
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>K</mi>
+    </munderover>
+   </mstyle>
+   <mpadded width="+1.7pt">
+    <msubsup>
+     <mi>θ</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>i</mi>
+     </mrow>
+     <mrow>
+      <mrow>
+       <msubsup>
+        <mi>n</mi>
+        <mrow>
+         <mi>j</mi>
+         <mo>,</mo>
+         <mrow>
+          <mo stretchy="false">(</mo>
+          <mo>⋅</mo>
+          <mo stretchy="false">)</mo>
+         </mrow>
+        </mrow>
+        <mi>i</mi>
+       </msubsup>
+       <mo>+</mo>
+       <msub>
+        <mi>α</mi>
+        <mi>i</mi>
+       </msub>
+      </mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msubsup>
+   </mpadded>
+   <mi>d</mi>
+   <msub>
+    <mi>θ</mi>
+    <mi>j</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <int></int>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <list>
+       <ci>j</ci>
+       <ci>t</ci>
+      </list>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>θ</ci>
+     <ci>j</ci>
+    </apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <int></int>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <ci>j</ci>
+     </apply>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>normal-Γ</ci>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <ci>i</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <ci>K</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <csymbol cd="latexml">product</csymbol>
+        <apply>
+         <eq></eq>
+         <ci>i</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <ci>K</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>normal-Γ</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>K</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>θ</ci>
+      <list>
+       <ci>j</ci>
+       <ci>i</ci>
+      </list>
+     </apply>
+     <apply>
+      <minus></minus>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>n</ci>
+         <list>
+          <ci>j</ci>
+          <ci>normal-⋅</ci>
+         </list>
+        </apply>
+        <ci>i</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <ci>i</ci>
+       </apply>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <csymbol cd="unknown">d</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>θ</ci>
+     <ci>j</ci>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\int_{\theta_{j}}P(\theta_{j};\alpha)\prod_{t=1}^{N}P(Z_{j,t}\mid%
+\theta_{j})\,d\theta_{j}=\int_{\theta_{j}}\frac{\Gamma\bigl(\sum_{i=1}^{K}%
+\alpha_{i}\bigr)}{\prod_{i=1}^{K}\Gamma(\alpha_{i})}\prod_{i=1}^{K}\theta_{j,i%
+}^{n_{j,(\cdot)}^{i}+\alpha_{i}-1}\,d\theta_{j}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>Now we turn our attentions to the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:76">
+ <semantics>
+  <mi>𝝋</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝝋</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\varphi}
+  </annotation>
+ </semantics>
+</math>
+
+ part. Actually, the derivation of the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:77">
+ <semantics>
+  <mi>𝝋</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝝋</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\varphi}
+  </annotation>
+ </semantics>
+</math>
+
+ part is very similar to the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:78">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+ part. Here we only list the steps of the derivation:</p>
+
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:79">
+ <semantics>
+  <mrow>
+   <mstyle displaystyle="true">
+    <msub>
+     <mo largeop="true" symmetric="true">∫</mo>
+     <mi>𝝋</mi>
+    </msub>
+   </mstyle>
+   <mstyle displaystyle="true">
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>K</mi>
+    </munderover>
+   </mstyle>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>φ</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>;</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mstyle displaystyle="true">
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>j</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>M</mi>
+    </munderover>
+   </mstyle>
+   <mstyle displaystyle="true">
+    <munderover>
+     <mo largeop="true" movablelimits="false" symmetric="true">∏</mo>
+     <mrow>
+      <mi>t</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>N</mi>
+    </munderover>
+   </mstyle>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>W</mi>
+     <mrow>
+      <mi>j</mi>
+      <mo>,</mo>
+      <mi>t</mi>
+     </mrow>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>φ</mi>
+     <msub>
+      <mi>Z</mi>
+      <mrow>
+       <mi>j</mi>
+       <mo>,</mo>
+       <mi>t</mi>
+      </mrow>
+     </msub>
+    </msub>
+    <mo rspace="4.2pt" stretchy="false">)</mo>
+   </mrow>
+   <mi>d</mi>
+   <mi>𝝋</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <int></int>
+     <ci>𝝋</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>i</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>K</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>φ</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">β</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>j</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>M</ci>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <csymbol cd="latexml">product</csymbol>
+      <apply>
+       <eq></eq>
+       <ci>t</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>W</ci>
+      <list>
+       <ci>j</ci>
+       <ci>t</ci>
+      </list>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>φ</ci>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>Z</ci>
+       <list>
+        <ci>j</ci>
+        <ci>t</ci>
+       </list>
+      </apply>
+     </apply>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="unknown">d</csymbol>
+    <csymbol cd="unknown">φ</csymbol>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\int_{\boldsymbol{\varphi}}\prod_{i=1}^{K}P(\varphi_{i};\beta)%
+\prod_{j=1}^{M}\prod_{t=1}^{N}P(W_{j,t}\mid\varphi_{Z_{j,t}})\,d\boldsymbol{\varphi}
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>For clarity, here we write down the final equation with both 
+
+<math display="inline" id="Latent_Dirichlet_allocation:80">
+ <semantics>
+  <mi mathvariant="bold-italic">ϕ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>bold-italic-ϕ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\phi}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Latent_Dirichlet_allocation:81">
+ <semantics>
+  <mi>𝜽</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>𝜽</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{\theta}
+  </annotation>
+ </semantics>
+</math>
+
+ integrated out:</p>
+
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:82">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝒁</mi>
+    <mo>,</mo>
+    <mi>𝑾</mi>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo>,</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>P</ci>
+    <vector>
+     <ci>𝒁</ci>
+     <ci>𝑾</ci>
+     <ci>α</ci>
+     <ci>β</ci>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle P(\boldsymbol{Z},\boldsymbol{W};\alpha,\beta)
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>The goal of Gibbs Sampling here is to approximate the distribution of 
+
+<math display="inline" id="Latent_Dirichlet_allocation:83">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝒁</mi>
+    <mo>∣</mo>
+    <mi>𝑾</mi>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo>,</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">Z</csymbol>
+     <ci>normal-∣</ci>
+     <csymbol cd="unknown">W</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">β</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(\boldsymbol{Z}\mid\boldsymbol{W};\alpha,\beta)
+  </annotation>
+ </semantics>
+</math>
+
+. Since 
+
+<math display="inline" id="Latent_Dirichlet_allocation:84">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝑾</mi>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo>,</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>P</ci>
+    <list>
+     <ci>𝑾</ci>
+     <ci>α</ci>
+     <ci>β</ci>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(\boldsymbol{W};\alpha,\beta)
+  </annotation>
+ </semantics>
+</math>
+
+ is invariable for any of Z, Gibbs Sampling equations can be derived from 
+
+<math display="inline" id="Latent_Dirichlet_allocation:85">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>𝒁</mi>
+    <mo>,</mo>
+    <mi>𝑾</mi>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo>,</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>P</ci>
+    <vector>
+     <ci>𝒁</ci>
+     <ci>𝑾</ci>
+     <ci>α</ci>
+     <ci>β</ci>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(\boldsymbol{Z},\boldsymbol{W};\alpha,\beta)
+  </annotation>
+ </semantics>
+</math>
+
+
+ directly. The key point is to derive the following conditional probability:</p>
+
+<p>
+
+<math display="block" id="Latent_Dirichlet_allocation:86">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>m</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>𝒁</mi>
+     <mrow>
+      <mo mathvariant="bold">-</mo>
+      <mrow>
+       <mo mathvariant="bold" stretchy="false">(</mo>
+       <mi>𝒎</mi>
+       <mo mathvariant="bold">,</mo>
+       <mi>𝒏</mi>
+       <mo mathvariant="bold" stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <mi>𝑾</mi>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo>,</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mi>P</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>Z</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mi>m</mi>
+        <mo>,</mo>
+        <mi>n</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </msub>
+      <mo>,</mo>
+      <msub>
+       <mi>𝒁</mi>
+       <mrow>
+        <mo mathvariant="bold">-</mo>
+        <mrow>
+         <mo mathvariant="bold" stretchy="false">(</mo>
+         <mi>𝒎</mi>
+         <mo mathvariant="bold">,</mo>
+         <mi>𝒏</mi>
+         <mo mathvariant="bold" stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </msub>
+      <mo>,</mo>
+      <mi>𝑾</mi>
+      <mo>;</mo>
+      <mi>α</mi>
+      <mo>,</mo>
+      <mi>β</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mi>P</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <msub>
+       <mi>𝒁</mi>
+       <mrow>
+        <mo mathvariant="bold">-</mo>
+        <mrow>
+         <mo mathvariant="bold" stretchy="false">(</mo>
+         <mi>𝒎</mi>
+         <mo mathvariant="bold">,</mo>
+         <mi>𝒏</mi>
+         <mo mathvariant="bold" stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </msub>
+      <mo>,</mo>
+      <mi>𝑾</mi>
+      <mo>;</mo>
+      <mi>α</mi>
+      <mo>,</mo>
+      <mi>β</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <interval closure="open">
+       <ci>m</ci>
+       <ci>n</ci>
+      </interval>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝒁</ci>
+      <apply>
+       <minus></minus>
+       <interval closure="open">
+        <ci>𝒎</ci>
+        <ci>𝒏</ci>
+       </interval>
+      </apply>
+     </apply>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">W</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">β</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <eq></eq>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>P</ci>
+      <vector>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>Z</ci>
+        <interval closure="open">
+         <ci>m</ci>
+         <ci>n</ci>
+        </interval>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝒁</ci>
+        <apply>
+         <minus></minus>
+         <interval closure="open">
+          <ci>𝒎</ci>
+          <ci>𝒏</ci>
+         </interval>
+        </apply>
+       </apply>
+       <ci>𝑾</ci>
+       <ci>α</ci>
+       <ci>β</ci>
+      </vector>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>P</ci>
+      <vector>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>𝒁</ci>
+        <apply>
+         <minus></minus>
+         <interval closure="open">
+          <ci>𝒎</ci>
+          <ci>𝒏</ci>
+         </interval>
+        </apply>
+       </apply>
+       <ci>𝑾</ci>
+       <ci>α</ci>
+       <ci>β</ci>
+      </vector>
+     </apply>
+    </apply>
+    <ci>normal-,</ci>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(Z_{(m,n)}\mid\boldsymbol{Z_{-(m,n)}},\boldsymbol{W};\alpha,\beta)=\frac{P(Z_%
+{(m,n)},\boldsymbol{Z_{-(m,n)}},\boldsymbol{W};\alpha,\beta)}{P(\boldsymbol{Z_%
+{-(m,n)}},\boldsymbol{W};\alpha,\beta)},
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where 
+
+<math display="inline" id="Latent_Dirichlet_allocation:87">
+ <semantics>
+  <msub>
+   <mi>Z</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>m</mi>
+    <mo>,</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>Z</ci>
+    <interval closure="open">
+     <ci>m</ci>
+     <ci>n</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Z_{(m,n)}
+  </annotation>
+ </semantics>
+</math>
+
+ denotes the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:88">
+ <semantics>
+  <mi>Z</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Z</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Z
+  </annotation>
+ </semantics>
+</math>
+
+ hidden variable of the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:89">
+ <semantics>
+  <msup>
+   <mi>n</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>n</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ word token in the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:90">
+ <semantics>
+  <msup>
+   <mi>m</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>m</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   m^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ document. And further we assume that the word symbol of it is the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:91">
+ <semantics>
+  <msup>
+   <mi>v</mi>
+   <mrow>
+    <mi>t</mi>
+    <mi>h</mi>
+   </mrow>
+  </msup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <ci>v</ci>
+    <apply>
+     <times></times>
+     <ci>t</ci>
+     <ci>h</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   v^{th}
+  </annotation>
+ </semantics>
+</math>
+
+ word in the vocabulary. 
+
+<math display="inline" id="Latent_Dirichlet_allocation:92">
+ <semantics>
+  <msub>
+   <mi>𝒁</mi>
+   <mrow>
+    <mo mathvariant="bold">-</mo>
+    <mrow>
+     <mo mathvariant="bold" stretchy="false">(</mo>
+     <mi>𝒎</mi>
+     <mo mathvariant="bold">,</mo>
+     <mi>𝒏</mi>
+     <mo mathvariant="bold" stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>𝒁</ci>
+    <apply>
+     <minus></minus>
+     <interval closure="open">
+      <ci>𝒎</ci>
+      <ci>𝒏</ci>
+     </interval>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \boldsymbol{Z_{-(m,n)}}
+  </annotation>
+ </semantics>
+</math>
+
+ denotes all the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:93">
+ <semantics>
+  <mi>Z</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>Z</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Z
+  </annotation>
+ </semantics>
+</math>
+
+s but 
+
+<math display="inline" id="Latent_Dirichlet_allocation:94">
+ <semantics>
+  <msub>
+   <mi>Z</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>m</mi>
+    <mo>,</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>Z</ci>
+    <interval closure="open">
+     <ci>m</ci>
+     <ci>n</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Z_{(m,n)}
+  </annotation>
+ </semantics>
+</math>
+
+. Note that Gibbs Sampling needs only to sample a value for 
+
+<math display="inline" id="Latent_Dirichlet_allocation:95">
+ <semantics>
+  <msub>
+   <mi>Z</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>m</mi>
+    <mo>,</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>Z</ci>
+    <interval closure="open">
+     <ci>m</ci>
+     <ci>n</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Z_{(m,n)}
+  </annotation>
+ </semantics>
+</math>
+
+, according to the above probability, we do not need the exact value of 
+
+<math display="inline" id="Latent_Dirichlet_allocation:96">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mi>m</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mo>∣</mo>
+    <msub>
+     <mi>𝒁</mi>
+     <mrow>
+      <mo mathvariant="bold">-</mo>
+      <mrow>
+       <mo mathvariant="bold" stretchy="false">(</mo>
+       <mi>𝒎</mi>
+       <mo mathvariant="bold">,</mo>
+       <mi>𝒏</mi>
+       <mo mathvariant="bold" stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <mi>𝑾</mi>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo>,</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <list>
+       <ci>m</ci>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝒁</ci>
+      <apply>
+       <minus></minus>
+       <interval closure="open">
+        <ci>𝒎</ci>
+        <ci>𝒏</ci>
+       </interval>
+      </apply>
+     </apply>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">W</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">β</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P(Z_{m,n}\mid\boldsymbol{Z_{-(m,n)}},\boldsymbol{W};\alpha,\beta)
+  </annotation>
+ </semantics>
+</math>
+
+ but the ratios among the probabilities that 
+
+<math display="inline" id="Latent_Dirichlet_allocation:97">
+ <semantics>
+  <msub>
+   <mi>Z</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>m</mi>
+    <mo>,</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>Z</ci>
+    <interval closure="open">
+     <ci>m</ci>
+     <ci>n</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Z_{(m,n)}
+  </annotation>
+ </semantics>
+</math>
+
+ can take value. So, the above equation can be simplified as:</p>
+
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:98">
+ <semantics>
+  <mrow>
+   <mi>P</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>m</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <mi>k</mi>
+    <mo>∣</mo>
+    <msub>
+     <mi>𝒁</mi>
+     <mrow>
+      <mo mathvariant="bold">-</mo>
+      <mrow>
+       <mo mathvariant="bold" stretchy="false">(</mo>
+       <mi>𝒎</mi>
+       <mo mathvariant="bold">,</mo>
+       <mi>𝒏</mi>
+       <mo mathvariant="bold" stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </msub>
+    <mo>,</mo>
+    <mi>𝑾</mi>
+    <mo>;</mo>
+    <mi>α</mi>
+    <mo>,</mo>
+    <mi>β</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">P</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <interval closure="open">
+       <ci>m</ci>
+       <ci>n</ci>
+      </interval>
+     </apply>
+     <eq></eq>
+     <csymbol cd="unknown">k</csymbol>
+     <ci>normal-∣</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>𝒁</ci>
+      <apply>
+       <minus></minus>
+       <interval closure="open">
+        <ci>𝒎</ci>
+        <ci>𝒏</ci>
+       </interval>
+      </apply>
+     </apply>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">W</csymbol>
+     <ci>normal-;</ci>
+     <csymbol cd="unknown">α</csymbol>
+     <ci>normal-,</ci>
+     <csymbol cd="unknown">β</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle P(Z_{(m,n)}=k\mid\boldsymbol{Z_{-(m,n)}},\boldsymbol{W};\alpha,\beta)
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>Finally, let 
+
+<math display="inline" id="Latent_Dirichlet_allocation:99">
+ <semantics>
+  <msubsup>
+   <mi>n</mi>
+   <mrow>
+    <mi>j</mi>
+    <mo>,</mo>
+    <mi>r</mi>
+   </mrow>
+   <mrow>
+    <mi>i</mi>
+    <mo>,</mo>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>m</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <list>
+      <ci>j</ci>
+      <ci>r</ci>
+     </list>
+    </apply>
+    <list>
+     <ci>i</ci>
+     <apply>
+      <minus></minus>
+      <interval closure="open">
+       <ci>m</ci>
+       <ci>n</ci>
+      </interval>
+     </apply>
+    </list>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{j,r}^{i,-(m,n)}
+  </annotation>
+ </semantics>
+</math>
+
+ be the same meaning as 
+
+<math display="inline" id="Latent_Dirichlet_allocation:100">
+ <semantics>
+  <msubsup>
+   <mi>n</mi>
+   <mrow>
+    <mi>j</mi>
+    <mo>,</mo>
+    <mi>r</mi>
+   </mrow>
+   <mi>i</mi>
+  </msubsup>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">superscript</csymbol>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>n</ci>
+     <list>
+      <ci>j</ci>
+      <ci>r</ci>
+     </list>
+    </apply>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n_{j,r}^{i}
+  </annotation>
+ </semantics>
+</math>
+
+ but with the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:101">
+ <semantics>
+  <msub>
+   <mi>Z</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>m</mi>
+    <mo>,</mo>
+    <mi>n</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>Z</ci>
+    <interval closure="open">
+     <ci>m</ci>
+     <ci>n</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Z_{(m,n)}
+  </annotation>
+ </semantics>
+</math>
+
+ excluded. The above equation can be further simplified leveraging the property of <a href="gamma_function" title="wikilink">gamma function</a>. We first split the summation and then merge it back to obtain a 
+
+<math display="inline" id="Latent_Dirichlet_allocation:102">
+ <semantics>
+  <mi>k</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>k</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k
+  </annotation>
+ </semantics>
+</math>
+
+-independent summation, which could be dropped:</p>
+
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:103">
+ <semantics>
+  <mo>∝</mo>
+  <annotation-xml encoding="MathML-Content">
+   <csymbol cd="latexml">proportional-to</csymbol>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \displaystyle\propto
+  </annotation>
+ </semantics>
+</math>
+
+
+</p>
+
+<p>Note that the same formula is derived in the article on the <a href="Dirichlet-multinomial_distribution#A_combined_example:_LDA_topic_models" title="wikilink">Dirichlet-multinomial distribution</a>, as part of a more general discussion of integrating <a href="Dirichlet_distribution" title="wikilink">Dirichlet distribution</a> priors out of a <a href="Bayesian_network" title="wikilink">Bayesian network</a>.</p>
+<h2 id="faster-sampling">Faster Sampling</h2>
+
+<p>Recent research has been focused on speeding up the inference of Latent Dirichlet Allocation to support capture of a massive number of topics in large number of documents. The update equation of the Collapsed Gibbs Sampler mentioned in the earlier section has a natural sparsity within it that can be taken advantage of. Intuitively, since each document only contains a subset of topics 
+
+<math display="inline" id="Latent_Dirichlet_allocation:104">
+ <semantics>
+  <msub>
+   <mi>K</mi>
+   <mi>d</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>K</ci>
+    <ci>d</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K_{d}
+  </annotation>
+ </semantics>
+</math>
+
+, and a word also only appears in a subset of topics 
+
+<math display="inline" id="Latent_Dirichlet_allocation:105">
+ <semantics>
+  <msub>
+   <mi>K</mi>
+   <mi>w</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>K</ci>
+    <ci>w</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   K_{w}
+  </annotation>
+ </semantics>
+</math>
+
+, the above update equation could be rewritten to take advantage of this sparsity.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> 
+
+<math display="inline" id="Latent_Dirichlet_allocation:106">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>Z</mi>
+     <mrow>
+      <mi>d</mi>
+      <mo>,</mo>
+      <mi>n</mi>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <mi>k</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+   <mo>∝</mo>
+   <mfrac>
+    <mrow>
+     <mi>α</mi>
+     <mi>β</mi>
+    </mrow>
+    <mrow>
+     <msubsup>
+      <mi>C</mi>
+      <mi>k</mi>
+      <mrow>
+       <mi mathvariant="normal">¬</mi>
+       <mi>n</mi>
+      </mrow>
+     </msubsup>
+     <mo>+</mo>
+     <mrow>
+      <mi>V</mi>
+      <mi>β</mi>
+     </mrow>
+    </mrow>
+   </mfrac>
+   <mo>+</mo>
+   <mfrac>
+    <mrow>
+     <msubsup>
+      <mi>C</mi>
+      <mi>k</mi>
+      <mi>d</mi>
+     </msubsup>
+     <mi>β</mi>
+    </mrow>
+    <mrow>
+     <msubsup>
+      <mi>C</mi>
+      <mi>k</mi>
+      <mrow>
+       <mi mathvariant="normal">¬</mi>
+       <mi>n</mi>
+      </mrow>
+     </msubsup>
+     <mo>+</mo>
+     <mrow>
+      <mi>V</mi>
+      <mi>β</mi>
+     </mrow>
+    </mrow>
+   </mfrac>
+   <mo>+</mo>
+   <mfrac>
+    <mrow>
+     <msubsup>
+      <mi>C</mi>
+      <mi>k</mi>
+      <mi>w</mi>
+     </msubsup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>α</mi>
+       <mo>+</mo>
+       <msubsup>
+        <mi>C</mi>
+        <mi>k</mi>
+        <mi>d</mi>
+       </msubsup>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mrow>
+     <msubsup>
+      <mi>C</mi>
+      <mi>k</mi>
+      <mrow>
+       <mi mathvariant="normal">¬</mi>
+       <mi>n</mi>
+      </mrow>
+     </msubsup>
+     <mo>+</mo>
+     <mrow>
+      <mi>V</mi>
+      <mi>β</mi>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">p</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>Z</ci>
+      <list>
+       <ci>d</ci>
+       <ci>n</ci>
+      </list>
+     </apply>
+     <eq></eq>
+     <csymbol cd="unknown">k</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+    <csymbol cd="latexml">proportional-to</csymbol>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <ci>α</ci>
+      <ci>β</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>C</ci>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <not></not>
+        <ci>n</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>V</ci>
+       <ci>β</ci>
+      </apply>
+     </apply>
+    </apply>
+    <plus></plus>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>C</ci>
+        <ci>k</ci>
+       </apply>
+       <ci>d</ci>
+      </apply>
+      <ci>β</ci>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>C</ci>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <not></not>
+        <ci>n</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>V</ci>
+       <ci>β</ci>
+      </apply>
+     </apply>
+    </apply>
+    <plus></plus>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>C</ci>
+        <ci>k</ci>
+       </apply>
+       <ci>w</ci>
+      </apply>
+      <apply>
+       <plus></plus>
+       <ci>α</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>C</ci>
+         <ci>k</ci>
+        </apply>
+        <ci>d</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>C</ci>
+        <ci>k</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <not></not>
+        <ci>n</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>V</ci>
+       <ci>β</ci>
+      </apply>
+     </apply>
+    </apply>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p(Z_{d,n}=k)\propto\frac{\alpha\beta}{C_{k}^{\neg n}+V\beta}+\frac{C_{k}^{d}%
+\beta}{C_{k}^{\neg n}+V\beta}+\frac{C_{k}^{w}(\alpha+C_{k}^{d})}{C_{k}^{\neg n%
+}+V\beta}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>In this equation, we have three terms, out of which two of them are sparse, and the other is small. We call these terms 
+
+<math display="inline" id="Latent_Dirichlet_allocation:107">
+ <semantics>
+  <mrow>
+   <mi>a</mi>
+   <mo>,</mo>
+   <mi>b</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <ci>a</ci>
+    <ci>b</ci>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   a,b
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Latent_Dirichlet_allocation:108">
+ <semantics>
+  <mi>c</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>c</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c
+  </annotation>
+ </semantics>
+</math>
+
+ respectively. Now, if we normalize each term by summing over all the topics, we get:</p>
+
+<p>
+
+<math display="inline" id="Latent_Dirichlet_allocation:109">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>K</mi>
+    </msubsup>
+    <mfrac>
+     <mrow>
+      <mi>α</mi>
+      <mi>β</mi>
+     </mrow>
+     <mrow>
+      <msubsup>
+       <mi>C</mi>
+       <mi>k</mi>
+       <mrow>
+        <mi mathvariant="normal">¬</mi>
+        <mi>n</mi>
+       </mrow>
+      </msubsup>
+      <mo>+</mo>
+      <mrow>
+       <mi>V</mi>
+       <mi>β</mi>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>A</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>K</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <ci>α</ci>
+       <ci>β</ci>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>C</ci>
+         <ci>k</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <not></not>
+         <ci>n</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>V</ci>
+        <ci>β</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A=\sum_{k=1}^{K}\frac{\alpha\beta}{C_{k}^{\neg n}+V\beta}
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Latent_Dirichlet_allocation:110">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>K</mi>
+    </msubsup>
+    <mfrac>
+     <mrow>
+      <msubsup>
+       <mi>C</mi>
+       <mi>k</mi>
+       <mi>d</mi>
+      </msubsup>
+      <mi>β</mi>
+     </mrow>
+     <mrow>
+      <msubsup>
+       <mi>C</mi>
+       <mi>k</mi>
+       <mrow>
+        <mi mathvariant="normal">¬</mi>
+        <mi>n</mi>
+       </mrow>
+      </msubsup>
+      <mo>+</mo>
+      <mrow>
+       <mi>V</mi>
+       <mi>β</mi>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>B</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>K</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>C</ci>
+         <ci>k</ci>
+        </apply>
+        <ci>d</ci>
+       </apply>
+       <ci>β</ci>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>C</ci>
+         <ci>k</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <not></not>
+         <ci>n</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>V</ci>
+        <ci>β</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B=\sum_{k=1}^{K}\frac{C_{k}^{d}\beta}{C_{k}^{\neg n}+V\beta}
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Latent_Dirichlet_allocation:111">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mo>=</mo>
+   <mrow>
+    <msubsup>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>k</mi>
+      <mo>=</mo>
+      <mn>1</mn>
+     </mrow>
+     <mi>K</mi>
+    </msubsup>
+    <mfrac>
+     <mrow>
+      <msubsup>
+       <mi>C</mi>
+       <mi>k</mi>
+       <mi>w</mi>
+      </msubsup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mi>α</mi>
+        <mo>+</mo>
+        <msubsup>
+         <mi>C</mi>
+         <mi>k</mi>
+         <mi>d</mi>
+        </msubsup>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msubsup>
+       <mi>C</mi>
+       <mi>k</mi>
+       <mrow>
+        <mi mathvariant="normal">¬</mi>
+        <mi>n</mi>
+       </mrow>
+      </msubsup>
+      <mo>+</mo>
+      <mrow>
+       <mi>V</mi>
+       <mi>β</mi>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>C</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <ci>K</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>C</ci>
+         <ci>k</ci>
+        </apply>
+        <ci>w</ci>
+       </apply>
+       <apply>
+        <plus></plus>
+        <ci>α</ci>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>C</ci>
+          <ci>k</ci>
+         </apply>
+         <ci>d</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>C</ci>
+         <ci>k</ci>
+        </apply>
+        <apply>
+         <times></times>
+         <not></not>
+         <ci>n</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <ci>V</ci>
+        <ci>β</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C=\sum_{k=1}^{K}\frac{C_{k}^{w}(\alpha+C_{k}^{d})}{C_{k}^{\neg n}+V\beta}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Here, we can see that 
+
+<math display="inline" id="Latent_Dirichlet_allocation:112">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+ is a summation of the topics that appear in document 
+
+<math display="inline" id="Latent_Dirichlet_allocation:113">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+, and 
+
+<math display="inline" id="Latent_Dirichlet_allocation:114">
+ <semantics>
+  <mi>C</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>C</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C
+  </annotation>
+ </semantics>
+</math>
+
+ is also a sparse summation of the topics that a word 
+
+<math display="inline" id="Latent_Dirichlet_allocation:115">
+ <semantics>
+  <mi>w</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>w</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   w
+  </annotation>
+ </semantics>
+</math>
+
+ has been observed by in the whole corpus. 
+
+<math display="inline" id="Latent_Dirichlet_allocation:116">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ on the other hand, is dense but because of the small values of 
+
+<math display="inline" id="Latent_Dirichlet_allocation:117">
+ <semantics>
+  <mi>α</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>α</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha
+  </annotation>
+ </semantics>
+</math>
+
+ &amp; 
+
+<math display="inline" id="Latent_Dirichlet_allocation:118">
+ <semantics>
+  <mi>β</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>β</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \beta
+  </annotation>
+ </semantics>
+</math>
+
+, the value is very small compared to the two other terms.</p>
+
+<p>Now, while sampling a topic, if we sample a random variable uniformly from 
+
+<math display="inline" id="Latent_Dirichlet_allocation:119">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mo>∼</mo>
+   <mi>U</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>s</mi>
+    <mo stretchy="false">|</mo>
+    <mi>A</mi>
+    <mo>+</mo>
+    <mi>B</mi>
+    <mo>+</mo>
+    <mi>C</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <cerror>
+    <csymbol cd="ambiguous">fragments</csymbol>
+    <csymbol cd="unknown">s</csymbol>
+    <csymbol cd="latexml">similar-to</csymbol>
+    <csymbol cd="unknown">U</csymbol>
+    <cerror>
+     <csymbol cd="ambiguous">fragments</csymbol>
+     <ci>normal-(</ci>
+     <csymbol cd="unknown">s</csymbol>
+     <ci>normal-|</ci>
+     <csymbol cd="unknown">A</csymbol>
+     <plus></plus>
+     <csymbol cd="unknown">B</csymbol>
+     <plus></plus>
+     <csymbol cd="unknown">C</csymbol>
+     <ci>normal-)</ci>
+    </cerror>
+   </cerror>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s\sim U(s|A+B+C)
+  </annotation>
+ </semantics>
+</math>
+
+, we can check which bucket our sample lands in. Since 
+
+<math display="inline" id="Latent_Dirichlet_allocation:120">
+ <semantics>
+  <mi>A</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>A</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A
+  </annotation>
+ </semantics>
+</math>
+
+ is small, we are very unlikely to fall into this bucket; however, if we do fall into this bucket, sampling a topic takes O(K) time (same as the original Collapsed Gibbs Sampler). However, if we fall into the other two buckets, we only need to check a subset of topics if we keep record of the sparse topics. A topic can be sampled from the 
+
+<math display="inline" id="Latent_Dirichlet_allocation:121">
+ <semantics>
+  <mi>B</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>B</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B
+  </annotation>
+ </semantics>
+</math>
+
+ bucket in 
+
+<math display="inline" id="Latent_Dirichlet_allocation:122">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>K</mi>
+     <mi>d</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>K</ci>
+     <ci>d</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(K_{d})
+  </annotation>
+ </semantics>
+</math>
+
+ time, and a topic can be sampled in 
+
+<math display="inline" id="Latent_Dirichlet_allocation:123">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msub>
+      <mi>K</mi>
+      <mi>w</mi>
+     </msub>
+     <mo>+</mo>
+     <msub>
+      <mi>K</mi>
+      <mi>d</mi>
+     </msub>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>K</ci>
+      <ci>w</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>K</ci>
+      <ci>d</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(K_{w}+K_{d})
+  </annotation>
+ </semantics>
+</math>
+
+ time.</p>
+
+<p>Notice that after sampling each topic, updating these buckets are all basic 
+
+<math display="inline" id="Latent_Dirichlet_allocation:124">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mn>1</mn>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <cn type="integer">1</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(1)
+  </annotation>
+ </semantics>
+</math>
+
+ arithmetic operations.</p>
+<h2 id="applications-extensions-and-similar-techniques">Applications, extensions and similar techniques</h2>
+
+<p>Topic modeling is a classic problem in <a href="information_retrieval" title="wikilink">information retrieval</a>. Related models and techniques are, among others, <a href="latent_semantic_indexing" title="wikilink">latent semantic indexing</a>, <a href="independent_component_analysis" title="wikilink">independent component analysis</a>, <a href="pLSI" title="wikilink">probabilistic latent semantic indexing</a>, <a href="non-negative_matrix_factorization" title="wikilink">non-negative matrix factorization</a>, and <a href="Gamma-Poisson_distribution" title="wikilink">Gamma-Poisson distribution</a>.</p>
+
+<p>The LDA model is highly modular and can therefore be easily extended. The main field of interest is modeling relations between topics. This is achieved by using another distribution on the simplex instead of the Dirichlet. The Correlated Topic Model<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a> follows this approach, inducing a correlation structure between topics by using the <a href="logistic_normal_distribution" title="wikilink">logistic normal distribution</a> instead of the Dirichlet. Another extension is the hierarchical LDA (hLDA),<a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a> where topics are joined together in a hierarchy by using the nested <a href="Chinese_restaurant_process" title="wikilink">Chinese restaurant process</a>. LDA can also be extended to a corpus in which a document includes two types of information (e.g., words and names), as in the <a href="LDA-dual_model" title="wikilink">LDA-dual model</a>.<a class="footnoteRef" href="#fn10" id="fnref10"><sup>10</sup></a> Nonparametric extensions of LDA include the <a href="Hierarchical_Dirichlet_process" title="wikilink">Hierarchical Dirichlet process</a> mixture model, which allows the number of topics to be unbounded and learnt from data and the <a href="Nested_Chinese_Restaurant_Process" title="wikilink">Nested Chinese Restaurant Process</a> which allows topics to be arranged in a hierarchy whose structure is learnt from data.</p>
+
+<p>As noted earlier, PLSA is similar to LDA. The LDA model is essentially the Bayesian version of PLSA model. The Bayesian formulation tends to perform better on small datasets because Bayesian methods can avoid overfitting the data. For very large datasets, the results of the two models tend to converge. One difference is that PLSA uses a variable 
+
+<math display="inline" id="Latent_Dirichlet_allocation:125">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+ to represent a document in the training set. So in PLSA, when presented with a document the model hasn't seen before, we fix 
+
+<math display="inline" id="Latent_Dirichlet_allocation:126">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>w</mi>
+    <mo>∣</mo>
+    <mi>z</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>w</ci>
+    <ci>z</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(w\mid z)
+  </annotation>
+ </semantics>
+</math>
+
+—the probability of words under topics—to be that learned from the training set and use the same EM algorithm to infer 
+
+<math display="inline" id="Latent_Dirichlet_allocation:127">
+ <semantics>
+  <mrow>
+   <mi>Pr</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>z</mi>
+    <mo>∣</mo>
+    <mi>d</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <ci>Pr</ci>
+    <ci>z</ci>
+    <ci>d</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Pr(z\mid d)
+  </annotation>
+ </semantics>
+</math>
+
+—the topic distribution under 
+
+<math display="inline" id="Latent_Dirichlet_allocation:128">
+ <semantics>
+  <mi>d</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>d</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d
+  </annotation>
+ </semantics>
+</math>
+
+. Blei argues that this step is cheating because you are essentially refitting the model to the new data.</p>
+
+<p>Variations on LDA have been used to automatically put natural images into categories, such as "bedroom" or "forest", by treating an image as a document, and small patches of the image as words;<a class="footnoteRef" href="#fn11" id="fnref11"><sup>11</sup></a> one of the variations is called <a href="Spatial_Latent_Dirichlet_Allocation" title="wikilink">Spatial Latent Dirichlet Allocation</a>.<a class="footnoteRef" href="#fn12" id="fnref12"><sup>12</sup></a></p>
+
+<p>Recently, LDA has been also applied to <a class="uri" href="bioinformatics" title="wikilink">bioinformatics</a> context.<a class="footnoteRef" href="#fn13" id="fnref13"><sup>13</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Pachinko_allocation" title="wikilink">Pachinko allocation</a></li>
+<li><a class="uri" href="tf-idf" title="wikilink">tf-idf</a></li>
+</ul>
+<h2 id="notes">Notes</h2>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://sourceforge.net/projects/jldadmm/">jLDADMM</a> A Java package for topic modeling on normal or short texts. jLDADMM includes implementations of LDA and the <em>one-topic-per-document</em> Dirichlet Multinomial Mixture model (i.e. mixture-of-unigrams). jLDADMM also provides an implementation for document clustering evaluation to compare topic models.</li>
+<li>Extremely useful lecture for understanding LDA: <a href="http://videolectures.net/mlss09uk_blei_tm/">LDA and Topic Modelling Video Lecture by David Blei</a> or <a href="https://www.youtube.com/watch?v=DDq3OVp9dNA/">same lecture on YouTube</a></li>
+<li><a href="http://mimno.infosci.cornell.edu/topics.html">D. Mimno's LDA Bibliography</a> An exhaustive list of LDA-related resources (incl. papers and some implementations)</li>
+<li><a class="uri" href="Gensim" title="wikilink">Gensim</a>, a Python+<a class="uri" href="NumPy" title="wikilink">NumPy</a> implementation of online LDA for inputs larger than the available RAM.</li>
+<li><a href="http://cran.r-project.org/web/packages/topicmodels/index.html">topicmodels</a> and <a href="http://cran.r-project.org/web/packages/lda/index.html">lda</a> are two <a href="R_(programming_language)" title="wikilink">R</a> packages for LDA analysis.</li>
+<li><a href="http://www.r-bloggers.com/RUG/2010/10/285/">"Text Mining with R" including LDA methods</a>, video presentation to the October 2011 meeting of the Los Angeles R users group</li>
+<li><a href="http://mallet.cs.umass.edu/index.php">MALLET</a> Open source Java-based package from the University of Massachusetts-Amherst for topic modeling with LDA, also has an independently developed GUI, the <a href="http://code.google.com/p/topic-modeling-tool/">Topic Modeling Tool</a></li>
+<li><a href="https://mahout.apache.org/users/clustering/latent-dirichlet-allocation.html">LDA in Mahout</a> implementation of LDA using <a class="uri" href="MapReduce" title="wikilink">MapReduce</a> on the <a class="uri" href="Hadoop" title="wikilink">Hadoop</a> platform</li>
+<li><a href="http://research.microsoft.com/en-us/um/cambridge/projects/infernet/docs/Latent%20Dirichlet%20Allocation.aspx">Latent Dirichlet Allocation (LDA) Tutorial for the Infer.NET Machine Computing Framework</a> Microsoft Research C# Machine Learning Framework</li>
+<li><a href="https://spark.apache.org/docs/latest/mllib-clustering.html#latent-dirichlet-allocation-lda">LDA in Spark</a>: Since version 1.3.0, <a href="Apache_Spark" title="wikilink">Apache Spark</a> also features an implementation of LDA</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Statistical_natural_language_processing" title="wikilink">Category:Statistical natural language processing</a> <a href="Category:Latent_variable_models" title="wikilink">Category:Latent variable models</a> <a href="Category:Probabilistic_models" title="wikilink">Category:Probabilistic models</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+<li id="fn2"><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="http://annalyn-ng.com/introLDA/index.html">"Layman's Explanation of Topic Modeling with LDA"</a><a href="#fnref3">↩</a></li>
+<li id="fn4"></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="#fnref6">↩</a></li>
+<li id="fn7"><a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="#fnref9">↩</a></li>
+<li id="fn10"><a href="#fnref10">↩</a></li>
+<li id="fn11"><a href="#fnref11">↩</a></li>
+<li id="fn12"><a href="#fnref12">↩</a></li>
+<li id="fn13">[<a class="uri" href="http://ieeexplore.ieee.org/xpl/login.jsp?tp">http://ieeexplore.ieee.org/xpl/login.jsp?tp</a>=&amp;arnumber;=6845514&amp;url;=http%3A%2F%2Fieeexplore.ieee.org%2Fxpls%2Fabs_all.jsp%3Farnumber%3D6845514 "Latent Dirichlet Allocation based on Gibbs Sampling for gene function prediction"]<a href="#fnref13">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

@@ -1,0 +1,836 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1355">Prime-factor FFT algorithm</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Prime-factor FFT algorithm</h1>
+<hr/>
+
+<p>The <strong>prime-factor algorithm (PFA)</strong>, also called the <strong>Good–Thomas algorithm</strong> (1958/1963), is a <a href="fast_Fourier_transform" title="wikilink">fast Fourier transform</a> (FFT) algorithm that re-expresses the <a href="discrete_Fourier_transform" title="wikilink">discrete Fourier transform</a> (DFT) of a size <em>N</em> = <em>N</em><sub>1</sub><em>N</em><sub>2</sub> as a two-dimensional <em>N</em><sub>1</sub>×<em>N</em><sub>2</sub> DFT, but <em>only</em> for the case where <em>N</em><sub>1</sub> and <em>N</em><sub>2</sub> are <a href="relatively_prime" title="wikilink">relatively prime</a>. These smaller transforms of size <em>N</em><sub>1</sub> and <em>N</em><sub>2</sub> can then be evaluated by applying PFA <a href="recursion" title="wikilink">recursively</a> or by using some other FFT algorithm.</p>
+
+<p>PFA should not be confused with the <strong>mixed-radix</strong> generalization of the popular <a href="Cooley–Tukey_FFT_algorithm" title="wikilink">Cooley–Tukey algorithm</a>, which also subdivides a DFT of size <em>N</em> = <em>N</em><sub>1</sub><em>N</em><sub>2</sub> into smaller transforms of size <em>N</em><sub>1</sub> and <em>N</em><sub>2</sub>. The latter algorithm can use <em>any</em> factors (not necessarily relatively prime), but it has the disadvantage that it also requires extra multiplications by roots of unity called <a href="twiddle_factor" title="wikilink">twiddle factors</a>, in addition to the smaller transforms. On the other hand, PFA has the disadvantages that it only works for relatively prime factors (e.g. it is useless for <a href="power_of_two" title="wikilink">power-of-two</a> sizes) and that it requires a more complicated re-indexing of the data based on the <a href="Chinese_remainder_theorem" title="wikilink">Chinese remainder theorem</a> (CRT). Note, however, that PFA can be combined with mixed-radix Cooley–Tukey, with the former factorizing <em>N</em> into relatively prime components and the latter handling repeated factors.</p>
+
+<p>PFA is also closely related to the nested <a href="Winograd_FFT_algorithm" title="wikilink">Winograd FFT algorithm</a>, where the latter performs the decomposed <em>N</em><sub>1</sub> by <em>N</em><sub>2</sub> transform via more sophisticated two-dimensional convolution techniques. Some older papers therefore also call Winograd's algorithm a PFA FFT.</p>
+
+<p>(Although the PFA is distinct from the Cooley–Tukey algorithm, Good's 1958 work on the PFA was cited as inspiration by Cooley and Tukey in their famous 1965 paper, and there was initially some confusion about whether the two algorithms were different. In fact, it was the only prior FFT work cited by them, as they were not then aware of the earlier research by Gauss and others.)</p>
+<h2 id="algorithm">Algorithm</h2>
+
+<p>Recall that the DFT is defined by the formula:</p>
+
+<p>
+
+<math display="block" id="Prime-factor_FFT_algorithm:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>X</mi>
+     <mi>k</mi>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <mi>n</mi>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <mi>N</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </munderover>
+     <mrow>
+      <msub>
+       <mi>x</mi>
+       <mi>n</mi>
+      </msub>
+      <msup>
+       <mi>e</mi>
+       <mrow>
+        <mo>-</mo>
+        <mrow>
+         <mfrac>
+          <mrow>
+           <mn>2</mn>
+           <mi>π</mi>
+           <mi>i</mi>
+          </mrow>
+          <mi>N</mi>
+         </mfrac>
+         <mi>n</mi>
+         <mi>k</mi>
+        </mrow>
+       </mrow>
+      </msup>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mrow>
+    <mi>k</mi>
+    <mo>=</mo>
+    <mrow>
+     <mn>0</mn>
+     <mo>,</mo>
+     <mi mathvariant="normal">…</mi>
+     <mo>,</mo>
+     <mrow>
+      <mi>N</mi>
+      <mo>-</mo>
+      <mn>1.</mn>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">formulae-sequence</csymbol>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>X</ci>
+      <ci>k</ci>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <sum></sum>
+        <apply>
+         <eq></eq>
+         <ci>n</ci>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <apply>
+        <minus></minus>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>x</ci>
+        <ci>n</ci>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>e</ci>
+        <apply>
+         <minus></minus>
+         <apply>
+          <times></times>
+          <apply>
+           <divide></divide>
+           <apply>
+            <times></times>
+            <cn type="integer">2</cn>
+            <ci>π</ci>
+            <ci>i</ci>
+           </apply>
+           <ci>N</ci>
+          </apply>
+          <ci>n</ci>
+          <ci>k</ci>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <ci>k</ci>
+     <list>
+      <cn type="integer">0</cn>
+      <ci>normal-…</ci>
+      <apply>
+       <minus></minus>
+       <ci>N</ci>
+       <cn type="float">1.</cn>
+      </apply>
+     </list>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{k}=\sum_{n=0}^{N-1}x_{n}e^{-\frac{2\pi i}{N}nk}\qquad k=0,\dots,N-1.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The PFA involves a re-indexing of the input and output arrays, which when substituted into the DFT formula transforms it into two nested DFTs (a two-dimensional DFT).</p>
+<h3 id="re-indexing">Re-indexing</h3>
+
+<p>Suppose that <em>N</em> = <em>N</em><sub>1</sub><em>N</em><sub>2</sub>, where <em>N</em><sub>1</sub> and <em>N</em><sub>2</sub> are relatively prime. In this case, we can define a <a href="bijection" title="wikilink">bijective</a> re-indexing of the input <em>n</em> and output <em>k</em> by:</p>
+
+<p>
+
+<math display="block" id="Prime-factor_FFT_algorithm:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>n</mi>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <msub>
+        <mi>n</mi>
+        <mn>1</mn>
+       </msub>
+       <msub>
+        <mi>N</mi>
+        <mn>2</mn>
+       </msub>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <msub>
+        <mi>n</mi>
+        <mn>2</mn>
+       </msub>
+       <msub>
+        <mi>N</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo lspace="2.5pt" rspace="2.5pt">mod</mo>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>n</ci>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>n</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>n</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n=n_{1}N_{2}+n_{2}N_{1}\mod N,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Prime-factor_FFT_algorithm:2">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>k</mi>
+    <mo>=</mo>
+    <mrow>
+     <mrow>
+      <mrow>
+       <msub>
+        <mi>k</mi>
+        <mn>1</mn>
+       </msub>
+       <msubsup>
+        <mi>N</mi>
+        <mn>2</mn>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msubsup>
+       <msub>
+        <mi>N</mi>
+        <mn>2</mn>
+       </msub>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <msub>
+        <mi>k</mi>
+        <mn>2</mn>
+       </msub>
+       <msubsup>
+        <mi>N</mi>
+        <mn>1</mn>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msubsup>
+       <msub>
+        <mi>N</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo lspace="2.5pt" rspace="2.5pt">mod</mo>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+   <mo>,</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>k</ci>
+    <apply>
+     <csymbol cd="latexml">modulo</csymbol>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>N</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>k</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>N</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k=k_{1}N_{2}^{-1}N_{2}+k_{2}N_{1}^{-1}N_{1}\mod N,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where <em>N</em><sub>1</sub><sup>−1</sup> denotes the <a href="modular_multiplicative_inverse" title="wikilink">modular multiplicative inverse</a> of <em>N</em><sub>1</sub> <a href="modular_arithmetic" title="wikilink">modulo</a> <em>N</em><sub>2</sub> and vice versa for <em>N</em><sub>2</sub><sup>−1</sup>; the indices <em>k</em><sub><em>a</em></sub> and <em>n</em><sub><em>a</em></sub> run from 0,...,<em>N</em><sub><em>a</em></sub>−1 (for <em>a</em> = 1, 2). These inverses only exist for relatively prime <em>N</em><sub>1</sub> and <em>N</em><sub>2</sub>, and that condition is also required for the first mapping to be bijective.</p>
+
+<p>This re-indexing of <em>n</em> is called the <em>Ruritanian</em> mapping (also <em>Good's</em> mapping), while this re-indexing of <em>k</em> is called the <em>CRT</em> mapping. The latter refers to the fact that <em>k</em> is the solution to the Chinese remainder problem <em>k</em> = <em>k</em><sub>1</sub> mod <em>N</em><sub>1</sub> and <em>k</em> = <em>k</em><sub>2</sub> mod <em>N</em><sub>2</sub>.</p>
+
+<p>(One could instead use the Ruritanian mapping for the output <em>k</em> and the CRT mapping for the input <em>n</em>, or various intermediate choices.)</p>
+
+<p>A great deal of research has been devoted to schemes for evaluating this re-indexing efficiently, ideally <a href="in-place_algorithm" title="wikilink">in-place</a>, while minimizing the number of costly modulo (remainder) operations (Chan, 1991, and references).</p>
+<h3 id="dft-re-expression">DFT re-expression</h3>
+
+<p>The above re-indexing is then substituted into the formula for the DFT, and in particular into the product <em>nk</em> in the exponent. Because <em>e</em><sup>2<em>πi</em></sup> = 1, this exponent is evaluated modulo <em>N</em>: any <em>N</em><sub>1</sub><em>N</em><sub>2</sub> = <em>N</em> cross term in the <em>nk</em> product can be set to zero. (Similarly, <em>X</em><sub><em>k</em></sub> and <em>x</em><sub><em>n</em></sub> are implicitly periodic in <em>N</em>, so their subscripts are evaluated modulo <em>N</em>.) The remaining terms give:</p>
+
+<p>
+
+<math display="block" id="Prime-factor_FFT_algorithm:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>X</mi>
+     <mrow>
+      <mrow>
+       <msub>
+        <mi>k</mi>
+        <mn>1</mn>
+       </msub>
+       <msubsup>
+        <mi>N</mi>
+        <mn>2</mn>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msubsup>
+       <msub>
+        <mi>N</mi>
+        <mn>2</mn>
+       </msub>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <msub>
+        <mi>k</mi>
+        <mn>2</mn>
+       </msub>
+       <msubsup>
+        <mi>N</mi>
+        <mn>1</mn>
+        <mrow>
+         <mo>-</mo>
+         <mn>1</mn>
+        </mrow>
+       </msubsup>
+       <msub>
+        <mi>N</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+     </mrow>
+    </msub>
+    <mo>=</mo>
+    <mrow>
+     <munderover>
+      <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+      <mrow>
+       <msub>
+        <mi>n</mi>
+        <mn>1</mn>
+       </msub>
+       <mo>=</mo>
+       <mn>0</mn>
+      </mrow>
+      <mrow>
+       <msub>
+        <mi>N</mi>
+        <mn>1</mn>
+       </msub>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+     </munderover>
+     <mrow>
+      <mrow>
+       <mo>(</mo>
+       <mrow>
+        <munderover>
+         <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+         <mrow>
+          <msub>
+           <mi>n</mi>
+           <mn>2</mn>
+          </msub>
+          <mo>=</mo>
+          <mn>0</mn>
+         </mrow>
+         <mrow>
+          <msub>
+           <mi>N</mi>
+           <mn>2</mn>
+          </msub>
+          <mo>-</mo>
+          <mn>1</mn>
+         </mrow>
+        </munderover>
+        <mrow>
+         <msub>
+          <mi>x</mi>
+          <mrow>
+           <mrow>
+            <msub>
+             <mi>n</mi>
+             <mn>1</mn>
+            </msub>
+            <msub>
+             <mi>N</mi>
+             <mn>2</mn>
+            </msub>
+           </mrow>
+           <mo>+</mo>
+           <mrow>
+            <msub>
+             <mi>n</mi>
+             <mn>2</mn>
+            </msub>
+            <msub>
+             <mi>N</mi>
+             <mn>1</mn>
+            </msub>
+           </mrow>
+          </mrow>
+         </msub>
+         <msup>
+          <mi>e</mi>
+          <mrow>
+           <mo>-</mo>
+           <mrow>
+            <mfrac>
+             <mrow>
+              <mn>2</mn>
+              <mi>π</mi>
+              <mi>i</mi>
+             </mrow>
+             <msub>
+              <mi>N</mi>
+              <mn>2</mn>
+             </msub>
+            </mfrac>
+            <msub>
+             <mi>n</mi>
+             <mn>2</mn>
+            </msub>
+            <msub>
+             <mi>k</mi>
+             <mn>2</mn>
+            </msub>
+           </mrow>
+          </mrow>
+         </msup>
+        </mrow>
+       </mrow>
+       <mo>)</mo>
+      </mrow>
+      <msup>
+       <mi>e</mi>
+       <mrow>
+        <mo>-</mo>
+        <mrow>
+         <mfrac>
+          <mrow>
+           <mn>2</mn>
+           <mi>π</mi>
+           <mi>i</mi>
+          </mrow>
+          <msub>
+           <mi>N</mi>
+           <mn>1</mn>
+          </msub>
+         </mfrac>
+         <msub>
+          <mi>n</mi>
+          <mn>1</mn>
+         </msub>
+         <msub>
+          <mi>k</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+       </mrow>
+      </msup>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>X</ci>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>k</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>N</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>k</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>N</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <eq></eq>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>n</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <cn type="integer">0</cn>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <cn type="integer">1</cn>
+       </apply>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <sum></sum>
+         <apply>
+          <eq></eq>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>n</ci>
+           <cn type="integer">2</cn>
+          </apply>
+          <cn type="integer">0</cn>
+         </apply>
+        </apply>
+        <apply>
+         <minus></minus>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>N</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>x</ci>
+         <apply>
+          <plus></plus>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>n</ci>
+            <cn type="integer">1</cn>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>N</ci>
+            <cn type="integer">2</cn>
+           </apply>
+          </apply>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>n</ci>
+            <cn type="integer">2</cn>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>N</ci>
+            <cn type="integer">1</cn>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>e</ci>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <apply>
+            <divide></divide>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <ci>π</ci>
+             <ci>i</ci>
+            </apply>
+            <apply>
+             <csymbol cd="ambiguous">subscript</csymbol>
+             <ci>N</ci>
+             <cn type="integer">2</cn>
+            </apply>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>n</ci>
+            <cn type="integer">2</cn>
+           </apply>
+           <apply>
+            <csymbol cd="ambiguous">subscript</csymbol>
+            <ci>k</ci>
+            <cn type="integer">2</cn>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>e</ci>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <divide></divide>
+          <apply>
+           <times></times>
+           <cn type="integer">2</cn>
+           <ci>π</ci>
+           <ci>i</ci>
+          </apply>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>N</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>n</ci>
+          <cn type="integer">1</cn>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>k</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   X_{k_{1}N_{2}^{-1}N_{2}+k_{2}N_{1}^{-1}N_{1}}=\sum_{n_{1}=0}^{N_{1}-1}\left(%
+\sum_{n_{2}=0}^{N_{2}-1}x_{n_{1}N_{2}+n_{2}N_{1}}e^{-\frac{2\pi i}{N_{2}}n_{2}%
+k_{2}}\right)e^{-\frac{2\pi i}{N_{1}}n_{1}k_{1}}.
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The inner and outer sums are simply DFTs of size <em>N</em><sub>2</sub> and <em>N</em><sub>1</sub>, respectively.</p>
+
+<p>(Here, we have used the fact that <em>N</em><sub>1</sub><sup>−1</sup><em>N</em><sub>1</sub> is unity when evaluated modulo <em>N</em><sub>2</sub> in the inner sum's exponent, and vice versa for the outer sum's exponent.)</p>
+<h2 id="references">References</h2>
+<ul>
+<li>
+
+<p>Addendum, <em>ibid.</em> <strong>22</strong> (2), 373-375 (1960) .</p></li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Rader's_FFT_algorithm" title="wikilink">Rader's FFT algorithm</a></li>
+<li><a href="Bluestein's_FFT_algorithm" title="wikilink">Bluestein's FFT algorithm</a></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:FFT_algorithms" title="wikilink">Category:FFT algorithms</a></p>
+</body>
+</html>

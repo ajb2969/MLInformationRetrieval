@@ -1,0 +1,105 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1204">Register allocation</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Register allocation</h1>
+<hr/>
+
+<p>In <a href="compiler_optimization" title="wikilink">compiler optimization</a>, <strong>register allocation</strong> is the process of assigning a large number of target program <a href="Variable_(programming)" title="wikilink">variables</a> onto a small number of <a href="Central_processing_unit" title="wikilink">CPU</a> <a href="processor_register" title="wikilink">registers</a>. Register allocation can happen over a <a href="basic_block" title="wikilink">basic block</a> (<em>local register allocation</em>), over a whole function/procedure (<em>global register allocation</em>), or across function boundaries traversed via call-graph (<em>interprocedural register allocation</em>). When done per function/procedure the calling convention may require insertion of save/restore around each call-site.</p>
+<h2 id="introduction">Introduction</h2>
+
+<p>In many programming languages, the programmer has the illusion of allocating arbitrarily many variables. However, during compilation, the <a href="Compiler_(computing)" title="wikilink">compiler</a> must decide how to allocate these variables to a small, finite set of registers. Not all variables are <a href="liveness_analysis" title="wikilink">in use</a> (or "live") at the same time, so some registers may be assigned to more than one variable. However, two variables in use at the same time cannot be assigned to the same register without corrupting its value. Variables which cannot be assigned to some register must be kept in <a href="random_access_memory" title="wikilink">RAM</a> and loaded in/out for every read/write, a process called <em>spilling</em>. Accessing RAM is significantly slower than accessing registers and slows down the execution speed of the compiled program, so an optimizing compiler aims to assign as many variables to registers as possible. <a href="Register_pressure" title="wikilink">Register pressure</a> is the term used when there are fewer hardware registers available than would have been optimal; higher pressure usually means that more spills and reloads are needed.</p>
+
+<p>In addition, programs can be further optimized by assigning the same register to a source and destination of a <code>move</code> instruction whenever possible. This is especially important if the compiler is using other optimizations such as <a href="Static_single_assignment_form" title="wikilink">SSA analysis</a>, which artificially generates additional <code>move</code> instructions in the intermediate code.</p>
+<h2 id="isomorphism-to-graph-colorability">Isomorphism to graph colorability</h2>
+
+<p>Through <a href="liveness_analysis" title="wikilink">liveness analysis</a>, compilers can determine which sets of variables are live at the same time, as well as variables which are involved in <code>move</code> instructions. Using this information, the compiler can construct a graph such that every <a href="Vertex_(graph_theory)" title="wikilink">vertex</a> represents a unique variable in the program. <em>Interference edges</em> connect pairs of vertices which are live at the same time, and <em>preference edges</em> connect pairs of vertices which are involved in move instructions. Register allocation can then be reduced to the problem of <a href="Graph_coloring#Vertex_coloring" title="wikilink">K-coloring</a> the resulting graph, where K is the number of registers available on the target architecture. No two vertices sharing an interference edge may be assigned the same color, and vertices sharing a preference edge should be assigned the same color if possible. Some of the vertices may be precolored to begin with, representing variables which must be kept in certain registers due to calling conventions or communication between modules. As <a href="graph_coloring" title="wikilink">graph coloring</a> in general is <a class="uri" href="NP-complete" title="wikilink">NP-complete</a>, so is register allocation. However, good algorithms exist which balance performance with quality of compiled code.</p>
+
+<p>It may be the case that the graph coloring algorithm fails to find a coloring of the interference graph. In this case, some of the variables must be spilled to memory in order to enable the remaining variables to be allocated to registers. This may be accomplished by a recursive search that tries spilling one variable and then recursively either colors the remaining set of variables or continues spilling recursively until all remaining unspilled variables can be colored and assigned to registers.</p>
+<h2 id="spilling">Spilling</h2>
+
+<p>In most register allocators, each variable is assigned to either a CPU register or to main memory. The advantage of using a register is speed. Computers have a limited number of registers, so not all variables can be assigned to registers. A "spilled variable" is a variable in main memory rather than in a CPU register. The operation of moving a variable from a register to memory is called <em>spilling,</em> while the reverse operation of moving a variable from memory to a register is called <em>filling.</em> For example, a 32-bit variable spilled to memory gets 32 bits of stack space allocated and all references to the variable are then to that memory. Such a variable has a much slower processing speed than a variable in a register. When deciding which variables to spill, multiple factors are considered: execution time, code space, data space.</p>
+<h2 id="iterated-register-coalescing">Iterated Register Coalescing</h2>
+
+<p>Register allocators have several types, with Iterated Register Coalescing (IRC) being a more common one. IRC was invented by LAL George and <a href="Andrew_Appel" title="wikilink">Andrew Appel</a> in 1996, building on <a href="Chaitin's_algorithm" title="wikilink">earlier work</a> by <a href="Gregory_Chaitin" title="wikilink">Gregory Chaitin</a>. IRC works based on a few principles. First, if there are any non-move related vertices in the graph with degree less than K the graph can be simplified by removing those vertices, since once those vertices are added back in it is guaranteed that a color can be found for them (simplification). Second, two vertices sharing a preference edge whose adjacency sets combined have a degree less than K can be combined into a single vertex, by the same reasoning (coalescing). If neither of the two steps can simplify the graph, simplification can be run again on move-related vertices (freezing). Finally, if nothing else works, vertices can be marked for potential spilling and removed from the graph (spill). Since all of these steps reduce the degrees of vertices in the graph, vertices may transform from being high-degree (degree &gt; K) to low-degree during the algorithm, enabling them to be simplified or coalesced. Thus, the stages of the algorithm are iterated to ensure aggressive simplification and coalescing. The pseudo-code is thus:</p>
+
+<p><code> function IRC_color g K :</code><br/>
+<code> repeat</code><br/>
+<code>   if </code><a href="∃" title="wikilink"><code>∃v</code></a><code> s.t. ¬moveRelated(v) </code><a href="∧" title="wikilink"><code>∧</code></a><code> degree(v) </code><code>Cooper, Dasgupta, "Tailoring Graph-coloring Register Allocation For Runtime Compilation", </code><a href="http://llvm.org/pubs/2006-04-04-CGO-GraphColoring.html"><code>http://llvm.org/pubs/2006-04-04-CGO-GraphColoring.html</code></a><code> The "lossy" moniker refers to the imprecision the algorithm introduces into the interference graph. This optimization reduces the costly graph building step of Chaitin-Briggs making it suitable for runtime compilation. Experiments indicate that this lossy register allocator outperforms linear scan on the majority of tests used.</code></p>
+
+<p>"Optimal" register allocation algorithms based on Integer Programming have been developed by Goodwin and Wilken for regular architectures. These algorithms have been extended to irregular architectures by Kong and Wilken.</p>
+
+<p>While the worst case execution time is exponential, the experimental results show that the actual time is typically of order 
+
+<math display="inline" id="Register_allocation:0">
+ <semantics>
+  <mrow>
+   <mi>O</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msup>
+     <mi>n</mi>
+     <mn>2.5</mn>
+    </msup>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>O</ci>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>n</ci>
+     <cn type="float">2.5</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   O(n^{2.5})
+  </annotation>
+ </semantics>
+</math>
+
+ of the number of constraints 
+
+<math display="inline" id="Register_allocation:1">
+ <semantics>
+  <mi>n</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>n</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   n
+  </annotation>
+ </semantics>
+</math>
+
+.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a></p>
+
+<p>The possibility of doing register allocation on <a href="Static_single_assignment_form" title="wikilink">SSA-form</a> programs is a focus of recent research.<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> The interference graphs of SSA-form programs are <a href="Chordal_graph" title="wikilink">chordal</a>, and as such, they can be colored in polynomial time. To clarify the sources of NP-completeness, recent research has examined register allocation in a broader context.<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a><a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Strahler_number" title="wikilink">Strahler number</a>, the minimum number of registers needed to evaluate an expression tree.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></li>
+</ul>
+<h2 id="references">References</h2>
+
+<p>"</p>
+
+<p><a href="Category:Compiler_optimizations" title="wikilink">Category:Compiler optimizations</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Kong, Wilken, "Precise Register Allocation for Irregular Architectures", <a class="uri" href="http://www.ece.ucdavis.edu/cerl/cerl_arch/irreg.pdf">http://www.ece.ucdavis.edu/cerl/cerl_arch/irreg.pdf</a><a href="#fnref1">↩</a></li>
+<li id="fn2">Brisk, Hack, Palsberg, Pereira, Rastello, "SSA-Based Register Allocation", ESWEEK Tutorial <a class="uri" href="http://thedude.cc.gt.atl.ga.us/tutorials/1/">http://thedude.cc.gt.atl.ga.us/tutorials/1/</a><a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="#fnref3">↩</a></li>
+<li id="fn4">; also <a class="uri" href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.130.7256">http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.130.7256</a> Proceedings of the 19th International Workshop on Languages and Compilers for Parallel Computing, 2006, pages 2–4.<a href="#fnref4">↩</a></li>
+<li id="fn5">.<a href="#fnref5">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

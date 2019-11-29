@@ -1,0 +1,1901 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="365">Kadir–Brady saliency detector</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Kadir–Brady saliency detector</h1>
+<hr/>
+
+<p>The <strong>Kadir–Brady saliency detector</strong> extracts features of objects in images that are distinct and representative. It was invented by Timor Kadir and Michael Brady<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> in 2001 and an affine invariant version was introduced by Kadir and Brady in 2004,<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a><a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a> and a robust version was designed by Shao et al.<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a> in 2007.</p>
+
+<p>The detector uses the algorithms to more efficiently remove background noise and so more easily identify features which can be used in a 3D model. As the detector scans images it uses the three basics of global transformation, local perturbations and intra-class variations to define the areas of search, and identifies unique regions of those images rather than using the more traditional corner or blob searches. It attempts to be invariant to affine transformations and illumination changes.<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+
+<p>This leads to a more object oriented search than previous methods and outperforms other detectors due to non blurring of the images, an ability to ignore slowly changing regions and a broader definition of surface geometry properties. As a result the Kadir–Brady saliency detector is more capable at object recognition than other detectors whose main focus is on whole image correspondence.</p>
+<h2 id="introduction">Introduction</h2>
+
+<p>Many <a href="computer_vision" title="wikilink">computer vision</a> and <a href="image_processing" title="wikilink">image processing</a> applications work directly with the features extracted from an image, rather than the raw image; for example, for computing image correspondences, or for <a href="learning_object" title="wikilink">learning object</a> categories. Depending on the applications, different characteristics are preferred. However there are three broad classes of image change under which good performance may be required: </p>
+
+<p><em>Global transformation</em>: Features should be repeatable across the expected class of global image transformations. These include both geometric and photometric transformations that arise due to changes in the imaging conditions. For example, region detection should be covariant with viewpoint as illustrated in Figure 1. In short, we require the segmentation to commute with viewpoint change. This property will be evaluated on the repeatability and accuracy of localization and region estimation.</p>
+
+<p><em>Local perturbations</em>: Features should be insensitive to classes of semi-local image disturbances. For example a feature responding to the eye of a human face should be unaffected by any motion of the mouth. A second class of disturbance is where a region neighbours a foreground/background boundary. The detector can be required to detect the foreground region despite changes in the background.</p>
+
+<p><em>Intra-class variations</em>: Features should capture corresponding object parts under intra-class variations in objects. For example the headlight of a car for different brands of car (imaged from the same viewpoint).</p>
+
+<p>All <a href="Feature_detection" title="wikilink">Feature detection</a> algorithms attempt to detect regions which are stable under the three types of image change described above. Instead of finding a corner, or blob, or any specific shape of region, the Kadir–Brady saliency detector looks for regions which are locally complex, and globally discriminative. Such regions usually correspond to regions more stable under these types of image change.</p>
+<h2 id="information-theoretic-saliency">Information-theoretic saliency</h2>
+
+<p>In the field of <a href="Information_theory" title="wikilink">Information theory</a> <a href="Information_entropy" title="wikilink">Shannon entropy</a> is defined to quantify the complexity of a distribution <em>p</em> as 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:0">
+ <semantics>
+  <mrow>
+   <mi>p</mi>
+   <mrow>
+    <mi>log</mi>
+    <mpadded width="+1.7pt">
+     <mi>p</mi>
+    </mpadded>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>p</ci>
+    <apply>
+     <log></log>
+     <ci>p</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   p\log p\,
+  </annotation>
+ </semantics>
+</math>
+
+. Therefore higher entropy means <em>p</em> is more complex hence more unpredictable.</p>
+
+<p>To measure the complexity of an image region 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:1">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <mi>x</mi>
+   <mo>,</mo>
+   <mi>R</mi>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <ci>x</ci>
+    <ci>R</ci>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{x,R\}
+  </annotation>
+ </semantics>
+</math>
+
+ around point 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:2">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ with shape 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:3">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+, a descriptor 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:4">
+ <semantics>
+  <mi>D</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>D</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   D
+  </annotation>
+ </semantics>
+</math>
+
+ that takes on values 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:5">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>d</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>,</mo>
+   <mi mathvariant="normal">…</mi>
+   <mo>,</mo>
+   <msub>
+    <mi>d</mi>
+    <mi>r</mi>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <list>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>d</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <ci>normal-…</ci>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>d</ci>
+     <ci>r</ci>
+    </apply>
+   </list>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {d_{1},\dots,d_{r}}
+  </annotation>
+ </semantics>
+</math>
+
+ (e.g., in an <a href="8-bit" title="wikilink">8 bit</a> grey level image, D would range from 0 to 255 for each pixel) is defined so that 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:6">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mi>D</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <msub>
+     <mi>d</mi>
+     <mi>i</mi>
+    </msub>
+    <mo>,</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>R</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <ci>D</ci>
+    </apply>
+    <vector>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>d</ci>
+      <ci>i</ci>
+     </apply>
+     <ci>x</ci>
+     <ci>R</ci>
+    </vector>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{D}(d_{i},x,R)
+  </annotation>
+ </semantics>
+</math>
+
+, the probability of descriptor value 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:7">
+ <semantics>
+  <msub>
+   <mi>d</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>d</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   d_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ occurs in region 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:8">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <mi>x</mi>
+   <mo>,</mo>
+   <mi>R</mi>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <ci>x</ci>
+    <ci>R</ci>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{x,R\}
+  </annotation>
+ </semantics>
+</math>
+
+ can be computed. Further, the entropy of image region 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:9">
+ <semantics>
+  <msub>
+   <mi>R</mi>
+   <mi>x</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>R</ci>
+    <ci>x</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R_{x}
+  </annotation>
+ </semantics>
+</math>
+
+ can compute as</p>
+
+<p>
+
+<math display="block" id="Kadir–Brady_saliency_detector:10">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>H</mi>
+      <mi>D</mi>
+     </msub>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>x</mi>
+      <mo>,</mo>
+      <mi>R</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mo>-</mo>
+     <mrow>
+      <munder>
+       <mo largeop="true" movablelimits="false" symmetric="true">∑</mo>
+       <mrow>
+        <mi>i</mi>
+        <mo>∈</mo>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <mrow>
+          <mn>1</mn>
+          <mi mathvariant="normal">…</mi>
+          <mi>r</mi>
+         </mrow>
+         <mo stretchy="false">)</mo>
+        </mrow>
+       </mrow>
+      </munder>
+      <mrow>
+       <msub>
+        <mi>P</mi>
+        <mi>D</mi>
+       </msub>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>d</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>,</mo>
+        <mi>x</mi>
+        <mo>,</mo>
+        <mi>R</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mrow>
+        <mi>log</mi>
+        <msub>
+         <mi>P</mi>
+         <mi>D</mi>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>d</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>,</mo>
+        <mi>x</mi>
+        <mo>,</mo>
+        <mi>R</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+    </mrow>
+   </mrow>
+   <mo>.</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>H</ci>
+      <ci>D</ci>
+     </apply>
+     <interval closure="open">
+      <ci>x</ci>
+      <ci>R</ci>
+     </interval>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <in></in>
+        <ci>i</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">1</cn>
+         <ci>normal-…</ci>
+         <ci>r</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>P</ci>
+        <ci>D</ci>
+       </apply>
+       <vector>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>d</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>x</ci>
+        <ci>R</ci>
+       </vector>
+       <apply>
+        <log></log>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>P</ci>
+         <ci>D</ci>
+        </apply>
+       </apply>
+       <vector>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>d</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>x</ci>
+        <ci>R</ci>
+       </vector>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H_{D}(x,R)=-\sum_{i\in(1\dots r)}P_{D}(d_{i},x,R)\log P_{D}(d_{i},x,R).
+  </annotation>
+ </semantics>
+</math>
+
+ Using this entropy equation we can further calculate 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:11">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>H</mi>
+    <mi>D</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>R</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>H</ci>
+     <ci>D</ci>
+    </apply>
+    <interval closure="open">
+     <ci>x</ci>
+     <ci>R</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H_{D}(x,R)
+  </annotation>
+ </semantics>
+</math>
+
+ for every point 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:12">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ and region shape 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:13">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+. A more complex region, like the eye region, has a more complex distributor and hence higher entropy.</p>
+
+<p>
+
+<math display="inline" id="Kadir–Brady_saliency_detector:14">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>H</mi>
+    <mi>D</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>R</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>H</ci>
+     <ci>D</ci>
+    </apply>
+    <interval closure="open">
+     <ci>x</ci>
+     <ci>R</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H_{D}(x,R)
+  </annotation>
+ </semantics>
+</math>
+
+ is a good measure for local complexity. Entropy only measures the statistic of the local attribute. It does not measure the spatial arrangement of the local attribute. However, these four regions are not equally discriminative under scale change. This observation is used to define measure on discriminative in subsections.</p>
+
+<p>The following subsections will discuss different methods to select regions with high local complexity and greater discrimination between different regions.</p>
+<h3 id="similarity-invariant-saliency">Similarity-invariant saliency</h3>
+
+<p>The first version of the Kadir–Brady saliency detector[10] only finds Salient regions invariant under <a href="similarity_(geometry)" title="wikilink">similarity transformation</a>. The algorithm finds circle regions with different scales. In other words given 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:15">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>H</mi>
+    <mi>D</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <mi>s</mi>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>H</ci>
+     <ci>D</ci>
+    </apply>
+    <interval closure="open">
+     <ci>x</ci>
+     <ci>s</ci>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H_{D}(x,s)
+  </annotation>
+ </semantics>
+</math>
+
+, where s is the <a href="scale_parameter" title="wikilink">scale parameter</a> of a circle region 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:16">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+, the algorithm selects a set of circle regions, 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:17">
+ <semantics>
+  <mrow>
+   <mo stretchy="false">{</mo>
+   <mrow>
+    <mrow>
+     <msub>
+      <mi>x</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>,</mo>
+     <msub>
+      <mi>s</mi>
+      <mi>i</mi>
+     </msub>
+     <mo>;</mo>
+     <mi>i</mi>
+    </mrow>
+    <mo>=</mo>
+    <mrow>
+     <mn>1</mn>
+     <mi mathvariant="normal">…</mi>
+     <mi>N</mi>
+    </mrow>
+   </mrow>
+   <mo stretchy="false">}</mo>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <set>
+    <apply>
+     <eq></eq>
+     <list>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>x</ci>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>s</ci>
+       <ci>i</ci>
+      </apply>
+      <ci>i</ci>
+     </list>
+     <apply>
+      <times></times>
+      <cn type="integer">1</cn>
+      <ci>normal-…</ci>
+      <ci>N</ci>
+     </apply>
+    </apply>
+   </set>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \{x_{i},s_{i};i=1\dots N\}
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>The method consists of three steps:</p>
+<ul>
+<li>Calculation of Shannon entropy of local image attributes for each x over a range of scales — 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:18">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>H</mi>
+     <mi>D</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>s</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mrow>
+     <msub>
+      <mo largeop="true" symmetric="true">∑</mo>
+      <mrow>
+       <mi>i</mi>
+       <mo>∈</mo>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>1</mn>
+         <mi mathvariant="normal">…</mi>
+         <mi>r</mi>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </msub>
+     <mrow>
+      <mrow>
+       <msub>
+        <mi>P</mi>
+        <mi>D</mi>
+       </msub>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>d</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>,</mo>
+        <mi>x</mi>
+        <mo>,</mo>
+        <mi>s</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mrow>
+        <mi>log</mi>
+        <msub>
+         <mi>P</mi>
+         <mi>D</mi>
+        </msub>
+       </mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>d</mi>
+         <mi>i</mi>
+        </msub>
+        <mo>,</mo>
+        <mi>x</mi>
+        <mo>,</mo>
+        <mi>s</mi>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>/</mo>
+      <mn>10</mn>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>H</ci>
+      <ci>D</ci>
+     </apply>
+     <interval closure="open">
+      <ci>x</ci>
+      <ci>s</ci>
+     </interval>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <sum></sum>
+       <apply>
+        <in></in>
+        <ci>i</ci>
+        <apply>
+         <times></times>
+         <cn type="integer">1</cn>
+         <ci>normal-…</ci>
+         <ci>r</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>P</ci>
+         <ci>D</ci>
+        </apply>
+        <vector>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>d</ci>
+          <ci>i</ci>
+         </apply>
+         <ci>x</ci>
+         <ci>s</ci>
+        </vector>
+        <apply>
+         <log></log>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>P</ci>
+          <ci>D</ci>
+         </apply>
+        </apply>
+        <vector>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>d</ci>
+          <ci>i</ci>
+         </apply>
+         <ci>x</ci>
+         <ci>s</ci>
+        </vector>
+       </apply>
+       <cn type="integer">10</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H_{D}(x,s)=-\sum_{i\in(1\dots r)}P_{D}(d_{i},x,s)\log P_{D}(d_{i},x,s)/10
+  </annotation>
+ </semantics>
+</math>
+
+;</li>
+<li>Select scales at which the entropy over scale function exhibits a peak — 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:19">
+ <semantics>
+  <msub>
+   <mi>s</mi>
+   <mi>p</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>s</ci>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{p}
+  </annotation>
+ </semantics>
+</math>
+
+ ;</li>
+<li>Calculate the magnitude change of the PDF as a function of scale at each peak — 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:20">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msub>
+     <mi>W</mi>
+     <mi>D</mi>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>x</mi>
+     <mo>,</mo>
+     <mi>s</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mo largeop="true" symmetric="true">∑</mo>
+     <mrow>
+      <mi>i</mi>
+      <mo>∈</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mn>1</mn>
+        <mi mathvariant="normal">…</mi>
+        <mi>r</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </msub>
+    <mrow>
+     <mo stretchy="false">|</mo>
+     <mrow>
+      <mfrac>
+       <mtext>Part II</mtext>
+       <mtext>Part IIsIIs</mtext>
+      </mfrac>
+      <msub>
+       <mi>P</mi>
+       <mrow>
+        <mi>D</mi>
+        <mo>,</mo>
+       </mrow>
+      </msub>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <msub>
+        <mi>d</mi>
+        <mi>i</mi>
+       </msub>
+       <mo>,</mo>
+       <mi>x</mi>
+       <mo>,</mo>
+       <mi>s</mi>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">|</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>W</ci>
+      <ci>D</ci>
+     </apply>
+     <interval closure="open">
+      <ci>x</ci>
+      <ci>s</ci>
+     </interval>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <sum></sum>
+      <apply>
+       <in></in>
+       <ci>i</ci>
+       <apply>
+        <times></times>
+        <cn type="integer">1</cn>
+        <ci>normal-…</ci>
+        <ci>r</ci>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <abs></abs>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <mtext>Part II</mtext>
+        <mtext>Part IIsIIs</mtext>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>P</ci>
+        <cerror>
+         <csymbol cd="ambiguous">fragments</csymbol>
+         <csymbol cd="unknown">D</csymbol>
+         <ci>normal-,</ci>
+        </cerror>
+       </apply>
+       <vector>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>d</ci>
+         <ci>i</ci>
+        </apply>
+        <ci>x</ci>
+        <ci>s</ci>
+       </vector>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W_{D}(x,s)=\sum_{i\in(1\dots r)}|\frac{\@@section{part}{Pt1}{I}{Part~I}{{\@tag%
+[][]{I}}}{{\@tag[][]{Part~I}}}}{\@@section{part}{Pt2}{II}{Part~II}{{\@tag[][]{%
+II}s}}{{\@tag[][]{Part~II}s}}}P_{D,}(d_{i},x,s)|
+  </annotation>
+ </semantics>
+</math>
+
+ (s).</li>
+</ul>
+
+<p>The ﬁnal saliency 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:21">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>Y</mi>
+    <mi>D</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>s</mi>
+     <mi>p</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>Y</ci>
+     <ci>D</ci>
+    </apply>
+    <interval closure="open">
+     <ci>x</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>p</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y_{D}(x,s_{p})
+  </annotation>
+ </semantics>
+</math>
+
+ is the product of 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:22">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>H</mi>
+    <mi>D</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>s</mi>
+     <mi>p</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>H</ci>
+     <ci>D</ci>
+    </apply>
+    <interval closure="open">
+     <ci>x</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>p</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H_{D}(x,s_{p})
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:23">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>W</mi>
+    <mi>D</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>s</mi>
+     <mi>p</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>W</ci>
+     <ci>D</ci>
+    </apply>
+    <interval closure="open">
+     <ci>x</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>p</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W_{D}(x,s_{p})
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+
+<p>For each x the method picks a scale 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:24">
+ <semantics>
+  <msub>
+   <mi>s</mi>
+   <mi>p</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>s</ci>
+    <ci>p</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s_{p}
+  </annotation>
+ </semantics>
+</math>
+
+ and calculates salient score 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:25">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>Y</mi>
+    <mi>D</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>s</mi>
+     <mi>p</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>Y</ci>
+     <ci>D</ci>
+    </apply>
+    <interval closure="open">
+     <ci>x</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>p</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y_{D}(x,s_{p})
+  </annotation>
+ </semantics>
+</math>
+
+. By comparing 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:26">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>Y</mi>
+    <mi>D</mi>
+   </msub>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mi>x</mi>
+    <mo>,</mo>
+    <msub>
+     <mi>s</mi>
+     <mi>p</mi>
+    </msub>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>Y</ci>
+     <ci>D</ci>
+    </apply>
+    <interval closure="open">
+     <ci>x</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>s</ci>
+      <ci>p</ci>
+     </apply>
+    </interval>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Y_{D}(x,s_{p})
+  </annotation>
+ </semantics>
+</math>
+
+ of different points 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:27">
+ <semantics>
+  <mi>x</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>x</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   x
+  </annotation>
+ </semantics>
+</math>
+
+ the detector can rank the saliency of points and pick the most representative ones.</p>
+<h3 id="affine-invariant-saliency">Affine-invariant saliency</h3>
+
+<p>Previous method is invariant to the similarity group of geometric transformations and to photometric shifts. However, as mentioned in the opening remarks, the ideal detector should detect region invariant up to viewpoint change. There are several detector [] can detect affine invariant region which is a better approximation of viewpoint change than similarity transformation.</p>
+
+<p>To detect affine invariant region, the detector need to detect ellipse as in figure 4. 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:28">
+ <semantics>
+  <mi>R</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>R</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   R
+  </annotation>
+ </semantics>
+</math>
+
+ now is parameterized by three parameter (s, "ρ", "θ"), where "ρ" is the axis ratio and "θ" the orientation of the ellipse.</p>
+
+<p>This modification increases the search space of the previous algorithm from a scale to a set of parameters and therefore the complexity of the affine invariant saliency detector increases. In practice the affine invariant saliency detector starts with the <a href="Railroad_switch" title="wikilink">set of points</a> and scales generated from the similarity invariant saliency detector then iteratively approximates the suboptimal parameters.</p>
+<h3 id="comparison">Comparison</h3>
+
+<p>Although similarity invariant saliency detector is faster than Affine invariant saliency detector it also has the drawback of favoring isotropic structure, since the discriminative measure 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:29">
+ <semantics>
+  <msub>
+   <mi>W</mi>
+   <mi>D</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>W</ci>
+    <ci>D</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   W_{D}
+  </annotation>
+ </semantics>
+</math>
+
+ is measured over isotropic scale.</p>
+
+<p>To summarize: Affine invariant saliency detector is invariant to <a href="affine_transformation" title="wikilink">affine transformation</a> and able to detect more generate salient regions.</p>
+<h3 id="salient-volume">Salient volume</h3>
+
+<p>It is intuitive to pick points from a higher salient score directly and stop when a certain number of threshold on "number of points" or "salient score" is satisfied. Natural images contain noise and <a href="motion_blur" title="wikilink">motion blur</a> which both act as randomisers and generally increase entropy, affecting previously low entropy values more than high entropy values.</p>
+
+<p>A more robust method would be to pick regions rather than points in entropy space. Although the individual pixels within a salient region may be affected at any given instant, by the noise, it is unlikely to affect all of them in such a way that the region as a whole becomes non-salient.</p>
+
+<p>It is also necessary to analyze the whole saliency space such that each salient feature is represented. A global threshold approach would result in highly salient features in one part of the image dominating the rest. A local threshold approach would require the setting of another scale parameter.</p>
+
+<p>A simple clustering algorithm meets these two requirements are used at the end of the algorithm. It works by selecting highly salient points that have local support i.e. nearby points with similar saliency and scale. Each region must be sufficiently distant from all others (in R3) to qualify as a separate entity. For robustness we use a representation that includes all of the points in a selected region. The method works as follows:</p>
+<ol>
+<li>Apply a global threshold.</li>
+<li>Choose the highest salient point in saliency-space (Y).</li>
+<li>Find the K nearest neighbours (K is a pre-set constant).</li>
+<li>Test the support of these using variance of the centre points.</li>
+<li>Find distance, D, in R3 from salient regions already clustered.</li>
+<li>Accept, if D &gt; scalemean of the region and if sufficiently clustered (variance is less than pre-set threshold Vth ).</li>
+<li>Store as the mean scale and spatial location of K points.</li>
+<li>Repeat from step 2 with next highest salient point.</li>
+</ol>
+
+<p>The algorithm is implemented as GreedyCluster1.m in matlab by Dr. Timor Kadir<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+<h2 id="performance-evaluation">Performance evaluation</h2>
+
+<p>In the field of <a href="computer_vision" title="wikilink">computer vision</a> different <a href="Feature_Detectors" title="wikilink">feature detectors</a> have been evaluated by several tests. The most profound evaluation is published in the International Journal of Computer Vision in 2006.<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a> The following subsection discuss the performance of Kadir–Brady saliency detector on a subset of a test in the paper.</p>
+<h3 id="performance-under-global-transformation">Performance under global transformation</h3>
+
+<p>In order to measure the consistency of a region detected on the same object or scene across images under global transformation, repeatability score, which is first proposed by Mikolajczyk and Cordelia Schmid in [18, 19] is calculated as follows:<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a><a class="footnoteRef" href="#fn9" id="fnref9"><sup>9</sup></a></p>
+
+<p>Firstly, overlap error 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:30">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ of a pair of corresponding ellipses 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:31">
+ <semantics>
+  <msub>
+   <mi>μ</mi>
+   <mi>a</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>μ</ci>
+    <ci>a</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu_{a}
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:32">
+ <semantics>
+  <msub>
+   <mi>μ</mi>
+   <mi>b</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>μ</ci>
+    <ci>b</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu_{b}
+  </annotation>
+ </semantics>
+</math>
+
+ each on different images is defined:</p>
+
+<p>
+
+<math display="inline" id="Kadir–Brady_saliency_detector:33">
+ <semantics>
+  <mrow>
+   <mi>ϵ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo>-</mo>
+    <mfrac>
+     <mrow>
+      <msub>
+       <mi>μ</mi>
+       <mi>a</mi>
+      </msub>
+      <mo>∩</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msup>
+         <mi>A</mi>
+         <mi>T</mi>
+        </msup>
+        <msub>
+         <mi>μ</mi>
+         <mi>b</mi>
+        </msub>
+        <mi>A</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+     <mrow>
+      <msub>
+       <mi>μ</mi>
+       <mi>a</mi>
+      </msub>
+      <mo>∪</mo>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <msup>
+         <mi>A</mi>
+         <mi>T</mi>
+        </msup>
+        <msub>
+         <mi>μ</mi>
+         <mi>b</mi>
+        </msub>
+        <mi>A</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </mrow>
+    </mfrac>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>ϵ</ci>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+     <apply>
+      <divide></divide>
+      <apply>
+       <intersect></intersect>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>μ</ci>
+        <ci>a</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>A</ci>
+         <ci>T</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>μ</ci>
+         <ci>b</ci>
+        </apply>
+        <ci>A</ci>
+       </apply>
+      </apply>
+      <apply>
+       <union></union>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>μ</ci>
+        <ci>a</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>A</ci>
+         <ci>T</ci>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>μ</ci>
+         <ci>b</ci>
+        </apply>
+        <ci>A</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon=1-\frac{\mu_{a}\cap(A^{T}\mu_{b}A)}{\mu_{a}\cup(A^{T}\mu_{b}A)}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where A is the locally linearized affine transformation of the homography between the two images,</p>
+
+<p>and 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:34">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>μ</mi>
+    <mi>a</mi>
+   </msub>
+   <mo>∩</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msup>
+      <mi>A</mi>
+      <mi>T</mi>
+     </msup>
+     <msub>
+      <mi>μ</mi>
+      <mi>b</mi>
+     </msub>
+     <mi>A</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <intersect></intersect>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>μ</ci>
+     <ci>a</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>A</ci>
+      <ci>T</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>μ</ci>
+      <ci>b</ci>
+     </apply>
+     <ci>A</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu_{a}\cap(A^{T}\mu_{b}A)
+  </annotation>
+ </semantics>
+</math>
+
+ and 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:35">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>μ</mi>
+    <mi>a</mi>
+   </msub>
+   <mo>∪</mo>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <msup>
+      <mi>A</mi>
+      <mi>T</mi>
+     </msup>
+     <msub>
+      <mi>μ</mi>
+      <mi>b</mi>
+     </msub>
+     <mi>A</mi>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <union></union>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>μ</ci>
+     <ci>a</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>A</ci>
+      <ci>T</ci>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>μ</ci>
+      <ci>b</ci>
+     </apply>
+     <ci>A</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu_{a}\cup(A^{T}\mu_{b}A)
+  </annotation>
+ </semantics>
+</math>
+
+ represent the area of intersection and union of the ellipses respectively.</p>
+
+<p>Notice 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:36">
+ <semantics>
+  <msub>
+   <mi>μ</mi>
+   <mi>a</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>μ</ci>
+    <ci>a</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \mu_{a}
+  </annotation>
+ </semantics>
+</math>
+
+ is scaled into a fix scale to take the count of size variation of different detected region. Only if 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:37">
+ <semantics>
+  <mi>ϵ</mi>
+  <annotation-xml encoding="MathML-Content">
+   <ci>ϵ</ci>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon
+  </annotation>
+ </semantics>
+</math>
+
+ is smaller than certain 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:38">
+ <semantics>
+  <msub>
+   <mi>ϵ</mi>
+   <mn>0</mn>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>ϵ</ci>
+    <cn type="integer">0</cn>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \epsilon_{0}
+  </annotation>
+ </semantics>
+</math>
+
+, the pair of ellipses are deemed to correspond.</p>
+
+<p>Then the repeatability score for a given pair of images is computed as the ratio between the number of region-to-region correspondences and the smaller of the number of regions in the pair of images, where only the regions located in the part of the scene present in both images are counted. In general we would like a detector to have a high repeatability score and a large number of correspondences.</p>
+
+<p>The specific global transformations tested in the <a href="http://www.robots.ox.ac.uk/~vgg/research/affine/index.html">test dataset</a> are:</p>
+<ul>
+<li>Viewpoint change</li>
+<li>Zoom+rotation</li>
+<li>Image blur</li>
+<li>JPEG compression</li>
+<li>Light change</li>
+</ul>
+
+<p>The performance of Kadir–Brady saliency detector is inferior to most of other detectors mainly because the number of points detected is usually lower than other detectors.</p>
+
+<p>The precise procedure is given in the Matlab code from Detector evaluation <a href="#Software_implementation" title="wikilink">#Software implementation</a>.</p>
+<h3 id="performance-under-intra-class-variation-and-image-perturbations">Performance under intra-class variation and image perturbations</h3>
+
+<p>In the task of object class categorization, the ability of detecting similar regions given intra-class variation and image perturbations across object instance is very critical. Repeatability measures over intra-class variation and image perturbations is proposed. The following subsection will introduce the definition and discuss the performance.</p>
+<h4 id="intra-class-variation-test">Intra-class variation test</h4>
+
+<p>Suppose there are a set of images of the same object class e.g., motorbikes. A region detection operator which is unaffected by intra-class variation will reliably select regions on corresponding parts of all the objects — say the wheels, engine or seat for motorbikes.</p>
+
+<p>Repeatability over intra-class variation is measuring the (average) number of correct correspondences over the set of images, where the correct correspondences is established by manual selection.</p>
+
+<p>A region is matched if it fulfills three requirements:</p>
+<ul>
+<li>Its position matches within 10 pixels.</li>
+<li>Its scale is within 20%.</li>
+<li>Normalized <a href="mutual_information" title="wikilink">mutual information</a> between the appearances is &gt; 0.4.</li>
+</ul>
+
+<p>In detail the average correspondence score S is measured as follows.</p>
+
+<p>N regions are detected on each image of the M images in the dataset. Then for a particular reference image, <strong>i</strong>, the correspondence score 
+
+<math display="inline" id="Kadir–Brady_saliency_detector:39">
+ <semantics>
+  <msub>
+   <mi>S</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>S</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ is given by the proportion of corresponding to detected regions for all the other images in the dataset, i.e.:</p>
+
+<p>
+
+<math display="inline" id="Kadir–Brady_saliency_detector:40">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>S</mi>
+    <mi>i</mi>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <mtext>Total number of matches</mtext>
+    <mtext>Total number of detected regions</mtext>
+   </mfrac>
+   <mo>=</mo>
+   <mfrac>
+    <msubsup>
+     <mi>N</mi>
+     <mi>M</mi>
+     <mi>i</mi>
+    </msubsup>
+    <mrow>
+     <mi>N</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>M</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <times></times>
+      <ci>S</ci>
+      <ci>i</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <mtext>Total number of matches</mtext>
+      <mtext>Total number of detected regions</mtext>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>N</ci>
+        <ci>M</ci>
+       </apply>
+       <ci>i</ci>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>N</ci>
+       <apply>
+        <minus></minus>
+        <ci>M</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   Si=\frac{\text{Total number of matches}}{\text{Total number of detected %
+regions}}=\frac{N_{M}^{i}}{N(M-1)}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The score
+
+<math display="inline" id="Kadir–Brady_saliency_detector:41">
+ <semantics>
+  <msub>
+   <mi>S</mi>
+   <mi>i</mi>
+  </msub>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <csymbol cd="ambiguous">subscript</csymbol>
+    <ci>S</ci>
+    <ci>i</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   S_{i}
+  </annotation>
+ </semantics>
+</math>
+
+ is computed for M/2 different selections of the reference image and averaged to give S. The score is evaluated as a function of the number of detected regions N.</p>
+
+<p>The Kadir–Brady saliency detector gives the highest score across three test classes which are motorbike, car and face. The saliency detector indicates that most detections are near the object. In contrast, other detectors maps show a much more diffuse pattern over the entire area caused by poor localization and false responses to background clutter.</p>
+<h4 id="image-perturbations-test">Image perturbations test</h4>
+
+<p>In order to test insensitivity to image perturbation the <a href="data_set" title="wikilink">data set</a> is split into two parts: the first contains images with a uniform background and the second images with varying degrees of background clutter. If the detector is robust to background clutter then the average correspondence score S should be similar for both subsets of images.</p>
+
+<p>In this test saliency detector also outperforms other detectors due to three reasons:</p>
+<ul>
+<li>Several detection methods blur the image, hence causing a greater degree of similarity between objects and background.</li>
+<li>In most images the objects of interest tend to be in focus while backgrounds are out of focus and hence blurred. Blurred regions tend to exhibit slowly varying statistics which result in a relatively low entropy and inter-scale saliency in the saliency detector.</li>
+<li>Other detectors define saliency with respect to <a href="specific_properties" title="wikilink">specific properties</a> of the local surface geometry. In contrast the saliency detector uses a much broader definition.</li>
+</ul>
+
+<p>The saliency detector is most useful in the task of object recognition, whereas several other detectors are more useful in the task of computing image correspondences. However, in the task of 3D object recognition where all three types of image change are combined, saliency detector might still be powerful.</p>
+<h2 id="software-implementation">Software implementation</h2>
+<ul>
+<li><a href="http://www.robots.ox.ac.uk/~timork/salscale.html">Scale Saliency and Scale Descriptors</a> by Timor Kadir</li>
+<li><a href="http://www.robots.ox.ac.uk/~timork/Saliency/AffineInvariantSaliency.html">Affine Invariant Scale Saliency</a> by Timor Kadir</li>
+<li><a href="http://www.robots.ox.ac.uk/~vgg/research/affine/evaluation.html">Comparison of Affine Region Detectors</a></li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li></li>
+<li>
+
+<p>(scale-adaptive and <a href="Scale_invariance" title="wikilink">scale invariant</a> interest points from Laplacian and determinant of Hessian <a href="blob_detection" title="wikilink">blob detection</a> as well as more general mechanisms for automatic scale selection)</p></li>
+<li>
+
+<p>(summary and review of a number of feature detectors formulated; based on a <a href="Scale_space_representation" title="wikilink">Scale space representation</a>)</p></li>
+<li>
+
+<p>(theory for affine invariant interest points and shape descriptors from second-moment matrices)</p></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Feature_detection_(computer_vision)" title="wikilink">Category:Feature detection (computer vision)</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">Scale, Saliency and Image Description. Timor Kadir and Michael Brady. International Journal of Computer Vision. 45 (2):83–105, 2001<a href="#fnref1">↩</a></li>
+<li id="fn2">Kadir, T., Zisserman, A. and Brady, M. An affine invariant salient region detector. Proceedings of the 8th European Conference on Computer Vision, <a href="Prague" title="wikilink">Prague, Czech Republic</a>, 2004<a href="#fnref2">↩</a></li>
+<li id="fn3"><a href="http://www.robots.ox.ac.uk/~az/">Zisserman, A.</a><a href="#fnref3">↩</a></li>
+<li id="fn4">Ling Shao, Timor Kadir and Michael Brady. Geometric and Photometric Invariant Distinctive Regions Detection. Information Sciences. 177 (4):1088-1122, 2007<a href="#fnref4">↩</a></li>
+<li id="fn5"><a href="#fnref5">↩</a></li>
+<li id="fn6"><a href="http://www.robots.ox.ac.uk/~timork/Saliency/AffineScaleSaliency_Public_linux_V1.0.tgz#ScaleSaliency_Public_linux">1</a> Kadir,T GreedyCluster1.m download<a href="#fnref6">↩</a></li>
+<li id="fn7">A comparison of affine region detectors. K. Mikolajczyk, T. Tuytelaars, C. Schmid, A. Zisserman, J. Matas, F. Schaffalitzky, T. Kadir and L. Van Gool. International Journal of Computer Vision<a href="#fnref7">↩</a></li>
+<li id="fn8"><a href="http://personal.ee.surrey.ac.uk/Personal/K.Mikolajczyk">2</a> Mikolajczyk<a href="#fnref8">↩</a></li>
+<li id="fn9"><a href="http://lear.inrialpes.fr/people/schmid/">3</a> Schmid, C<a href="#fnref9">↩</a></li>
+</ol>
+</section>
+</body>
+</html>
