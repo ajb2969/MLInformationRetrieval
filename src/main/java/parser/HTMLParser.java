@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 class HTMLParser {
-    static final String HTML_LOCATION = System.getProperty("user.dir") + "/data/transcripts.html";
+    static final String HTML_LOCATION = System.getProperty("user.dir") + "/html_documents/";
     private static final String HTML_TRANSCRIPT_ID = "mw-content-text";
     private static final String HTML_TOC_ID = "transcripts-toc";
     private static final Set<String> IGNORED_TAGS = ImmutableSet.of("p", "div", "noscript", "h3", "h4");
@@ -97,8 +97,7 @@ class HTMLParser {
         List<String> bodySections = htmlTranscript.stream()
             .map(this::extractText)
             .collect(Collectors.toList());
-        int season = titleToSeason.get(title);
-        return new EpisodeDocument(title, String.join("", bodySections), season);
+        return new EpisodeDocument(title, String.join("", bodySections));
     }
 
     private String extractText(Element section) {
