@@ -48,7 +48,7 @@ public class QueryController {
 
     public enum ModelTypes {
         BM25,
-        TFIDF,
+        LDA,
         Pool,
     };
 
@@ -76,10 +76,10 @@ public class QueryController {
                 System.out.println("Pooling");
                 this.currModel = ModelTypes.Pool;
                 m = new Pooling(query.getContent(), ModelTypes.Pool);
-            } else if(query.getModel().equals("TF.IDF")) {
-                System.out.println("TF.IDF");
-                this.currModel = ModelTypes.TFIDF;
-                m = new Pooling(query.getContent(), ModelTypes.TFIDF);
+            } else if(query.getModel().equals("LDA")) {
+                System.out.println("LDA");
+                this.currModel = ModelTypes.LDA;
+                m = new Pooling(query.getContent(), ModelTypes.LDA);
             } else if(query.getModel().equals("BM25")) {
                 this.currModel = ModelTypes.BM25;
                 System.out.println("BM25");

@@ -8,27 +8,27 @@ import static retrieval.Models.DOCUMENTSRETURNED;
 
 public class Pooling {
     private Models bm25;
-    private Models tfidf;
+    private Models lda;
     private String query;
     private QueryController.ModelTypes currModel;
 
     public Pooling(String query, QueryController.ModelTypes model) {
         this.bm25 = new BM25();
-        this.tfidf = new TfIdf();
+        this.lda = new LDA();
         this.query = query;
         this.currModel = model;
     }
 
 
     public ArrayList<Similarity> retrieve() {
-        ArrayList<Similarity> tfidfResults = this.tfidf.retrieve(this.query);
+        ArrayList<Similarity> ldaResults = this.lda.retrieve(this.query);
         ArrayList<Similarity> bm25Results = this.bm25.retrieve(this.query);
         ArrayList<Similarity> returnedResults = new ArrayList<>();
         System.out.println("Retrieving results for model " + this.currModel.toString());
 
-        if(this.currModel == QueryController.ModelTypes.TFIDF) {
+        if(this.currModel == QueryController.ModelTypes.LDA) {
             for(int i = 0; i < DOCUMENTSRETURNED; i++) {
-                returnedResults.add(tfidfResults.get(i));
+                returnedResults.add(ldaResults.get(i));
             }
         } else if(this.currModel == QueryController.ModelTypes.BM25) {
             for(int i = 0; i < DOCUMENTSRETURNED; i++) {
@@ -40,8 +40,8 @@ public class Pooling {
                     returnedResults.add(bm25Results.get(i));
                 }
 
-                if (i % 2 == 1 && !returnedResults.contains(tfidfResults.get(i))) {
-                    returnedResults.add(tfidfResults.get(i));
+                if (i % 2 == 1 && !returnedResults.contains(ldaResults.get(i))) {
+                    returnedResults.add(ldaResults.get(i));
                 }
 
                 i++;
