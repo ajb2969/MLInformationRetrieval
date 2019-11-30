@@ -22,11 +22,10 @@ public class Index {
         HashMap<String, Map<String, Integer>> doc_index = new HashMap<>();
         // Map of Token -> File -> [positions in which the word occurs]
         HashMap<String, Integer> totalTokens = new HashMap<>();
-        HashMap<String, HashMap<String, ArrayList<Integer>>> tokenPositions =
-                new HashMap<>();
+        HashMap<String, HashMap<String, ArrayList<Integer>>> tokenPositions = new HashMap<>();
         HashMap<String, Integer> titleToSeason = new HashMap<>();
         File[] files = new File(docs_file_path).listFiles();
-        //brackets, parenthesis, colons, periods, commas, html tags, split on
+        // brackets, parenthesis, colons, periods, commas, html tags, split on
         // spaces, remove new-line
         for (File f : files) {
             try {
@@ -34,44 +33,30 @@ public class Index {
                 BufferedReader br = new BufferedReader(new FileReader(f));
                 String line;
                 Map<String, Integer> wordOccurrences = Maps.newHashMap();
-                int metaDataCounter = 0;
-                int season = 0;
                 while ((line = br.readLine()) != null) {
-                    if (metaDataCounter == 1) {
-                        // season
-                        season = Integer.parseInt(line.split(" ")[1]);
-                    }
-                    //String [] split = line.split("[.\\[\\]!.:\"?,\s]");
+                    // String [] split = line.split("[.\\[\\]!.:\"?,\s]");
 
-                    line = line.replaceAll("<[^>]*>", "").replaceAll("\\p" +
-                            "{Punct}", "");
+                    line = line.replaceAll("<[^>]*>", "").replaceAll("\\p" + "{Punct}", "");
                     String[] split = line.split(" ");
-                    Arrays.stream(split)
-                            .filter(token -> !token.isEmpty() || !token.equals(""))
-                            .map(token -> token.replaceAll("[.,!?:\\[\\]]", ""))
-                            .map(String::toLowerCase)
+                    Arrays.stream(split).filter(token -> !token.isEmpty() || !token.equals(""))
+                            .map(token -> token.replaceAll("[.,!?:\\[\\]]", "")).map(String::toLowerCase)
                             .forEach(token -> {
                                 if (tokenPositions.containsKey(token)) {
-                                    HashMap<String, ArrayList<Integer>> temp
-                                            = tokenPositions.get(token);
+                                    HashMap<String, ArrayList<Integer>> temp = tokenPositions.get(token);
                                     if (temp.containsKey(f.getName())) {
-                                        ArrayList<Integer> positions =
-                                                temp.get(f.getName());
+                                        ArrayList<Integer> positions = temp.get(f.getName());
                                         positions.add(sum.intValue());
                                         temp.put(f.getName(), positions);
                                         tokenPositions.put(token, temp);
                                     } else {
-                                        ArrayList<Integer> positions =
-                                                new ArrayList<>();
+                                        ArrayList<Integer> positions = new ArrayList<>();
                                         positions.add(sum.intValue());
                                         temp.put(f.getName(), positions);
                                         tokenPositions.put(token, temp);
                                     }
                                 } else {
-                                    HashMap<String, ArrayList<Integer>> temp
-                                            = new HashMap<>();
-                                    ArrayList<Integer> tempPos =
-                                            new ArrayList<>();
+                                    HashMap<String, ArrayList<Integer>> temp = new HashMap<>();
+                                    ArrayList<Integer> tempPos = new ArrayList<>();
                                     tempPos.add(sum.intValue());
                                     temp.put(f.getName(), tempPos);
                                     tokenPositions.put(token, temp);
@@ -79,26 +64,21 @@ public class Index {
                                 sum.addAndGet(1);
                                 addOccurrence(token, wordOccurrences);
                             });
-
-                    metaDataCounter++;
                 }
                 br.close();
                 doc_index.put(f.getName(), wordOccurrences);
                 totalTokens.put(f.getName(), sum.intValue());
-                titleToSeason.put(f.getName(), season);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
 
-        //map of token -> files it exists in
+        // map of token -> files it exists in
         HashMap<String, ArrayList<String>> index = new HashMap<>();
         for (String file_name : doc_index.keySet()) {
-            for (Entry<String, Integer> wordOccurrenceEntry :
-                    doc_index.get(file_name).entrySet()) {
+            for (Entry<String, Integer> wordOccurrenceEntry : doc_index.get(file_name).entrySet()) {
                 String token = wordOccurrenceEntry.getKey();
-                String filenameWithOccurrences =
-                        file_name + ":" + String.valueOf(wordOccurrenceEntry.getValue());
+                String filenameWithOccurrences = file_name + ":" + String.valueOf(wordOccurrenceEntry.getValue());
                 if (!token.equals("")) {
                     if (index.containsKey(token) && !index.get(token).contains(file_name)) {
                         ArrayList<String> documents = index.get(token);
@@ -124,8 +104,7 @@ public class Index {
         }
     }
 
-    private static void addOccurrence(String word,
-                                      Map<String, Integer> wordOccurrences) {
+    private static void addOccurrence(String word, Map<String, Integer> wordOccurrences) {
         if (wordOccurrences.containsKey(word)) {
             Integer occurrences = wordOccurrences.get(word);
             wordOccurrences.put(word, occurrences + 1);
@@ -170,8 +149,8 @@ public class Index {
         bw.close();
     }
 
-    private static void writePositionIndex(HashMap<String, HashMap<String,
-            ArrayList<Integer>>> tokenPositions) throws IOException {
+    private static void writePositionIndex(HashMap<String, HashMap<String, ArrayList<Integer>>> tokenPositions)
+            throws IOException {
         File outputFile = new File(tokenPositionsFile);
         BufferedWriter bw = new BufferedWriter(new FileWriter(outputFile));
         for (String token : tokenPositions.keySet()) {
@@ -196,18 +175,18 @@ public class Index {
         File inputFile = new File(tokenPositionsFile);
         List<String> lines = Files.readAllLines(Paths.get(inputFile.getCanonicalPath()));
         ArrayList<String> selectedLines = new ArrayList<>();
-        for(String line: lines) {
+        for (String line : lines) {
             String token = line.split("\t")[0];
-            if(terms.stream().map(String::toLowerCase).collect(Collectors.toList()).contains(token)) {
+            if (terms.stream().map(String::toLowerCase).collect(Collectors.toList()).contains(token)) {
                 selectedLines.add(line);
             }
         }
         ArrayList<Integer> positions = new ArrayList<>();
-        for(String selected: selectedLines) {
+        for (String selected : selectedLines) {
             String[] filePositionsLine = selected.split("\t");
-            for(int i = 1; i < filePositionsLine.length; i++) {
+            for (int i = 1; i < filePositionsLine.length; i++) {
                 if (filePositionsLine[i].split(":")[0].equals(docName)) {
-                    for(String position: filePositionsLine[i].split(":")[1].split(",")) {
+                    for (String position : filePositionsLine[i].split(":")[1].split(",")) {
                         positions.add(Integer.parseInt(position));
                     }
                 }
@@ -220,11 +199,11 @@ public class Index {
     public static class Positions {
         private String file;
         private ArrayList<Integer> positions;
+
         Positions(String filePositions) {
             this.file = filePositions.split(":")[0];
             positions = (ArrayList<Integer>) Arrays.stream(filePositions.split(":")[1].split(","))
-                    .map(Integer::parseInt)
-                    .collect(Collectors.toList());
+                    .map(Integer::parseInt).collect(Collectors.toList());
         }
 
         public String getFile() {
@@ -235,7 +214,6 @@ public class Index {
             return positions;
         }
     }
-
 
     public static void main(String[] args) {
         document_level();
