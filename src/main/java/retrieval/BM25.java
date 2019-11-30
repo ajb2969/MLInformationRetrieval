@@ -44,7 +44,7 @@ public class BM25 extends Models {
 
     private double getAverageTfIdfForTerms(List<String> keywords, String document) {
         return keywords.stream()
-            .mapToDouble(term -> TfIdf.tfidf(term, document))
+            .mapToDouble(term -> LDA.tfidf(term, document))
             .average()
             .orElse(0);
     }
@@ -55,7 +55,7 @@ public class BM25 extends Models {
         }
         double tfidfSum = get_doc_indicies().get(term).getFileOccurrences().stream()
             .map(FileOccurrence::getFilename)
-            .mapToDouble(document -> TfIdf.tfidf(term, document))
+            .mapToDouble(document -> LDA.tfidf(term, document))
             .sum();
 
         double numberOfDocuments = getNumberOfDocuments();
