@@ -7,17 +7,26 @@ import time
 
 DOCUMENTS_INPUT_PATH = "html_documents/"
 DOCUMENTS_OUTPUT_PATH = "documents/"
-
-def write_file(document_number, text):
+INDICIES_OUTPUT_PATH = "indicies/"
+DOC_NUM_TSV_MAP = "doc-num-map.tsv"
+NUMBER_DOC_MAP = dict()
+def write_file(filename, document_number, text):
+    NUMBER_DOC_MAP[document_number] = filename
     with open(DOCUMENTS_OUTPUT_PATH + document_number + ".txt", 'w+') as document:
         document.write(text)
+        
+def write_index():
+    with open(INDICIES_OUTPUT_PATH + DOC_NUM_TSV_MAP, 'w+') as index:
+        for key in NUMBER_DOC_MAP:
+            index.write(key + "\t" + NUMBER_DOC_MAP[key] + "\n")
+        
         
 def process_file(file):
     ignore_tags = set(["math"])
     contents = bs.BeautifulSoup(" ".join(open(DOCUMENTS_INPUT_PATH + file).readlines()), 'html.parser')
     document_number = contents.findAll('title')[0].attrs['offset']
     document_text = filter(lambda e: e not in ignore_tags, contents.findAll(text=True))
-    write_file(document_number, " ".join(token.strip() for token in document_text))
+    write_file(file, document_number, " ".join(token.strip() for token in document_text))
 
 def parse_html():
     
@@ -27,5 +36,6 @@ def parse_html():
         while(tpool._work_queue.qsize() > 0):
             print("Jobs remaining", tpool._work_queue.qsize())
             time.sleep(5)
+        write_index()
 if __name__ == "__main__":
     parse_html()
