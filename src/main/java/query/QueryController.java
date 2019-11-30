@@ -13,7 +13,6 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.templateresolver.ITemplateResolver;
-import retrieval.Models;
 import retrieval.Pooling;
 import retrieval.Similarity;
 
@@ -58,11 +57,6 @@ public class QueryController {
         return "index";
     }
 
-    @ModelAttribute("getSeasons")
-    public int[] getSeasonNumbers() {
-        return Models.DOCS_TO_SEASONS.values().stream().mapToInt(Integer::intValue).distinct().sorted().toArray();
-    }
-
 
     @PostMapping("/query")
     public String querySubmit(@ModelAttribute("query") Querycontainer query,
@@ -92,15 +86,15 @@ public class QueryController {
             ArrayList<Similarity> documents = m.retrieve();
 
             if(query.selectedSeason.size() != 0) {
-                documents = (ArrayList<Similarity>) documents.stream().filter(document -> query.selectedSeason.contains(document.getSeason())).collect(Collectors.toList());
-                seasons = new HashSet<>(query.getSelectedSeason());
-                model.addAttribute("seasons", seasons);
+                //documents = (ArrayList<Similarity>) documents.stream().filter(document -> query.selectedSeason.contains(document.getSeason())).collect(Collectors.toList());
+                //seasons = new HashSet<>(query.getSelectedSeason());
+                //model.addAttribute("seasons", seasons);
             } else {
-                int [] seasonsNumbers = getSeasonNumbers();
-                ArrayList<Integer> seasons = new ArrayList<>();
-                for(int i = 0; i < seasonsNumbers.length; i++){seasons.add(seasonsNumbers[i]);}
-                seasons = new ArrayList<>(seasons);
-                model.addAttribute("seasons", seasons);
+                //int [] seasonsNumbers = getSeasonNumbers();
+                //ArrayList<Integer> seasons = new ArrayList<>();
+                //for(int i = 0; i < seasonsNumbers.length; i++){seasons.add(seasonsNumbers[i]);}
+                //seasons = new ArrayList<>(seasons);
+                //model.addAttribute("seasons", seasons);
             }
 
             for (Similarity sim : documents) {
@@ -108,9 +102,9 @@ public class QueryController {
             }
 
             this.currDocuments = documents;
-            for(Similarity s: this.currDocuments) {
-                seasons.add(s.getSeason());
-            }
+            //for(Similarity s: this.currDocuments) {
+                //seasons.add(s.getSeason());
+            //}
 
             //if the first document isn't relevant or similar send back no
             // results available
@@ -158,6 +152,7 @@ public class QueryController {
         return "result";
     }
 
+    /*
     @GetMapping("/seasons")
     public String seasons(@RequestParam(required = true) String season, Model model) {
         ArrayList<Similarity> temp = Lists.newArrayList(this.currDocuments);
@@ -173,6 +168,7 @@ public class QueryController {
                 Active.seasons.toString().toLowerCase());
         return "result";
     }
+    */
 
     @GetMapping("/document")
     @ResponseBody
