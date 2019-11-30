@@ -5,14 +5,12 @@ import java.util.Objects;
 public class Similarity implements Comparable<Similarity> {
     private String document_name;
     private String preview;
-    private int season;
     private double similarity;
 
-    Similarity(String document, double similarity, int season) {
+    Similarity(String document, double similarity) {
         this.document_name = document;
         this.similarity = similarity;
         this.preview = "";
-        this.season = season;
     }
 
     public String getDocument_name() {
@@ -42,14 +40,6 @@ public class Similarity implements Comparable<Similarity> {
 
     public void setPreview(String preview) {
         this.preview = preview;
-    }
-
-    public int getSeason() {
-        return season;
-    }
-
-    public void setSeason(int season) {
-        this.season = season;
     }
 
     @Override

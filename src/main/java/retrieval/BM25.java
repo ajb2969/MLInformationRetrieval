@@ -26,7 +26,7 @@ public class BM25 extends Models {
             .forEach(document -> scoredDocuments.put(document, getScore(keywords, document, relevantDocuments)));
 
         return (ArrayList<Similarity>) scoredDocuments.entrySet().stream()
-            .map(entry -> new Similarity(entry.getKey(), entry.getValue(), DOCS_TO_SEASONS.get(entry.getKey())))
+            .map(entry -> new Similarity(entry.getKey(), entry.getValue()))
             .sorted(Comparator.reverseOrder())
             .limit(Models.DOCUMENTSRETURNED)
             .collect(Collectors.toList());
