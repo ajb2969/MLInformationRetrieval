@@ -4,6 +4,7 @@ import java.util.Objects;
 
 public class Similarity implements Comparable<Similarity> {
     private String document_name;
+    private String documentLink;
     private String preview;
     private double similarity;
 
@@ -11,14 +12,22 @@ public class Similarity implements Comparable<Similarity> {
         this.document_name = document;
         this.similarity = similarity;
         this.preview = "";
+        this.documentLink = "";
     }
 
+    public void setDocumentName(String name) {
+        this.document_name = name;
+    }
     public String getDocument_name() {
         return document_name.replace(".txt", "");
     }
 
+    public void setDocumentLink(String link) {
+        this.documentLink = link;
+    }
+
     public String getDocumentLink() {
-        return document_name;
+        return this.documentLink;
     }
 
     public double getSimilarity() {

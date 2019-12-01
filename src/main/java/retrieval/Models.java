@@ -17,13 +17,14 @@ import java.util.stream.Collectors;
 abstract public class Models {
     private static final String indicies_path = Index.output_dir;
     private static final String FILE_TERM_SIZE_PATH = Index.docSize;
+    private static final String DOCNUMMAPPATH = "indicies/doc-num-map.tsv";
     static final HashMap<String, Integer> fileTermSize = parseDocumentIndexFile(FILE_TERM_SIZE_PATH);
     static final HashMap<String, Entry> documents = parse_doc_indicies();
+    public static final HashMap<Integer, String> HTMLDOCPATHS = parseDocNumMap();
     static final int DOCUMENTSRETURNED = 30;
     static final Map<String, Map<String, Integer>> termToFileAndOccurrence = createIndexMap();
 
-    Models() {
-    }
+    Models() {}
 
     private static HashMap<String, Integer> parseDocumentIndexFile(String path) {
         HashMap<String, Integer> docMap = new HashMap<>();
@@ -31,7 +32,7 @@ abstract public class Models {
 
         try {
             Files.readLines(index, Charset.defaultCharset())
-                .forEach(entry -> docMap.put(entry.split("\t")[0], Integer.parseInt(entry.split("\t")[1])));
+                    .forEach(entry -> docMap.put(entry.split("\t")[0], Integer.parseInt(entry.split("\t")[1])));
         } catch (IOException e) {
             e.printStackTrace();
             throw new RuntimeException(e);
@@ -41,8 +42,7 @@ abstract public class Models {
 
     ArrayList<String> getDocumentList() {
         ArrayList<String> documents = new ArrayList<>();
-        for (File f :
-                Objects.requireNonNull(new File(Index.docs_file_path).listFiles())) {
+        for (File f : Objects.requireNonNull(new File(Index.docs_file_path).listFiles())) {
             documents.add(f.getName());
         }
         return documents;
@@ -62,7 +62,6 @@ abstract public class Models {
         return query.toLowerCase().split("\\s+");
     }
 
-
     private static HashMap<String, Entry> parse_doc_indicies() {
         try {
             HashMap<String, Entry> terms = new HashMap<>();
@@ -78,12 +77,10 @@ abstract public class Models {
                 for (int i = 2; i < parsed_line.length; i++) {
                     String[] fileAndOccurrence = parsed_line[i].split(":");
                     if (fileAndOccurrence.length == 3) {
-                        documents.add(new FileOccurrence(fileAndOccurrence[0] +
-                            ":" + fileAndOccurrence[1],
-                            Integer.valueOf(fileAndOccurrence[2])));
+                        documents.add(new FileOccurrence(fileAndOccurrence[0] + ":" + fileAndOccurrence[1],
+                                Integer.valueOf(fileAndOccurrence[2])));
                     } else {
-                        documents.add(new FileOccurrence(fileAndOccurrence[0],
-                            Integer.valueOf(fileAndOccurrence[1])));
+                        documents.add(new FileOccurrence(fileAndOccurrence[0], Integer.valueOf(fileAndOccurrence[1])));
                     }
                 }
                 terms.put(term, new Entry(quantity, documents));
@@ -94,6 +91,20 @@ abstract public class Models {
             e.printStackTrace();
             throw new RuntimeException();
         }
+    }
+
+    private static HashMap<Integer, String> parseDocNumMap() {
+        HashMap<Integer, String> siMap = new HashMap<>();
+        File f = new File(DOCNUMMAPPATH);
+        try {
+            Files.readLines(f, Charset.defaultCharset()).forEach(line -> {
+                String[] tokens = line.split("\t");
+                siMap.put(Integer.parseInt(tokens[0].trim()), tokens[1].trim());
+            });
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return siMap;
     }
 
     private static Map<String, Map<String, Integer>> createIndexMap() {

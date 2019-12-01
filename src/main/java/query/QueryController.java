@@ -1,5 +1,6 @@
 package query;
 
+import retrieval.Models;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import indexer.Index;
@@ -16,7 +17,7 @@ import org.thymeleaf.templateresolver.ITemplateResolver;
 import retrieval.Pooling;
 import retrieval.Similarity;
 
-import java.io.File;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -31,7 +32,8 @@ import static java.util.Collections.sort;
 public class QueryController {
     private static final int HALF_WINDOW_SIZE = 20;
     private final String documentsPath = "documents/";
-    final File temp = new File(documentsPath + "temp.txt");
+    private final String htmlDocumentsPath = "html_documents/";
+    //final File temp = new File(documentsPath + "temp.txt");
     private ArrayList<Similarity> currDocuments = new ArrayList<>();
     private String currQuery = "";
     private HashSet<Integer> seasons = new HashSet<>();
@@ -62,9 +64,9 @@ public class QueryController {
     public String querySubmit(@ModelAttribute("query") Querycontainer query,
                               Model model) {
         if (query != null) {
-            if (temp.exists()) {
-                temp.delete();
-            }
+            //if (temp.exists()) {
+                //temp.delete();
+            //}
 
             if(query.getModel().equals("Pool")) {
                 System.out.println("Pooling");
@@ -98,10 +100,13 @@ public class QueryController {
             }
 
             for (Similarity sim : documents) {
-                sim.setPreview(getLongestIncreasingSequence(sim.getDocumentLink(), query.getContent()));
+                sim.setPreview(getLongestIncreasingSequence(sim.getDocument_name() + ".txt", query.getContent()));
+                sim.setDocumentLink(Models.HTMLDOCPATHS.get(Integer.parseInt(sim.getDocument_name())));
+                sim.setDocumentName(Models.HTMLDOCPATHS.get(Integer.parseInt(sim.getDocument_name())).replace(".html","").replaceAll("_", " "));
             }
 
             this.currDocuments = documents;
+            
             //for(Similarity s: this.currDocuments) {
                 //seasons.add(s.getSeason());
             //}
@@ -173,20 +178,8 @@ public class QueryController {
     @GetMapping("/document")
     @ResponseBody
     public FileSystemResource getDocument(@RequestParam(required = true) String doc, Model model) {
-        try {
-            if (temp.exists()) {
-                temp.delete();
-            }
-            List<String> selected =
-                    Files.readAllLines(Paths.get(documentsPath + doc));
-            selected =
-                    selected.stream().map(e -> e + "<br>").collect(Collectors.toList());
-            Files.write(Paths.get(String.valueOf(temp)), selected);
-            return new FileSystemResource(documentsPath + "temp.txt");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return new FileSystemResource(documentsPath + doc);
+        System.err.println("Submitting the path " + htmlDocumentsPath + doc);
+        return new FileSystemResource(htmlDocumentsPath + doc);
     }
 
     private String getLongestIncreasingSequence(String docName, String query) {

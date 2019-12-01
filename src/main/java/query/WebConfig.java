@@ -14,12 +14,14 @@ public class WebConfig implements WebMvcConfigurer {
                 "/img/**",
                 "/css/**",
                 "/js/**",
-                "/documents/**")
+                "/documents/**",
+                "/html_documents/**")
                 .addResourceLocations(
                         "classpath:/img/",
                         "classpath:/css/",
                         "classpath:/js/",
-                        "classpath:/documents/")
+                        "classpath:/documents/",
+                        "classpath:/html_documents/")
                 .resourceChain(true)
             .addResolver(new PathResourceResolver());
     }
