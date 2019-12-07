@@ -17,12 +17,12 @@ public class BM25 extends Models {
 
     @Override
     public ArrayList<Similarity> retrieve(String query) {
-        ArrayList<String> keywords = Lists.newArrayList(super.extractTerms(query));
-        Set<String> relevantDocuments = getRelevantDocuments(keywords);
-        ArrayList<String> documentCollection = getDocumentList();
+        ArrayList<String> keywords = Lists.newArrayList(extractTerms(query));
+        Set<String> documentCollection = getAllDocuments();
+        Set<String> relevantDocuments = getRelevantDocuments(keywords, documentCollection);
 
         Map<String, Double> scoredDocuments = Maps.newHashMap();
-        documentCollection.stream()
+        documentCollection
             .forEach(document -> scoredDocuments.put(document, getScore(keywords, document, relevantDocuments)));
 
         return (ArrayList<Similarity>) scoredDocuments.entrySet().stream()
@@ -32,30 +32,30 @@ public class BM25 extends Models {
             .collect(Collectors.toList());
     }
 
-    private Set<String> getRelevantDocuments(List<String> keywords) {
+    private Set<String> getRelevantDocuments(List<String> keywords, Set<String> documentCollection) {
         double threshold = keywords.stream()
             .mapToDouble(this::getAverageTfIdfForCollection)
             .average()
             .orElse(1); // highest threshold if no keywords
-        return getDocumentList().stream()
+        return documentCollection.stream()
             .filter(document -> getAverageTfIdfForTerms(keywords, document) > threshold)
             .collect(Collectors.toSet());
     }
 
     private double getAverageTfIdfForTerms(List<String> keywords, String document) {
         return keywords.stream()
-            .mapToDouble(term -> LDA.tfidf(term, document))
+            .mapToDouble(term -> tfidf(term, document))
             .average()
             .orElse(0);
     }
 
     private double getAverageTfIdfForCollection(String term) {
-        if (!get_doc_indicies().containsKey(term)) {
+        if (!getTokenToEntryIndex().containsKey(term)) {
             return 0; // if term isnt in collection, term frequency = 0
         }
-        double tfidfSum = get_doc_indicies().get(term).getFileOccurrences().stream()
+        double tfidfSum = getTokenToEntryIndex().get(term).getFileOccurrences().stream()
             .map(FileOccurrence::getFilename)
-            .mapToDouble(document -> LDA.tfidf(term, document))
+            .mapToDouble(document -> tfidf(term, document))
             .sum();
 
         double numberOfDocuments = getNumberOfDocuments();
@@ -118,11 +118,11 @@ public class BM25 extends Models {
     }
 
     private double getNumberOfDocuments(String term) {
-        return occursInDocuments(term) ? get_doc_indicies().get(term).getSize() : 0;
+        return occursInDocuments(term) ? getTokenToEntryIndex().get(term).getSize() : 0;
     }
 
     private double getNumberOfDocumentsContainingTerm(String term, Set<String> documents) {
-        return !occursInDocuments(term) ? 0 : get_doc_indicies().get(term).getFileOccurrences().stream()
+        return !occursInDocuments(term) ? 0 : getTokenToEntryIndex().get(term).getFileOccurrences().stream()
             .map(FileOccurrence::getFilename)
             .filter(documents::contains)
             .count();
