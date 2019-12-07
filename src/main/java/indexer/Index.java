@@ -15,18 +15,17 @@ public class Index {
     public static String output_dir = "indicies/doc-index.tsv";
     public static String docSize = "indicies/doc-size-index.tsv";
     public static String tokenPositionsFile = "indicies/token-pos.tsv";
-    public static final String SEASON_INDEX_PATH = "indicies/season-index.tsv";
 
-    private static void document_level() {
+    private static void document_level(){
         // Map of Filename -> <word, occurrences in file>
         HashMap<String, Map<String, Integer>> doc_index = new HashMap<>();
         // Map of Token -> File -> [positions in which the word occurs]
         HashMap<String, Integer> totalTokens = new HashMap<>();
         HashMap<String, HashMap<String, ArrayList<Integer>>> tokenPositions = new HashMap<>();
-        HashMap<String, Integer> titleToSeason = new HashMap<>();
         File[] files = new File(docs_file_path).listFiles();
         // brackets, parenthesis, colons, periods, commas, html tags, split on
         // spaces, remove new-line
+        // TODO do in parallel
         for (File f : files) {
             try {
                 AtomicInteger sum = new AtomicInteger();
@@ -98,7 +97,6 @@ public class Index {
             writeSizeIndex(totalTokens);
             writePositionIndex(tokenPositions);
             writeEpisodeIndex(totalTokens, docSize);
-            writeEpisodeIndex(titleToSeason, SEASON_INDEX_PATH);
         } catch (IOException e) {
             System.err.println("Unable to create index file");
         }
@@ -216,6 +214,11 @@ public class Index {
     }
 
     public static void main(String[] args) {
-        document_level();
+        try {
+            document_level();
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
     }
 }

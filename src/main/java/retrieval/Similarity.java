@@ -18,8 +18,8 @@ public class Similarity implements Comparable<Similarity> {
     public void setDocumentName(String name) {
         this.document_name = name;
     }
-    public String getDocument_name() {
-        return document_name.replace(".txt", "");
+    public String getDocumentName() {
+        return this.document_name.replace(".txt", "");
     }
 
     public void setDocumentLink(String link) {
@@ -31,7 +31,7 @@ public class Similarity implements Comparable<Similarity> {
     }
 
     public double getSimilarity() {
-        return similarity;
+        return this.similarity;
     }
 
     @Override
@@ -53,13 +53,13 @@ public class Similarity implements Comparable<Similarity> {
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(this.getDocument_name());
+        return Objects.hashCode(this.getDocumentName());
     }
 
     @Override
     public boolean equals(Object obj) {
         if(obj instanceof Similarity) {
-            if(this.getDocument_name().equals(((Similarity) obj).getDocument_name())) {
+            if(this.getDocumentName().equals(((Similarity) obj).getDocumentName())) {
                 return true;
             } else {
                 return false;
