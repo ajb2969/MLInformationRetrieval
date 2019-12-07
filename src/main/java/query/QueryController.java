@@ -17,7 +17,6 @@ import org.thymeleaf.templateresolver.ITemplateResolver;
 import retrieval.Pooling;
 import retrieval.Similarity;
 
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -27,13 +26,12 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.sort;
 
-
 @Controller
 public class QueryController {
     private static final int HALF_WINDOW_SIZE = 20;
     private final String documentsPath = "documents/";
     private final String htmlDocumentsPath = "html_documents/";
-    //final File temp = new File(documentsPath + "temp.txt");
+    // final File temp = new File(documentsPath + "temp.txt");
     private ArrayList<Similarity> currDocuments = new ArrayList<>();
     private String currQuery = "";
     private HashSet<Integer> seasons = new HashSet<>();
@@ -41,16 +39,11 @@ public class QueryController {
     private ModelTypes currModel;
 
     enum Active {
-        relevance,
-        alphabet,
-        reverse,
-        seasons,
+        relevance, alphabet, reverse, seasons,
     };
 
     public enum ModelTypes {
-        BM25,
-        LDA,
-        Pool,
+        BM25, LDA, Pool,
     };
 
     @GetMapping("/")
@@ -59,24 +52,22 @@ public class QueryController {
         return "index";
     }
 
-
     @PostMapping("/query")
-    public String querySubmit(@ModelAttribute("query") Querycontainer query,
-                              Model model) {
+    public String querySubmit(@ModelAttribute("query") Querycontainer query, Model model) {
         if (query != null) {
-            //if (temp.exists()) {
-                //temp.delete();
-            //}
+            // if (temp.exists()) {
+            // temp.delete();
+            // }
 
-            if(query.getModel().equals("Pool")) {
+            if (query.getModel().equals("Pool")) {
                 System.out.println("Pooling");
                 this.currModel = ModelTypes.Pool;
                 m = new Pooling(query.getContent(), ModelTypes.Pool);
-            } else if(query.getModel().equals("LDA")) {
+            } else if (query.getModel().equals("LDA")) {
                 System.out.println("LDA");
                 this.currModel = ModelTypes.LDA;
                 m = new Pooling(query.getContent(), ModelTypes.LDA);
-            } else if(query.getModel().equals("BM25")) {
+            } else if (query.getModel().equals("BM25")) {
                 this.currModel = ModelTypes.BM25;
                 System.out.println("BM25");
                 m = new Pooling(query.getContent(), ModelTypes.BM25);
@@ -87,35 +78,37 @@ public class QueryController {
             currQuery = query.getContent();
             ArrayList<Similarity> documents = m.retrieve();
 
-            if(query.selectedSeason.size() != 0) {
-                //documents = (ArrayList<Similarity>) documents.stream().filter(document -> query.selectedSeason.contains(document.getSeason())).collect(Collectors.toList());
-                //seasons = new HashSet<>(query.getSelectedSeason());
-                //model.addAttribute("seasons", seasons);
+            if (query.selectedSeason.size() != 0) {
+                // documents = (ArrayList<Similarity>) documents.stream().filter(document ->
+                // query.selectedSeason.contains(document.getSeason())).collect(Collectors.toList());
+                // seasons = new HashSet<>(query.getSelectedSeason());
+                // model.addAttribute("seasons", seasons);
             } else {
-                //int [] seasonsNumbers = getSeasonNumbers();
-                //ArrayList<Integer> seasons = new ArrayList<>();
-                //for(int i = 0; i < seasonsNumbers.length; i++){seasons.add(seasonsNumbers[i]);}
-                //seasons = new ArrayList<>(seasons);
-                //model.addAttribute("seasons", seasons);
+                // int [] seasonsNumbers = getSeasonNumbers();
+                // ArrayList<Integer> seasons = new ArrayList<>();
+                // for(int i = 0; i < seasonsNumbers.length;
+                // i++){seasons.add(seasonsNumbers[i]);}
+                // seasons = new ArrayList<>(seasons);
+                // model.addAttribute("seasons", seasons);
             }
 
             for (Similarity sim : documents) {
                 sim.setPreview(getLongestIncreasingSequence(sim.getDocument_name() + ".txt", query.getContent()));
                 sim.setDocumentLink(Models.HTMLDOCPATHS.get(Integer.parseInt(sim.getDocument_name())));
-                sim.setDocumentName(Models.HTMLDOCPATHS.get(Integer.parseInt(sim.getDocument_name())).replace(".html","").replaceAll("_", " "));
+                sim.setDocumentName(Models.HTMLDOCPATHS.get(Integer.parseInt(sim.getDocument_name()))
+                        .replace(".html", "").replaceAll("_", " "));
             }
 
             this.currDocuments = documents;
-            
-            //for(Similarity s: this.currDocuments) {
-                //seasons.add(s.getSeason());
-            //}
 
-            //if the first document isn't relevant or similar send back no
+            // for(Similarity s: this.currDocuments) {
+            // seasons.add(s.getSeason());
+            // }
+
+            // if the first document isn't relevant or similar send back no
             // results available
             model.addAttribute("results", documents);
-            model.addAttribute("selected",
-                    Active.relevance.toString().toLowerCase());
+            model.addAttribute("selected", Active.relevance.toString().toLowerCase());
             model.addAttribute("queryContents", currQuery);
             model.addAttribute("season", "-1");
             model.addAttribute("query", new Querycontainer());
@@ -134,9 +127,8 @@ public class QueryController {
         } else {
             sort(temp, Comparator.comparing(Similarity::getDocument_name));
         }
-        model.addAttribute("selected", !backward ?
-                Active.alphabet.toString().toLowerCase() :
-                Active.reverse.toString().toLowerCase());
+        model.addAttribute("selected",
+                !backward ? Active.alphabet.toString().toLowerCase() : Active.reverse.toString().toLowerCase());
         model.addAttribute("query", new Querycontainer());
         model.addAttribute("results", temp);
         model.addAttribute("season", "-1");
@@ -149,8 +141,7 @@ public class QueryController {
     public String relevance(Model model) {
         model.addAttribute("results", this.currDocuments);
         model.addAttribute("query", new Querycontainer());
-        model.addAttribute("selected",
-                Active.relevance.toString().toLowerCase());
+        model.addAttribute("selected", Active.relevance.toString().toLowerCase());
         model.addAttribute("season", "-1");
         model.addAttribute("queryContents", currQuery);
         model.addAttribute("seasons", seasons);
@@ -158,34 +149,28 @@ public class QueryController {
     }
 
     /*
-    @GetMapping("/seasons")
-    public String seasons(@RequestParam(required = true) String season, Model model) {
-        ArrayList<Similarity> temp = Lists.newArrayList(this.currDocuments);
-        temp = (ArrayList<Similarity>) temp.stream()
-                .filter(e -> e.getSeason() == Integer.parseInt(season))
-                .collect(Collectors.toList());
-        model.addAttribute("results", temp);
-        model.addAttribute("query", new Querycontainer());
-        model.addAttribute("season", season);
-        model.addAttribute("seasons", seasons);
-        model.addAttribute("queryContents", currQuery);
-        model.addAttribute("selected",
-                Active.seasons.toString().toLowerCase());
-        return "result";
-    }
-    */
+     * @GetMapping("/seasons") public String seasons(@RequestParam(required = true)
+     * String season, Model model) { ArrayList<Similarity> temp =
+     * Lists.newArrayList(this.currDocuments); temp = (ArrayList<Similarity>)
+     * temp.stream() .filter(e -> e.getSeason() == Integer.parseInt(season))
+     * .collect(Collectors.toList()); model.addAttribute("results", temp);
+     * model.addAttribute("query", new Querycontainer());
+     * model.addAttribute("season", season); model.addAttribute("seasons", seasons);
+     * model.addAttribute("queryContents", currQuery);
+     * model.addAttribute("selected", Active.seasons.toString().toLowerCase());
+     * return "result"; }
+     */
 
     @GetMapping("/document")
     @ResponseBody
     public FileSystemResource getDocument(@RequestParam(required = true) String doc, Model model) {
-        System.err.println("Submitting the path " + htmlDocumentsPath + doc);
+        //TODO replace all links in document with th:href
         return new FileSystemResource(htmlDocumentsPath + doc);
     }
 
     private String getLongestIncreasingSequence(String docName, String query) {
         ArrayList<String> terms = (ArrayList<String>) Lists.newArrayList(query.split("\\s+")).stream()
-            .filter(term -> !term.isEmpty())
-            .collect(Collectors.toList());
+                .filter(term -> !term.isEmpty()).collect(Collectors.toList());
         String fileContent;
         List<Integer> termTokenPositionsInFile;
         try {
@@ -195,13 +180,13 @@ public class QueryController {
             throw new RuntimeException(e);
         }
         fileContent = fileContent.replaceAll("<[^>]*>", "");
-        List<String> fileTokens = Arrays.stream(fileContent.split("\\s+"))
-            .collect(Collectors.toList());
+        List<String> fileTokens = Arrays.stream(fileContent.split("\\s+")).collect(Collectors.toList());
 
         HashMap<Integer, Integer> windowCenterTermCounts = Maps.newHashMap();
         for (Integer termPosition : termTokenPositionsInFile) {
             int lowerBound = termPosition - HALF_WINDOW_SIZE < 0 ? 0 : termPosition - HALF_WINDOW_SIZE;
-            int upperBound =  termPosition + HALF_WINDOW_SIZE > fileTokens.size() ? fileTokens.size() : termPosition + HALF_WINDOW_SIZE;
+            int upperBound = termPosition + HALF_WINDOW_SIZE > fileTokens.size() ? fileTokens.size()
+                    : termPosition + HALF_WINDOW_SIZE;
             for (int i = lowerBound; i < upperBound; i++) {
                 if (windowCenterTermCounts.containsKey(i)) {
                     Integer currVote = windowCenterTermCounts.get(i);
@@ -213,16 +198,15 @@ public class QueryController {
         }
 
         Integer bestWindowCenter = windowCenterTermCounts.entrySet().stream()
-            .max((center1, center2) -> center1.getValue() > center2.getValue() ? 1 : -1)
-            .map(Map.Entry::getKey)
-            .orElse(HALF_WINDOW_SIZE);
+                .max((center1, center2) -> center1.getValue() > center2.getValue() ? 1 : -1).map(Map.Entry::getKey)
+                .orElse(HALF_WINDOW_SIZE);
 
         int lowerBound = bestWindowCenter - HALF_WINDOW_SIZE < 0 ? 0 : bestWindowCenter - HALF_WINDOW_SIZE;
-        int upperBound = bestWindowCenter + HALF_WINDOW_SIZE > fileTokens.size() ? fileTokens.size() : bestWindowCenter + HALF_WINDOW_SIZE;
+        int upperBound = bestWindowCenter + HALF_WINDOW_SIZE > fileTokens.size() ? fileTokens.size()
+                : bestWindowCenter + HALF_WINDOW_SIZE;
         return String.join(" ", fileTokens.subList(lowerBound, upperBound));
     }
 }
-
 
 @Configuration
 class ThymeleafConfig {
@@ -235,8 +219,7 @@ class ThymeleafConfig {
     }
 
     private ITemplateResolver textTemplateResolver() {
-        ClassLoaderTemplateResolver templateResolver =
-                new ClassLoaderTemplateResolver();
+        ClassLoaderTemplateResolver templateResolver = new ClassLoaderTemplateResolver();
         templateResolver.setPrefix("/documents/");
         templateResolver.setSuffix(".txt");
         templateResolver.setTemplateMode(TemplateMode.TEXT);
