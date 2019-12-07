@@ -1,0 +1,163 @@
+   Racket features      Racket features  table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+   margin: 0; padding: 0; vertical-align: baseline; border: none; }
+ <style>
+ table.sourceCode { width: 100%; line-height: 100%; }
+ td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+ td.sourceCode { padding-left: 5px; }
+ code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+ code > span.dt { color: #902000; } /* DataType */
+ code > span.dv { color: #40a070; } /* DecVal */
+ code > span.bn { color: #40a070; } /* BaseN */
+ code > span.fl { color: #40a070; } /* Float */
+ code > span.ch { color: #4070a0; } /* Char */
+ code > span.st { color: #4070a0; } /* String */
+ code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+ code > span.ot { color: #007020; } /* Other */
+ code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+ code > span.fu { color: #06287e; } /* Function */
+ code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+ code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+ code > span.cn { color: #880000; } /* Constant */
+ code > span.sc { color: #4070a0; } /* SpecialChar */
+ code > span.vs { color: #4070a0; } /* VerbatimString */
+ code > span.ss { color: #bb6688; } /* SpecialString */
+ code > span.im { } /* Import */
+ code > span.va { color: #19177c; } /* Variable */
+ code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+ code > span.op { color: #666666; } /* Operator */
+ code > span.bu { } /* BuiltIn */
+ code > span.ex { } /* Extension */
+ code > span.pp { color: #bc7a00; } /* Preprocessor */
+ code > span.at { color: #7d9029; } /* Attribute */
+ code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+ code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+ code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */     Racket has been under active development as a vehicle for programming language research since the mid-1990s, and has accumulated many features over the years. This article describes and demonstrates some of these features. Note that one of Racket's main design goals is to accommodate creating new languages, both domain-specific languages and completely new languages. 1 Therefore, some of the following examples are in different languages, but they are all implemented in Racket. Please refer to the main article for more information.  The core Racket implementation is highly flexible. Even without using dialects, it can function as a full-featured scripting language, capable of running both with and without windows-native GUI, and capable of tasks from web server creation to graphics.  Runtime Support  Garbage Collection, Tail Calls, and Space Safety  Racket can use three different garbage collectors :   Originally, the conservative Boehm garbage collector was used. However, conservative collection is impractical for long-running processes such as a web server—such processes tend to slowly leak memory. In addition, there are pathological cases where a conservative collector leaks memory fast enough to make certain programs impossible to run. For example, when traversing an infinite list, a single conservative mistake of retaining a pointer leads to keeping the complete list in memory, quickly overflowing available memory. This collector is often referred to as "CGC" in the Racket community.    SenoraGC is an alternative conservative garbage collector that is intended mainly for debugging and memory tracing.    The moving memory manager (aka "3m") is a precise garbage collector, and it has been Racket's default collector since 2007. This collector is a generational one, and it supports memory accounting via custodians (see below). The collector is implemented as a C source transformer that is itself written in Racket. Therefore, the build process uses the conservative collector for bootstrapping .   Like all implementations in the Scheme family, Racket implements full tail call elimination . Racket takes this further: the language is made fully safe-for-space, via live variable analysis . This complements the precise garbage collector and in some cases, like in the implementation of Lazy Racket, the two features are crucial for proper execution. This is in addition to additional compiler optimizations such as lambda lifting and just-in-time compilation .  System Interface and Scripting  Racket's system interface includes asynchronous non-blocking I/O , green threads , synchronization channels, semaphores, sub-processes , and TCP sockets.  The following program starts an "echo server" on port 12345.  #lang racket
+ 
+ ( define listener (tcp-listen 12345 ))
+ 
+ ( let echo-server () ;; create a TCP server (define-values (in out) (tcp-accept listener)) ;; handle an incoming connection in a (green) thread (thread (λ () (copy-port in out) ( close-output-port out))) ;; and immediately loop back to accept additional clients (echo-server))  The combination of dynamic compilation and a rich system interface makes Racket a capable scripting language, similar to Perl or Python .  The following example demonstrates walking a directory tree, starting at the current directory. It uses the in-directory function to construct a sequence that walks the tree. The for form binds path to each path in the sequence, and regexp-match? tests these paths against the given regexp pattern.  #lang racket ;; Finds Racket sources in all subdirs (for ([path (in-directory)]) ; iterate over the current tree (when (regexp-match? #rx "[.]rkt$" path)
+     (printf "source file: ~a\n" path)))  The next example uses a hash table to record previously seen lines and print only unique ones.  #lang racket ;; Report each unique line from stdin ( let ([saw (make-hash)])
+   (for ([line (in-lines)])
+     (unless (hash-ref saw line #f )
+       (displayln line))
+     (hash-set! saw line #t )))  Both of these programs can be run in DrRacket , or on the command line, via the racket executable. Racket ignores an initial shebang line, making it possible to turn such programs to executable scripts. The following script demonstrates this, in addition to using Racket's library for command-line argument parsing :  #!/usr/bin/env racket  #lang racket  (command-line  #:args (base-dir ext re)  (for ([p (in-directory)]  #:when (regexp-match? (string-append "[.]" ext "$") p)  [(line num) (in-indexed (file->lines p))])  (when (regexp-match? (pregexp re) line)  (printf "~a:~a: ~a~n" p num line))))  The script is a grep-like utility, expecting three command-line arguments: a base directory, a filename extension , and a (perl-compatible) regular expression. It scans the base directory for files with the given suffix, and print lines matching the regexp pattern.  Resource Management and Sandboxing  Racket features the concept of a "custodian": a kind of value that acts as a resource manager. This is often used in network servers, where each connection is dealt with in a new custodian, making it easy to "clean-up" all resources that might have been left open by the handler (e.g., open ports). The following extends the "echo server" example with such a custodian use:  #lang racket
+ 
+ ( define listener (tcp-listen 12345 )) ;; per-connection handler ( define  (handler in out)
+   (copy-port in out)
+   ( close-output-port out))
+ 
+ ( let echo-server ()
+   (define-values (in out) (tcp-accept listener))
+   (thread (λ () ( let ([c (make-custodian)])
+                   (parameterize ([current-custodian c])
+                     (handler in out)
+                     (custodian-shutdown-all c)))))
+   (echo-server))  Custodians, combined with the memory accounting feature of the 3m garbage collector, and a number of additional runtime parameters that control additional aspects of the runtime, make it possible to create completely safe sandboxed execution contexts. The racket/sandbox library provides this kind of functionality in a simple way. The following example creates a "REPL server" on the specified port; connecting to this port will look like a plain Racket REPL, except that the evaluation is subject to the various protection aspects of the sandbox. For example, it is not possible to access the filesystem from this REPL, create network connection, run subprocesses, or use too much time or memory. (In fact, this REPL is safe enough to be given out publicly.)  #lang racket
+ (require racket/sandbox)
+ ( define e (make-evaluator 'racket/base))
+ (let-values ([(i o) (tcp-accept (tcp-listen 9999 ))])
+   (parameterize ([ current-input-port i]
+                  [ current-output-port o]
+                  [current-error-port  o]
+                  [current-eval e]
+                  [current-read-interaction (λ (x in) ( read in))])
+     (read-eval-print-loop)
+     (fprintf o "\nBye...\n" )
+     ( close-output-port o)))  Web and Network Programming  The next example implements a web server using the web-server/insta language. Each time a connection is made to the server, the start function is called to get the HTML to send back to the client.  #lang web-server/insta ;; A tiny "hello world" web server ( define  (start request)
+   (response/xexpr '(html (body "Hello World" ))))  Racket also includes the functions you would need to write scrapers and robots. As an example, the following function would list the Google results for a search string.  #lang racket ;; Simple web scraper (require net/url net/uri-codec)
+ 
+ ( define  (let-me-google-that-for-you str)
+   ( let* ([g "http://www.google.com/search?q=" ]
+          [u ( string-append g (uri-encode str))]
+          [rx #rx "(?<= ).*?(?= )" ])
+     (regexp-match* rx (get-pure-port (string->url u)))))  The library also includes support for protocols other than http:  #lang racket ;; Sending a timed email alert from racket (require net/sendmail)
+ 
+ (sleep (* ( - (* 60  4 ) 15 ) 60 )) ; wait 3h 45m (send-mail-message
+  (getenv "EMAIL" ) "Parking meter alert!" ( list (getenv "EMAIL" )) null null
+  '( "Time to go out and move your car." ))  Graphics  Graphic capabilities come in several different flavors that are intended for different audiences. The 2htdp/image library provides convenient functions for constructing images. This library is mainly used by students in HtDP -based courses. In the following example, a sierpinski function is defined and called (at the same time) to generate a Sierpinski triangle of depth 8.  #lang racket ;; A picture (require 2htdp/image)
+ 
+ ( let sierpinski ([n 8 ])
+   ( if ( zero? n)
+     (triangle 2 'solid 'red)
+     ( let ([t (sierpinski ( - n 1 ))])
+       (freeze (above t (beside t t))))))  DrRacket editors can contain images, and DrRacket displays image values just like any other type of value (such as integers or lists). Running the above program, for example, actually displays a Sierpinski triangle, which can be cut and pasted into another program.  The plot library constructs image values for more mature audiences and needs. For example, the following program plots the sum of two     ℝ  ×  ℝ  ×  ℝ   →  ℝ     normal-→    ℝ  ℝ  ℝ   ℝ    \mathbb{R}\times\mathbb{R}\times\mathbb{R}\rightarrow\mathbb{R}   (three-dimensional) Gaussians, as concentric, partially transparent surfaces:  #lang racket ;; Visualize a sum of two 3D Gaussians as concentric isosurfaces  ;; Note: this example requires Racket 5.2 or later (require plot) ;; Returns an R x R x R -> R Gaussian function centered at (cx,cy,cz) ( define  ((gaussian cx cy cz) x y z)
+   ( exp ( - ( + (sqr ( - x cx)) (sqr ( - y cy)) (sqr ( - z cz)))))) ;; Lifts + to operate on three-argument functions ( define  ((f3+ g h) x y z) ( + (g x y z) (h x y z))) ;; Constructs an image value representing the sum of two Gaussians (plot3d (isosurfaces3d (f3+ (gaussian 0  0  0 ) (gaussian 1.5 - 1.5  0 ))
+                        - 1  2.5 - 2.5  1 - 1  1 #:label "g" )) ; labeling adds a legend  Here, the isosurfaces3d function requires a three-argument function for its first argument, which the curried f3+ supplies. Besides constructing image values, plot can also write files in PNG , PDF , PostScript and SVG formats.  GUI Programming  Racket implements a portable GUI layer which the libraries mentioned above build on. It is implemented via the native Windows API, via Cocoa on Mac OS X , and via Gtk on Linux and others. The Racket API is a class-based toolkit, somewhat related to WxWidgets which was used originally.  The following simple guessing game demonstrates coding with the GUI toolkit. The frame% class implements a top-level window, and button% implements a button. The check function defined here produces a function that is used for the button's callback action.  #lang racket/gui ;; A GUI guessing game ( define secret (random 5 ))
+ 
+ ( define f (new frame% [label "Guessing game" ])) ; toplevel window ( define t (new message% [parent f]
+                [label "Can you guess the number I'm thinking about?" ]))
+ ( define p (new horizontal-pane% [parent f])) ; horizontal container ( define  ((make-check i) btn evt)
+   (message-box "." ( cond [( < i secret) "Too small" ]
+                          [( > i secret) "Too big" ]
+                          [ else  "Exactly!" ]))
+   (when ( = i secret) (send f show #f ))) ; success => close window (for ([i (in-range 10 )]) ; create all buttons (make-object button% (format "~a" i) p (make-check i)))
+ 
+ (send f show #t ) ; show the window to start the application  The GUI can be hand-coded in this way or with the help of a GUI designer program available on PLaneT. 2  Slideshow  Slide -based presentations can also be developed in Racket using the slideshow language, much like Beamer , but with Racket's programmatic facilities. Elements of the slides are pictures that can be combined.  For example, the following program displays in full-screen a title slide, followed by a slide with some pictures. The vc-append and hc-append functions combine pictures vertically and horizontally, respectively, and centered on the other axis.  #lang slideshow
+ 
+ (slide
+  (text "Slideshow" 'roman 56 )
+  (text "Making presentations in Racket" 'roman 40 ))
+ 
+ (slide
+  #:title "Some pictures" (apply vc-append
+         (for/list ([i 5 ])
+           ( define  (scale+color p c) 
+             (colorize (scale p ( / (add1 i) 5 )) c))
+           (hc-append 
+            (scale+color (filled-rectangle 100  50 ) "darkblue" )
+            (scale+color (disk 100 ) "darkgreen" )
+            (scale+color (arrow 100 ( / pi 6 )) "darkred" )
+            ))))  Extension packages also exist on PLaneT, 3 for example to include LaTeX elements.  Foreign Function Interface  Racket features a foreign function interface that is based on libffi . The interface allows writing unsafe low-level C -like code, that can allocate memory, dereference pointers, call out to functions in shared libraries , and send out callbacks to Racket functions (using libffi closures). The core implementation is a thin layer atop libffi (written in C), and the full interface is then implemented via Racket code. The interface uses macros extensively, resulting in an expressive Racket-based interface description language . This language has a number of useful features, such as uniform representation for higher-order functions (avoiding the pitfalls when callbacks and callouts are different), struct definitions that are similar to plain Racket structs, and custom function types that can represent input and output pointers, implicit arguments (e.g., an argument that provides the number of elements in a vector that is passed as another argument). By using this interface to access underlying GUI toolkits, Racket implements its own GUI layer completely in Racket. 4  The FFI can be used in a number of different ways: from writing a complete glue layer for a library (as done for Racket's OpenGL binding), to quickly pulling out a single foreign function. An example of the latter approach:  #lang scheme/base ;; Simple use of the FFI (require ffi/unsafe)
+ 
+ ( define mci-send-string (get-ffi-obj "mciSendStringA"  "Winmm" (_fun _string [_pointer =  #f ] [_int =  0 ] [_pointer =  #f ]
+           -> [ret : _int])))
+ (mci-send-string "play sound.wav wait" )  Language Extensions  Racket's most notable feature is its ability to build new domain-specific and general-purpose languages. This is the result of combining a number of important features:   a flexible module system that is used for linking code and for namespace management,  an extensive macro system—functioning as a compiler-API—that can create new syntactic forms,  a rich runtime system, providing features that language implementors can use, like (composable, delimited) continuations, resource management, etc.,  a way to specify (and implement) parsers for new language syntaxes.   The module system plays an important role in combining these features, and making it possible to write code that spans across a number of modules, where each can be written in a different language.  Such languages are used extensively in the Racket distribution and in user libraries. In fact, creating a new language is so straightforward, that there are some languages that have less than a handful of uses.  Racket comes with a number of useful languages, some are very different from Racket's default language.  Scribble  Scribble, Racket's documentation system, comes in the form of a number of languages that are used to write prose. It is used for Racket's documentation, as well as writing books and articles. Actually, rather than a single "scribble" language, it is a family of (very similar) dialects, each for a different purpose.  To run the following example, copy it into DrRacket and click one of the two scribble rendering buttons that will appear (PDF rendering requires pdfTeX ). Alternatively, use the scribble executable on the file.  #lang scribble/base
+ @ ; Generate a PDF or an HTML document using `scribble' @(require (planet neil/numspell))
+ 
+ @title{ 99 Bottles of Beer}
+ 
+ In case you need some @emph{blah blah} in your life.
+ 
+ @(apply itemlist
+   (for/list ([n (in-range 99  0 - 1 )])
+     ( define N (number->english n))
+     ( define N-- (number->english (sub1 n)))
+     @item{@string-titlecase[N] bottles of beer on the wall,
+           @N bottles of beer.
+           Take one down, pass it around,
+           @N-- bottles of beer on the wall.}))  The most striking feature of the Scribble languages is their use of a new syntax, which is designed specifically for textually rich code. 5 The syntax allows free-form text, string interpolation, customizable quotations, and is useful in other applications such as preprocessing text , generating text, and HTML template systems. Note that the syntax extends plain S-expressions, and is implemented as an alternative input for such expressions.  #lang scribble/text
+ Hi,
+ I'm a text file -- run me.
+ @( define  (thrice . text) @list{@text, @text, @text})
+ @thrice{SPAM}!
+ @thrice{HAM}!  Typed Racket  Typed Racket is a statically typed variant of Racket. The type system that it implements is unique in that the motivation in developing it was accommodating as much idiomatic Racket code as possible—as a result, it includes subtypes, unions, and much more. 6 Another goal of Typed Racket is to allow migration of parts of a program into the typed language, so it accommodates calling typed code from untyped code and vice versa, generating dynamic contracts to enforce type invariants. 7 This is considered a desirable feature of an application's lifetime stages, as it matures from "a script" to "an application", where static typing helps in maintenance of a large body of code.  #lang typed/racket ;; Using higher-order occurrence typing (define-type Str-or-Num (U String Number))
+ 
+ (: tog ((Listof Str-or-Num) -> String))
+ ( define  (tog l)
+   (apply string-append (filter string? l)))
+ 
+ (tog ( list  5  "hello "  1 / 2  "world" ( sqrt - 1 )))  Lazy Racket  The lazy language is a language with lazy evaluation semantics, similar to Haskell . In the following example, fibs is an infinite list whose 1000th element will not be computed until its value is needed for the printout.  #lang lazy ;; An infinite list: ( define fibs (list* 1  1 (map + fibs ( cdr fibs)))) ;; Print the 1000th Fibonacci number: (print ( list-ref fibs 1000 ))  Logic Programming  Racket comes with three logic programming languages: Racklog, a Prolog -like language, a Datalog implementation, and a miniKanren port. Unlike the Scribble syntax, the first two of these languages use a completely new syntax rather than an extension of S-expressions. If you use it in DrRacket, you'll see that it provides proper highlighting, the usual host of tools check syntax, and a Prolog/Datalog REPL.  #lang datalog
+ 
+ ancestor( A ,  B ) :- parent( A ,  B ) . ancestor( A ,  B ) :- parent( A ,  C ) ,  D  =  C , ancestor( D ,  B ) . parent(john , douglas) . parent(bob , john) . ancestor( A ,  B )?  Educational Tools  The PLT group which develops Racket has traditionally been involved in education at all levels. One of the earliest research ideas that the group promoted is the use of language levels, which restrict new students while providing them with helpful error messages that fit the student's level of knowledge. This approach is heavily used in How to Design Programs , the textbook that several PLT developers have authored, as well as in the ProgramByDesign project. The following program uses the htdp/bsl —the "beginning student language". It uses the 2htdp/image library for creating pictures in the teaching languages, and the 2htdp/universe library for interactive animations.  #lang htdp/bsl ;; Any key inflates the balloon (require 2htdp/image)
+ (require 2htdp/universe)
+ 
+ ( define  (balloon b) (circle b "solid"  "red" ))
+ 
+ ( define  (blow-up b k) ( + b 5 ))
+ 
+ ( define  (deflate b) ( max ( - b 1 ) 1 ))
+ 
+ (big-bang 50 (on-key blow-up) (on-tick deflate)
+           (to-draw balloon 200  200 ))  Algol  Racket comes with a complete implementation of the ALGOL 60 language.  #l ang algol60 begin  integer  procedure SIGMA(x, i, n);
+     value n; integer x, i, n; begin  integer sum;
+     sum := 0 ; for i := 1 step 1  until n do sum := sum + x;
+     SIGMA := sum; end ; integer q;
+   printnln(SIGMA(q* 2-1 , q, 7 )); end  Additional Languages  Finally, the following example is an implementation of a new language:  #lang racket
+ (provide (except-out (all-from-out racket)
+                      #%top #%app)
+          (rename-out [top #%top] [app #%app]))
+ (define-syntax-rule (top . x) 'x)
+ (define-syntax-rule (app f . xs)
+   ( if (hash? f) (hash-ref f . xs) (f . xs)))  This language:   provides everything from the racket language, so it is a somewhat similar variant,  except for two special "hook macros" that implement unbound variable lookup and function calls, instead of these, new forms are provided to  implicitly quote all unknown variables  allow hash tables to be used as functions, where the arguments are used for hash-table lookup. 8    If this code is stored in a mylang.rkt file, you can use it as follows:  #lang s-exp "mylang.rkt"  ; sexpr syntax, using mylang semantics ( define h (make-hasheq))
+ (hash-set! h A B) ; A and B are self-evaluating here (h A) ; the hash table is used as a function  References and footnotes   ''As of [ http://en.wikipedia.org/w/index.php?title=Racket_features&oldid; ;=445553008 Aug 18, 2011] some of the content of this article (contained in examples and descriptive passages) consisted of text from the Racket home page , published with a "copyleft" notice.  docs.racket   "  Category:Articles with example Racket code     ↩  PLaneT : Racket's centralized package distribution system ↩   ↩  ↩  ↩  ↩  Note that #%app is a macro that is used in all function calls, making this language not too efficient, as every function call incurs an additional condition. In addition, the macro evaluates the function expression twice, so it should not be taken as an example of good macro-programming. ↩    

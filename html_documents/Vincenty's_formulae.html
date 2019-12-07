@@ -1,0 +1,4592 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="1006">Vincenty's formulae</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Vincenty's formulae</h1>
+<hr/>
+
+<p><strong>Vincenty's formulae</strong> are two related <a href="iterative_method" title="wikilink">iterative methods</a> used in <a class="uri" href="geodesy" title="wikilink">geodesy</a> to calculate the distance between two points on the surface of a spheroid, developed by <a href="Thaddeus_Vincenty" title="wikilink">Thaddeus Vincenty</a> (1975a) They are based on the assumption that the <a href="figure_of_the_Earth" title="wikilink">figure of the Earth</a> is an <a href="oblate_spheroid" title="wikilink">oblate spheroid</a>, and hence are more accurate than methods such as <a href="great-circle_distance" title="wikilink">great-circle distance</a> which assume a <a class="uri" href="spherical" title="wikilink">spherical</a> Earth.</p>
+
+<p>The first (direct) method computes the location of a point which is a given distance and <a class="uri" href="azimuth" title="wikilink">azimuth</a> (direction) from another point. The second (inverse) method computes the <a href="geographical_distance" title="wikilink">geographical distance</a> and azimuth between two given points. They have been widely used in geodesy because they are accurate to within 0.5 mm (0.020″) on the <a href="Earth_ellipsoid" title="wikilink">Earth ellipsoid</a>.</p>
+<h2 id="background">Background</h2>
+
+<p>Vincenty's goal was to express existing algorithms for <a href="geodesics_on_an_ellipsoid" title="wikilink">geodesics on an ellipsoid</a> in a form that minimized the program length (see the first sentence of his paper). His unpublished report (1975b) mentions the use of a <a href="Wang_Laboratories#Calculators" title="wikilink">Wang</a> 720 desk calculator which had only a few kilobytes of memory. To obtain good accuracy for long lines, the solution uses the classical solution of Legendre (1806), Bessel (1825), and Helmert (1880) based on the auxiliary sphere. (Vincenty relied on formulation of this method given by Rainsford, 1955.) Legendre showed that an ellipsoidal geodesic can be exactly mapped to a great circle on the auxiliary sphere by mapping the geographic latitude to reduced latitude and setting the azimuth of the great circle equal to that of the geodesic. The longitude on the ellipsoid and the distance along the geodesic are then given in terms of the longitude on the sphere and the arc length along the great circle by simple integrals. Bessel and Helmert gave rapidly converging series for these integrals which allow the geodesic to be computed with arbitrary accuracy.</p>
+
+<p>In order to minimize the program size, Vincenty took these series, re-expanded them using the first term of each series as the small parameter, and truncated them to order <em>ƒ</em><sup>3</sup>. This resulted in compact expressions for the longitude and distance integrals. The expressions were put in <a href="Horner_scheme" title="wikilink">Horner</a> (or <em>nested</em>) form, since this allows polynomials to be evaluated using only a single temporary register. Finally, simple iterative techniques were used to solve the implicit equations in the direct and inverse methods; even though these are slow (and in the case of the inverse method it sometimes does not converge), they result in the least increase in code size.</p>
+<h2 id="notation">Notation</h2>
+
+<p>Define the following notation:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">
+<p><em>a</em></p></td>
+<td style="text-align: left;">
+<p>length of semi-<a href="major_axis" title="wikilink">major axis</a> of the ellipsoid (radius at equator);</p></td>
+<td style="text-align: left;">
+<p>(6378137.0 metres in <a class="uri" href="WGS-84" title="wikilink">WGS-84</a>)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><em>ƒ</em></p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="flattening" title="wikilink">flattening</a> of the ellipsoid;</p></td>
+<td style="text-align: left;">
+<p>(1/298.257223563 in <a class="uri" href="WGS-84" title="wikilink">WGS-84</a>)</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><em>b</em> = (1 - <em>ƒ</em>) <em>a</em></p></td>
+<td style="text-align: left;">
+<p>length of semi-<a href="minor_axis" title="wikilink">minor axis</a> of the ellipsoid (radius at the poles);</p></td>
+<td style="text-align: left;">
+<p>(6356752.314245 meters in <a class="uri" href="WGS-84" title="wikilink">WGS-84</a>)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><em>Φ</em><sub>1</sub>, <em>Φ</em><sub>2</sub></p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="latitude" title="wikilink">latitude</a> of the points;</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><em>U</em><sub>1</sub> = arctan[(1 − <em>ƒ</em>) tan <em>Φ</em><sub>1</sub>],<br/>
+<em>U</em><sub>2</sub> = arctan[(1 − <em>ƒ</em>) tan <em>Φ</em><sub>2</sub>]</p></td>
+<td style="text-align: left;">
+<p><a href="Latitude#Reduced_.28or_parametric.29_latitude" title="wikilink">reduced latitude</a> (latitude on the auxiliary sphere)</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><em>L</em> = <em>L</em><sub>2</sub> - <em>L</em><sub>1</sub></p></td>
+<td style="text-align: left;">
+<p>difference in <a class="uri" href="longitude" title="wikilink">longitude</a> of two points;</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><em>λ</em><sub>1</sub>, <em>λ</em><sub>2</sub></p></td>
+<td style="text-align: left;">
+<p>longitude of the points on the auxiliary sphere;</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><em>α</em><sub>1</sub>, <em>α</em><sub>2</sub></p></td>
+<td style="text-align: left;">
+<p>forward <a href="azimuth" title="wikilink">azimuths</a> at the points;</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><em>α</em></p></td>
+<td style="text-align: left;">
+<p><a class="uri" href="azimuth" title="wikilink">azimuth</a> at the equator;</p></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">
+<p><em>s</em></p></td>
+<td style="text-align: left;">
+<p>ellipsoidal distance between the two points;</p></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">
+<p><em>σ</em></p></td>
+<td style="text-align: left;">
+<p>arc length between points on the auxiliary sphere</p></td>
+</tr>
+</tbody>
+</table>
+<h2 id="inverse-problem">Inverse problem</h2>
+
+<p>Given the coordinates of the two points (<em>Φ</em><sub>1</sub>, <em>L</em><sub>1</sub>) and (<em>Φ</em><sub>2</sub>, <em>L</em><sub>2</sub>), the inverse problem finds the azimuths <em>α</em><sub>1</sub>, <em>α</em><sub>2</sub> and the ellipsoidal distance <em>s</em>.</p>
+
+<p>Calculate <em>U</em><sub>1</sub>, <em>U</em><sub>2</sub> and <em>L</em>, and set initial value of <em>λ</em> = <em>L</em>. Then iteratively evaluate the following equations until <em>λ</em> converges:</p>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>sin</mi>
+    <mi>σ</mi>
+   </mrow>
+   <mo>=</mo>
+   <msqrt>
+    <mrow>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>2</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>sin</mi>
+         <mi>λ</mi>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+     <mo>+</mo>
+     <msup>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mrow>
+         <mrow>
+          <mi>cos</mi>
+          <msub>
+           <mi>U</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mi>sin</mi>
+          <msub>
+           <mi>U</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+        </mrow>
+        <mo>-</mo>
+        <mrow>
+         <mrow>
+          <mi>sin</mi>
+          <msub>
+           <mi>U</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mi>cos</mi>
+          <msub>
+           <mi>U</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mi>cos</mi>
+          <mi>λ</mi>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mn>2</mn>
+     </msup>
+    </mrow>
+   </msqrt>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <sin></sin>
+     <ci>σ</ci>
+    </apply>
+    <apply>
+     <root></root>
+     <apply>
+      <plus></plus>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <times></times>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <sin></sin>
+         <ci>λ</ci>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <cos></cos>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>U</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <apply>
+          <sin></sin>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>U</ci>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+        <apply>
+         <times></times>
+         <apply>
+          <sin></sin>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>U</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <apply>
+          <cos></cos>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>U</ci>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+         <apply>
+          <cos></cos>
+          <ci>λ</ci>
+         </apply>
+        </apply>
+       </apply>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sin\sigma=\sqrt{(\cos U_{2}\sin\lambda)^{2}+(\cos U_{1}\sin U_{2}-\sin U_{1}%
+\cos U_{2}\cos\lambda)^{2}}
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:1">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>cos</mi>
+    <mi>σ</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mrow>
+      <mi>sin</mi>
+      <msub>
+       <mi>U</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+     <mrow>
+      <mi>sin</mi>
+      <msub>
+       <mi>U</mi>
+       <mn>2</mn>
+      </msub>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mrow>
+      <mi>cos</mi>
+      <msub>
+       <mi>U</mi>
+       <mn>1</mn>
+      </msub>
+     </mrow>
+     <mrow>
+      <mi>cos</mi>
+      <msub>
+       <mi>U</mi>
+       <mn>2</mn>
+      </msub>
+     </mrow>
+     <mrow>
+      <mi>cos</mi>
+      <mpadded width="+1.7pt">
+       <mi>λ</mi>
+      </mpadded>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <cos></cos>
+     <ci>σ</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <sin></sin>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>U</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <sin></sin>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>U</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <cos></cos>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>U</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <cos></cos>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>U</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <cos></cos>
+       <ci>λ</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \cos\sigma=\sin U_{1}\sin U_{2}+\cos U_{1}\cos U_{2}\cos\lambda\,
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:2">
+ <semantics>
+  <mrow>
+   <mi>σ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>arctan</mi>
+    <mpadded width="+1.7pt">
+     <mfrac>
+      <mrow>
+       <mi>sin</mi>
+       <mi>σ</mi>
+      </mrow>
+      <mrow>
+       <mi>cos</mi>
+       <mi>σ</mi>
+      </mrow>
+     </mfrac>
+    </mpadded>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>σ</ci>
+    <apply>
+     <arctan></arctan>
+     <apply>
+      <divide></divide>
+      <apply>
+       <sin></sin>
+       <ci>σ</ci>
+      </apply>
+      <apply>
+       <cos></cos>
+       <ci>σ</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma=\arctan\frac{\sin\sigma}{\cos\sigma}\,
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a><a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a>
+</dd>
+</dl>
+</dd>
+</dl>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:3">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>sin</mi>
+    <mi>α</mi>
+   </mrow>
+   <mo>=</mo>
+   <mpadded width="+1.7pt">
+    <mfrac>
+     <mrow>
+      <mrow>
+       <mi>cos</mi>
+       <msub>
+        <mi>U</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+      <mrow>
+       <mi>cos</mi>
+       <msub>
+        <mi>U</mi>
+        <mn>2</mn>
+       </msub>
+      </mrow>
+      <mrow>
+       <mi>sin</mi>
+       <mi>λ</mi>
+      </mrow>
+     </mrow>
+     <mrow>
+      <mi>sin</mi>
+      <mi>σ</mi>
+     </mrow>
+    </mfrac>
+   </mpadded>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <sin></sin>
+     <ci>α</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <times></times>
+      <apply>
+       <cos></cos>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>U</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <cos></cos>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>U</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <sin></sin>
+       <ci>λ</ci>
+      </apply>
+     </apply>
+     <apply>
+      <sin></sin>
+      <ci>σ</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sin\alpha=\frac{\cos U_{1}\cos U_{2}\sin\lambda}{\sin\sigma}\,
+  </annotation>
+ </semantics>
+</math>
+
+<ref name="opposite">If sin ''σ
+</ref></dd>
+</dl>
+</dd>
+</dl>
+
+<p><code>= 0'' the value of sin </code><em><code>α</code></em><code> is indeterminate. It represents an end point equal to, or</code></p>
+
+<p>diametrically opposite the start point.</p>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:4">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>cos</mi>
+     <mn>2</mn>
+    </msup>
+    <mi>α</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo>-</mo>
+    <mrow>
+     <msup>
+      <mi>sin</mi>
+      <mn>2</mn>
+     </msup>
+     <mpadded width="+1.7pt">
+      <mi>α</mi>
+     </mpadded>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <cos></cos>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>α</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <sin></sin>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>α</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \cos^{2}\alpha=1-\sin^{2}\alpha\,
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>cos</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mn>2</mn>
+      <msub>
+       <mi>σ</mi>
+       <mi>m</mi>
+      </msub>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>cos</mi>
+     <mi>σ</mi>
+    </mrow>
+    <mo>-</mo>
+    <mpadded width="+1.7pt">
+     <mfrac>
+      <mrow>
+       <mn>2</mn>
+       <mrow>
+        <mi>sin</mi>
+        <msub>
+         <mi>U</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+       <mrow>
+        <mi>sin</mi>
+        <msub>
+         <mi>U</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+      </mrow>
+      <mrow>
+       <msup>
+        <mi>cos</mi>
+        <mn>2</mn>
+       </msup>
+       <mi>α</mi>
+      </mrow>
+     </mfrac>
+    </mpadded>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <cos></cos>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>m</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <apply>
+      <cos></cos>
+      <ci>σ</ci>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <cn type="integer">2</cn>
+       <apply>
+        <sin></sin>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>U</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <sin></sin>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>U</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <cos></cos>
+        <cn type="integer">2</cn>
+       </apply>
+       <ci>α</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \cos(2\sigma_{m})=\cos\sigma-\frac{2\sin U_{1}\sin U_{2}}{\cos^{2}\alpha}\,
+  </annotation>
+ </semantics>
+</math>
+
+<ref name="equator">Start
+</ref></dd>
+</dl>
+</dd>
+</dl>
+
+<p>and end point are on the equator. In this case <em>C = 0</em> so the value of 
+
+<math display="inline" id="Vincenty's_formulae:6">
+ <semantics>
+  <mrow>
+   <mi>cos</mi>
+   <mrow>
+    <mo stretchy="false">(</mo>
+    <mrow>
+     <mn>2</mn>
+     <msub>
+      <mi>σ</mi>
+      <mi>m</mi>
+     </msub>
+    </mrow>
+    <mo stretchy="false">)</mo>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <cos></cos>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>m</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \cos(2\sigma_{m})
+  </annotation>
+ </semantics>
+</math>
+
+ is not used. The limiting value is 
+
+<math display="inline" id="Vincenty's_formulae:7">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>cos</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mn>2</mn>
+      <msub>
+       <mi>σ</mi>
+       <mi>m</mi>
+      </msub>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mo>-</mo>
+    <mn>1</mn>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <cos></cos>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <ci>m</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \cos(2\sigma_{m})=-1
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:8">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mi>f</mi>
+     <mn>16</mn>
+    </mfrac>
+    <mrow>
+     <msup>
+      <mi>cos</mi>
+      <mn>2</mn>
+     </msup>
+     <mi>α</mi>
+    </mrow>
+    <mrow>
+     <mo maxsize="120%" minsize="120%">[</mo>
+     <mrow>
+      <mn>4</mn>
+      <mo>+</mo>
+      <mrow>
+       <mi>f</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>4</mn>
+         <mo>-</mo>
+         <mrow>
+          <mn>3</mn>
+          <mrow>
+           <msup>
+            <mi>cos</mi>
+            <mn>2</mn>
+           </msup>
+           <mi>α</mi>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo maxsize="120%" minsize="120%" rspace="4.2pt">]</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>C</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <ci>f</ci>
+      <cn type="integer">16</cn>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cos></cos>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>α</ci>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <plus></plus>
+       <cn type="integer">4</cn>
+       <apply>
+        <times></times>
+        <ci>f</ci>
+        <apply>
+         <minus></minus>
+         <cn type="integer">4</cn>
+         <apply>
+          <times></times>
+          <cn type="integer">3</cn>
+          <apply>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <cos></cos>
+            <cn type="integer">2</cn>
+           </apply>
+           <ci>α</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C=\frac{f}{16}\cos^{2}\alpha\big[4+f(4-3\cos^{2}\alpha)\big]\,
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:9">
+ <semantics>
+  <mrow>
+   <mi>λ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>L</mi>
+    <mo>+</mo>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>-</mo>
+       <mi>C</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>f</mi>
+     <mrow>
+      <mi>sin</mi>
+      <mi>α</mi>
+     </mrow>
+     <mrow>
+      <mo>{</mo>
+      <mrow>
+       <mi>σ</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi>C</mi>
+        <mrow>
+         <mi>sin</mi>
+         <mi>σ</mi>
+        </mrow>
+        <mrow>
+         <mo>[</mo>
+         <mrow>
+          <mrow>
+           <mi>cos</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mn>2</mn>
+             <msub>
+              <mi>σ</mi>
+              <mi>m</mi>
+             </msub>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+          <mo>+</mo>
+          <mrow>
+           <mi>C</mi>
+           <mrow>
+            <mi>cos</mi>
+            <mi>σ</mi>
+           </mrow>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mrow>
+              <mo>-</mo>
+              <mn>1</mn>
+             </mrow>
+             <mo>+</mo>
+             <mrow>
+              <mn>2</mn>
+              <mrow>
+               <msup>
+                <mi>cos</mi>
+                <mn>2</mn>
+               </msup>
+               <mrow>
+                <mo stretchy="false">(</mo>
+                <mrow>
+                 <mn>2</mn>
+                 <msub>
+                  <mi>σ</mi>
+                  <mi>m</mi>
+                 </msub>
+                </mrow>
+                <mo stretchy="false">)</mo>
+               </mrow>
+              </mrow>
+             </mrow>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+         </mrow>
+         <mo>]</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo rspace="4.2pt">}</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>λ</ci>
+    <apply>
+     <plus></plus>
+     <ci>L</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <ci>C</ci>
+      </apply>
+      <ci>f</ci>
+      <apply>
+       <sin></sin>
+       <ci>α</ci>
+      </apply>
+      <set>
+       <apply>
+        <plus></plus>
+        <ci>σ</ci>
+        <apply>
+         <times></times>
+         <ci>C</ci>
+         <apply>
+          <sin></sin>
+          <ci>σ</ci>
+         </apply>
+         <apply>
+          <csymbol cd="latexml">delimited-[]</csymbol>
+          <apply>
+           <plus></plus>
+           <apply>
+            <cos></cos>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>σ</ci>
+              <ci>m</ci>
+             </apply>
+            </apply>
+           </apply>
+           <apply>
+            <times></times>
+            <ci>C</ci>
+            <apply>
+             <cos></cos>
+             <ci>σ</ci>
+            </apply>
+            <apply>
+             <plus></plus>
+             <apply>
+              <minus></minus>
+              <cn type="integer">1</cn>
+             </apply>
+             <apply>
+              <times></times>
+              <cn type="integer">2</cn>
+              <apply>
+               <apply>
+                <csymbol cd="ambiguous">superscript</csymbol>
+                <cos></cos>
+                <cn type="integer">2</cn>
+               </apply>
+               <apply>
+                <times></times>
+                <cn type="integer">2</cn>
+                <apply>
+                 <csymbol cd="ambiguous">subscript</csymbol>
+                 <ci>σ</ci>
+                 <ci>m</ci>
+                </apply>
+               </apply>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </set>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda=L+(1-C)f\sin\alpha\left\{\sigma+C\sin\sigma\left[\cos(2\sigma_{m})+C%
+\cos\sigma(-1+2\cos^{2}(2\sigma_{m}))\right]\right\}\,
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+
+<p>When <em>λ</em> has converged to the desired degree of accuracy (10<sup>−12</sup> corresponds to approximately 0.06mm), evaluate the following:</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:10">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>u</mi>
+    <mn>2</mn>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>cos</mi>
+     <mn>2</mn>
+    </msup>
+    <mrow>
+     <mi>α</mi>
+     <mpadded width="+1.7pt">
+      <mfrac>
+       <mrow>
+        <msup>
+         <mi>a</mi>
+         <mn>2</mn>
+        </msup>
+        <mo>-</mo>
+        <msup>
+         <mi>b</mi>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+       <msup>
+        <mi>b</mi>
+        <mn>2</mn>
+       </msup>
+      </mfrac>
+     </mpadded>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>u</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <cos></cos>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>α</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>a</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>b</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>b</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   u^{2}=\cos^{2}\alpha\frac{a^{2}-b^{2}}{b^{2}}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:11">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo>+</mo>
+    <mrow>
+     <mfrac>
+      <msup>
+       <mi>u</mi>
+       <mn>2</mn>
+      </msup>
+      <mn>16384</mn>
+     </mfrac>
+     <mrow>
+      <mo>{</mo>
+      <mrow>
+       <mn>4096</mn>
+       <mo>+</mo>
+       <mrow>
+        <msup>
+         <mi>u</mi>
+         <mn>2</mn>
+        </msup>
+        <mrow>
+         <mo>[</mo>
+         <mrow>
+          <mrow>
+           <mo>-</mo>
+           <mn>768</mn>
+          </mrow>
+          <mo>+</mo>
+          <mrow>
+           <msup>
+            <mi>u</mi>
+            <mn>2</mn>
+           </msup>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mn>320</mn>
+             <mo>-</mo>
+             <mrow>
+              <mn>175</mn>
+              <msup>
+               <mi>u</mi>
+               <mn>2</mn>
+              </msup>
+             </mrow>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+         </mrow>
+         <mo>]</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>}</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>A</ci>
+    <apply>
+     <plus></plus>
+     <cn type="integer">1</cn>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>u</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <cn type="integer">16384</cn>
+      </apply>
+      <set>
+       <apply>
+        <plus></plus>
+        <cn type="integer">4096</cn>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>u</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <apply>
+          <csymbol cd="latexml">delimited-[]</csymbol>
+          <apply>
+           <plus></plus>
+           <apply>
+            <minus></minus>
+            <cn type="integer">768</cn>
+           </apply>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">superscript</csymbol>
+             <ci>u</ci>
+             <cn type="integer">2</cn>
+            </apply>
+            <apply>
+             <minus></minus>
+             <cn type="integer">320</cn>
+             <apply>
+              <times></times>
+              <cn type="integer">175</cn>
+              <apply>
+               <csymbol cd="ambiguous">superscript</csymbol>
+               <ci>u</ci>
+               <cn type="integer">2</cn>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </set>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A=1+\frac{u^{2}}{16384}\left\{4096+u^{2}\left[-768+u^{2}(320-175u^{2})\right]\right\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:12">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <msup>
+      <mi>u</mi>
+      <mn>2</mn>
+     </msup>
+     <mn>1024</mn>
+    </mfrac>
+    <mrow>
+     <mo>{</mo>
+     <mrow>
+      <mn>256</mn>
+      <mo>+</mo>
+      <mrow>
+       <msup>
+        <mi>u</mi>
+        <mn>2</mn>
+       </msup>
+       <mrow>
+        <mo>[</mo>
+        <mrow>
+         <mrow>
+          <mo>-</mo>
+          <mn>128</mn>
+         </mrow>
+         <mo>+</mo>
+         <mrow>
+          <msup>
+           <mi>u</mi>
+           <mn>2</mn>
+          </msup>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mn>74</mn>
+            <mo>-</mo>
+            <mrow>
+             <mn>47</mn>
+             <msup>
+              <mi>u</mi>
+              <mn>2</mn>
+             </msup>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo>]</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo>}</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>B</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>u</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <cn type="integer">1024</cn>
+     </apply>
+     <set>
+      <apply>
+       <plus></plus>
+       <cn type="integer">256</cn>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>u</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="latexml">delimited-[]</csymbol>
+         <apply>
+          <plus></plus>
+          <apply>
+           <minus></minus>
+           <cn type="integer">128</cn>
+          </apply>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <ci>u</ci>
+            <cn type="integer">2</cn>
+           </apply>
+           <apply>
+            <minus></minus>
+            <cn type="integer">74</cn>
+            <apply>
+             <times></times>
+             <cn type="integer">47</cn>
+             <apply>
+              <csymbol cd="ambiguous">superscript</csymbol>
+              <ci>u</ci>
+              <cn type="integer">2</cn>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </set>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B=\frac{u^{2}}{1024}\left\{256+u^{2}\left[-128+u^{2}(74-47u^{2})\right]\right\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:13">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi mathvariant="normal">Δ</mi>
+    <mi>σ</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>B</mi>
+    <mrow>
+     <mi>sin</mi>
+     <mi>σ</mi>
+    </mrow>
+    <mrow>
+     <mo maxsize="160%" minsize="160%">{</mo>
+     <mrow>
+      <mrow>
+       <mi>cos</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>2</mn>
+         <msub>
+          <mi>σ</mi>
+          <mi>m</mi>
+         </msub>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <mstyle displaystyle="false">
+        <mfrac>
+         <mn>1</mn>
+         <mn>4</mn>
+        </mfrac>
+       </mstyle>
+       <mi>B</mi>
+       <mrow>
+        <mo maxsize="120%" minsize="120%">[</mo>
+        <mrow>
+         <mrow>
+          <mrow>
+           <mi>cos</mi>
+           <mi>σ</mi>
+          </mrow>
+          <mrow>
+           <mo maxsize="120%" minsize="120%">(</mo>
+           <mrow>
+            <mrow>
+             <mo>-</mo>
+             <mn>1</mn>
+            </mrow>
+            <mo>+</mo>
+            <mrow>
+             <mn>2</mn>
+             <mrow>
+              <msup>
+               <mi>cos</mi>
+               <mn>2</mn>
+              </msup>
+              <mrow>
+               <mo stretchy="false">(</mo>
+               <mrow>
+                <mn>2</mn>
+                <msub>
+                 <mi>σ</mi>
+                 <mi>m</mi>
+                </msub>
+               </mrow>
+               <mo stretchy="false">)</mo>
+              </mrow>
+             </mrow>
+            </mrow>
+           </mrow>
+           <mo maxsize="120%" minsize="120%">)</mo>
+          </mrow>
+         </mrow>
+         <mo>-</mo>
+         <mrow>
+          <mstyle displaystyle="false">
+           <mfrac>
+            <mn>1</mn>
+            <mn>6</mn>
+           </mfrac>
+          </mstyle>
+          <mi>B</mi>
+          <mrow>
+           <mi>cos</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mn>2</mn>
+             <msub>
+              <mi>σ</mi>
+              <mi>m</mi>
+             </msub>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mrow>
+             <mo>-</mo>
+             <mn>3</mn>
+            </mrow>
+            <mo>+</mo>
+            <mrow>
+             <mn>4</mn>
+             <mrow>
+              <msup>
+               <mi>sin</mi>
+               <mn>2</mn>
+              </msup>
+              <mi>σ</mi>
+             </mrow>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+          <mrow>
+           <mo maxsize="120%" minsize="120%">(</mo>
+           <mrow>
+            <mrow>
+             <mo>-</mo>
+             <mn>3</mn>
+            </mrow>
+            <mo>+</mo>
+            <mrow>
+             <mn>4</mn>
+             <mrow>
+              <msup>
+               <mi>cos</mi>
+               <mn>2</mn>
+              </msup>
+              <mrow>
+               <mo stretchy="false">(</mo>
+               <mrow>
+                <mn>2</mn>
+                <msub>
+                 <mi>σ</mi>
+                 <mi>m</mi>
+                </msub>
+               </mrow>
+               <mo stretchy="false">)</mo>
+              </mrow>
+             </mrow>
+            </mrow>
+           </mrow>
+           <mo maxsize="120%" minsize="120%">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo maxsize="120%" minsize="120%">]</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo maxsize="160%" minsize="160%">}</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>normal-Δ</ci>
+     <ci>σ</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <apply>
+      <sin></sin>
+      <ci>σ</ci>
+     </apply>
+     <set>
+      <apply>
+       <plus></plus>
+       <apply>
+        <cos></cos>
+        <apply>
+         <times></times>
+         <cn type="integer">2</cn>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>σ</ci>
+          <ci>m</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <cn type="integer">4</cn>
+        </apply>
+        <ci>B</ci>
+        <apply>
+         <csymbol cd="latexml">delimited-[]</csymbol>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <apply>
+            <cos></cos>
+            <ci>σ</ci>
+           </apply>
+           <apply>
+            <plus></plus>
+            <apply>
+             <minus></minus>
+             <cn type="integer">1</cn>
+            </apply>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <apply>
+              <apply>
+               <csymbol cd="ambiguous">superscript</csymbol>
+               <cos></cos>
+               <cn type="integer">2</cn>
+              </apply>
+              <apply>
+               <times></times>
+               <cn type="integer">2</cn>
+               <apply>
+                <csymbol cd="ambiguous">subscript</csymbol>
+                <ci>σ</ci>
+                <ci>m</ci>
+               </apply>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+          <apply>
+           <times></times>
+           <apply>
+            <divide></divide>
+            <cn type="integer">1</cn>
+            <cn type="integer">6</cn>
+           </apply>
+           <ci>B</ci>
+           <apply>
+            <cos></cos>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>σ</ci>
+              <ci>m</ci>
+             </apply>
+            </apply>
+           </apply>
+           <apply>
+            <plus></plus>
+            <apply>
+             <minus></minus>
+             <cn type="integer">3</cn>
+            </apply>
+            <apply>
+             <times></times>
+             <cn type="integer">4</cn>
+             <apply>
+              <apply>
+               <csymbol cd="ambiguous">superscript</csymbol>
+               <sin></sin>
+               <cn type="integer">2</cn>
+              </apply>
+              <ci>σ</ci>
+             </apply>
+            </apply>
+           </apply>
+           <apply>
+            <plus></plus>
+            <apply>
+             <minus></minus>
+             <cn type="integer">3</cn>
+            </apply>
+            <apply>
+             <times></times>
+             <cn type="integer">4</cn>
+             <apply>
+              <apply>
+               <csymbol cd="ambiguous">superscript</csymbol>
+               <cos></cos>
+               <cn type="integer">2</cn>
+              </apply>
+              <apply>
+               <times></times>
+               <cn type="integer">2</cn>
+               <apply>
+                <csymbol cd="ambiguous">subscript</csymbol>
+                <ci>σ</ci>
+                <ci>m</ci>
+               </apply>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </set>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta\sigma=B\sin\sigma\Big\{\cos(2\sigma_{m})+\tfrac{1}{4}B\big[\cos\sigma%
+\big(-1+2\cos^{2}(2\sigma_{m})\big)-\tfrac{1}{6}B\cos(2\sigma_{m})(-3+4\sin^{2%
+}\sigma)\big(-3+4\cos^{2}(2\sigma_{m})\big)\big]\Big\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:14">
+ <semantics>
+  <mrow>
+   <mi>s</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>b</mi>
+    <mi>A</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>σ</mi>
+      <mo>-</mo>
+      <mrow>
+       <mi mathvariant="normal">Δ</mi>
+       <mi>σ</mi>
+      </mrow>
+     </mrow>
+     <mo rspace="4.2pt" stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>s</ci>
+    <apply>
+     <times></times>
+     <ci>b</ci>
+     <ci>A</ci>
+     <apply>
+      <minus></minus>
+      <ci>σ</ci>
+      <apply>
+       <times></times>
+       <ci>normal-Δ</ci>
+       <ci>σ</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   s=bA(\sigma-\Delta\sigma)\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:15">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>α</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>arctan</mi>
+    <mrow>
+     <mo>(</mo>
+     <mfrac>
+      <mrow>
+       <mrow>
+        <mi>cos</mi>
+        <msub>
+         <mi>U</mi>
+         <mn>2</mn>
+        </msub>
+       </mrow>
+       <mrow>
+        <mi>sin</mi>
+        <mi>λ</mi>
+       </mrow>
+      </mrow>
+      <mrow>
+       <mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>sin</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>2</mn>
+         </msub>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mrow>
+         <mi>sin</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>2</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>cos</mi>
+         <mi>λ</mi>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mfrac>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>α</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <arctan></arctan>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <cos></cos>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>U</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <sin></sin>
+        <ci>λ</ci>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <sin></sin>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <sin></sin>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <cos></cos>
+         <ci>λ</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha_{1}=\arctan\left(\frac{\cos U_{2}\sin\lambda}{\cos U_{1}\sin U_{2}-\sin
+U%
+_{1}\cos U_{2}\cos\lambda}\right)
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn3" id="fnref3"><sup>3</sup></a></p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:16">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>α</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>arctan</mi>
+    <mrow>
+     <mo>(</mo>
+     <mfrac>
+      <mrow>
+       <mrow>
+        <mi>cos</mi>
+        <msub>
+         <mi>U</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+       <mrow>
+        <mi>sin</mi>
+        <mi>λ</mi>
+       </mrow>
+      </mrow>
+      <mrow>
+       <mrow>
+        <mo>-</mo>
+        <mrow>
+         <mrow>
+          <mi>sin</mi>
+          <msub>
+           <mi>U</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mi>cos</mi>
+          <msub>
+           <mi>U</mi>
+           <mn>2</mn>
+          </msub>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>sin</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>2</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>cos</mi>
+         <mi>λ</mi>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mfrac>
+     <mo>)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>α</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <arctan></arctan>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <cos></cos>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>U</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+       <apply>
+        <sin></sin>
+        <ci>λ</ci>
+       </apply>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <sin></sin>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>U</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <apply>
+          <cos></cos>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>U</ci>
+           <cn type="integer">2</cn>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <sin></sin>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+        <apply>
+         <cos></cos>
+         <ci>λ</ci>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha_{2}=\arctan\left(\frac{\cos U_{1}\sin\lambda}{-\sin U_{1}\cos U_{2}+%
+\cos U_{1}\sin U_{2}\cos\lambda}\right)
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn4" id="fnref4"><sup>4</sup></a></p>
+
+<p>Between two nearly antipodal points, the iterative formula may fail to converge; this will occur when the first guess at <em>λ</em> as computed by the equation above is greater than <em>π</em> in absolute value.</p>
+<h2 id="direct-problem">Direct Problem</h2>
+
+<p>Given an initial point (<em>Φ</em><sub>1</sub>, <em>L</em><sub>1</sub>) and initial azimuth, <em>α</em><sub>1</sub>, and a distance, <em>s</em>, along the geodesic the problem is to find the end point (<em>Φ</em><sub>2</sub>, <em>L</em><sub>2</sub>) and azimuth, <em>α</em><sub>2</sub>.</p>
+
+<p>Start by calculating the following:</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:17">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>U</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>arctan</mi>
+    <mrow>
+     <mo>(</mo>
+     <mrow>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mn>1</mn>
+        <mo>-</mo>
+        <mi>f</mi>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+      <mrow>
+       <mi>tan</mi>
+       <msub>
+        <mi>ϕ</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+     </mrow>
+     <mo rspace="4.2pt">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>U</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <arctan></arctan>
+     <apply>
+      <times></times>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <ci>f</ci>
+      </apply>
+      <apply>
+       <tan></tan>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>ϕ</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   U_{1}=\arctan\left((1-f)\tan\phi_{1}\right)\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:18">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>σ</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>arctan</mi>
+    <mrow>
+     <mo>(</mo>
+     <mfrac>
+      <mrow>
+       <mi>tan</mi>
+       <msub>
+        <mi>U</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+      <mrow>
+       <mi>cos</mi>
+       <msub>
+        <mi>α</mi>
+        <mn>1</mn>
+       </msub>
+      </mrow>
+     </mfrac>
+     <mo rspace="4.2pt">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>σ</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <arctan></arctan>
+     <apply>
+      <divide></divide>
+      <apply>
+       <tan></tan>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>U</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <cos></cos>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>α</ci>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma_{1}=\arctan\left(\frac{\tan U_{1}}{\cos\alpha_{1}}\right)\,
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn5" id="fnref5"><sup>5</sup></a></p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:19">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>sin</mi>
+    <mi>α</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>cos</mi>
+     <msub>
+      <mi>U</mi>
+      <mn>1</mn>
+     </msub>
+    </mrow>
+    <mrow>
+     <mi>sin</mi>
+     <mpadded width="+1.7pt">
+      <msub>
+       <mi>α</mi>
+       <mn>1</mn>
+      </msub>
+     </mpadded>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <sin></sin>
+     <ci>α</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <cos></cos>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>U</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <sin></sin>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>α</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sin\alpha=\cos U_{1}\sin\alpha_{1}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:20">
+ <semantics>
+  <mrow>
+   <mrow>
+    <msup>
+     <mi>cos</mi>
+     <mn>2</mn>
+    </msup>
+    <mi>α</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo>-</mo>
+    <mrow>
+     <msup>
+      <mi>sin</mi>
+      <mn>2</mn>
+     </msup>
+     <mpadded width="+1.7pt">
+      <mi>α</mi>
+     </mpadded>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <cos></cos>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>α</ci>
+    </apply>
+    <apply>
+     <minus></minus>
+     <cn type="integer">1</cn>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <sin></sin>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>α</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \cos^{2}\alpha=1-\sin^{2}\alpha\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:21">
+ <semantics>
+  <mrow>
+   <msup>
+    <mi>u</mi>
+    <mn>2</mn>
+   </msup>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>cos</mi>
+     <mn>2</mn>
+    </msup>
+    <mrow>
+     <mi>α</mi>
+     <mpadded width="+1.7pt">
+      <mfrac>
+       <mrow>
+        <msup>
+         <mi>a</mi>
+         <mn>2</mn>
+        </msup>
+        <mo>-</mo>
+        <msup>
+         <mi>b</mi>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+       <msup>
+        <mi>b</mi>
+        <mn>2</mn>
+       </msup>
+      </mfrac>
+     </mpadded>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">superscript</csymbol>
+     <ci>u</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <cos></cos>
+      <cn type="integer">2</cn>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>α</ci>
+      <apply>
+       <divide></divide>
+       <apply>
+        <minus></minus>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>a</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>b</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>b</ci>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   u^{2}=\cos^{2}\alpha\frac{a^{2}-b^{2}}{b^{2}}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:22">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mo>=</mo>
+   <mrow>
+    <mn>1</mn>
+    <mo>+</mo>
+    <mrow>
+     <mfrac>
+      <msup>
+       <mi>u</mi>
+       <mn>2</mn>
+      </msup>
+      <mn>16384</mn>
+     </mfrac>
+     <mrow>
+      <mo>{</mo>
+      <mrow>
+       <mn>4096</mn>
+       <mo>+</mo>
+       <mrow>
+        <msup>
+         <mi>u</mi>
+         <mn>2</mn>
+        </msup>
+        <mrow>
+         <mo>[</mo>
+         <mrow>
+          <mrow>
+           <mo>-</mo>
+           <mn>768</mn>
+          </mrow>
+          <mo>+</mo>
+          <mrow>
+           <msup>
+            <mi>u</mi>
+            <mn>2</mn>
+           </msup>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mn>320</mn>
+             <mo>-</mo>
+             <mrow>
+              <mn>175</mn>
+              <msup>
+               <mi>u</mi>
+               <mn>2</mn>
+              </msup>
+             </mrow>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+         </mrow>
+         <mo>]</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo>}</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>A</ci>
+    <apply>
+     <plus></plus>
+     <cn type="integer">1</cn>
+     <apply>
+      <times></times>
+      <apply>
+       <divide></divide>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>u</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <cn type="integer">16384</cn>
+      </apply>
+      <set>
+       <apply>
+        <plus></plus>
+        <cn type="integer">4096</cn>
+        <apply>
+         <times></times>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <ci>u</ci>
+          <cn type="integer">2</cn>
+         </apply>
+         <apply>
+          <csymbol cd="latexml">delimited-[]</csymbol>
+          <apply>
+           <plus></plus>
+           <apply>
+            <minus></minus>
+            <cn type="integer">768</cn>
+           </apply>
+           <apply>
+            <times></times>
+            <apply>
+             <csymbol cd="ambiguous">superscript</csymbol>
+             <ci>u</ci>
+             <cn type="integer">2</cn>
+            </apply>
+            <apply>
+             <minus></minus>
+             <cn type="integer">320</cn>
+             <apply>
+              <times></times>
+              <cn type="integer">175</cn>
+              <apply>
+               <csymbol cd="ambiguous">superscript</csymbol>
+               <ci>u</ci>
+               <cn type="integer">2</cn>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </set>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A=1+\frac{u^{2}}{16384}\left\{4096+u^{2}\left[-768+u^{2}(320-175u^{2})\right]\right\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:23">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <msup>
+      <mi>u</mi>
+      <mn>2</mn>
+     </msup>
+     <mn>1024</mn>
+    </mfrac>
+    <mrow>
+     <mo>{</mo>
+     <mrow>
+      <mn>256</mn>
+      <mo>+</mo>
+      <mrow>
+       <msup>
+        <mi>u</mi>
+        <mn>2</mn>
+       </msup>
+       <mrow>
+        <mo>[</mo>
+        <mrow>
+         <mrow>
+          <mo>-</mo>
+          <mn>128</mn>
+         </mrow>
+         <mo>+</mo>
+         <mrow>
+          <msup>
+           <mi>u</mi>
+           <mn>2</mn>
+          </msup>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mn>74</mn>
+            <mo>-</mo>
+            <mrow>
+             <mn>47</mn>
+             <msup>
+              <mi>u</mi>
+              <mn>2</mn>
+             </msup>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo>]</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo>}</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>B</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>u</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <cn type="integer">1024</cn>
+     </apply>
+     <set>
+      <apply>
+       <plus></plus>
+       <cn type="integer">256</cn>
+       <apply>
+        <times></times>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>u</ci>
+         <cn type="integer">2</cn>
+        </apply>
+        <apply>
+         <csymbol cd="latexml">delimited-[]</csymbol>
+         <apply>
+          <plus></plus>
+          <apply>
+           <minus></minus>
+           <cn type="integer">128</cn>
+          </apply>
+          <apply>
+           <times></times>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <ci>u</ci>
+            <cn type="integer">2</cn>
+           </apply>
+           <apply>
+            <minus></minus>
+            <cn type="integer">74</cn>
+            <apply>
+             <times></times>
+             <cn type="integer">47</cn>
+             <apply>
+              <csymbol cd="ambiguous">superscript</csymbol>
+              <ci>u</ci>
+              <cn type="integer">2</cn>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </set>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B=\frac{u^{2}}{1024}\left\{256+u^{2}\left[-128+u^{2}(74-47u^{2})\right]\right\}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Then, using an initial value 
+
+<math display="inline" id="Vincenty's_formulae:24">
+ <semantics>
+  <mrow>
+   <mi>σ</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mi>s</mi>
+    <mrow>
+     <mi>b</mi>
+     <mi>A</mi>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>σ</ci>
+    <apply>
+     <divide></divide>
+     <ci>s</ci>
+     <apply>
+      <times></times>
+      <ci>b</ci>
+      <ci>A</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma=\tfrac{s}{bA}
+  </annotation>
+ </semantics>
+</math>
+
+, iterate the following equations until there is no significant change in <em>σ</em>:</p>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:25">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mn>2</mn>
+    <msub>
+     <mi>σ</mi>
+     <mi>m</mi>
+    </msub>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mn>2</mn>
+     <msub>
+      <mi>σ</mi>
+      <mn>1</mn>
+     </msub>
+    </mrow>
+    <mo>+</mo>
+    <mpadded width="+1.7pt">
+     <mi>σ</mi>
+    </mpadded>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <cn type="integer">2</cn>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>σ</ci>
+      <ci>m</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>σ</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <ci>σ</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   2\sigma_{m}=2\sigma_{1}+\sigma\,
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:26">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi mathvariant="normal">Δ</mi>
+    <mi>σ</mi>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>B</mi>
+    <mrow>
+     <mi>sin</mi>
+     <mi>σ</mi>
+    </mrow>
+    <mrow>
+     <mo maxsize="160%" minsize="160%">{</mo>
+     <mrow>
+      <mrow>
+       <mi>cos</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>2</mn>
+         <msub>
+          <mi>σ</mi>
+          <mi>m</mi>
+         </msub>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+      <mo>+</mo>
+      <mrow>
+       <mfrac>
+        <mn>1</mn>
+        <mn>4</mn>
+       </mfrac>
+       <mi>B</mi>
+       <mrow>
+        <mo maxsize="120%" minsize="120%">[</mo>
+        <mrow>
+         <mrow>
+          <mrow>
+           <mi>cos</mi>
+           <mi>σ</mi>
+          </mrow>
+          <mrow>
+           <mo maxsize="120%" minsize="120%">(</mo>
+           <mrow>
+            <mrow>
+             <mo>-</mo>
+             <mn>1</mn>
+            </mrow>
+            <mo>+</mo>
+            <mrow>
+             <mn>2</mn>
+             <mrow>
+              <msup>
+               <mi>cos</mi>
+               <mn>2</mn>
+              </msup>
+              <mrow>
+               <mo stretchy="false">(</mo>
+               <mrow>
+                <mn>2</mn>
+                <msub>
+                 <mi>σ</mi>
+                 <mi>m</mi>
+                </msub>
+               </mrow>
+               <mo stretchy="false">)</mo>
+              </mrow>
+             </mrow>
+            </mrow>
+           </mrow>
+           <mo maxsize="120%" minsize="120%">)</mo>
+          </mrow>
+         </mrow>
+         <mo>-</mo>
+         <mrow>
+          <mfrac>
+           <mn>1</mn>
+           <mn>6</mn>
+          </mfrac>
+          <mi>B</mi>
+          <mrow>
+           <mi>cos</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mn>2</mn>
+             <msub>
+              <mi>σ</mi>
+              <mi>m</mi>
+             </msub>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mrow>
+             <mo>-</mo>
+             <mn>3</mn>
+            </mrow>
+            <mo>+</mo>
+            <mrow>
+             <mn>4</mn>
+             <mrow>
+              <msup>
+               <mi>sin</mi>
+               <mn>2</mn>
+              </msup>
+              <mi>σ</mi>
+             </mrow>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+          <mrow>
+           <mo maxsize="120%" minsize="120%">(</mo>
+           <mrow>
+            <mrow>
+             <mo>-</mo>
+             <mn>3</mn>
+            </mrow>
+            <mo>+</mo>
+            <mrow>
+             <mn>4</mn>
+             <mrow>
+              <msup>
+               <mi>cos</mi>
+               <mn>2</mn>
+              </msup>
+              <mrow>
+               <mo stretchy="false">(</mo>
+               <mrow>
+                <mn>2</mn>
+                <msub>
+                 <mi>σ</mi>
+                 <mi>m</mi>
+                </msub>
+               </mrow>
+               <mo stretchy="false">)</mo>
+              </mrow>
+             </mrow>
+            </mrow>
+           </mrow>
+           <mo maxsize="120%" minsize="120%">)</mo>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo maxsize="120%" minsize="120%">]</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo maxsize="160%" minsize="160%">}</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>normal-Δ</ci>
+     <ci>σ</ci>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>B</ci>
+     <apply>
+      <sin></sin>
+      <ci>σ</ci>
+     </apply>
+     <set>
+      <apply>
+       <plus></plus>
+       <apply>
+        <cos></cos>
+        <apply>
+         <times></times>
+         <cn type="integer">2</cn>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>σ</ci>
+          <ci>m</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <divide></divide>
+         <cn type="integer">1</cn>
+         <cn type="integer">4</cn>
+        </apply>
+        <ci>B</ci>
+        <apply>
+         <csymbol cd="latexml">delimited-[]</csymbol>
+         <apply>
+          <minus></minus>
+          <apply>
+           <times></times>
+           <apply>
+            <cos></cos>
+            <ci>σ</ci>
+           </apply>
+           <apply>
+            <plus></plus>
+            <apply>
+             <minus></minus>
+             <cn type="integer">1</cn>
+            </apply>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <apply>
+              <apply>
+               <csymbol cd="ambiguous">superscript</csymbol>
+               <cos></cos>
+               <cn type="integer">2</cn>
+              </apply>
+              <apply>
+               <times></times>
+               <cn type="integer">2</cn>
+               <apply>
+                <csymbol cd="ambiguous">subscript</csymbol>
+                <ci>σ</ci>
+                <ci>m</ci>
+               </apply>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+          <apply>
+           <times></times>
+           <apply>
+            <divide></divide>
+            <cn type="integer">1</cn>
+            <cn type="integer">6</cn>
+           </apply>
+           <ci>B</ci>
+           <apply>
+            <cos></cos>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>σ</ci>
+              <ci>m</ci>
+             </apply>
+            </apply>
+           </apply>
+           <apply>
+            <plus></plus>
+            <apply>
+             <minus></minus>
+             <cn type="integer">3</cn>
+            </apply>
+            <apply>
+             <times></times>
+             <cn type="integer">4</cn>
+             <apply>
+              <apply>
+               <csymbol cd="ambiguous">superscript</csymbol>
+               <sin></sin>
+               <cn type="integer">2</cn>
+              </apply>
+              <ci>σ</ci>
+             </apply>
+            </apply>
+           </apply>
+           <apply>
+            <plus></plus>
+            <apply>
+             <minus></minus>
+             <cn type="integer">3</cn>
+            </apply>
+            <apply>
+             <times></times>
+             <cn type="integer">4</cn>
+             <apply>
+              <apply>
+               <csymbol cd="ambiguous">superscript</csymbol>
+               <cos></cos>
+               <cn type="integer">2</cn>
+              </apply>
+              <apply>
+               <times></times>
+               <cn type="integer">2</cn>
+               <apply>
+                <csymbol cd="ambiguous">subscript</csymbol>
+                <ci>σ</ci>
+                <ci>m</ci>
+               </apply>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </set>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \Delta\sigma=B\sin\sigma\Big\{\cos(2\sigma_{m})+\tfrac{1}{4}B\big[\cos\sigma%
+\big(-1+2\cos^{2}(2\sigma_{m})\big)-\tfrac{1}{6}B\cos(2\sigma_{m})(-3+4\sin^{2%
+}\sigma)\big(-3+4\cos^{2}(2\sigma_{m})\big)\big]\Big\}
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+<dl>
+<dd><dl>
+<dd>
+
+<math display="inline" id="Vincenty's_formulae:27">
+ <semantics>
+  <mrow>
+   <mi>σ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mi>s</mi>
+     <mrow>
+      <mi>b</mi>
+      <mi>A</mi>
+     </mrow>
+    </mfrac>
+    <mo>+</mo>
+    <mrow>
+     <mi mathvariant="normal">Δ</mi>
+     <mpadded width="+1.7pt">
+      <mi>σ</mi>
+     </mpadded>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>σ</ci>
+    <apply>
+     <plus></plus>
+     <apply>
+      <divide></divide>
+      <ci>s</ci>
+      <apply>
+       <times></times>
+       <ci>b</ci>
+       <ci>A</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>normal-Δ</ci>
+      <ci>σ</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \sigma=\frac{s}{bA}+\Delta\sigma\,
+  </annotation>
+ </semantics>
+</math>
+
+
+</dd>
+</dl>
+</dd>
+</dl>
+
+<p>Once <em>σ</em> is obtained to sufficient accuracy evaluate:</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:28">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>ϕ</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>arctan</mi>
+    <mrow>
+     <mo>(</mo>
+     <mfrac>
+      <mrow>
+       <mrow>
+        <mrow>
+         <mi>sin</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>cos</mi>
+         <mi>σ</mi>
+        </mrow>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>sin</mi>
+         <mi>σ</mi>
+        </mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>α</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mrow>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>1</mn>
+         <mo>-</mo>
+         <mi>f</mi>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <msqrt>
+        <mrow>
+         <mrow>
+          <msup>
+           <mi>sin</mi>
+           <mn>2</mn>
+          </msup>
+          <mi>α</mi>
+         </mrow>
+         <mo>+</mo>
+         <msup>
+          <mrow>
+           <mo stretchy="false">(</mo>
+           <mrow>
+            <mrow>
+             <mrow>
+              <mi>sin</mi>
+              <msub>
+               <mi>U</mi>
+               <mn>1</mn>
+              </msub>
+             </mrow>
+             <mrow>
+              <mi>sin</mi>
+              <mi>σ</mi>
+             </mrow>
+            </mrow>
+            <mo>-</mo>
+            <mrow>
+             <mrow>
+              <mi>cos</mi>
+              <msub>
+               <mi>U</mi>
+               <mn>1</mn>
+              </msub>
+             </mrow>
+             <mrow>
+              <mi>cos</mi>
+              <mi>σ</mi>
+             </mrow>
+             <mrow>
+              <mi>cos</mi>
+              <msub>
+               <mi>α</mi>
+               <mn>1</mn>
+              </msub>
+             </mrow>
+            </mrow>
+           </mrow>
+           <mo stretchy="false">)</mo>
+          </mrow>
+          <mn>2</mn>
+         </msup>
+        </mrow>
+       </msqrt>
+      </mrow>
+     </mfrac>
+     <mo rspace="4.2pt">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>ϕ</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <arctan></arctan>
+     <apply>
+      <divide></divide>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <apply>
+         <sin></sin>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <cos></cos>
+         <ci>σ</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <sin></sin>
+         <ci>σ</ci>
+        </apply>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>α</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <minus></minus>
+        <cn type="integer">1</cn>
+        <ci>f</ci>
+       </apply>
+       <apply>
+        <root></root>
+        <apply>
+         <plus></plus>
+         <apply>
+          <apply>
+           <csymbol cd="ambiguous">superscript</csymbol>
+           <sin></sin>
+           <cn type="integer">2</cn>
+          </apply>
+          <ci>α</ci>
+         </apply>
+         <apply>
+          <csymbol cd="ambiguous">superscript</csymbol>
+          <apply>
+           <minus></minus>
+           <apply>
+            <times></times>
+            <apply>
+             <sin></sin>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>U</ci>
+              <cn type="integer">1</cn>
+             </apply>
+            </apply>
+            <apply>
+             <sin></sin>
+             <ci>σ</ci>
+            </apply>
+           </apply>
+           <apply>
+            <times></times>
+            <apply>
+             <cos></cos>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>U</ci>
+              <cn type="integer">1</cn>
+             </apply>
+            </apply>
+            <apply>
+             <cos></cos>
+             <ci>σ</ci>
+            </apply>
+            <apply>
+             <cos></cos>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>α</ci>
+              <cn type="integer">1</cn>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+          <cn type="integer">2</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \phi_{2}=\arctan\left(\frac{\sin U_{1}\cos\sigma+\cos U_{1}\sin\sigma\cos%
+\alpha_{1}}{(1-f)\sqrt{\sin^{2}\alpha+(\sin U_{1}\sin\sigma-\cos U_{1}\cos%
+\sigma\cos\alpha_{1})^{2}}}\right)\,
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn6" id="fnref6"><sup>6</sup></a></p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:29">
+ <semantics>
+  <mrow>
+   <mi>λ</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>arctan</mi>
+    <mrow>
+     <mo>(</mo>
+     <mfrac>
+      <mrow>
+       <mrow>
+        <mi>sin</mi>
+        <mi>σ</mi>
+       </mrow>
+       <mrow>
+        <mi>sin</mi>
+        <msub>
+         <mi>α</mi>
+         <mn>1</mn>
+        </msub>
+       </mrow>
+      </mrow>
+      <mrow>
+       <mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>cos</mi>
+         <mi>σ</mi>
+        </mrow>
+       </mrow>
+       <mo>-</mo>
+       <mrow>
+        <mrow>
+         <mi>sin</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>sin</mi>
+         <mi>σ</mi>
+        </mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>α</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mfrac>
+     <mo rspace="4.2pt">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>λ</ci>
+    <apply>
+     <arctan></arctan>
+     <apply>
+      <divide></divide>
+      <apply>
+       <times></times>
+       <apply>
+        <sin></sin>
+        <ci>σ</ci>
+       </apply>
+       <apply>
+        <sin></sin>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>α</ci>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <cos></cos>
+         <ci>σ</ci>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <sin></sin>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <sin></sin>
+         <ci>σ</ci>
+        </apply>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>α</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \lambda=\arctan\left(\frac{\sin\sigma\sin\alpha_{1}}{\cos U_{1}\cos\sigma-\sin
+U%
+_{1}\sin\sigma\cos\alpha_{1}}\right)\,
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn7" id="fnref7"><sup>7</sup></a></p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:30">
+ <semantics>
+  <mrow>
+   <mi>C</mi>
+   <mo>=</mo>
+   <mrow>
+    <mfrac>
+     <mi>f</mi>
+     <mn>16</mn>
+    </mfrac>
+    <mrow>
+     <msup>
+      <mi>cos</mi>
+      <mn>2</mn>
+     </msup>
+     <mi>α</mi>
+    </mrow>
+    <mrow>
+     <mo maxsize="120%" minsize="120%">[</mo>
+     <mrow>
+      <mn>4</mn>
+      <mo>+</mo>
+      <mrow>
+       <mi>f</mi>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <mrow>
+         <mn>4</mn>
+         <mo>-</mo>
+         <mrow>
+          <mn>3</mn>
+          <mrow>
+           <msup>
+            <mi>cos</mi>
+            <mn>2</mn>
+           </msup>
+           <mi>α</mi>
+          </mrow>
+         </mrow>
+        </mrow>
+        <mo stretchy="false">)</mo>
+       </mrow>
+      </mrow>
+     </mrow>
+     <mo maxsize="120%" minsize="120%" rspace="4.2pt">]</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>C</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <divide></divide>
+      <ci>f</ci>
+      <cn type="integer">16</cn>
+     </apply>
+     <apply>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <cos></cos>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>α</ci>
+     </apply>
+     <apply>
+      <csymbol cd="latexml">delimited-[]</csymbol>
+      <apply>
+       <plus></plus>
+       <cn type="integer">4</cn>
+       <apply>
+        <times></times>
+        <ci>f</ci>
+        <apply>
+         <minus></minus>
+         <cn type="integer">4</cn>
+         <apply>
+          <times></times>
+          <cn type="integer">3</cn>
+          <apply>
+           <apply>
+            <csymbol cd="ambiguous">superscript</csymbol>
+            <cos></cos>
+            <cn type="integer">2</cn>
+           </apply>
+           <ci>α</ci>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   C=\frac{f}{16}\cos^{2}\alpha\big[4+f(4-3\cos^{2}\alpha)\big]\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:31">
+ <semantics>
+  <mrow>
+   <mi>L</mi>
+   <mo>=</mo>
+   <mrow>
+    <mi>λ</mi>
+    <mo>-</mo>
+    <mrow>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>1</mn>
+       <mo>-</mo>
+       <mi>C</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mi>f</mi>
+     <mrow>
+      <mi>sin</mi>
+      <mi>α</mi>
+     </mrow>
+     <mrow>
+      <mo>{</mo>
+      <mrow>
+       <mi>σ</mi>
+       <mo>+</mo>
+       <mrow>
+        <mi>C</mi>
+        <mrow>
+         <mi>sin</mi>
+         <mi>σ</mi>
+        </mrow>
+        <mrow>
+         <mo>[</mo>
+         <mrow>
+          <mrow>
+           <mi>cos</mi>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mn>2</mn>
+             <msub>
+              <mi>σ</mi>
+              <mi>m</mi>
+             </msub>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+          <mo>+</mo>
+          <mrow>
+           <mi>C</mi>
+           <mrow>
+            <mi>cos</mi>
+            <mi>σ</mi>
+           </mrow>
+           <mrow>
+            <mo stretchy="false">(</mo>
+            <mrow>
+             <mrow>
+              <mo>-</mo>
+              <mn>1</mn>
+             </mrow>
+             <mo>+</mo>
+             <mrow>
+              <mn>2</mn>
+              <mrow>
+               <msup>
+                <mi>cos</mi>
+                <mn>2</mn>
+               </msup>
+               <mrow>
+                <mo stretchy="false">(</mo>
+                <mrow>
+                 <mn>2</mn>
+                 <msub>
+                  <mi>σ</mi>
+                  <mi>m</mi>
+                 </msub>
+                </mrow>
+                <mo stretchy="false">)</mo>
+               </mrow>
+              </mrow>
+             </mrow>
+            </mrow>
+            <mo stretchy="false">)</mo>
+           </mrow>
+          </mrow>
+         </mrow>
+         <mo>]</mo>
+        </mrow>
+       </mrow>
+      </mrow>
+      <mo rspace="4.2pt">}</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>L</ci>
+    <apply>
+     <minus></minus>
+     <ci>λ</ci>
+     <apply>
+      <times></times>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+       <ci>C</ci>
+      </apply>
+      <ci>f</ci>
+      <apply>
+       <sin></sin>
+       <ci>α</ci>
+      </apply>
+      <set>
+       <apply>
+        <plus></plus>
+        <ci>σ</ci>
+        <apply>
+         <times></times>
+         <ci>C</ci>
+         <apply>
+          <sin></sin>
+          <ci>σ</ci>
+         </apply>
+         <apply>
+          <csymbol cd="latexml">delimited-[]</csymbol>
+          <apply>
+           <plus></plus>
+           <apply>
+            <cos></cos>
+            <apply>
+             <times></times>
+             <cn type="integer">2</cn>
+             <apply>
+              <csymbol cd="ambiguous">subscript</csymbol>
+              <ci>σ</ci>
+              <ci>m</ci>
+             </apply>
+            </apply>
+           </apply>
+           <apply>
+            <times></times>
+            <ci>C</ci>
+            <apply>
+             <cos></cos>
+             <ci>σ</ci>
+            </apply>
+            <apply>
+             <plus></plus>
+             <apply>
+              <minus></minus>
+              <cn type="integer">1</cn>
+             </apply>
+             <apply>
+              <times></times>
+              <cn type="integer">2</cn>
+              <apply>
+               <apply>
+                <csymbol cd="ambiguous">superscript</csymbol>
+                <cos></cos>
+                <cn type="integer">2</cn>
+               </apply>
+               <apply>
+                <times></times>
+                <cn type="integer">2</cn>
+                <apply>
+                 <csymbol cd="ambiguous">subscript</csymbol>
+                 <ci>σ</ci>
+                 <ci>m</ci>
+                </apply>
+               </apply>
+              </apply>
+             </apply>
+            </apply>
+           </apply>
+          </apply>
+         </apply>
+        </apply>
+       </apply>
+      </set>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L=\lambda-(1-C)f\sin\alpha\left\{\sigma+C\sin\sigma\left[\cos(2\sigma_{m})+C%
+\cos\sigma(-1+2\cos^{2}(2\sigma_{m}))\right]\right\}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:32">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>L</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>L</mi>
+    <mo>+</mo>
+    <mpadded width="+1.7pt">
+     <msub>
+      <mi>L</mi>
+      <mn>1</mn>
+     </msub>
+    </mpadded>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>L</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <plus></plus>
+     <ci>L</ci>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>L</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   L_{2}=L+L_{1}\,
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>
+
+<math display="block" id="Vincenty's_formulae:33">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>α</mi>
+    <mn>2</mn>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mi>arctan</mi>
+    <mrow>
+     <mo>(</mo>
+     <mfrac>
+      <mrow>
+       <mi>sin</mi>
+       <mi>α</mi>
+      </mrow>
+      <mrow>
+       <mrow>
+        <mo>-</mo>
+        <mrow>
+         <mrow>
+          <mi>sin</mi>
+          <msub>
+           <mi>U</mi>
+           <mn>1</mn>
+          </msub>
+         </mrow>
+         <mrow>
+          <mi>sin</mi>
+          <mi>σ</mi>
+         </mrow>
+        </mrow>
+       </mrow>
+       <mo>+</mo>
+       <mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>U</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+        <mrow>
+         <mi>cos</mi>
+         <mi>σ</mi>
+        </mrow>
+        <mrow>
+         <mi>cos</mi>
+         <msub>
+          <mi>α</mi>
+          <mn>1</mn>
+         </msub>
+        </mrow>
+       </mrow>
+      </mrow>
+     </mfrac>
+     <mo rspace="4.2pt">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>α</ci>
+     <cn type="integer">2</cn>
+    </apply>
+    <apply>
+     <arctan></arctan>
+     <apply>
+      <divide></divide>
+      <apply>
+       <sin></sin>
+       <ci>α</ci>
+      </apply>
+      <apply>
+       <plus></plus>
+       <apply>
+        <minus></minus>
+        <apply>
+         <times></times>
+         <apply>
+          <sin></sin>
+          <apply>
+           <csymbol cd="ambiguous">subscript</csymbol>
+           <ci>U</ci>
+           <cn type="integer">1</cn>
+          </apply>
+         </apply>
+         <apply>
+          <sin></sin>
+          <ci>σ</ci>
+         </apply>
+        </apply>
+       </apply>
+       <apply>
+        <times></times>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>U</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+        <apply>
+         <cos></cos>
+         <ci>σ</ci>
+        </apply>
+        <apply>
+         <cos></cos>
+         <apply>
+          <csymbol cd="ambiguous">subscript</csymbol>
+          <ci>α</ci>
+          <cn type="integer">1</cn>
+         </apply>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \alpha_{2}=\arctan\left(\frac{\sin\alpha}{-\sin U_{1}\sin\sigma+\cos U_{1}\cos%
+\sigma\cos\alpha_{1}}\right)\,
+  </annotation>
+ </semantics>
+</math>
+
+<a class="footnoteRef" href="#fn8" id="fnref8"><sup>8</sup></a></p>
+
+<p>If the initial point is at the North or South pole then the first equation is indeterminate. If the initial azimuth is due East or West then the second equation is indeterminate. If a double valued <em>atan2</em> type function is used then these values are usually handled correctly.</p>
+<h2 id="vincentys-modification">Vincenty's modification</h2>
+
+<p>In his letter to Survey Review in 1976, Vincenty suggested replacing his series expressions for <em>A</em> and <em>B</em> with simpler formulas using Helmert's expansion parameter <em>k</em><sub>1</sub>:</p>
+
+<p>
+
+<math display="inline" id="Vincenty's_formulae:34">
+ <semantics>
+  <mrow>
+   <mi>A</mi>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <mn>1</mn>
+     <mo>+</mo>
+     <mrow>
+      <mfrac>
+       <mn>1</mn>
+       <mn>4</mn>
+      </mfrac>
+      <msup>
+       <mrow>
+        <mo stretchy="false">(</mo>
+        <msub>
+         <mi>k</mi>
+         <mn>1</mn>
+        </msub>
+        <mo stretchy="false">)</mo>
+       </mrow>
+       <mn>2</mn>
+      </msup>
+     </mrow>
+    </mrow>
+    <mrow>
+     <mn>1</mn>
+     <mo>-</mo>
+     <msub>
+      <mi>k</mi>
+      <mn>1</mn>
+     </msub>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>A</ci>
+    <apply>
+     <divide></divide>
+     <apply>
+      <plus></plus>
+      <cn type="integer">1</cn>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">1</cn>
+        <cn type="integer">4</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>k</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   A=\frac{1+\frac{1}{4}(k_{1})^{2}}{1-k_{1}}
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Vincenty's_formulae:35">
+ <semantics>
+  <mrow>
+   <mi>B</mi>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>k</mi>
+     <mn>1</mn>
+    </msub>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mn>1</mn>
+      <mo>-</mo>
+      <mrow>
+       <mfrac>
+        <mn>3</mn>
+        <mn>8</mn>
+       </mfrac>
+       <msup>
+        <mrow>
+         <mo stretchy="false">(</mo>
+         <msub>
+          <mi>k</mi>
+          <mn>1</mn>
+         </msub>
+         <mo stretchy="false">)</mo>
+        </mrow>
+        <mn>2</mn>
+       </msup>
+      </mrow>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <ci>B</ci>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>k</ci>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+      <apply>
+       <times></times>
+       <apply>
+        <divide></divide>
+        <cn type="integer">3</cn>
+        <cn type="integer">8</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>k</ci>
+         <cn type="integer">1</cn>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   B=k_{1}(1-\tfrac{3}{8}(k_{1})^{2})
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where
+
+<math display="inline" id="Vincenty's_formulae:36">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>k</mi>
+    <mn>1</mn>
+   </msub>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msqrt>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mn>1</mn>
+        <mo>+</mo>
+        <msup>
+         <mi>u</mi>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msqrt>
+     <mo>-</mo>
+     <mn>1</mn>
+    </mrow>
+    <mrow>
+     <msqrt>
+      <mrow>
+       <mo stretchy="false">(</mo>
+       <mrow>
+        <mn>1</mn>
+        <mo>+</mo>
+        <msup>
+         <mi>u</mi>
+         <mn>2</mn>
+        </msup>
+       </mrow>
+       <mo stretchy="false">)</mo>
+      </mrow>
+     </msqrt>
+     <mo>+</mo>
+     <mn>1</mn>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>k</ci>
+     <cn type="integer">1</cn>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <minus></minus>
+      <apply>
+       <root></root>
+       <apply>
+        <plus></plus>
+        <cn type="integer">1</cn>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>u</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+     <apply>
+      <plus></plus>
+      <apply>
+       <root></root>
+       <apply>
+        <plus></plus>
+        <cn type="integer">1</cn>
+        <apply>
+         <csymbol cd="ambiguous">superscript</csymbol>
+         <ci>u</ci>
+         <cn type="integer">2</cn>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   k_{1}=\frac{\sqrt{(1+u^{2})}-1}{\sqrt{(1+u^{2})}+1}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="nearly-antipodal-points">Nearly antipodal points</h2>
+
+<p>As noted above, the iterative solution to the inverse problem fails to converge or converges slowly for nearly antipodal points. An example of slow convergence is (<em>Φ</em><sub>1</sub>, <em>L</em><sub>1</sub>) = (0°, 0°) and (<em>Φ</em><sub>2</sub>, <em>L</em><sub>2</sub>) = (0.5°, 179.5°) for the WGS84 ellipsoid. This requires about 130 iterations to give a result accurate to 1 mm. Depending on how the inverse method is implemented, the algorithm might return the correct result (19936288.579 m), an incorrect result, or an error indicator. An example of an incorrect result is provided by the <a href="http://www.ngs.noaa.gov/TOOLS/Inv_Fwd/Inv_Fwd.html">NGS online utility</a> which returns a distance which is about 5 km too long. Vincenty suggested a method of accelerating the convergence in such cases (Rapp, 1973).</p>
+
+<p>An example of a failure of the inverse method to converge is (<em>Φ</em><sub>1</sub>, <em>L</em><sub>1</sub>) = (0°, 0°) and (<em>Φ</em><sub>2</sub>, <em>L</em><sub>2</sub>) = (0.5°, 179.7°) for the WGS84 ellipsoid. In an unpublished report, Vincenty (1975b) gave an alternative iterative scheme to handle such cases. This converges to the correct result 19944127.421 m after about 60 iterations; however, in other cases many thousands of iterations are required.</p>
+
+<p>Newton's method has been successfully used to give rapid convergence for all pairs of input points (Karney, 2013).</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Geographical_distance" title="wikilink">Geographical distance</a></li>
+<li><a href="Great-circle_distance" title="wikilink">Great-circle distance</a></li>
+<li><a href="Meridian_arc" title="wikilink">Meridian arc</a></li>
+<li><a href="Geodesics_on_an_ellipsoid" title="wikilink">Geodesics on an ellipsoid</a></li>
+<li><a href="Thaddeus_Vincenty" title="wikilink">Thaddeus Vincenty</a></li>
+<li><a class="uri" href="Geodesy" title="wikilink">Geodesy</a></li>
+</ul>
+<h2 id="notes">Notes</h2>
+<h2 id="references">References</h2>
+<ul>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+</ul>
+<h2 id="external-links">External links</h2>
+<ul>
+<li>Online calculators from <a href="Geoscience_Australia" title="wikilink">Geoscience Australia</a>:
+<ul>
+<li><a href="http://www.ga.gov.au/geodesy/datums/vincenty_direct.jsp">Vincenty Direct</a> (destination point)</li>
+<li><a href="http://www.ga.gov.au/geodesy/datums/vincenty_inverse.jsp">Vincenty Inverse</a> (distance between points)</li>
+</ul></li>
+<li>Calculators from the <a href="U.S._National_Geodetic_Survey" title="wikilink">U.S. National Geodetic Survey</a>:
+<ul>
+<li><a href="http://www.ngs.noaa.gov/TOOLS/Inv_Fwd/Inv_Fwd.html">Online and downloadable PC-executable calculation utilities</a>, including forward (direct) and inverse problems, in both two and three dimensions (accessed 2011-08-01).</li>
+</ul></li>
+<li>Online calculators with JavaScript source code by Chris Veness (Creative Commons Attribution license):
+<ul>
+<li><a href="http://www.movable-type.co.uk/scripts/latlong-vincenty-direct.html">Vincenty Direct</a> (destination point)</li>
+<li><a href="http://www.movable-type.co.uk/scripts/latlong-vincenty.html">Vincenty Inverse</a> (distance between points)</li>
+</ul></li>
+<li><a href="http://geographiclib.sourceforge.net">GeographicLib</a> provides a utility GeodSolve (with MIT/X11 licensed source code) for solving direct and inverse geodesic problems. Compared to Vincenty, this is about 1000 times more accurate (error = 15 nm) and the inverse solution is complete. Here is an <a href="http://geographiclib.sourceforge.net/cgi-bin/GeodSolve">online version of GeodSolve</a>.</li>
+</ul>
+
+<p>"</p>
+
+<p><a class="uri" href="Category:Geodesy" title="wikilink">Category:Geodesy</a> <a href="Category:Articles_with_example_pseudocode" title="wikilink">Category:Articles with example pseudocode</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><em>σ</em> isn't evaluated directly from sin <em>σ</em> or cos <em>σ</em> to preserve numerical accuracy near the poles and equator<a href="#fnref1">↩</a></li>
+<li id="fn2">The arctan quantity should be evaluated using a two argument <a class="uri" href="atan2" title="wikilink">atan2</a> type function.<a href="#fnref2">↩</a></li>
+<li id="fn3"></li>
+<li id="fn4"></li>
+<li id="fn5"></li>
+<li id="fn6"></li>
+<li id="fn7"></li>
+<li id="fn8"></li>
+</ol>
+</section>
+</body>
+</html>

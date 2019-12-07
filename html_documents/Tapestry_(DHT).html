@@ -1,0 +1,149 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="292">Tapestry (DHT)</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Tapestry (DHT)</h1>
+<hr/>
+
+<p><strong>Tapestry</strong> is a <a class="uri" href="peer-to-peer" title="wikilink">peer-to-peer</a> <a href="overlay_network" title="wikilink">overlay network</a> which provides a <a href="distributed_hash_table" title="wikilink">distributed hash table</a>, <a class="uri" href="routing" title="wikilink">routing</a>, and <a href="multicast" title="wikilink">multicasting</a> infrastructure for distributed applications.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> The Tapestry <a class="uri" href="peer-to-peer" title="wikilink">peer-to-peer</a> system offers efficient, scalable, self-repairing, location-aware routing to nearby resources.</p>
+<h2 id="introduction">Introduction</h2>
+
+<p>The first generation of peer-to-peer applications, including <a class="uri" href="Napster" title="wikilink">Napster</a>, <a class="uri" href="Gnutella" title="wikilink">Gnutella</a>, had restricting limitations such as a central directory for Napster and scoped broadcast queries for Gnutella limiting scalability. To address these problems a second generation of P2P applications were developed including Tapestry, <a href="Chord_(peer-to-peer)" title="wikilink">Chord</a>, <a href="Pastry_(DHT)" title="wikilink">Pastry</a>, and <a href="Content_addressable_network" title="wikilink">CAN</a>. These overlays implement a basic key-based routing mechanism. This allows for deterministic routing of messages and adaptation to node failures in the overlay network. Of the named networks Pastry is very close to Tapestry as they both adopt the same routing algorithm by Plaxton et al.</p>
+
+<p>Tapestry is an extensible infrastructure that provides decentralized object location and routing focusing on efficiency and minimizing message latency. This is achieved since Tapestry constructs locally optimal routing tables from initialization and maintains them in order to reduce routing stretch. Furthermore, Tapestry allows object distribution determination according to the needs of a given application. Similarly Tapestry allows applications to implement multicasting in the overlay network.</p>
+<h2 id="algorithm">Algorithm</h2>
+<h3 id="api">API</h3>
+
+<p>Each node is assigned a unique nodeID uniformly distributed in a large identifier space. Tapestry uses SHA-1 to produce a 160-bit identifier space represented by a 40 digit hex key. Application specific endpoints GUIDs are similarly assigned unique identifiers. NodeIDs and GUIDs are roughly evenly distributed in the overlay network with each node storing several different IDs. From experiments it is shown that Tapestry efficiency increases with network size, so multiple applications sharing the same overlay network increases efficiency. To differentiate between applications a unique application identifier is used. Tapestry uses best-effort to publish and route objects.</p>
+<ul>
+<li>PublishObject</li>
+<li>UnPublishObject</li>
+<li>RouteToObject</li>
+<li>RouteToNode (to exact match instead of closest match)</li>
+</ul>
+<h3 id="routing">Routing</h3>
+<h4 id="routing-mesh">Routing mesh</h4>
+
+<p>Each identifier is mapped to a live node called the root. If a node's nodeID is G then it is the root else use the routing table's nodeIDs and IP addresses to find the nodes neighbors. At each hop a message is progressively routed closer to G by incremental suffix routing. Each neighbor map has multiple levels where each level contains links to nodes matching up to a certain digit position in the ID. The primary i<sup>th</sup> entry in the j<sup>th</sup> level is the ID and location of the closest node that begins with prefix (N, j-1)+i. This means that level 1 has links to nodes that have nothing in common, level 2 has the first digit in common, etc. Because of this, routing takes approximately 
+
+<math display="inline" id="Tapestry_(DHT):0">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>log</mi>
+    <mi>B</mi>
+   </msub>
+   <mi>N</mi>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <log></log>
+     <ci>B</ci>
+    </apply>
+    <ci>N</ci>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \log_{B}N
+  </annotation>
+ </semantics>
+</math>
+
+ hops in a network of size N and IDs of base B (hex: B=16). If an exact ID can not be found, the routing table will route to the closest matching node. For fault tolerance, nodes keep c secondary links such that the routing table has size 
+
+<math display="inline" id="Tapestry_(DHT):1">
+ <semantics>
+  <mrow>
+   <mi>c</mi>
+   <mo>*</mo>
+   <mi>B</mi>
+   <mo>*</mo>
+   <mrow>
+    <msub>
+     <mi>log</mi>
+     <mi>B</mi>
+    </msub>
+    <mi>N</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <times></times>
+    <ci>c</ci>
+    <ci>B</ci>
+    <apply>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <log></log>
+      <ci>B</ci>
+     </apply>
+     <ci>N</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   c*B*\log_{B}N
+  </annotation>
+ </semantics>
+</math>
+
+.</p>
+<h4 id="object-publication-and-location">Object publication and location</h4>
+
+<p>Participants in the network can publish objects by periodically routing a publish message toward the root node. Each node along the path stores a pointer mapping the object. Multiple servers can publish pointers to the same object. The redundant links are prioritized by latency and/or locality.</p>
+
+<p>Objects are located by routing a message towards the root of the object. Each node along the path checks the mapping and redirects the request appropriately. The effect of routing is convergence of nearby paths heading to the same destination.</p>
+<h3 id="dynamic-nodes">Dynamic nodes</h3>
+<h4 id="node-insertion">Node insertion</h4>
+
+<p>The new node becomes the root for its nodeID. The root finds the length of the longest prefix of the ID it shares. Then it sends a multicast message that reaches all existing nodes sharing the same prefix. These nodes then add the new node to their routing tables. The new node may take over being the root for some of the root's objects. The nodes will contact the new node to provide a temporary neighborhood list. The new node then performs an iterative nearest neighbor search to fill all levels in its routing table.</p>
+<h4 id="node-departure">Node departure</h4>
+
+<p>To leave the network, a node broadcasts its intention of leaving and transmits the replacement node for each level in the routing tables of the other nodes. Objects at the leaving node are redistributed or replenished from redundant copies.</p>
+<h4 id="node-failure">Node failure</h4>
+
+<p>Unexpected node failure is handled through redundancy in the network and backup pointers to reestablish damaged links.</p>
+<h2 id="applications">Applications</h2>
+
+<p>Tapestry provides an overlay routing network that is stable under a variety of network conditions. This provides an ideal infrastructure for distributed applications and services. Applications based on tapestry are:</p>
+<ul>
+<li><a class="uri" href="OceanStore" title="wikilink">OceanStore</a> − Distributed storage utility on PlanetLab</li>
+<li><a href="http://www.cs.rice.edu/Conferences/IPTPS02/107.pdf">Mnemosyne</a> − Steganographic file system</li>
+<li><a href="Bayeux_(distributed_application)" title="wikilink">Bayeux</a> − Self-organizing multicasting application</li>
+<li><a class="uri" href="Spamwatch" title="wikilink">Spamwatch</a> − Decentralized spam filter</li>
+</ul>
+<h2 id="developers">Developers</h2>
+
+<p>Tapestry was developed by Ben Y. Zhao, Ling Huang, Jeremy Stribling, Sean C. Rhea, Anthony D. Joseph and John D. Kubiatowicz.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="Content_addressable_network" title="wikilink">Content addressable network</a> (CAN)</li>
+<li><a href="Chord_(peer-to-peer)" title="wikilink">Chord (peer-to-peer)</a></li>
+<li><a class="uri" href="Kademlia" title="wikilink">Kademlia</a></li>
+<li><a href="Pastry_(DHT)" title="wikilink">Pastry (DHT)</a></li>
+</ul>
+<h2 id="references">References</h2>
+<references>
+</references>
+<h2 id="external-links">External links</h2>
+<ul>
+<li><a href="http://current.cs.ucsb.edu/projects/chimera/">Chimera Project</a> an implementation of Tapestry (ca. 2007)</li>
+</ul>
+
+<p>"</p>
+
+<p><a href="Category:Distributed_data_storage" title="wikilink">Category:Distributed data storage</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1"><a href="#fnref1">↩</a></li>
+</ol>
+</section>
+</body>
+</html>

@@ -20,7 +20,7 @@ abstract public class Models {
     private static final String DOCNUMMAPPATH = "indicies/doc-num-map.tsv";
     static final HashMap<String, Integer> fileTermSize = parseDocumentIndexFile(FILE_TERM_SIZE_PATH);
     static final HashMap<String, Entry> documents = parse_doc_indicies();
-    public static final HashMap<Integer, String> HTMLDOCPATHS = parseDocNumMap();
+    public static final HashMap<String, String> HTMLDOCPATHS = parseDocNumMap();
     static final int DOCUMENTSRETURNED = 30;
     static final Map<String, Map<String, Integer>> termToFileAndOccurrence = createIndexMap();
 
@@ -93,13 +93,13 @@ abstract public class Models {
         }
     }
 
-    private static HashMap<Integer, String> parseDocNumMap() {
-        HashMap<Integer, String> siMap = new HashMap<>();
+    private static HashMap<String, String> parseDocNumMap() {
+        HashMap<String, String> siMap = new HashMap<>();
         File f = new File(DOCNUMMAPPATH);
         try {
             Files.readLines(f, Charset.defaultCharset()).forEach(line -> {
                 String[] tokens = line.split("\t");
-                siMap.put(Integer.parseInt(tokens[0].trim()), tokens[1].trim());
+                siMap.put(tokens[0].trim(), tokens[1].trim());
             });
         } catch (IOException e) {
             e.printStackTrace();

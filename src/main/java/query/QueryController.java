@@ -93,10 +93,10 @@ public class QueryController {
             }
 
             for (Similarity sim : documents) {
-                sim.setPreview(getLongestIncreasingSequence(sim.getDocument_name() + ".txt", query.getContent()));
-                sim.setDocumentLink(Models.HTMLDOCPATHS.get(Integer.parseInt(sim.getDocument_name())));
-                sim.setDocumentName(Models.HTMLDOCPATHS.get(Integer.parseInt(sim.getDocument_name()))
-                        .replace(".html", "").replaceAll("_", " "));
+                sim.setPreview(getLongestIncreasingSequence(sim.getDocumentName() + ".txt", query.getContent()));
+                sim.setDocumentLink(Models.HTMLDOCPATHS.get(sim.getDocumentName()));
+                sim.setDocumentName(Models.HTMLDOCPATHS.get(sim.getDocumentName()).replace(".html", "").replaceAll("_", " "));
+                System.out.println("The documents name is " + sim.getDocumentName() + " and the document's link is " + sim.getDocumentLink());
             }
 
             this.currDocuments = documents;
@@ -123,9 +123,9 @@ public class QueryController {
         ArrayList<Similarity> temp = Lists.newArrayList(this.currDocuments);
 
         if (backward) {
-            sort(temp, (o1, o2) -> o2.getDocument_name().compareTo(o1.getDocument_name()));
+            sort(temp, (o1, o2) -> o2.getDocumentName().compareTo(o1.getDocumentName()));
         } else {
-            sort(temp, Comparator.comparing(Similarity::getDocument_name));
+            sort(temp, Comparator.comparing(Similarity::getDocumentName));
         }
         model.addAttribute("selected",
                 !backward ? Active.alphabet.toString().toLowerCase() : Active.reverse.toString().toLowerCase());

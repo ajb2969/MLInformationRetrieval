@@ -1,0 +1,1430 @@
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title offset="328">Parallel Processing (DSP implementation)</title>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG.js" type="text/javascript">
+</script>
+</head>
+<body>
+<h1>Parallel Processing (DSP implementation)</h1>
+<hr/>
+
+<p><strong>Parallel Processing</strong> in <a href="digital_signal_processing" title="wikilink">digital signal processing</a> (DSP) is a technique duplicating function units to operate different tasks (signals) simultaneously.<a class="footnoteRef" href="#fn1" id="fnref1"><sup>1</sup></a> Accordingly, we can perform the same processing for different <a href="Signal_(electrical_engineering)" title="wikilink">signals</a> on the corresponding duplicated function units. Further, due to the features of <a href="parallel_processing" title="wikilink">parallel processing</a>, the parallel DSP design often contains multiple outputs, resulting in higher throughput than not parallel.</p>
+<h2 id="conceptual-example">Conceptual Example</h2>
+
+<p>Consider a function unit (<em>F</em><sub>0</sub>) and three tasks (<em>T</em><sub>0</sub>, <em>T</em><sub>1</sub> and <em>T</em><sub>2</sub>). The required time for the function unit <em>F</em><sub>0</sub> to process those tasks is <em>t</em><sub>0</sub>,<em>t</em><sub>1</sub> and <em>t</em><sub>2</sub> respectively. Then, if we operate these three tasks in a sequential order, the required time to complete them is <em>t</em><sub>0</sub>+<em>t</em><sub>1</sub>+<em>t</em><sub>2</sub>.</p>
+
+<p><br/>
+</p>
+
+<p>However, if we duplicate the function unit to another two copies (<em>F</em>), the aggregate time is reduced to max(<em>t</em><sub>0</sub>,<em>t</em><sub>1</sub>,<em>t</em><sub>2</sub>), which is smaller than in a sequential order.</p>
+
+<p><br/>
+</p>
+<h2 id="parallel-processing-versus-pipelining">Parallel Processing Versus Pipelining</h2>
+
+<p>Mechanism:</p>
+<ul>
+<li>Parallel: duplicated function units working in parallel
+<ul>
+<li>Each task is processed entirely by a different function unit.</li>
+</ul></li>
+<li><a class="uri" href="Pipelining" title="wikilink">Pipelining</a>: different function units working in parallel
+<ul>
+<li>Each task is split into a sequence of sub-tasks, which are handled by specialized and different function units.</li>
+</ul></li>
+</ul>
+
+<p>Objective:</p>
+<ul>
+<li>Pipelining leads to a reduction in the critical path, which can increase the sample speed or reduce power consumption at the same speed.</li>
+<li>Parallel processing techniques require multiple outputs, which are computed in parallel in a clock period. Therefore, the effective sample speed is increased by the level of parallelism.</li>
+</ul>
+
+<p>Consider a condition that we are able to apply both parallel processing and pipelining techniques, it is better to choose parallel processing techniques with the following reasons</p>
+<ul>
+<li>Pipelining usually causes I/O bottlenecks</li>
+<li>Parallel processing is also utilized for reduction of power consumption while using slow clocks</li>
+<li>The hybrid method of pipelining and parallel processing further increase the speed of the architecture</li>
+</ul>
+<h2 id="parallel-fir-filters">Parallel FIR Filters</h2>
+
+<p>Consider a 3-tap FIR filter:<a class="footnoteRef" href="#fn2" id="fnref2"><sup>2</sup></a> 
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):0">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>y</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>n</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>a</mi>
+     <mi>x</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>b</mi>
+     <mi>x</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>n</mi>
+       <mo>-</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>c</mi>
+     <mi>x</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>n</mi>
+       <mo>-</mo>
+       <mn>2</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>y</ci>
+     <ci>n</ci>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>a</ci>
+      <ci>x</ci>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>b</ci>
+      <ci>x</ci>
+      <apply>
+       <minus></minus>
+       <ci>n</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <ci>x</ci>
+      <apply>
+       <minus></minus>
+       <ci>n</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y(n)=ax(n)+bx(n-1)+cx(n-2)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>which is shown in the following figure.</p>
+
+<p>Assume the calculation time for multiplication units is T<sub>m</sub> and T<sub>a</sub> for add units. The sample period is given by</p>
+
+<p>
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):1">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mi>s</mi>
+     <mi>a</mi>
+     <mi>m</mi>
+     <mi>p</mi>
+     <mi>l</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>≥</mo>
+   <mrow>
+    <msub>
+     <mi>T</mi>
+     <mi>m</mi>
+    </msub>
+    <mo>+</mo>
+    <mrow>
+     <mn>2</mn>
+     <msub>
+      <mi>T</mi>
+      <mi>a</mi>
+     </msub>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <geq></geq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <ci>s</ci>
+      <ci>a</ci>
+      <ci>m</ci>
+      <ci>p</ci>
+      <ci>l</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>T</ci>
+      <ci>m</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <cn type="integer">2</cn>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>T</ci>
+       <ci>a</ci>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {T_{sample}\geq T_{m}+2T_{a}}
+  </annotation>
+ </semantics>
+</math>
+
+ </p>
+
+<p>By parallelizing it, the resultant architecture is shown as follows. The sample rate now becomes<br/>
+
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):2">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mi>s</mi>
+     <mi>a</mi>
+     <mi>m</mi>
+     <mi>p</mi>
+     <mi>l</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>≥</mo>
+   <mfrac>
+    <msub>
+     <mi>T</mi>
+     <mrow>
+      <mi>c</mi>
+      <mi>l</mi>
+      <mi>o</mi>
+      <mi>c</mi>
+      <mi>k</mi>
+     </mrow>
+    </msub>
+    <mi>N</mi>
+   </mfrac>
+   <mo>=</mo>
+   <mfrac>
+    <mrow>
+     <msub>
+      <mi>T</mi>
+      <mi>m</mi>
+     </msub>
+     <mo>+</mo>
+     <mrow>
+      <mn>2</mn>
+      <msub>
+       <mi>T</mi>
+       <mi>a</mi>
+      </msub>
+     </mrow>
+    </mrow>
+    <mn>3</mn>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <geq></geq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>T</ci>
+      <apply>
+       <times></times>
+       <ci>s</ci>
+       <ci>a</ci>
+       <ci>m</ci>
+       <ci>p</ci>
+       <ci>l</ci>
+       <ci>e</ci>
+      </apply>
+     </apply>
+     <apply>
+      <divide></divide>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>T</ci>
+       <apply>
+        <times></times>
+        <ci>c</ci>
+        <ci>l</ci>
+        <ci>o</ci>
+        <ci>c</ci>
+        <ci>k</ci>
+       </apply>
+      </apply>
+      <ci>N</ci>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <divide></divide>
+      <apply>
+       <plus></plus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>T</ci>
+        <ci>m</ci>
+       </apply>
+       <apply>
+        <times></times>
+        <cn type="integer">2</cn>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>T</ci>
+         <ci>a</ci>
+        </apply>
+       </apply>
+      </apply>
+      <cn type="integer">3</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   {T_{sample}\geq\frac{T_{clock}}{N}=\frac{T_{m}+2T_{a}}{3}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where N represents the number of copies.</p>
+
+<p>Please note that, in a parallel system, 
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):3">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mi>s</mi>
+     <mi>a</mi>
+     <mi>m</mi>
+     <mi>p</mi>
+     <mi>l</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>≠</mo>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mi>c</mi>
+     <mi>l</mi>
+     <mi>o</mi>
+     <mi>c</mi>
+     <mi>k</mi>
+    </mrow>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <neq></neq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <ci>s</ci>
+      <ci>a</ci>
+      <ci>m</ci>
+      <ci>p</ci>
+      <ci>l</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <ci>l</ci>
+      <ci>o</ci>
+      <ci>c</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{sample}\neq T_{clock}
+  </annotation>
+ </semantics>
+</math>
+
+ while 
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):4">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mi>s</mi>
+     <mi>a</mi>
+     <mi>m</mi>
+     <mi>p</mi>
+     <mi>l</mi>
+     <mi>e</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <msub>
+    <mi>T</mi>
+    <mrow>
+     <mi>c</mi>
+     <mi>l</mi>
+     <mi>o</mi>
+     <mi>c</mi>
+     <mi>k</mi>
+    </mrow>
+   </msub>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <ci>s</ci>
+      <ci>a</ci>
+      <ci>m</ci>
+      <ci>p</ci>
+      <ci>l</ci>
+      <ci>e</ci>
+     </apply>
+    </apply>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>T</ci>
+     <apply>
+      <times></times>
+      <ci>c</ci>
+      <ci>l</ci>
+      <ci>o</ci>
+      <ci>c</ci>
+      <ci>k</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   T_{sample}=T_{clock}
+  </annotation>
+ </semantics>
+</math>
+
+ holds in a pipelined system. </p>
+<h2 id="parallel-1st-order-iir-filters">Parallel 1st-order IIR Filters</h2>
+
+<p>Consider the transfer function of a 1st–order IIR filter formulated as<br/>
+
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):5">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>H</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mi>z</mi>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mfrac>
+    <msup>
+     <mi>z</mi>
+     <mrow>
+      <mo>-</mo>
+      <mn>1</mn>
+     </mrow>
+    </msup>
+    <mrow>
+     <mn>1</mn>
+     <mo>-</mo>
+     <mrow>
+      <mi>a</mi>
+      <mo>*</mo>
+      <msup>
+       <mi>z</mi>
+       <mrow>
+        <mo>-</mo>
+        <mn>1</mn>
+       </mrow>
+      </msup>
+     </mrow>
+    </mrow>
+   </mfrac>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>H</ci>
+     <ci>z</ci>
+    </apply>
+    <apply>
+     <divide></divide>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <ci>z</ci>
+      <apply>
+       <minus></minus>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <minus></minus>
+      <cn type="integer">1</cn>
+      <apply>
+       <times></times>
+       <ci>a</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>z</ci>
+        <apply>
+         <minus></minus>
+         <cn type="integer">1</cn>
+        </apply>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   H(z)=\frac{z^{-1}}{1-a*z^{-1}}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where |<em>a</em>|≤1 for stability, and such filter has only one pole located at <em>z</em>=<em>a</em>;</p>
+
+<p>The corresponding recursive representation is<br/>
+
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):6">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>y</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>n</mi>
+      <mo>+</mo>
+      <mn>1</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mi>a</mi>
+     <mi>y</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>u</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>y</ci>
+     <apply>
+      <plus></plus>
+      <ci>n</ci>
+      <cn type="integer">1</cn>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <ci>a</ci>
+      <ci>y</ci>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>u</ci>
+      <ci>n</ci>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y(n+1)=ay(n)+u(n)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>Consider the design of a 4-parallel architecture (<em>N</em>=4). In such parallel system, each delay element means a block delay and the clock period is four times the sample period.<br/>
+Therefore, by iterating the recursion with <em>n</em>=4<em>k</em>, we have<br/>
+
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):7">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>y</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>n</mi>
+      <mo>+</mo>
+      <mn>4</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msup>
+      <mi>a</mi>
+      <mn>4</mn>
+     </msup>
+     <mi>y</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mi>a</mi>
+      <mn>3</mn>
+     </msup>
+     <mi>u</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mi>n</mi>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mi>a</mi>
+      <mn>2</mn>
+     </msup>
+     <mi>u</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>n</mi>
+       <mo>+</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>a</mi>
+     <mi>u</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>n</mi>
+       <mo>+</mo>
+       <mn>2</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>u</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mi>n</mi>
+       <mo>+</mo>
+       <mn>3</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>y</ci>
+     <apply>
+      <plus></plus>
+      <ci>n</ci>
+      <cn type="integer">4</cn>
+     </apply>
+    </apply>
+    <apply>
+     <plus></plus>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>a</ci>
+       <cn type="integer">4</cn>
+      </apply>
+      <ci>y</ci>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>a</ci>
+       <cn type="integer">3</cn>
+      </apply>
+      <ci>u</ci>
+      <ci>n</ci>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>a</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <ci>u</ci>
+      <apply>
+       <plus></plus>
+       <ci>n</ci>
+       <cn type="integer">1</cn>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>a</ci>
+      <ci>u</ci>
+      <apply>
+       <plus></plus>
+       <ci>n</ci>
+       <cn type="integer">2</cn>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <ci>u</ci>
+      <apply>
+       <plus></plus>
+       <ci>n</ci>
+       <cn type="integer">3</cn>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   y(n+4)=a^{4}y(n)+a^{3}u(n)+a^{2}u(n+1)+au(n+2)+u(n+3)
+  </annotation>
+ </semantics>
+</math>
+
+ 
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):8">
+ <semantics>
+  <mrow>
+   <mi></mi>
+   <mo>→</mo>
+   <mrow>
+    <mi>y</mi>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mrow>
+       <mn>4</mn>
+       <mi>k</mi>
+      </mrow>
+      <mo>+</mo>
+      <mn>4</mn>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <msup>
+      <mi>a</mi>
+      <mn>4</mn>
+     </msup>
+     <mi>y</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>4</mn>
+       <mi>k</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mi>a</mi>
+      <mn>3</mn>
+     </msup>
+     <mi>u</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mn>4</mn>
+       <mi>k</mi>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <msup>
+      <mi>a</mi>
+      <mn>2</mn>
+     </msup>
+     <mi>u</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mrow>
+        <mn>4</mn>
+        <mi>k</mi>
+       </mrow>
+       <mo>+</mo>
+       <mn>1</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>a</mi>
+     <mi>u</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mrow>
+        <mn>4</mn>
+        <mi>k</mi>
+       </mrow>
+       <mo>+</mo>
+       <mn>2</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+    <mo>+</mo>
+    <mrow>
+     <mi>u</mi>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mrow>
+        <mn>4</mn>
+        <mi>k</mi>
+       </mrow>
+       <mo>+</mo>
+       <mn>3</mn>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+    </mrow>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <ci>normal-→</ci>
+     <csymbol cd="latexml">absent</csymbol>
+     <apply>
+      <times></times>
+      <ci>y</ci>
+      <apply>
+       <plus></plus>
+       <apply>
+        <times></times>
+        <cn type="integer">4</cn>
+        <ci>k</ci>
+       </apply>
+       <cn type="integer">4</cn>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <plus></plus>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>a</ci>
+        <cn type="integer">4</cn>
+       </apply>
+       <ci>y</ci>
+       <apply>
+        <times></times>
+        <cn type="integer">4</cn>
+        <ci>k</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>a</ci>
+        <cn type="integer">3</cn>
+       </apply>
+       <ci>u</ci>
+       <apply>
+        <times></times>
+        <cn type="integer">4</cn>
+        <ci>k</ci>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <ci>a</ci>
+        <cn type="integer">2</cn>
+       </apply>
+       <ci>u</ci>
+       <apply>
+        <plus></plus>
+        <apply>
+         <times></times>
+         <cn type="integer">4</cn>
+         <ci>k</ci>
+        </apply>
+        <cn type="integer">1</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>a</ci>
+       <ci>u</ci>
+       <apply>
+        <plus></plus>
+        <apply>
+         <times></times>
+         <cn type="integer">4</cn>
+         <ci>k</ci>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>u</ci>
+       <apply>
+        <plus></plus>
+        <apply>
+         <times></times>
+         <cn type="integer">4</cn>
+         <ci>k</ci>
+        </apply>
+        <cn type="integer">3</cn>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   \rightarrow y(4k+4)=a^{4}y(4k)+a^{3}u(4k)+a^{2}u(4k+1)+au(4k+2)+u(4k+3)
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>The corresponding architecture is shown as follows.</p>
+<figure><b>(Figure)</b>
+<figcaption>Parallel IIR.png</figcaption>
+</figure>
+
+<p>The resultant parallel design has the following properties.</p>
+<ul>
+<li>The pole of the original filter is at <em>z</em>=<em>a</em> while the pole for the parallel system is at <em>z</em>=<em>a</em><sup>4</sup> which is closer to the origin.</li>
+<li>The pole movement improves the robustness of the system to the round-off noise.</li>
+<li>Hardware complexity of this architecture: <em>N</em>*<em>N</em> multiply-add operations.</li>
+</ul>
+
+<p><br/>
+ Please note that the square increase in hardware complexity can be reduced by exploiting the concurrency and the incremental computation to avoid repeated computing.</p>
+<h2 id="parallel-processing-for-low-power">Parallel Processing for Low Power</h2>
+
+<p>Another advantage for the parallel processing techniques is that it can reduce the power consumption of a system by reducing the supply voltage.<br/>
+ Consider the following power consumption in a normal CMOS circuit.<br/>
+
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):9">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mrow>
+     <mi>s</mi>
+     <mi>e</mi>
+     <mi>q</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <msub>
+     <mi>C</mi>
+     <mrow>
+      <mi>t</mi>
+      <mi>o</mi>
+      <mi>t</mi>
+      <mi>a</mi>
+      <mi>l</mi>
+     </mrow>
+    </msub>
+    <mo>*</mo>
+    <msubsup>
+     <mi>V</mi>
+     <mn>0</mn>
+     <mn>2</mn>
+    </msubsup>
+    <mo>*</mo>
+    <mi>f</mi>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <csymbol cd="ambiguous">subscript</csymbol>
+     <ci>P</ci>
+     <apply>
+      <times></times>
+      <ci>s</ci>
+      <ci>e</ci>
+      <ci>q</ci>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>C</ci>
+      <apply>
+       <times></times>
+       <ci>t</ci>
+       <ci>o</ci>
+       <ci>t</ci>
+       <ci>a</ci>
+       <ci>l</ci>
+      </apply>
+     </apply>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>V</ci>
+       <cn type="integer">0</cn>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+     <ci>f</ci>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{seq}=C_{total}*V_{0}^{2}*f
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where the <em>C<sub>total</sub></em> represents the total capacitance of the CMOS circuit.</p>
+
+<p><br/>
+ For a parallel version, the charging capacitance remains the same but the total capacitance increases by <em>N</em> times.<br/>
+ In order to maintain the same sample rate, the clock period of the <em>N</em>-parallel circuit increases to <em>N</em> times the propagation delay of the original circuit.<br/>
+ It makes the charging time prolongs <em>N</em> times. The supply voltage can be reduced to <em>β</em>V<sub>0</sub>.</p>
+
+<p>Therefore, the power consumption of the N-parallel system can be formulated as<br/>
+
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):10">
+ <semantics>
+  <mrow>
+   <msub>
+    <mi>P</mi>
+    <mrow>
+     <mi>p</mi>
+     <mi>a</mi>
+     <mi>r</mi>
+     <mi>a</mi>
+    </mrow>
+   </msub>
+   <mo>=</mo>
+   <mrow>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>N</mi>
+      <msub>
+       <mi>C</mi>
+       <mrow>
+        <mi>t</mi>
+        <mi>o</mi>
+        <mi>t</mi>
+        <mi>a</mi>
+        <mi>l</mi>
+       </mrow>
+      </msub>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>*</mo>
+    <mrow>
+     <mo stretchy="false">(</mo>
+     <mrow>
+      <mi>β</mi>
+      <msubsup>
+       <mi>V</mi>
+       <mn>0</mn>
+       <mn>2</mn>
+      </msubsup>
+     </mrow>
+     <mo stretchy="false">)</mo>
+    </mrow>
+    <mo>*</mo>
+    <mfrac>
+     <mi>f</mi>
+     <mi>N</mi>
+    </mfrac>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <msup>
+     <mi>β</mi>
+     <mn>2</mn>
+    </msup>
+    <mo>*</mo>
+    <msub>
+     <mi>P</mi>
+     <mrow>
+      <mi>s</mi>
+      <mi>e</mi>
+      <mi>q</mi>
+     </mrow>
+    </msub>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <and></and>
+    <apply>
+     <eq></eq>
+     <apply>
+      <csymbol cd="ambiguous">subscript</csymbol>
+      <ci>P</ci>
+      <apply>
+       <times></times>
+       <ci>p</ci>
+       <ci>a</ci>
+       <ci>r</ci>
+       <ci>a</ci>
+      </apply>
+     </apply>
+     <apply>
+      <times></times>
+      <apply>
+       <times></times>
+       <ci>N</ci>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>C</ci>
+        <apply>
+         <times></times>
+         <ci>t</ci>
+         <ci>o</ci>
+         <ci>t</ci>
+         <ci>a</ci>
+         <ci>l</ci>
+        </apply>
+       </apply>
+      </apply>
+      <apply>
+       <times></times>
+       <ci>β</ci>
+       <apply>
+        <csymbol cd="ambiguous">superscript</csymbol>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>V</ci>
+         <cn type="integer">0</cn>
+        </apply>
+        <cn type="integer">2</cn>
+       </apply>
+      </apply>
+      <apply>
+       <divide></divide>
+       <ci>f</ci>
+       <ci>N</ci>
+      </apply>
+     </apply>
+    </apply>
+    <apply>
+     <eq></eq>
+     <share href="#.cmml">
+     </share>
+     <apply>
+      <times></times>
+      <apply>
+       <csymbol cd="ambiguous">superscript</csymbol>
+       <ci>β</ci>
+       <cn type="integer">2</cn>
+      </apply>
+      <apply>
+       <csymbol cd="ambiguous">subscript</csymbol>
+       <ci>P</ci>
+       <apply>
+        <times></times>
+        <ci>s</ci>
+        <ci>e</ci>
+        <ci>q</ci>
+       </apply>
+      </apply>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   P_{para}=(NC_{total})*(\beta V_{0}^{2})*\frac{f}{N}=\beta^{2}*P_{seq}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+
+<p>where <em>β</em> can be computed by</p>
+
+<p>
+
+<math display="inline" id="Parallel_Processing_(DSP_implementation):11">
+ <semantics>
+  <mrow>
+   <mrow>
+    <mi>N</mi>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <mrow>
+        <mi>β</mi>
+        <msub>
+         <mi>V</mi>
+         <mn>0</mn>
+        </msub>
+       </mrow>
+       <mo>-</mo>
+       <msub>
+        <mi>V</mi>
+        <mi>t</mi>
+       </msub>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+   <mo>=</mo>
+   <mrow>
+    <mi>β</mi>
+    <msup>
+     <mrow>
+      <mo stretchy="false">(</mo>
+      <mrow>
+       <msub>
+        <mi>V</mi>
+        <mn>0</mn>
+       </msub>
+       <mo>-</mo>
+       <msub>
+        <mi>V</mi>
+        <mi>t</mi>
+       </msub>
+      </mrow>
+      <mo stretchy="false">)</mo>
+     </mrow>
+     <mn>2</mn>
+    </msup>
+   </mrow>
+  </mrow>
+  <annotation-xml encoding="MathML-Content">
+   <apply>
+    <eq></eq>
+    <apply>
+     <times></times>
+     <ci>N</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <minus></minus>
+       <apply>
+        <times></times>
+        <ci>β</ci>
+        <apply>
+         <csymbol cd="ambiguous">subscript</csymbol>
+         <ci>V</ci>
+         <cn type="integer">0</cn>
+        </apply>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>V</ci>
+        <ci>t</ci>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+    <apply>
+     <times></times>
+     <ci>β</ci>
+     <apply>
+      <csymbol cd="ambiguous">superscript</csymbol>
+      <apply>
+       <minus></minus>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>V</ci>
+        <cn type="integer">0</cn>
+       </apply>
+       <apply>
+        <csymbol cd="ambiguous">subscript</csymbol>
+        <ci>V</ci>
+        <ci>t</ci>
+       </apply>
+      </apply>
+      <cn type="integer">2</cn>
+     </apply>
+    </apply>
+   </apply>
+  </annotation-xml>
+  <annotation encoding="application/x-tex">
+   N(\beta V_{0}-V_{t})^{2}=\beta(V_{0}-V_{t})^{2}
+  </annotation>
+ </semantics>
+</math>
+
+</p>
+<h2 id="references">References</h2>
+<references>
+</references>
+
+<p>"</p>
+
+<p><a href="Category:Digital_signal_processing" title="wikilink">Category:Digital signal processing</a></p>
+<section class="footnotes">
+<hr/>
+<ol>
+<li id="fn1">K.K. Parhi, VLSI Digital Signal Processing Systems: Design and Implementation, John Wiley, 1999<a href="#fnref1">↩</a></li>
+<li id="fn2">Slides for VLSI Digital Signal Processing Systems: Design and Implementation John Wiley &amp; Sons, 1999 (ISBN Number: 0-471-24186-5): <a class="uri" href="http://www.ece.umn.edu/users/parhi/slides.html">http://www.ece.umn.edu/users/parhi/slides.html</a><a href="#fnref2">↩</a></li>
+</ol>
+</section>
+</body>
+</html>
