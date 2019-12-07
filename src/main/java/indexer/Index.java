@@ -214,11 +214,6 @@ public class Index {
     }
 
     public static void main(String[] args) {
-        try {
-            document_level();
-        } catch (InterruptedException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
+        document_level();
     }
 }
