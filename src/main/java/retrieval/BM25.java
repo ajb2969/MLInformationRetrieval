@@ -28,7 +28,7 @@ public class BM25 extends Models {
         return (ArrayList<Similarity>) scoredDocuments.entrySet().stream()
             .map(entry -> new Similarity(entry.getKey(), entry.getValue()))
             .sorted(Comparator.reverseOrder())
-            .limit(Models.DOCUMENTSRETURNED)
+            .limit(RESULT_SET_SIZE)
             .collect(Collectors.toList());
     }
 

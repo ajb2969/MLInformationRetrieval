@@ -4,7 +4,7 @@ import query.QueryController;
 
 import java.util.ArrayList;
 
-import static retrieval.Models.DOCUMENTSRETURNED;
+import static retrieval.Models.RESULT_SET_SIZE;
 
 public class Pooling {
     private Models bm25;
@@ -27,15 +27,15 @@ public class Pooling {
         System.out.println("Retrieving results for model " + this.currModel.toString());
 
         if(this.currModel == QueryController.ModelTypes.LDA) {
-            for(int i = 0; i < DOCUMENTSRETURNED; i++) {
+            for(int i = 0; i < RESULT_SET_SIZE; i++) {
                 returnedResults.add(ldaResults.get(i));
             }
         } else if(this.currModel == QueryController.ModelTypes.BM25) {
-            for(int i = 0; i < DOCUMENTSRETURNED; i++) {
+            for(int i = 0; i < RESULT_SET_SIZE; i++) {
                 returnedResults.add(bm25Results.get(i));
             }
         } else {
-            for (int i = 0; i < DOCUMENTSRETURNED; ) {
+            for (int i = 0; i < RESULT_SET_SIZE; ) {
                 if (i % 2 == 0 && !returnedResults.contains(bm25Results.get(i))) {
                     returnedResults.add(bm25Results.get(i));
                 }

@@ -12,10 +12,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 abstract public class Models {
-    static final int DOCUMENTSRETURNED = 30;
+    static final int RESULT_SET_SIZE = 30;
     public static final HashMap<String, String> HTMLDOCPATHS = parseDocNumMap();
-    private static final String INDICIES_PATH = Index.output_dir;
-    private static final String FILE_TERM_SIZE_PATH = Index.docSize;
+    private static final String INDICIES_PATH = Index.TOKEN_INDEX_PATH;
+    private static final String FILE_TERM_SIZE_PATH = Index.DOCUMENT_SIZE_PATH;
     private static final String DOCNUMMAPPATH = "indicies/doc-num-map.tsv";
     private static final HashMap<String, Integer> FILE_TERM_SIZE = parseDocumentIndexFile(FILE_TERM_SIZE_PATH);
     private static final HashMap<String, Entry> TOKEN_TO_ENTRY = parseTokenIndexFile();
@@ -31,7 +31,7 @@ abstract public class Models {
 
     static Set<String> getAllDocuments() {
 //        ArrayList<String> documents = new ArrayList<>();
-//        for (File f : Objects.requireNonNull(new File(Index.docs_file_path).listFiles())) {
+//        for (File f : Objects.requireNonNull(new File(Index.DOC_DIRECTORY).listFiles())) {
 //            documents.add(f.getName());
 //        }
 //        return documents;
