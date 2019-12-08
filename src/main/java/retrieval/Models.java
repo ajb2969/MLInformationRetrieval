@@ -60,26 +60,23 @@ abstract public class Models {
     }
 
     private static HashMap<String, Integer> parseDocumentIndexFile(String path) {
-<<<<<<< HEAD
         System.out.println("Parsing document index file");
-=======
->>>>>>> 45218c832924cd7d54fa6e0546320da3192355ab
         HashMap<String, Integer> docMap = new HashMap<>();
         File index = new File(path);
 
         try {
-<<<<<<< HEAD
             BufferedReader reader = new BufferedReader(new FileReader(index));
             String line;
+            int counter = 0;
             while((line = reader.readLine()) != null) {
-                String [] entry = line.trim().split("\t");
-                docMap.put(entry[0], Integer.parseInt(entry[1]));
+                if(counter < 3) {
+                    counter += 1;
+                } else {
+                    String [] entry = line.trim().split("\t");
+                    docMap.put(entry[0], Integer.parseInt(entry[1]));
+                }
             }
             reader.close();
-=======
-            Files.readLines(index, Charset.defaultCharset())
-                .forEach(entry -> docMap.put(entry.split("\t")[0], Integer.parseInt(entry.split("\t")[1])));
->>>>>>> 45218c832924cd7d54fa6e0546320da3192355ab
         } catch (IOException e) {
             e.printStackTrace();
             throw new RuntimeException(e);
@@ -94,22 +91,27 @@ abstract public class Models {
             File index = new File(INDICIES_PATH);
             BufferedReader br = new BufferedReader(new FileReader(index));
             String line;
+            int counter = 0;
 
             while ((line = br.readLine()) != null) {
-                String[] parsed_line = line.split("\t");
-                String term = parsed_line[0];
-                int quantity = Integer.parseInt(parsed_line[1]);
-                ArrayList<FileOccurrence> documents = new ArrayList<>();
-                for (int i = 2; i < parsed_line.length; i++) {
-                    String[] fileAndOccurrence = parsed_line[i].split(":");
-                    if (fileAndOccurrence.length == 3) {
-                        documents.add(new FileOccurrence(fileAndOccurrence[0] + ":" + fileAndOccurrence[1],
-                                Integer.valueOf(fileAndOccurrence[2])));
-                    } else {
-                        documents.add(new FileOccurrence(fileAndOccurrence[0], Integer.valueOf(fileAndOccurrence[1])));
+                if(counter < 3) {
+                    counter += 1;
+                } else {
+                    String[] parsed_line = line.split("\t");
+                    String term = parsed_line[0];
+                    int quantity = Integer.parseInt(parsed_line[1]);
+                    ArrayList<FileOccurrence> documents = new ArrayList<>();
+                    for (int i = 2; i < parsed_line.length; i++) {
+                        String[] fileAndOccurrence = parsed_line[i].split(":");
+                        if (fileAndOccurrence.length == 3) {
+                            documents.add(new FileOccurrence(fileAndOccurrence[0] + ":" + fileAndOccurrence[1],
+                                    Integer.valueOf(fileAndOccurrence[2])));
+                        } else {
+                            documents.add(new FileOccurrence(fileAndOccurrence[0], Integer.valueOf(fileAndOccurrence[1])));
+                        }
                     }
+                    terms.put(term, new Entry(quantity, documents));
                 }
-                terms.put(term, new Entry(quantity, documents));
             }
             br.close();
             return terms;
@@ -120,14 +122,11 @@ abstract public class Models {
     }
 
     private static HashMap<String, String> parseDocNumMap() {
-<<<<<<< HEAD
         System.out.println("Parsing doc num map");
-=======
->>>>>>> 45218c832924cd7d54fa6e0546320da3192355ab
         HashMap<String, String> siMap = new HashMap<>();
         File f = new File(DOCNUMMAPPATH);
         try {
-            Files.readLines(f, Charset.defaultCharset()).forEach(line -> {
+            Files.readLines(f, Charset.defaultCharset()).subList(3, Files.readLines(f, Charset.defaultCharset()).size()).forEach(line -> {
                 String[] tokens = line.split("\t");
                 siMap.put(tokens[0].trim(), tokens[1].trim());
             });

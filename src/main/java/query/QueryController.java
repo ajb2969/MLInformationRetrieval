@@ -86,7 +86,7 @@ public class QueryController {
                 // model.addAttribute("seasons", seasons);
             }
 
-            documents = (ArrayList<Similarity>) documents.stream()
+            documents = (ArrayList<Similarity>) documents.parallelStream()
                 .map(sim -> updateObject(sim, query))
                 .collect(Collectors.toList());
             System.out.println("Finished updating documents");
@@ -106,7 +106,6 @@ public class QueryController {
     }
 
     private Similarity updateObject(Similarity sim, Querycontainer query) {
-        System.out.println(sim.getDocumentName());
         sim.setPreview(getLongestIncreasingSequence(sim.getDocumentName(), query.getContent()));
         sim.setDocumentLink(Models.HTMLDOCPATHS.get(sim.getDocumentName().substring(0, sim.getDocumentName().length()-4)));
         sim.setDocumentName(Models.HTMLDOCPATHS.get(sim.getDocumentName().substring(0, sim.getDocumentName().length()-4))
