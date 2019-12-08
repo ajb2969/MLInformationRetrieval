@@ -19,7 +19,7 @@ public class Similarity implements Comparable<Similarity> {
         this.document_name = name;
     }
     public String getDocumentName() {
-        return this.document_name.replace(".txt", "");
+        return this.document_name;
     }
 
     public void setDocumentLink(String link) {

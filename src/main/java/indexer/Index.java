@@ -3,7 +3,8 @@ package indexer;
 import com.google.common.collect.Maps;
 
 import java.io.*;
-import java.nio.file.Files;
+import java.io.File;
+import java.io.BufferedReader;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.Map.Entry;
@@ -223,14 +224,17 @@ public class Index {
     public static ArrayList<Integer> readQueryPositions(ArrayList<String> terms, String docName) throws IOException {
 
         File inputFile = new File(TOKEN_POSITION_PATH);
-        List<String> lines = Files.readAllLines(Paths.get(inputFile.getCanonicalPath()));
+        
+        BufferedReader reader = new BufferedReader(new FileReader(new File(Paths.get(inputFile.getCanonicalPath()).toString())));
         ArrayList<String> selectedLines = new ArrayList<>();
-        for (String line : lines) {
+        String line;
+        while((line = reader.readLine()) != null) {
             String token = line.split("\t")[0];
             if (terms.stream().map(String::toLowerCase).collect(Collectors.toList()).contains(token)) {
                 selectedLines.add(line);
             }
         }
+        reader.close();
         ArrayList<Integer> positions = new ArrayList<>();
         for (String selected : selectedLines) {
             String[] filePositionsLine = selected.split("\t");

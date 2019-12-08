@@ -78,6 +78,7 @@ public class QueryController {
             currQuery = query.getContent();
             ArrayList<Similarity> documents = m.retrieve();
 
+            System.out.println("parsing results");
             if (query.selectedSeason.size() != 0) {
                 // documents = (ArrayList<Similarity>) documents.stream().filter(document ->
                 // query.selectedSeason.contains(document.getSeason())).collect(Collectors.toList());
@@ -92,18 +93,11 @@ public class QueryController {
                 // model.addAttribute("seasons", seasons);
             }
 
-            for (Similarity sim : documents) {
-                sim.setPreview(getLongestIncreasingSequence(sim.getDocumentName() + ".txt", query.getContent()));
-                sim.setDocumentLink(Models.HTMLDOCPATHS.get(sim.getDocumentName()));
-                sim.setDocumentName(Models.HTMLDOCPATHS.get(sim.getDocumentName()).replace(".html", "").replaceAll("_", " "));
-                System.out.println("The documents name is " + sim.getDocumentName() + " and the document's link is " + sim.getDocumentLink());
-            }
-
+            documents = (ArrayList<Similarity>) documents.parallelStream()
+                .map(sim -> updateObject(sim, query))
+                .collect(Collectors.toList());
+            System.out.println("Finished updating documents");
             this.currDocuments = documents;
-
-            // for(Similarity s: this.currDocuments) {
-            // seasons.add(s.getSeason());
-            // }
 
             // if the first document isn't relevant or similar send back no
             // results available
@@ -116,6 +110,15 @@ public class QueryController {
             return "index";
         }
         return "result";
+    }
+
+    private Similarity updateObject(Similarity sim, Querycontainer query) {
+        sim.setPreview(getLongestIncreasingSequence(sim.getDocumentName(), query.getContent()));
+        sim.setDocumentLink(Models.HTMLDOCPATHS.get(sim.getDocumentName().substring(0, sim.getDocumentName().length()-4)));
+        sim.setDocumentName(Models.HTMLDOCPATHS.get(sim.getDocumentName().substring(0, sim.getDocumentName().length()-4))
+                                                    .replaceAll("_", " ")
+                                                    .replaceAll(".html", ""));
+        return sim;
     }
 
     @GetMapping("/alphabetically")
@@ -165,6 +168,9 @@ public class QueryController {
     @ResponseBody
     public FileSystemResource getDocument(@RequestParam(required = true) String doc, Model model) {
         //TODO replace all links in document with th:href
+        if(!doc.contains(".html")) {
+            doc += ".html";
+        }
         return new FileSystemResource(htmlDocumentsPath + doc);
     }
 
@@ -205,27 +211,5 @@ public class QueryController {
         int upperBound = bestWindowCenter + HALF_WINDOW_SIZE > fileTokens.size() ? fileTokens.size()
                 : bestWindowCenter + HALF_WINDOW_SIZE;
         return String.join(" ", fileTokens.subList(lowerBound, upperBound));
-    }
-}
-
-@Configuration
-class ThymeleafConfig {
-
-    @Bean(name = "textTemplateEngine")
-    public TemplateEngine textTemplateEngine() {
-        TemplateEngine templateEngine = new TemplateEngine();
-        templateEngine.addTemplateResolver(textTemplateResolver());
-        return templateEngine;
-    }
-
-    private ITemplateResolver textTemplateResolver() {
-        ClassLoaderTemplateResolver templateResolver = new ClassLoaderTemplateResolver();
-        templateResolver.setPrefix("/documents/");
-        templateResolver.setSuffix(".txt");
-        templateResolver.setTemplateMode(TemplateMode.TEXT);
-        templateResolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        templateResolver.setCheckExistence(true);
-        templateResolver.setCacheable(true);
-        return templateResolver;
     }
 }
