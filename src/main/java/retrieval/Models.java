@@ -60,12 +60,18 @@ abstract public class Models {
     }
 
     private static HashMap<String, Integer> parseDocumentIndexFile(String path) {
+        System.out.println("Parsing document index file");
         HashMap<String, Integer> docMap = new HashMap<>();
         File index = new File(path);
 
         try {
-            Files.readLines(index, Charset.defaultCharset())
-                .forEach(entry -> docMap.put(entry.split("\t")[0], Integer.parseInt(entry.split("\t")[1])));
+            BufferedReader reader = new BufferedReader(new FileReader(index));
+            String line;
+            while((line = reader.readLine()) != null) {
+                String [] entry = line.trim().split("\t");
+                docMap.put(entry[0], Integer.parseInt(entry[1]));
+            }
+            reader.close();
         } catch (IOException e) {
             e.printStackTrace();
             throw new RuntimeException(e);
@@ -74,6 +80,7 @@ abstract public class Models {
     }
 
     private static HashMap<String, Entry> parseTokenIndexFile() {
+        System.out.println("Parsing token index file");
         try {
             HashMap<String, Entry> terms = new HashMap<>();
             File index = new File(INDICIES_PATH);
@@ -105,6 +112,7 @@ abstract public class Models {
     }
 
     private static HashMap<String, String> parseDocNumMap() {
+        System.out.println("Parsing doc num map");
         HashMap<String, String> siMap = new HashMap<>();
         File f = new File(DOCNUMMAPPATH);
         try {
