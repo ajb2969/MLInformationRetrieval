@@ -4,21 +4,14 @@ import retrieval.Models;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import indexer.Index;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
-import org.thymeleaf.TemplateEngine;
-import org.thymeleaf.templatemode.TemplateMode;
-import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
-import org.thymeleaf.templateresolver.ITemplateResolver;
 import retrieval.Pooling;
 import retrieval.Similarity;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -169,12 +162,10 @@ public class QueryController {
     @ResponseBody
     public FileSystemResource getDocument(@RequestParam(required = true) String doc, Model model) {
         //TODO replace all links in document with th:href
-<<<<<<< HEAD
         if(!doc.contains(".html")) {
             doc += ".html";
         }
-=======
->>>>>>> 45218c832924cd7d54fa6e0546320da3192355ab
+
         return new FileSystemResource(htmlDocumentsPath + doc);
     }
 
