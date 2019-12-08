@@ -11,24 +11,28 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public class Index {
-    public static String docs_file_path = "documents/";
-    public static String output_dir = "indicies/doc-index.tsv";
-    public static String docSize = "indicies/doc-size-index.tsv";
-    public static String tokenPositionsFile = "indicies/token-pos.tsv";
+    public static String DOC_DIRECTORY = "documents/";
+    public static String TOKEN_INDEX_PATH = "indicies/doc-index.tsv";
+    public static String DOCUMENT_SIZE_PATH = "indicies/doc-size-index.tsv";
+    public static String TOKEN_POSITION_PATH = "indicies/token-pos.tsv";
 
-    private static void document_level(){
+    public static void main(String[] args) {
+        File[] files = new File(DOC_DIRECTORY).listFiles();
+        createIndices(files);
+    }
+
+    private static void createIndices(File[] files){
+        createDocumentSizeIndex(files);
+        createTokenIndex(files);
+        createTokenPositionIndex(files);
+    }
+
+    private static void createTokenIndex(File[] files) {
+        System.out.println("Creating Token index file");
         // Map of Filename -> <word, occurrences in file>
-        HashMap<String, Map<String, Integer>> doc_index = new HashMap<>();
-        // Map of Token -> File -> [positions in which the word occurs]
-        HashMap<String, Integer> totalTokens = new HashMap<>();
-        HashMap<String, HashMap<String, ArrayList<Integer>>> tokenPositions = new HashMap<>();
-        File[] files = new File(docs_file_path).listFiles();
-        // brackets, parenthesis, colons, periods, commas, html tags, split on
-        // spaces, remove new-line
-        // TODO do in parallel
+        HashMap<String, Map<String, Integer>> fileToWordAndOccurrences = new HashMap<>();
         for (File f : files) {
             try {
-                AtomicInteger sum = new AtomicInteger();
                 BufferedReader br = new BufferedReader(new FileReader(f));
                 String line;
                 Map<String, Integer> wordOccurrences = Maps.newHashMap();
@@ -37,49 +41,28 @@ public class Index {
 
                     line = line.replaceAll("<[^>]*>", "").replaceAll("\\p" + "{Punct}", "");
                     String[] split = line.split(" ");
-                    Arrays.stream(split).filter(token -> !token.isEmpty() || !token.equals(""))
-                            .map(token -> token.replaceAll("[.,!?:\\[\\]]", "")).map(String::toLowerCase)
-                            .forEach(token -> {
-                                if (tokenPositions.containsKey(token)) {
-                                    HashMap<String, ArrayList<Integer>> temp = tokenPositions.get(token);
-                                    if (temp.containsKey(f.getName())) {
-                                        ArrayList<Integer> positions = temp.get(f.getName());
-                                        positions.add(sum.intValue());
-                                        temp.put(f.getName(), positions);
-                                        tokenPositions.put(token, temp);
-                                    } else {
-                                        ArrayList<Integer> positions = new ArrayList<>();
-                                        positions.add(sum.intValue());
-                                        temp.put(f.getName(), positions);
-                                        tokenPositions.put(token, temp);
-                                    }
-                                } else {
-                                    HashMap<String, ArrayList<Integer>> temp = new HashMap<>();
-                                    ArrayList<Integer> tempPos = new ArrayList<>();
-                                    tempPos.add(sum.intValue());
-                                    temp.put(f.getName(), tempPos);
-                                    tokenPositions.put(token, temp);
-                                }
-                                sum.addAndGet(1);
-                                addOccurrence(token, wordOccurrences);
-                            });
+                    Arrays.stream(split)
+                        .filter(token -> !token.isEmpty())
+                        .map(token -> token.replaceAll("[.,!?:\\[\\]]", ""))
+                        .map(String::toLowerCase)
+                        .forEach(token -> addOccurrence(token, wordOccurrences));
                 }
                 br.close();
-                doc_index.put(f.getName(), wordOccurrences);
-                totalTokens.put(f.getName(), sum.intValue());
+                fileToWordAndOccurrences.put(f.getName(), wordOccurrences);
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("Error extracting word occurrences from file " + f.getName());
+                throw new RuntimeException(e);
             }
         }
 
         // map of token -> files it exists in
         HashMap<String, ArrayList<String>> index = new HashMap<>();
-        for (String file_name : doc_index.keySet()) {
-            for (Entry<String, Integer> wordOccurrenceEntry : doc_index.get(file_name).entrySet()) {
+        for (String filename : fileToWordAndOccurrences.keySet()) {
+            for (Entry<String, Integer> wordOccurrenceEntry : fileToWordAndOccurrences.get(filename).entrySet()) {
                 String token = wordOccurrenceEntry.getKey();
-                String filenameWithOccurrences = file_name + ":" + String.valueOf(wordOccurrenceEntry.getValue());
+                String filenameWithOccurrences = filename + ":" + String.valueOf(wordOccurrenceEntry.getValue());
                 if (!token.equals("")) {
-                    if (index.containsKey(token) && !index.get(token).contains(file_name)) {
+                    if (index.containsKey(token) && !index.get(token).contains(filename)) {
                         ArrayList<String> documents = index.get(token);
                         documents.add(filenameWithOccurrences);
                         index.put(token, documents);
@@ -93,12 +76,92 @@ public class Index {
         }
 
         try {
-            write_index(index);
-            writeSizeIndex(totalTokens);
-            writePositionIndex(tokenPositions);
-            writeEpisodeIndex(totalTokens, docSize);
+            writeTokenIndex(index);
         } catch (IOException e) {
-            System.err.println("Unable to create index file");
+            System.err.println("Unable to create Token index file");
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void createTokenPositionIndex(File[] files) {
+        System.out.println("Creating Token Position index file");
+        // Map of Token -> File -> [positions in which the word occurs]
+        HashMap<String, HashMap<String, ArrayList<Integer>>> tokenPositions = new HashMap<>();
+        for (File f : files) {
+            try {
+                AtomicInteger sum = new AtomicInteger();
+                BufferedReader br = new BufferedReader(new FileReader(f));
+                String line;
+                while ((line = br.readLine()) != null) {
+                    // String [] split = line.split("[.\\[\\]!.:\"?,\s]");
+
+                    line = line.replaceAll("<[^>]*>", "").replaceAll("\\p" + "{Punct}", "");
+                    String[] split = line.split(" ");
+                    Arrays.stream(split)
+                        .filter(token -> !token.isEmpty())
+                        .map(token -> token.replaceAll("[.,!?:\\[\\]]", ""))
+                        .map(String::toLowerCase)
+                        .forEach(token -> {
+                            if (tokenPositions.containsKey(token)) {
+                                HashMap<String, ArrayList<Integer>> temp = tokenPositions.get(token);
+                                if (temp.containsKey(f.getName())) {
+                                    ArrayList<Integer> positions = temp.get(f.getName());
+                                    positions.add(sum.intValue());
+                                    temp.put(f.getName(), positions);
+                                    tokenPositions.put(token, temp);
+                                } else {
+                                    ArrayList<Integer> positions = new ArrayList<>();
+                                    positions.add(sum.intValue());
+                                    temp.put(f.getName(), positions);
+                                    tokenPositions.put(token, temp);
+                                }
+                            } else {
+                                HashMap<String, ArrayList<Integer>> temp = new HashMap<>();
+                                ArrayList<Integer> tempPos = new ArrayList<>();
+                                tempPos.add(sum.intValue());
+                                temp.put(f.getName(), tempPos);
+                                tokenPositions.put(token, temp);
+                            }
+                            sum.addAndGet(1);
+                        });
+                }
+                br.close();
+            } catch (IOException e) {
+                System.err.println("Error extracting token positions from file " + f.getName());
+                throw new RuntimeException(e);
+            }
+        }
+
+        try {
+            writePositionIndex(tokenPositions);
+        } catch (IOException e) {
+            System.err.println("Unable to create Token Positions index");
+            throw new RuntimeException(e);
+        }
+
+    }
+
+    private static void createDocumentSizeIndex(File[] files) {
+        System.out.println("Creating Document Size index file");
+        HashMap<String, Integer> documentToSize = new HashMap<>();
+        try {
+            for (File f : files) {
+                int sum = 0;
+                BufferedReader br = new BufferedReader(new FileReader(f));
+                String line;
+                while ((line = br.readLine()) != null) {
+                    line = line.replaceAll("<[^>]*>", "").replaceAll("\\p" + "{Punct}", "");
+                    sum += Arrays.stream(line.split(" "))
+                        .filter(token -> !token.isEmpty())
+                        .count();
+                }
+                br.close();
+                documentToSize.put(f.getName(), sum);
+            }
+            writeSizeIndex(documentToSize);
+        } catch (IOException e) {
+            System.err.println("Unable to create Document Size index file");
+            throw new RuntimeException(e);
         }
     }
 
@@ -111,8 +174,8 @@ public class Index {
         }
     }
 
-    private static void write_index(HashMap<String, ArrayList<String>> index) throws IOException {
-        File output_file = new File(output_dir);
+    private static void writeTokenIndex(HashMap<String, ArrayList<String>> index) throws IOException {
+        File output_file = new File(TOKEN_INDEX_PATH);
         BufferedWriter bw = new BufferedWriter(new FileWriter(output_file));
         for (String term : index.keySet()) {
             bw.write(term + "\t" + index.get(term).size() + "\t");
@@ -125,19 +188,8 @@ public class Index {
         bw.close();
     }
 
-    private static void writeEpisodeIndex(HashMap<String, Integer> index, String path) throws IOException {
-        File output_file = new File(path);
-        BufferedWriter bw = new BufferedWriter(new FileWriter(output_file));
-        for (String file : index.keySet()) {
-            bw.write(file + "\t" + index.get(file));
-            bw.write("\n");
-            bw.flush();
-        }
-        bw.close();
-    }
-
     private static void writeSizeIndex(HashMap<String, Integer> index) throws IOException {
-        File output_file = new File(docSize);
+        File output_file = new File(DOCUMENT_SIZE_PATH);
         BufferedWriter bw = new BufferedWriter(new FileWriter(output_file));
         for (String file : index.keySet()) {
             bw.write(file + "\t" + index.get(file));
@@ -149,7 +201,7 @@ public class Index {
 
     private static void writePositionIndex(HashMap<String, HashMap<String, ArrayList<Integer>>> tokenPositions)
             throws IOException {
-        File outputFile = new File(tokenPositionsFile);
+        File outputFile = new File(TOKEN_POSITION_PATH);
         BufferedWriter bw = new BufferedWriter(new FileWriter(outputFile));
         for (String token : tokenPositions.keySet()) {
             bw.write(token + "\t");
@@ -170,7 +222,7 @@ public class Index {
 
     public static ArrayList<Integer> readQueryPositions(ArrayList<String> terms, String docName) throws IOException {
 
-        File inputFile = new File(tokenPositionsFile);
+        File inputFile = new File(TOKEN_POSITION_PATH);
         List<String> lines = Files.readAllLines(Paths.get(inputFile.getCanonicalPath()));
         ArrayList<String> selectedLines = new ArrayList<>();
         for (String line : lines) {
@@ -211,9 +263,5 @@ public class Index {
         public ArrayList<Integer> getPositions() {
             return positions;
         }
-    }
-
-    public static void main(String[] args) {
-        document_level();
     }
 }
