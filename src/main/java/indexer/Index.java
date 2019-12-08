@@ -224,11 +224,17 @@ public class Index {
     public static ArrayList<Integer> readQueryPositions(ArrayList<String> terms, String docName) throws IOException {
 
         File inputFile = new File(TOKEN_POSITION_PATH);
+<<<<<<< HEAD
         
         BufferedReader reader = new BufferedReader(new FileReader(new File(Paths.get(inputFile.getCanonicalPath()).toString())));
         ArrayList<String> selectedLines = new ArrayList<>();
         String line;
         while((line = reader.readLine()) != null) {
+=======
+        List<String> lines = Files.readAllLines(Paths.get(inputFile.getCanonicalPath()));
+        ArrayList<String> selectedLines = new ArrayList<>();
+        for (String line : lines) {
+>>>>>>> 45218c832924cd7d54fa6e0546320da3192355ab
             String token = line.split("\t")[0];
             if (terms.stream().map(String::toLowerCase).collect(Collectors.toList()).contains(token)) {
                 selectedLines.add(line);

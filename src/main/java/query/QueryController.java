@@ -169,9 +169,12 @@ public class QueryController {
     @ResponseBody
     public FileSystemResource getDocument(@RequestParam(required = true) String doc, Model model) {
         //TODO replace all links in document with th:href
+<<<<<<< HEAD
         if(!doc.contains(".html")) {
             doc += ".html";
         }
+=======
+>>>>>>> 45218c832924cd7d54fa6e0546320da3192355ab
         return new FileSystemResource(htmlDocumentsPath + doc);
     }
 

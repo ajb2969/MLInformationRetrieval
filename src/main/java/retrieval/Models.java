@@ -60,11 +60,15 @@ abstract public class Models {
     }
 
     private static HashMap<String, Integer> parseDocumentIndexFile(String path) {
+<<<<<<< HEAD
         System.out.println("Parsing document index file");
+=======
+>>>>>>> 45218c832924cd7d54fa6e0546320da3192355ab
         HashMap<String, Integer> docMap = new HashMap<>();
         File index = new File(path);
 
         try {
+<<<<<<< HEAD
             BufferedReader reader = new BufferedReader(new FileReader(index));
             String line;
             while((line = reader.readLine()) != null) {
@@ -72,6 +76,10 @@ abstract public class Models {
                 docMap.put(entry[0], Integer.parseInt(entry[1]));
             }
             reader.close();
+=======
+            Files.readLines(index, Charset.defaultCharset())
+                .forEach(entry -> docMap.put(entry.split("\t")[0], Integer.parseInt(entry.split("\t")[1])));
+>>>>>>> 45218c832924cd7d54fa6e0546320da3192355ab
         } catch (IOException e) {
             e.printStackTrace();
             throw new RuntimeException(e);
@@ -112,7 +120,10 @@ abstract public class Models {
     }
 
     private static HashMap<String, String> parseDocNumMap() {
+<<<<<<< HEAD
         System.out.println("Parsing doc num map");
+=======
+>>>>>>> 45218c832924cd7d54fa6e0546320da3192355ab
         HashMap<String, String> siMap = new HashMap<>();
         File f = new File(DOCNUMMAPPATH);
         try {
