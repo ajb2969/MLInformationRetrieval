@@ -8,23 +8,56 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 abstract public class Models {
-    private static final String indicies_path = Index.output_dir;
-    private static final String FILE_TERM_SIZE_PATH = Index.docSize;
-    private static final String DOCNUMMAPPATH = "indicies/doc-num-map.tsv";
-    static final HashMap<String, Integer> fileTermSize = parseDocumentIndexFile(FILE_TERM_SIZE_PATH);
-    static final HashMap<String, Entry> documents = parse_doc_indicies();
+    static final int RESULT_SET_SIZE = 30;
     public static final HashMap<String, String> HTMLDOCPATHS = parseDocNumMap();
-    static final int DOCUMENTSRETURNED = 30;
-    static final Map<String, Map<String, Integer>> termToFileAndOccurrence = createIndexMap();
+    private static final String INDICIES_PATH = Index.TOKEN_INDEX_PATH;
+    private static final String FILE_TERM_SIZE_PATH = Index.DOCUMENT_SIZE_PATH;
+    private static final String DOCNUMMAPPATH = "indicies/doc-num-map.tsv";
+    private static final HashMap<String, Integer> FILE_TERM_SIZE = parseDocumentIndexFile(FILE_TERM_SIZE_PATH);
+    private static final HashMap<String, Entry> TOKEN_TO_ENTRY = parseTokenIndexFile();
+    private static final Map<String, Map<String, Integer>> TERM_TO_FILE_AND_OCCURRENCE = collapseIndexIntoMaps();
 
     Models() {}
+
+    public abstract ArrayList<Similarity> retrieve(String query);
+
+    static double tfidf(String term, String document) {
+        return occursInDocuments(term) ? termFrequency(term, document) * inverseDocumentFrequency(term) : 0;
+    }
+
+    static Set<String> getAllDocuments() {
+//        ArrayList<String> documents = new ArrayList<>();
+//        for (File f : Objects.requireNonNull(new File(Index.DOC_DIRECTORY).listFiles())) {
+//            documents.add(f.getName());
+//        }
+//        return documents;
+
+        return FILE_TERM_SIZE.keySet();
+    }
+
+    static HashMap<String, Integer> getFileTermSize() {
+        return FILE_TERM_SIZE;
+    }
+
+    static HashMap<String, Entry> getTokenToEntryIndex() {
+        return TOKEN_TO_ENTRY;
+    }
+
+    static boolean occursInDocuments(String term) {
+        return TOKEN_TO_ENTRY.containsKey(term);
+    }
+
+    int getOccurrencesInFile(String term, String filename) {
+        return TERM_TO_FILE_AND_OCCURRENCE.getOrDefault(term, new HashMap<>()).getOrDefault(filename, 0);
+    }
+
+    static String[] extractTerms(String query) {
+        return query.toLowerCase().split("\\s+");
+    }
 
     private static HashMap<String, Integer> parseDocumentIndexFile(String path) {
         HashMap<String, Integer> docMap = new HashMap<>();
@@ -32,7 +65,7 @@ abstract public class Models {
 
         try {
             Files.readLines(index, Charset.defaultCharset())
-                    .forEach(entry -> docMap.put(entry.split("\t")[0], Integer.parseInt(entry.split("\t")[1])));
+                .forEach(entry -> docMap.put(entry.split("\t")[0], Integer.parseInt(entry.split("\t")[1])));
         } catch (IOException e) {
             e.printStackTrace();
             throw new RuntimeException(e);
@@ -40,32 +73,10 @@ abstract public class Models {
         return docMap;
     }
 
-    ArrayList<String> getDocumentList() {
-        ArrayList<String> documents = new ArrayList<>();
-        for (File f : Objects.requireNonNull(new File(Index.docs_file_path).listFiles())) {
-            documents.add(f.getName());
-        }
-        return documents;
-    }
-
-    public static HashMap<String, Entry> get_doc_indicies() {
-        return documents;
-    }
-
-    public static boolean occursInDocuments(String term) {
-        return get_doc_indicies().containsKey(term);
-    }
-
-    public abstract ArrayList<Similarity> retrieve(String query);
-
-    String[] extractTerms(String query) {
-        return query.toLowerCase().split("\\s+");
-    }
-
-    private static HashMap<String, Entry> parse_doc_indicies() {
+    private static HashMap<String, Entry> parseTokenIndexFile() {
         try {
             HashMap<String, Entry> terms = new HashMap<>();
-            File index = new File(indicies_path);
+            File index = new File(INDICIES_PATH);
             BufferedReader br = new BufferedReader(new FileReader(index));
             String line;
 
@@ -107,8 +118,8 @@ abstract public class Models {
         return siMap;
     }
 
-    private static Map<String, Map<String, Integer>> createIndexMap() {
-        return documents.entrySet().stream()
+    private static Map<String, Map<String, Integer>> collapseIndexIntoMaps() {
+        return TOKEN_TO_ENTRY.entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,
                 entry -> convertToMap(entry.getValue())));
@@ -121,12 +132,19 @@ abstract public class Models {
                 FileOccurrence::getOccurrences));
     }
 
-    public static HashMap<String, Integer> getFileTermSize() {
-        return fileTermSize;
+    private static double termFrequency(String term, String document) {
+        int totalTerms = getFileTermSize().get(document);
+        int occurrences = getTokenToEntryIndex().get(term).getFileOccurrences().stream()
+            .filter(e -> e.getFilename().equals(document)).findFirst().orElse(new FileOccurrence("", 0))
+            .getOccurrences();
+
+        return (double) occurrences / totalTerms;
     }
 
-    public int getOccurrencesInFile(String term, String filename) {
-        return termToFileAndOccurrence.getOrDefault(term, new HashMap<>()).getOrDefault(filename, 0);
+    private static double inverseDocumentFrequency(String term) {
+        int totalDocuments = getFileTermSize().keySet().size();
+        int documentsWithTerm = getTokenToEntryIndex().get(term).getSize();
+        return Math.log((double) totalDocuments / documentsWithTerm);
     }
 
     static class Entry {
@@ -138,7 +156,6 @@ abstract public class Models {
             this.fileOccurrences = fileOccurrences;
         }
 
-
         public int getSize() {
             return size;
         }
@@ -147,12 +164,8 @@ abstract public class Models {
             this.size = size;
         }
 
-        public ArrayList<FileOccurrence> getFileOccurrences() {
+        ArrayList<FileOccurrence> getFileOccurrences() {
             return fileOccurrences;
-        }
-
-        public void setFileOccurrences(ArrayList<FileOccurrence> fileOccurrences) {
-            this.fileOccurrences = fileOccurrences;
         }
     }
 }
