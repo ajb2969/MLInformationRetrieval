@@ -30,12 +30,6 @@ abstract public class Models {
     }
 
     static Set<String> getAllDocuments() {
-//        ArrayList<String> documents = new ArrayList<>();
-//        for (File f : Objects.requireNonNull(new File(Index.DOC_DIRECTORY).listFiles())) {
-//            documents.add(f.getName());
-//        }
-//        return documents;
-
         return FILE_TERM_SIZE.keySet();
     }
 
