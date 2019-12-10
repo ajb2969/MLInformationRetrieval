@@ -54,11 +54,12 @@ public class LDA extends Models {
         String[] terms = extractTerms(query);
         ConcurrentHashMap<String, List<Index>> parsedDocs;
         File outputFile = new File(vecModelFilePath);
+        List<String> docTokens;
         if(!outputFile.exists()) {
             List<String> documents = new ArrayList<>(Models.getAllDocuments());
             Collections.sort(documents);
             System.out.println("There are " + documents.size() + " documents");
-            List<String> docTokens = new ArrayList<>(Models.getTokenToEntryIndex().keySet());
+            docTokens = new ArrayList<>(Models.getTokenToEntryIndex().keySet());
             Collections.sort(docTokens);
             System.out.println("There are " + docTokens.size() + " tokens");
         
@@ -96,27 +97,30 @@ public class LDA extends Models {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            //System.out.println("finished parsing vector space index");
-            //SparseMatrix cscMatrix = new SparseMatrix(parsedDocs,Models.getTokenToEntryIndex().keySet().size());
-            //System.out.println("finish building sparse matrix");
             //http://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf
-            double mu = 0.2;
-            HashMap<String, Double> ranking = new HashMap<>();
+            double mu = 1000;
+            HashMap<String, TFSmoothing> ranking = new HashMap<>();
+            int totalCollectionTokens = Models.getDocumentTokenSizes().keySet().stream().mapToInt(key -> Models.getDocumentTokenSizes().get(key)).sum();
             for(String term: terms) {
+                int collectionTermsQuantity = Models.getTermToFileAndOccurrence().get(term).values().stream().reduce(0, Integer::sum);
                 for(String document: parsedDocs.keySet()) {
                     if(!ranking.containsKey(document)) {
-                        ranking.put(document, Models.termFrequency(term, document));
+                        TFSmoothing termTF = Models.termFreqencySmoothing(term, document);
+                        termTF.setMu(mu);
+                        termTF.setSmoothing(collectionTermsQuantity, totalCollectionTokens);
+                        ranking.put(document, termTF);
                     } else {
-                        ranking.put(document, ranking.get(document) * Models.termFrequency(term, document));
+                        
                     }
                 }
             }
 
             return (ArrayList<Similarity>) new ArrayList<>(ranking.keySet()).stream()
-                    .sorted((document1, document2) -> Double.compare(ranking.get(document1), ranking.get(document2)))
+                    .sorted((document1, document2) -> Double.compare(ranking.get(document2).getScore(), ranking.get(document1).getScore()))
                     .limit(RESULT_SET_SIZE)
-                    .map(document -> new Similarity(document, ranking.get(document)))
+                    .map(document -> new Similarity(document, ranking.get(document).getScore()))
                     .collect(Collectors.toList());
+                  
         }
 
         

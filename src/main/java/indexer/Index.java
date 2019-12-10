@@ -189,6 +189,8 @@ public class Index {
         bw.close();
     }
 
+
+
     private static void writeSizeIndex(HashMap<String, Integer> index) throws IOException {
         File output_file = new File(DOCUMENT_SIZE_PATH);
         BufferedWriter bw = new BufferedWriter(new FileWriter(output_file));
