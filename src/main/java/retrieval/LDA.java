@@ -72,6 +72,7 @@ public class LDA extends Models {
             }
             
         } else {
+            
             parsedDocs = new ConcurrentHashMap<>();
             System.out.println("Reading in compressed sparse matrix");
             try {
@@ -87,15 +88,17 @@ public class LDA extends Models {
                     }
                     parsedDocs.put(key, values);
                 }
-                reader.close();
+                reader.close();            
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
             } catch (IOException e) {
                 e.printStackTrace();
             }
             System.out.println("finished parsing vector space index");
+            //http://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf
+            //utilize LSA for dimensional reduction
 
-            
+
             //read in file into hashmap
         }
 
