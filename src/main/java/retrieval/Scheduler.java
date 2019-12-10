@@ -1,6 +1,5 @@
 package retrieval;
 
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -21,13 +20,13 @@ import org.apache.tomcat.jni.Time;
 
 class Scheduler {
     private ExecutorService threadpool;
-    private static Set<String> documents;
+    private static List<String> documents;
     private static ConcurrentHashMap<String, List<LDA.Index>> vectorSpace;
     private List<String> docTokens;
     private static CountDownLatch counter;
     private static BufferedWriter writer;
 
-    Scheduler(Set<String> documents, List<String> docTokens, File file) throws IOException {
+    Scheduler(List<String> documents, List<String> docTokens, File file) throws IOException {
         this.threadpool = new ThreadPoolExecutor(32, 64, Time.APR_MSEC_PER_USEC, TimeUnit.SECONDS,
                 new LinkedBlockingDeque<>());
         Scheduler.documents = documents;

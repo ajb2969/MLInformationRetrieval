@@ -61,14 +61,9 @@ abstract public class Models {
         try {
             BufferedReader reader = new BufferedReader(new FileReader(index));
             String line;
-            int counter = 0;
             while((line = reader.readLine()) != null) {
-                if(counter < 3) {
-                    counter += 1;
-                } else {
-                    String [] entry = line.trim().split("\t");
-                    docMap.put(entry[0], Integer.parseInt(entry[1]));
-                }
+                String [] entry = line.trim().split("\t");
+                docMap.put(entry[0], Integer.parseInt(entry[1]));
             }
             reader.close();
         } catch (IOException e) {
@@ -85,27 +80,22 @@ abstract public class Models {
             File index = new File(INDICIES_PATH);
             BufferedReader br = new BufferedReader(new FileReader(index));
             String line;
-            int counter = 0;
 
             while ((line = br.readLine()) != null) {
-                if(counter < 3) {
-                    counter += 1;
-                } else {
-                    String[] parsed_line = line.split("\t");
-                    String term = parsed_line[0];
-                    int quantity = Integer.parseInt(parsed_line[1]);
-                    ArrayList<FileOccurrence> documents = new ArrayList<>();
-                    for (int i = 2; i < parsed_line.length; i++) {
-                        String[] fileAndOccurrence = parsed_line[i].split(":");
-                        if (fileAndOccurrence.length == 3) {
-                            documents.add(new FileOccurrence(fileAndOccurrence[0] + ":" + fileAndOccurrence[1],
-                                    Integer.valueOf(fileAndOccurrence[2])));
-                        } else {
-                            documents.add(new FileOccurrence(fileAndOccurrence[0], Integer.valueOf(fileAndOccurrence[1])));
-                        }
+                String[] parsed_line = line.split("\t");
+                String term = parsed_line[0];
+                int quantity = Integer.parseInt(parsed_line[1]);
+                ArrayList<FileOccurrence> documents = new ArrayList<>();
+                for (int i = 2; i < parsed_line.length; i++) {
+                    String[] fileAndOccurrence = parsed_line[i].split(":");
+                    if (fileAndOccurrence.length == 3) {
+                        documents.add(new FileOccurrence(fileAndOccurrence[0] + ":" + fileAndOccurrence[1],
+                                Integer.valueOf(fileAndOccurrence[2])));
+                    } else {
+                        documents.add(new FileOccurrence(fileAndOccurrence[0], Integer.valueOf(fileAndOccurrence[1])));
                     }
-                    terms.put(term, new Entry(quantity, documents));
                 }
+                terms.put(term, new Entry(quantity, documents));
             }
             br.close();
             return terms;
@@ -120,7 +110,7 @@ abstract public class Models {
         HashMap<String, String> siMap = new HashMap<>();
         File f = new File(DOCNUMMAPPATH);
         try {
-            Files.readLines(f, Charset.defaultCharset()).subList(3, Files.readLines(f, Charset.defaultCharset()).size()).forEach(line -> {
+            Files.readLines(f, Charset.defaultCharset()).subList(0, Files.readLines(f, Charset.defaultCharset()).size()).forEach(line -> {
                 String[] tokens = line.split("\t");
                 siMap.put(tokens[0].trim(), tokens[1].trim());
             });
@@ -144,7 +134,7 @@ abstract public class Models {
                 FileOccurrence::getOccurrences));
     }
 
-    private static double termFrequency(String term, String document) {
+    static double termFrequency(String term, String document) {
         int totalTerms = getFileTermSize().get(document);
         int occurrences = getTokenToEntryIndex().get(term).getFileOccurrences().stream()
             .filter(e -> e.getFilename().equals(document)).findFirst().orElse(new FileOccurrence("", 0))

@@ -2,7 +2,7 @@ package retrieval;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Set;
+import java.util.HashMap;
 import java.util.List;
 import java.io.BufferedReader;
 import java.io.File;
@@ -10,6 +10,7 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class LDA extends Models {
     final String vecModelFilePath = "indicies/vecSpaceModel.tsv";
@@ -54,7 +55,8 @@ public class LDA extends Models {
         ConcurrentHashMap<String, List<Index>> parsedDocs;
         File outputFile = new File(vecModelFilePath);
         if(!outputFile.exists()) {
-            Set<String> documents = Models.getAllDocuments();
+            List<String> documents = new ArrayList<>(Models.getAllDocuments());
+            Collections.sort(documents);
             System.out.println("There are " + documents.size() + " documents");
             List<String> docTokens = new ArrayList<>(Models.getTokenToEntryIndex().keySet());
             Collections.sort(docTokens);
@@ -94,12 +96,27 @@ public class LDA extends Models {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            System.out.println("finished parsing vector space index");
+            //System.out.println("finished parsing vector space index");
+            //SparseMatrix cscMatrix = new SparseMatrix(parsedDocs,Models.getTokenToEntryIndex().keySet().size());
+            //System.out.println("finish building sparse matrix");
             //http://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf
-            //utilize LSA for dimensional reduction
+            double mu = 0.2;
+            HashMap<String, Double> ranking = new HashMap<>();
+            for(String term: terms) {
+                for(String document: parsedDocs.keySet()) {
+                    if(!ranking.containsKey(document)) {
+                        ranking.put(document, Models.termFrequency(term, document));
+                    } else {
+                        ranking.put(document, ranking.get(document) * Models.termFrequency(term, document));
+                    }
+                }
+            }
 
-
-            //read in file into hashmap
+            return (ArrayList<Similarity>) new ArrayList<>(ranking.keySet()).stream()
+                    .sorted((document1, document2) -> Double.compare(ranking.get(document1), ranking.get(document2)))
+                    .limit(RESULT_SET_SIZE)
+                    .map(document -> new Similarity(document, ranking.get(document)))
+                    .collect(Collectors.toList());
         }
 
         
