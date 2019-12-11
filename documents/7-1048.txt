@@ -1,5 +1,160 @@
-   Live variable analysis      Live variable analysis   In compiler theory , live variable analysis (or simply liveness analysis ) is a classic data-flow analysis performed by compilers to calculate for each program point the variables that may be potentially read before their next write, that is, the variables that are live at the exit from each program point.  Stated simply: a variable is live if it holds a value that may be needed in the future.  Recently , various program analyses such as live variable analysis have been solved using Datalog . The Datalog specifications for such analyses are generally an order of magnitude shorter than their imperative counterparts (e.g. iterative analysis ), and are at least as efficient. 1  Example      L1: b := 3;
+
+
+
+Live variable analysis
+
+
+
+
+Live variable analysis
+
+In compiler theory, live variable analysis (or simply liveness analysis) is a classic data-flow analysis performed by compilers to calculate for each program point the variables that may be potentially read before their next write, that is, the variables that are live at the exit from each program point.
+Stated simply: a variable is live if it holds a value that may be needed in the future.
+Recently , various program analyses such as live variable analysis have been solved using Datalog. The Datalog specifications for such analyses are generally an order of magnitude shorter than their imperative counterparts (e.g. iterative analysis), and are at least as efficient.1
+Example
+
+
+
+
+
+  L1: b := 3;
   L2: c := 5;
   L3: a := f(b + c);
-  goto L1;     The set of live variables at line L3 is { b , c } because both are used in the addition, and thereby the call to f and assignment to a . But the set of live variables at line L1 is only { b } since variable c is updated in L2. The value of variable a is never used. Note that f may be stateful, so the never-live assignment to a can be eliminated, but there is insufficient information to rule on the entirety of L3 .  Expression in terms of dataflow equations  Liveness analysis is a "backwards may" analysis. The analysis is done in a backwards order, and the dataflow confluence operator is set union .  The dataflow equations used for a given basic block s and exiting block f in live variable analysis are the following:      GEN   [  s  ]       GEN   delimited-[]  s     {\mbox{GEN}}[s]   : The set of variables that are used in s before any assignment.      KILL   [  s  ]       KILL   delimited-[]  s     {\mbox{KILL}}[s]   : The set of variables that are assigned a value in s (in many books, KILL (s) is also defined as the set of variables assigned a value in s before any use , but this doesn't change the solution of the dataflow equation):        LIVE   i  n     [  s  ]    =    GEN   [  s  ]    ∪   (     LIVE   o  u  t     [  s  ]    -   KILL   [  s  ]     )           subscript  LIVE    i  n     delimited-[]  s        GEN   delimited-[]  s         subscript  LIVE    o  u  t     delimited-[]  s      KILL   delimited-[]  s        {\mbox{LIVE}}_{in}[s]={\mbox{GEN}}[s]\cup({\mbox{LIVE}}_{out}[s]-{\mbox{KILL}}%
- [s])           LIVE   o  u  t     [   f  i  n  a  l   ]    =  ∅         subscript  LIVE    o  u  t     delimited-[]    f  i  n  a  l        {\mbox{LIVE}}_{out}[final]={\emptyset}           LIVE   o  u  t     [  s  ]    =    ⋃   p  ∈   s  u  c  c   [  S  ]        LIVE   i  n     [  p  ]            subscript  LIVE    o  u  t     delimited-[]  s      subscript     p    s  u  c  c   delimited-[]  S         subscript  LIVE    i  n     delimited-[]  p       {\mbox{LIVE}}_{out}[s]=\bigcup_{p\in succ[S]}{\mbox{LIVE}}_{in}[p]         GEN   [  d  :  y  ←  f   (   x  1   ,  ⋯  ,   x  n   )   ]   =   {   x  1   ,  …  ,   x  n   }      fragments  GEN   fragments  normal-[  d  normal-:  y  normal-←  f   fragments  normal-(   subscript  x  1   normal-,  normal-⋯  normal-,   subscript  x  n   normal-)   normal-]     fragments  normal-{   subscript  x  1   normal-,  normal-…  normal-,   subscript  x  n   normal-}     {\mbox{GEN}}[d:y\leftarrow f(x_{1},\cdots,x_{n})]=\{x_{1},...,x_{n}\}         KILL   [  d  :  y  ←  f   (   x  1   ,  ⋯  ,   x  n   )   ]   =   {  y  }      fragments  KILL   fragments  normal-[  d  normal-:  y  normal-←  f   fragments  normal-(   subscript  x  1   normal-,  normal-⋯  normal-,   subscript  x  n   normal-)   normal-]     fragments  normal-{  y  normal-}     {\mbox{KILL}}[d:y\leftarrow f(x_{1},\cdots,x_{n})]=\{y\}     The in-state of a block is the set of variables that are live at the start of the block. Its out-state is the set of variables that are live at the end of it. The out-state is the union of the in-states of the block's successors. The transfer function of a statement is applied by making the variables that are written dead, then making the variables that are read live.  Second example      // in: {}  b1: a = 3;  b = 5;  d = 4;  x = 100; //x is never being used later thus not in the out set {a,b,d}  if a > b then  // out: {a,b,d}    //union of all (in) successors of b1 => b2: {a,b}, and b3:{b,d}  // in: {a,b}  b2: c = a + b;  d = 2;  // out: {b,d}  // in: {b,d}  b3: endif  c = 4;  return b * d + c;  // out:{}     The in-state of b3 only contains b and d , since c has been written. The out-state of b1 is the union of the in-states of b2 and b3. The definition of c in b2 can be removed, since c is not live immediately after the statement.  Solving the data flow equations starts with initializing all in-states and out-states to the empty set. The work list is initialized by inserting the exit point (b3) in the work list (typical for backward flow). Its computed in-state differs from the previous one, so its predecessors b1 and b2 are inserted and the process continues. The progress is summarized in the table below.      processing   out-state   old in-state   new in-state   work list       b3   {}   {}   {b,d}   (b1,b2)     b1   {b,d}   {}   {}   (b2)     b2   {b,d}   {}   {a,b}   (b1)     b1   {a,b,d}   {}   {}   ()     Note that b1 was entered in the list before b2, which forced processing b1 twice (b1 was re-entered as predecessor of b2). Inserting b2 before b1 would have allowed earlier completion.  Initializing with the empty set is an optimistic initialization: all variables start out as dead. Note that the out-states cannot shrink from one iteration to the next, although the out-state can be smaller than the in-state. This can be seen from the fact that after the first iteration the out-state can only change by a change of the in-state. Since the in-state starts as the empty set, it can only grow in further iterations.  References  "  Category:Compiler optimizations  Category:Data-flow analysis     ↩     
+  goto L1;
+ 
+
+
+
+The set of live variables at line L3 is {b, c} because both are used in the addition, and thereby the call to f and assignment to a. But the set of live variables at line L1 is only {b} since variable c is updated in L2. The value of variable a is never used. Note that f may be stateful, so the never-live assignment to a can be eliminated, but there is insufficient information to rule on the entirety of L3.
+Expression in terms of dataflow equations
+Liveness analysis is a "backwards may" analysis. The analysis is done in a backwards order, and the dataflow confluence operator is set union.
+The dataflow equations used for a given basic block s and exiting block f in live variable analysis are the following:
+
+
+ 
+ : The set of variables that are used in s before any assignment.
+
+
+ 
+ : The set of variables that are assigned a value in s (in many books, KILL (s) is also defined as the set of variables assigned a value in s before any use, but this doesn't change the solution of the dataflow equation):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+The in-state of a block is the set of variables that are live at the start of the block. Its out-state is the set of variables that are live at the end of it. The out-state is the union of the in-states of the block's successors. The transfer function of a statement is applied by making the variables that are written dead, then making the variables that are read live.
+Second example
+
+
+
+
+// in: {}
+b1: a = 3; 
+    b = 5;
+    d = 4;
+    x = 100; //x is never being used later thus not in the out set {a,b,d}
+    if a > b then
+// out: {a,b,d}    //union of all (in) successors of b1 => b2: {a,b}, and b3:{b,d}  
+// in: {a,b}
+b2: c = a + b;
+    d = 2;
+// out: {b,d}
+// in: {b,d}
+b3: endif
+    c = 4;
+    return b * d + c;
+// out:{}
+
+
+
+The in-state of b3 only contains b and d, since c has been written. The out-state of b1 is the union of the in-states of b2 and b3. The definition of c in b2 can be removed, since c is not live immediately after the statement.
+Solving the data flow equations starts with initializing all in-states and out-states to the empty set. The work list is initialized by inserting the exit point (b3) in the work list (typical for backward flow). Its computed in-state differs from the previous one, so its predecessors b1 and b2 are inserted and the process continues. The progress is summarized in the table below.
+
+
+
+
+processing
+
+out-state
+
+old in-state
+
+new in-state
+
+work list
+
+
+
+
+
+b3
+
+{}
+
+{}
+
+{b,d}
+
+(b1,b2)
+
+
+
+b1
+
+{b,d}
+
+{}
+
+{}
+
+(b2)
+
+
+
+b2
+
+{b,d}
+
+{}
+
+{a,b}
+
+(b1)
+
+
+
+b1
+
+{a,b,d}
+
+{}
+
+{}
+
+()
+
+
+
+Note that b1 was entered in the list before b2, which forced processing b1 twice (b1 was re-entered as predecessor of b2). Inserting b2 before b1 would have allowed earlier completion.
+Initializing with the empty set is an optimistic initialization: all variables start out as dead. Note that the out-states cannot shrink from one iteration to the next, although the out-state can be smaller than the in-state. This can be seen from the fact that after the first iteration the out-state can only change by a change of the in-state. Since the in-state starts as the empty set, it can only grow in further iterations.
+References
+"
+Category:Compiler optimizations Category:Data-flow analysis
+
+
+
+↩
+
+
+
+

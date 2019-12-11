@@ -1,3 +1,494 @@
-   Online machine learning      Online machine learning   Online machine learning is used in the case where the data becomes available in a sequential fashion, in order to determine a mapping from the dataset to the corresponding labels. The key difference between online learning and batch learning (or "offline" learning ) techniques, is that in online learning the mapping is updated after the arrival of every new datapoint in a scalable fashion, whereas batch techniques are used when one has access to the entire training dataset at once. Online learning could be used in the case of a process occurring in time, for example the value of a stock given its history and other external factors, in which case the mapping updates as time goes on and we get more and more samples.  Ideally in online learning, the memory needed to store the function remains constant even with added datapoints, since the solution computed at one step is updated when a new datapoint becomes available, after which that datapoint can then be discarded. For many formulations, for example nonlinear kernel methods , true online learning is not possible, though a form of hybrid online learning with recursive algorithms can be used. In this case, the space requirements are no longer guaranteed to be constant since it requires storing all previous datapoints, but the solution may take less time to compute with the addition of a new datapoint, as compared to batch learning techniques.  As in all machine learning problems, the goal of the algorithm is to minimize some performance criteria using a loss function . For example, with stock market prediction the algorithm may attempt to minimize the mean squared error between the predicted and true value of a stock. Another popular performance criterion is to minimize the number of mistakes when dealing with classification problems. In addition to applications of a sequential nature, online learning algorithms are also relevant in applications with huge amounts of data such that traditional learning approaches that use the entire data set in aggregate are computationally infeasible.  A prototypical online supervised learning algorithm  In the setting of supervised learning , or learning from examples, we are interested in learning a function    f  :   X  →  Y      normal-:  f   normal-→  X  Y     f:X\to Y   , where   X   X   X   is thought of as a space of inputs and   Y   Y   Y   as a space of outputs, that predicts well on instances that are drawn from a joint probability distribution    p   (  x  ,  y  )       p   x  y     p(x,y)   on    X  ×  Y      X  Y    X\times Y   . In this setting, we are given a loss function     V  :    Y  ×  Y   →  ℝ      normal-:  V   normal-→    Y  Y   ℝ     V:Y\times Y\to\mathbb{R}   , such that    V   (   f   (  x  )    ,  y  )       V     f  x   y     V(f(x),y)   measures the difference between the predicted value    f   (  x  )       f  x    f(x)   and the true value   y   y   y   . The ideal goal is to select a function    f  ∈  ℋ      f  ℋ    f\in\mathcal{H}   , where   ℋ   ℋ   \mathcal{H}   is a space of functions called a hypothesis space, so as to minimize the expected risk:        I   [  f  ]    =   𝔼   [   V   (   f   (  x  )    ,  y  )    ]    =   ∫   V   (   f   (  x  )    ,  y  )   d  p   (  x  ,  y  )      .          I   delimited-[]  f      𝔼   delimited-[]    V     f  x   y               V     f  x   y   d  p   x  y        I[f]=\mathbb{E}[V(f(x),y)]=\int V(f(x),y)\,dp(x,y)\ .   In reality, the learner never knows the true distribution    p   (  x  ,  y  )       p   x  y     p(x,y)   over instances. Instead, the learner usually has access to a training set of examples     (   x  1   ,   y  1   )   ,  …  ,   (   x  n   ,   y  n   )        subscript  x  1    subscript  y  1    normal-…    subscript  x  n    subscript  y  n      (x_{1},y_{1}),\ldots,(x_{n},y_{n})   that are assumed to have been drawn i.i.d. from the true distribution    p   (  x  ,  y  )       p   x  y     p(x,y)   . A common paradigm in this situation is to estimate a function    f  ^     normal-^  f    \hat{f}   through empirical risk minimization or regularized empirical risk minimization (usually Tikhonov regularization ). The choice of loss function here gives rise to several well-known learning algorithms such as regularized least squares and support vector machines .  The above paradigm is not well-suited to the online learning setting though, as it requires complete a priori knowledge of the entire training set. In the pure online learning approach, the learning algorithm should update a sequence of functions     f  1   ,   f  2   ,  …      subscript  f  1    subscript  f  2   normal-…    f_{1},f_{2},\ldots   in a way such that the function    f   t  +  1      subscript  f    t  1     f_{t+1}   depends only on the previous function    f  t     subscript  f  t    f_{t}   and the next data point    (   x  t   ,   y  t   )      subscript  x  t    subscript  y  t     (x_{t},y_{t})   . This approach has low memory requirements in the sense that it only requires storage of a representation of the current function    f  t     subscript  f  t    f_{t}   and the next data point    (   x  t   ,   y  t   )      subscript  x  t    subscript  y  t     (x_{t},y_{t})   . A related approach that has larger memory requirements allows    f   t  +  1      subscript  f    t  1     f_{t+1}   to depend on    f  t     subscript  f  t    f_{t}   and all previous data points     (   x  1   ,   y  1   )   ,  …  ,   (   x  t   ,   y  t   )        subscript  x  1    subscript  y  1    normal-…    subscript  x  t    subscript  y  t      (x_{1},y_{1}),\ldots,(x_{t},y_{t})   . We focus solely on the former approach here, and we consider both the case where the data is coming from an infinite stream     (   x  1   ,   y  1   )   ,   (   x  2   ,   y  2   )   ,  …       subscript  x  1    subscript  y  1      subscript  x  2    subscript  y  2    normal-…    (x_{1},y_{1}),(x_{2},y_{2}),\ldots   and the case where the data is coming from a finite training set     (   x  1   ,   y  1   )   ,  …  ,   (   x  n   ,   y  n   )        subscript  x  1    subscript  y  1    normal-…    subscript  x  n    subscript  y  n      (x_{1},y_{1}),\ldots,(x_{n},y_{n})   , in which case the online learning algorithm may make multiple passes through the data.  The algorithm and its interpretations  Here we outline a prototypical online learning algorithm in the supervised learning setting and we discuss several interpretations of this algorithm. For simplicity, consider the case where    X  =   ℝ  d       X   superscript  ℝ  d     X=\mathbb{R}^{d}   ,    Y  ⊆  ℝ      Y  ℝ    Y\subseteq\mathbb{R}   , and    ℋ  =   {   ⟨  w  ,  ⋅  ⟩   :   w  ∈   ℝ  d    }       ℋ   conditional-set   w  normal-⋅     w   superscript  ℝ  d       \mathcal{H}=\{\langle w,\cdot\rangle:w\in\mathbb{R}^{d}\}   is the set of all linear functionals from   X   X   X   into   ℝ   ℝ   \mathbb{R}   , i.e. we are working with a linear kernel and functions    f  ∈  ℋ      f  ℋ    f\in\mathcal{H}   can be identified with vectors    w  ∈   ℝ  d       w   superscript  ℝ  d     w\in\mathbb{R}^{d}   . Furthermore, assume that    V   (  ⋅  ,  ⋅  )       V   normal-⋅  normal-⋅     V(\cdot,\cdot)   is a convex, differentiable loss function. An online learning algorithm satisfying the low memory property discussed above consists of the following iteration:        w   t  +  1    ←    w  t   -    γ  t    ∇  V    (   ⟨   w  t   ,   x  t   ⟩   ,   y  t   )      ,     normal-←   subscript  w    t  1       subscript  w  t      subscript  γ  t    normal-∇  V      subscript  w  t    subscript  x  t     subscript  y  t        w_{t+1}\leftarrow w_{t}-\gamma_{t}\nabla V(\langle w_{t},x_{t}\rangle,y_{t})\ ,   where     w  1   ←  0     normal-←   subscript  w  1   0    w_{1}\leftarrow 0   ,     ∇  V    (   ⟨   w  t   ,   x  t   ⟩   ,   y  t   )        normal-∇  V      subscript  w  t    subscript  x  t     subscript  y  t      \nabla V(\langle w_{t},x_{t}\rangle,y_{t})   is the gradient of the loss for the next data point    (   x  t   ,   y  t   )      subscript  x  t    subscript  y  t     (x_{t},y_{t})   evaluated at the current linear functional    w  t     subscript  w  t    w_{t}   , and     γ  t   >  0       subscript  γ  t   0    \gamma_{t}>0   is a step-size parameter. In the case of an infinite stream of data, one can run this iteration, in principle, forever, and in the case of a finite but large set of data, one can consider a single pass or multiple passes (epochs) through the data.  Interestingly enough, the above simple iterative online learning algorithm has three distinct interpretations, each of which has distinct implications about the predictive quality of the sequence of functions     w  1   ,   w  2   ,  …      subscript  w  1    subscript  w  2   normal-…    w_{1},w_{2},\ldots   . The first interpretation considers the above iteration as an instance of the stochastic gradient descent method applied to the problem of minimizing the expected risk    I   [  w  ]       I   delimited-[]  w     I[w]   defined above. 1 Indeed, in the case of an infinite stream of data, since the examples     (   x  1   ,   y  1   )   ,   (   x  2   ,   y  2   )   ,  …       subscript  x  1    subscript  y  1      subscript  x  2    subscript  y  2    normal-…    (x_{1},y_{1}),(x_{2},y_{2}),\ldots   are assumed to be drawn i.i.d. from the distribution    p   (  x  ,  y  )       p   x  y     p(x,y)   , the sequence of gradients of    V   (  ⋅  ,  ⋅  )       V   normal-⋅  normal-⋅     V(\cdot,\cdot)   in the above iteration are an i.i.d. sample of stochastic estimates of the gradient of the expected risk    I   [  w  ]       I   delimited-[]  w     I[w]   and therefore one can apply complexity results for the stochastic gradient descent method to bound the deviation     I   [   w  t   ]    -   I   [   w  ∗   ]          I   delimited-[]   subscript  w  t       I   delimited-[]   superscript  w  normal-∗       I[w_{t}]-I[w^{\ast}]   , where    w  ∗     superscript  w  normal-∗    w^{\ast}   is the minimizer of    I   [  w  ]       I   delimited-[]  w     I[w]   . 2 This interpretation is also valid in the case of a finite training set; although with multiple passes through the data the gradients are no longer independent, still complexity results can be obtained in special cases.  The second interpretation applies to the case of a finite training set and considers the above recursion as an instance of the incremental gradient descent method 3 to minimize the empirical risk:         I  n    [  w  ]    =    1  n     ∑   i  =  1   n    V   (   ⟨  w  ,   x  i   ⟩   ,   y  i   )       .         subscript  I  n    delimited-[]  w        1  n     superscript   subscript     i  1    n     V    w   subscript  x  i     subscript  y  i         I_{n}[w]=\frac{1}{n}\sum_{i=1}^{n}V(\langle w,x_{i}\rangle,y_{i})\ .   Since the gradients of    V   (  ⋅  ,  ⋅  )       V   normal-⋅  normal-⋅     V(\cdot,\cdot)   in the above iteration are also stochastic estimates of the gradient of     I  n    [  w  ]        subscript  I  n    delimited-[]  w     I_{n}[w]   , this interpretation is also related to the stochastic gradient descent method, but applied to minimize the empirical risk as opposed to the expected risk. Since this interpretation concerns the empirical risk and not the expected risk, multiple passes through the data are readily allowed and actually lead to tighter bounds on the deviations      I  n    [   w  t   ]    -    I  n    [   w  n  ∗   ]           subscript  I  n    delimited-[]   subscript  w  t        subscript  I  n    delimited-[]   subscript   superscript  w  normal-∗   n       I_{n}[w_{t}]-I_{n}[w^{\ast}_{n}]   , where    w  n  ∗     subscript   superscript  w  normal-∗   n    w^{\ast}_{n}   is the minimizer of     I  n    [  w  ]        subscript  I  n    delimited-[]  w     I_{n}[w]   .  The third interpretation of the above recursion is distinctly different from the first two and concerns the case of sequential trials discussed above, where the data are potentially not i.i.d. and can perhaps be selected in an adversarial manner. At each step of this process, the learner is given an input    x  t     subscript  x  t    x_{t}   and makes a prediction based on the current linear function    w  t     subscript  w  t    w_{t}   . Only after making this prediction does the learner see the true label    y  t     subscript  y  t    y_{t}   , at which point the learner is allowed to update    w  t     subscript  w  t    w_{t}   to    w   t  +  1      subscript  w    t  1     w_{t+1}   . Since we are not making any distributional assumptions about the data, the goal here is to perform as well as if we could view the entire sequence of examples ahead of time; that is, we would like the sequence of functions     w  1   ,   w  2   ,  …      subscript  w  1    subscript  w  2   normal-…    w_{1},w_{2},\ldots   to have low regret relative to any vector    w  ∗     superscript  w  normal-∗    w^{\ast}   :         R  T    (   w  ∗   )    =     ∑   t  =  1   T    V   (   ⟨   w  t   ,   x  t   ⟩   ,   y  t   )     -    ∑   t  =  1   T    V   (   ⟨   w  ∗   ,   x  t   ⟩   ,   y  t   )       .         subscript  R  T    superscript  w  normal-∗        superscript   subscript     t  1    T     V     subscript  w  t    subscript  x  t     subscript  y  t        superscript   subscript     t  1    T     V     superscript  w  normal-∗    subscript  x  t     subscript  y  t         R_{T}(w^{\ast})=\sum_{t=1}^{T}V(\langle w_{t},x_{t}\rangle,y_{t})-\sum_{t=1}^{%
- T}V(\langle w^{\ast},x_{t}\rangle,y_{t})\ .   In this setting, the above recursion can be considered as an instance of the online gradient descent method for which there are complexity bounds that guarantee    O   (   T   )       O    T     O(\sqrt{T})   regret. 4  It should be noted that although the three interpretations of this algorithm yield complexity bounds in three distinct settings, each bound depends on the choice of step-size sequence    {   γ  t   }      subscript  γ  t     \{\gamma_{t}\}   in a different way, and thus we cannot simultaneously apply the consequences of all three interpretations; we must instead select the step-size sequence in a way that is tailored for the interpretation that is most relevant. Furthermore, the above algorithm and these interpretations can be extended to the case of a nonlinear kernel by simply considering   X   X   X   to be the feature space associated with the kernel. Although in this case the memory requirements at each iteration are no longer    O   (  d  )       O  d    O(d)   , but are rather on the order of the number of data points considered so far.  Example: Complexity in the Case of Linear Least Squares  Batch Learning  Let us consider the setting of supervised learning with the square loss function     V   (   ⟨  w  ,   x  i   ⟩   ,   y  i   )    =    (     x  i  T   w   -   y  i    )   2         V    w   subscript  x  i     subscript  y  i      superscript       superscript   subscript  x  i   T   w    subscript  y  i    2     V(\langle w,x_{i}\rangle,y_{i})=(x_{i}^{T}w-y_{i})^{2}   , (     x  i   ∈   ℝ  d        subscript  x  i    superscript  ℝ  d     x_{i}\in\mathbb{R}^{d}   ,     w  i   ∈   ℝ  d        subscript  w  i    superscript  ℝ  d     w_{i}\in\mathbb{R}^{d}   ,     y  i   ∈  ℝ       subscript  y  i   ℝ    y_{i}\in\mathbb{R}   ). The solution after the arrival of every datapoint    {   x  i   ,   y  i   }      subscript  x  i    subscript  y  i     \{x_{i},y_{i}\}   is given by     w  *   =     (    X  T   X   )    -  1     X  T   Y        superscript  w       superscript     superscript  X  T   X     1     superscript  X  T   Y     w^{*}=(X^{T}X)^{-1}X^{T}Y   where   X   X   X   and   Y   Y   Y   is built from the   i   i   i   data points, with   X   X   X   being   i   i   i   -by-   d   d   d   and   Y   Y   Y   being   i   i   i   -by-   1   1   1   . The solution of linear least squares problem is roughly    O   (   i   d  2    )       O    i   superscript  d  2      O(id^{2})   .  If we have   n   n   n   total points in the dataset and we have to recompute the solution after the arrival of every datapoint    i  =   1  ,  …  ,  n       i   1  normal-…  n     i=1,\ldots,n   , we have a total complexity    O   (    n  2    d  2    )       O     superscript  n  2    superscript  d  2      O(n^{2}d^{2})   . Here we assume that the matrix     X  T   X       superscript  X  T   X    X^{T}X   is invertible, otherwise we can proceed in a similar fashion with Tikhonov regularization.  Online Learning  The recursive least squares algorithm considers an online approach to the least squares problem. It can be shown that for suitable initializations of     w  0   ∈   ℝ  d        subscript  w  0    superscript  ℝ  d     w_{0}\in\mathbb{R}^{d}   and     Γ  0   ∈   ℝ   d  x  d         subscript  normal-Γ  0    superscript  ℝ    d  x  d      \Gamma_{0}\in\mathbb{R}^{dxd}   , the solution of the linear least squares problem given in the previous section can be computed by the following iteration:       Γ  i   =    Γ   i  -  1    -     Γ   i  -  1     x  i    x  i  T    Γ   i  -  1      1  +    x  i  T    Γ   i  -  1     x  i            subscript  normal-Γ  i      subscript  normal-Γ    i  1         subscript  normal-Γ    i  1     subscript  x  i    superscript   subscript  x  i   T    subscript  normal-Γ    i  1       1     superscript   subscript  x  i   T    subscript  normal-Γ    i  1     subscript  x  i         \Gamma_{i}=\Gamma_{i-1}-\frac{\Gamma_{i-1}x_{i}x_{i}^{T}\Gamma_{i-1}}{1+x_{i}^%
- {T}\Gamma_{i-1}x_{i}}          w  i   =    w   i  -  1    -    Γ  i    x  i    (     x  i  T    w   i  -  1     -   y  i    )          subscript  w  i      subscript  w    i  1       subscript  normal-Γ  i    subscript  x  i        superscript   subscript  x  i   T    subscript  w    i  1      subscript  y  i        w_{i}=w_{i-1}-\Gamma_{i}x_{i}(x_{i}^{T}w_{i-1}-y_{i})     For the proof, see RLS .  The complexity for   n   n   n   steps of this algorithm is    O   (   n   d  2    )       O    n   superscript  d  2      O(nd^{2})   , which is an order of magnitude faster than the corresponding batch learning complexity. The storage requirements at every step   i   i   i   here are constant at    O   (   d  2   )       O   superscript  d  2     O(d^{2})   , i.e. that of storing the matrix    Γ  i     subscript  normal-Γ  i    \Gamma_{i}   .  Stochastic Gradient Descent  If we now replace     w  i   =    w   i  -  1    -    Γ  i    x  n    (     x  i  T    w   i  -  1     -   y  i    )          subscript  w  i      subscript  w    i  1       subscript  normal-Γ  i    subscript  x  n        superscript   subscript  x  i   T    subscript  w    i  1      subscript  y  i        w_{i}=w_{i-1}-\Gamma_{i}x_{n}(x_{i}^{T}w_{i-1}-y_{i})   by     w  i   =    w   i  -  1    -    γ  i    x  i    (     x  i  T    w   i  -  1     -   y  i    )          subscript  w  i      subscript  w    i  1       subscript  γ  i    subscript  x  i        superscript   subscript  x  i   T    subscript  w    i  1      subscript  y  i        w_{i}=w_{i-1}-\gamma_{i}x_{i}(x_{i}^{T}w_{i-1}-y_{i})   (i.e. replacing     Γ  i   ∈   ℝ   d  ×  d         subscript  normal-Γ  i    superscript  ℝ    d  d      \Gamma_{i}\in\mathbb{R}^{d\times d}   by     γ  i   ∈  ℝ       subscript  γ  i   ℝ    \gamma_{i}\in\mathbb{R}   ), we have a stochastic gradient descent algorithm. In this case, the complexity for   n   n   n   steps of this algorithm reduces to    O   (   n  d   )       O    n  d     O(nd)   . The storage requirements at every step   i   i   i   are constant at    O   (  d  )       O  d    O(d)   .  However, the stepsize    γ  i     subscript  γ  i    \gamma_{i}   needs to be chosen carefully to solve the expected risk minimization problem, as detailed above.  Books with substantial treatment of online machine learning   Algorithmic Learning in a Random World by Vladimir Vovk, Alex Gammerman, and Glenn Shafer. Published by Springer Science+Business Media, Inc. 2005 ISBN 0-387-00152-2    Prediction, learning, and games by Nicolò Cesa-Bianchi and Gábor Lugosi. Cambridge University Press, 2006 ISBN 0-521-84108-9   See also   Hierarchical temporal memory  k-nearest neighbor algorithm  Lazy learning  Learning Vector Quantization  Offline learning , the opposite model  Online algorithm  Streaming Algorithm  Perceptron  Stochastic gradient descent  Supervised learning   References    External links   http://onlineprediction.net/ , Wiki for On-Line Prediction.   "  Category:Machine learning algorithms     ↩  Stochastic Approximation Algorithms and Applications , Harold J. Kushner and G. George Yin, New York: Springer-Verlag, 1997. ISBN 0-387-94916-X; 2nd ed., titled Stochastic Approximation and Recursive Algorithms and Applications , 2003, ISBN 0-387-00894-2. ↩  Bertsekas, D. P. (2011). Incremental gradient, subgradient, and proximal methods for convex optimization: a survey. Optimization for Machine Learning, 85. ↩  Shalev-Shwartz, S. (2011). Online learning and online convex optimization. Foundations and Trends in Machine Learning, 4(2), 107-194. ↩     
+
+
+
+Online machine learning
+
+
+
+
+Online machine learning
+
+Online machine learning is used in the case where the data becomes available in a sequential fashion, in order to determine a mapping from the dataset to the corresponding labels. The key difference between online learning and batch learning (or "offline" learning) techniques, is that in online learning the mapping is updated after the arrival of every new datapoint in a scalable fashion, whereas batch techniques are used when one has access to the entire training dataset at once. Online learning could be used in the case of a process occurring in time, for example the value of a stock given its history and other external factors, in which case the mapping updates as time goes on and we get more and more samples.
+Ideally in online learning, the memory needed to store the function remains constant even with added datapoints, since the solution computed at one step is updated when a new datapoint becomes available, after which that datapoint can then be discarded. For many formulations, for example nonlinear kernel methods, true online learning is not possible, though a form of hybrid online learning with recursive algorithms can be used. In this case, the space requirements are no longer guaranteed to be constant since it requires storing all previous datapoints, but the solution may take less time to compute with the addition of a new datapoint, as compared to batch learning techniques.
+As in all machine learning problems, the goal of the algorithm is to minimize some performance criteria using a loss function. For example, with stock market prediction the algorithm may attempt to minimize the mean squared error between the predicted and true value of a stock. Another popular performance criterion is to minimize the number of mistakes when dealing with classification problems. In addition to applications of a sequential nature, online learning algorithms are also relevant in applications with huge amounts of data such that traditional learning approaches that use the entire data set in aggregate are computationally infeasible.
+A prototypical online supervised learning algorithm
+In the setting of supervised learning, or learning from examples, we are interested in learning a function 
+ 
+ 
+ 
+ , where 
+ 
+ 
+ 
+  is thought of as a space of inputs and 
+ 
+ 
+ 
+  as a space of outputs, that predicts well on instances that are drawn from a joint probability distribution 
+ 
+ 
+ 
+  on 
+ 
+ 
+ 
+ . In this setting, we are given a loss function
+
+ 
+ , such that 
+ 
+ 
+ 
+  measures the difference between the predicted value 
+ 
+ 
+ 
+  and the true value 
+ 
+ 
+ 
+ . The ideal goal is to select a function 
+ 
+ 
+ 
+ , where 
+ 
+ 
+ 
+  is a space of functions called a hypothesis space, so as to minimize the expected risk:
+
+
+ 
+  In reality, the learner never knows the true distribution 
+ 
+ 
+ 
+  over instances. Instead, the learner usually has access to a training set of examples 
+ 
+ 
+ 
+  that are assumed to have been drawn i.i.d. from the true distribution 
+ 
+ 
+ 
+ . A common paradigm in this situation is to estimate a function 
+ 
+ 
+ 
+  through empirical risk minimization or regularized empirical risk minimization (usually Tikhonov regularization). The choice of loss function here gives rise to several well-known learning algorithms such as regularized least squares and support vector machines.
+The above paradigm is not well-suited to the online learning setting though, as it requires complete a priori knowledge of the entire training set. In the pure online learning approach, the learning algorithm should update a sequence of functions 
+ 
+ 
+ 
+  in a way such that the function 
+ 
+ 
+ 
+  depends only on the previous function 
+ 
+ 
+ 
+  and the next data point 
+ 
+ 
+ 
+ . This approach has low memory requirements in the sense that it only requires storage of a representation of the current function 
+ 
+ 
+ 
+  and the next data point 
+ 
+ 
+ 
+ . A related approach that has larger memory requirements allows 
+ 
+ 
+ 
+  to depend on 
+ 
+ 
+ 
+  and all previous data points 
+ 
+ 
+ 
+ . We focus solely on the former approach here, and we consider both the case where the data is coming from an infinite stream 
+ 
+ 
+ 
+  and the case where the data is coming from a finite training set 
+ 
+ 
+ 
+ , in which case the online learning algorithm may make multiple passes through the data.
+The algorithm and its interpretations
+Here we outline a prototypical online learning algorithm in the supervised learning setting and we discuss several interpretations of this algorithm. For simplicity, consider the case where 
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+ , and 
+ 
+ 
+ 
+  is the set of all linear functionals from 
+ 
+ 
+ 
+  into 
+ 
+ 
+ 
+ , i.e. we are working with a linear kernel and functions 
+ 
+ 
+ 
+  can be identified with vectors 
+ 
+ 
+ 
+ . Furthermore, assume that 
+ 
+ 
+ 
+  is a convex, differentiable loss function. An online learning algorithm satisfying the low memory property discussed above consists of the following iteration:
+
+
+ 
+  where 
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+  is the gradient of the loss for the next data point 
+ 
+ 
+ 
+  evaluated at the current linear functional 
+ 
+ 
+ 
+ , and 
+ 
+ 
+ 
+  is a step-size parameter. In the case of an infinite stream of data, one can run this iteration, in principle, forever, and in the case of a finite but large set of data, one can consider a single pass or multiple passes (epochs) through the data.
+Interestingly enough, the above simple iterative online learning algorithm has three distinct interpretations, each of which has distinct implications about the predictive quality of the sequence of functions 
+ 
+ 
+ 
+ . The first interpretation considers the above iteration as an instance of the stochastic gradient descent method applied to the problem of minimizing the expected risk 
+ 
+ 
+ 
+  defined above.1 Indeed, in the case of an infinite stream of data, since the examples 
+ 
+ 
+ 
+  are assumed to be drawn i.i.d. from the distribution 
+ 
+ 
+ 
+ , the sequence of gradients of 
+ 
+ 
+ 
+  in the above iteration are an i.i.d. sample of stochastic estimates of the gradient of the expected risk 
+ 
+ 
+ 
+  and therefore one can apply complexity results for the stochastic gradient descent method to bound the deviation 
+ 
+ 
+ 
+ , where 
+ 
+ 
+ 
+  is the minimizer of 
+ 
+ 
+ 
+ .2 This interpretation is also valid in the case of a finite training set; although with multiple passes through the data the gradients are no longer independent, still complexity results can be obtained in special cases.
+The second interpretation applies to the case of a finite training set and considers the above recursion as an instance of the incremental gradient descent method3 to minimize the empirical risk:
+
+
+ 
+  Since the gradients of 
+ 
+ 
+ 
+  in the above iteration are also stochastic estimates of the gradient of 
+ 
+ 
+ 
+ , this interpretation is also related to the stochastic gradient descent method, but applied to minimize the empirical risk as opposed to the expected risk. Since this interpretation concerns the empirical risk and not the expected risk, multiple passes through the data are readily allowed and actually lead to tighter bounds on the deviations 
+ 
+ 
+ 
+ , where 
+ 
+ 
+ 
+  is the minimizer of 
+ 
+ 
+ 
+ .
+The third interpretation of the above recursion is distinctly different from the first two and concerns the case of sequential trials discussed above, where the data are potentially not i.i.d. and can perhaps be selected in an adversarial manner. At each step of this process, the learner is given an input 
+ 
+ 
+ 
+  and makes a prediction based on the current linear function 
+ 
+ 
+ 
+ . Only after making this prediction does the learner see the true label 
+ 
+ 
+ 
+ , at which point the learner is allowed to update 
+ 
+ 
+ 
+  to 
+ 
+ 
+ 
+ . Since we are not making any distributional assumptions about the data, the goal here is to perform as well as if we could view the entire sequence of examples ahead of time; that is, we would like the sequence of functions 
+ 
+ 
+ 
+  to have low regret relative to any vector 
+ 
+ 
+ 
+ :
+
+
+ 
+  In this setting, the above recursion can be considered as an instance of the online gradient descent method for which there are complexity bounds that guarantee 
+ 
+ 
+ 
+  regret.4
+It should be noted that although the three interpretations of this algorithm yield complexity bounds in three distinct settings, each bound depends on the choice of step-size sequence 
+ 
+ 
+ 
+  in a different way, and thus we cannot simultaneously apply the consequences of all three interpretations; we must instead select the step-size sequence in a way that is tailored for the interpretation that is most relevant. Furthermore, the above algorithm and these interpretations can be extended to the case of a nonlinear kernel by simply considering 
+ 
+ 
+ 
+  to be the feature space associated with the kernel. Although in this case the memory requirements at each iteration are no longer 
+ 
+ 
+ 
+ , but are rather on the order of the number of data points considered so far.
+Example: Complexity in the Case of Linear Least Squares
+Batch Learning
+Let us consider the setting of supervised learning with the square loss function 
+ 
+ 
+ 
+ , (
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+ ). The solution after the arrival of every datapoint 
+ 
+ 
+ 
+  is given by 
+ 
+ 
+ 
+  where 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+  is built from the 
+ 
+ 
+ 
+  data points, with 
+ 
+ 
+ 
+  being 
+ 
+ 
+ 
+ -by-
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+  being 
+ 
+ 
+ 
+ -by-
+ 
+ 
+ 
+ . The solution of linear least squares problem is roughly 
+ 
+ 
+ 
+ .
+If we have 
+ 
+ 
+ 
+  total points in the dataset and we have to recompute the solution after the arrival of every datapoint 
+ 
+ 
+ 
+ , we have a total complexity 
+ 
+ 
+ 
+ . Here we assume that the matrix 
+ 
+ 
+ 
+  is invertible, otherwise we can proceed in a similar fashion with Tikhonov regularization.
+Online Learning
+The recursive least squares algorithm considers an online approach to the least squares problem. It can be shown that for suitable initializations of 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+ , the solution of the linear least squares problem given in the previous section can be computed by the following iteration:
+
+
+
+
+
+
+For the proof, see RLS.
+The complexity for 
+ 
+ 
+ 
+  steps of this algorithm is 
+ 
+ 
+ 
+ , which is an order of magnitude faster than the corresponding batch learning complexity. The storage requirements at every step 
+ 
+ 
+ 
+  here are constant at 
+ 
+ 
+ 
+ , i.e. that of storing the matrix 
+ 
+ 
+ 
+ .
+Stochastic Gradient Descent
+If we now replace 
+ 
+ 
+ 
+  by 
+ 
+ 
+ 
+  (i.e. replacing 
+ 
+ 
+ 
+  by 
+ 
+ 
+ 
+ ), we have a stochastic gradient descent algorithm. In this case, the complexity for 
+ 
+ 
+ 
+  steps of this algorithm reduces to 
+ 
+ 
+ 
+ . The storage requirements at every step 
+ 
+ 
+ 
+  are constant at 
+ 
+ 
+ 
+ .
+However, the stepsize 
+ 
+ 
+ 
+  needs to be chosen carefully to solve the expected risk minimization problem, as detailed above.
+Books with substantial treatment of online machine learning
+
+Algorithmic Learning in a Random World by Vladimir Vovk, Alex Gammerman, and Glenn Shafer. Published by Springer Science+Business Media, Inc. 2005 ISBN 0-387-00152-2
+
+
+Prediction, learning, and games by Nicolò Cesa-Bianchi and Gábor Lugosi. Cambridge University Press, 2006 ISBN 0-521-84108-9
+
+See also
+
+Hierarchical temporal memory
+k-nearest neighbor algorithm
+Lazy learning
+Learning Vector Quantization
+Offline learning, the opposite model
+Online algorithm
+Streaming Algorithm
+Perceptron
+Stochastic gradient descent
+Supervised learning
+
+References
+
+
+External links
+
+http://onlineprediction.net/, Wiki for On-Line Prediction.
+
+"
+Category:Machine learning algorithms
+
+
+
+↩
+Stochastic Approximation Algorithms and Applications, Harold J. Kushner and G. George Yin, New York: Springer-Verlag, 1997. ISBN 0-387-94916-X; 2nd ed., titled Stochastic Approximation and Recursive Algorithms and Applications, 2003, ISBN 0-387-00894-2.↩
+Bertsekas, D. P. (2011). Incremental gradient, subgradient, and proximal methods for convex optimization: a survey. Optimization for Machine Learning, 85.↩
+Shalev-Shwartz, S. (2011). Online learning and online convex optimization. Foundations and Trends in Machine Learning, 4(2), 107-194.↩
+
+
+
+

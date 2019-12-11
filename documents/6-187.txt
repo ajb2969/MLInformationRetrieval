@@ -1,6 +1,236 @@
-   Information flow (information theory)      Information flow (information theory)   Information flow in an information theoretical context is the transfer of information from a variable    x   x   x   to a variable   y   y   y   in a given process . Not all flows may be desirable. For example, a system shouldn't leak any secret (partially or not) to public observers.  Introduction  Securing the data manipulated by computing systems has been a challenge in the past years. Several methods to limit the information disclosure exist today, such as access control lists , firewalls , and cryptography . However, although these methods do impose limits on the information that is released by a system, they provide no guarantees about information propagation . 1 For example, access control lists of file systems prevent unauthorized file access, but they do not control how the data is used afterwards. Similarly, cryptography provides a means to exchange information privately across a non-secure channel, but no guarantees about the confidentiality of the data are given once it is decrypted.  In low level information flow analysis, each variable is usually assigned a security level. The basic model comprises two distinct levels: low and high, meaning, respectively, publicly observable information, and secret information. To ensure confidentiality, flowing information from high to low variables should not be allowed. On the other hand, to ensure integrity, flows to high variables should be restricted. 2  More generally, the security levels can be viewed as a lattice with information flowing only upwards in the lattice. 3  For example, considering two security levels   L   L   L   and   H   H   H   (low and high), if    L  ≤  H      L  H    L\leq H   , flows from   L   L   L   to   L   L   L   , from   H   H   H   to   H   H   H   , and   L   L   L   to   H   H   H   would be allowed, while flows from   H   H   H   to   L   L   L   would not. 4  Preliminaries  Throughout this article, the following notation is used:   variable    l  ∈  L      l  L    l\in L   (low) shall denote a publicly observable variable  variable    h  ∈  H      h  H    h\in H   (high) shall denote a secret variable   Where   L   L   L   and   H   H   H   are the only two security levels in the lattice being considered.  Explicit Flows and Side Channels  Information flows can be divided in two major categories. The simplest one is explicit flow, where some secret is explicitly leaked to a publicly observable variable. In the following example, the secret in the variable h flows into the publicly observable variable l .  var l, h  l := h  The other flows fall into the side channel category. For example, in the timing attack or in the power analysis attack , the system leaks information through, respectively, the time or power it takes to perform an action depending on a secret value.  In the following example, the attacker can deduce if the value of h is one or not by the time the program takes to finish:  var l, h  if h = 1 then  (* do some time-consuming work *)  l := 0  Another side channel flow is the implicit information flow, which consists in leakage of information through the program control flow. The following program (implicitly) discloses the value of the secret variable h to the variable l . In this case, since the h variable is boolean, all the bits of the variable of h is disclosed (at the end of the program, l will be 3 if h is true, and 42 otherwise).  var l, h  if h = true then  l := 3  else  l := 42  Non-Interference  Non-interference is a policy that enforces that an attacker should not be able to distinguish two computations from their outputs if they only vary in their secret inputs. However, this policy is too strict to be usable in realistic programs. 5 The classic example is a password checker program that, in order to be useful, needs to disclose some secret information: whether the input password is correct or not (note that the information that an attacker learns in case the program rejects the password is that the attempted password is not the valid one).  Information flow control  A mechanism for information flow control is one that enforces information flow policies. Several methods to enforce information flow policies have been proposed. Run-time mechanisms that tag data with information flow labels have been employed at the operating system level and at the programming language level. Static program analyses have also been developed that ensure information flows within programs are in accordance with policies.  Both static and dynamic analysis for current programming languages have been developed. However, static analysis techniques cannot observe all execution paths, and therefore cannot be both sound and precise. In order to guarantee noninterference, they either terminate executions that might release sensitive information 6 or they ignore updates that might leak information. 7  A prominent way to enforce information flow policies in a program is through a security type system: that is, a type system that enforces security properties. In such a sound type system, if a program type-checks, it meets the flow policy and therefore contains no improper information flows.  Security type system  In a programming language augmented with a security type system every expression carries both a type (such as boolean, or integer) and a security label.  Following is a simple security type system from 8 that enforces non-interference. The notation    ⊢  e  x   p   :  τ     fragments  proves  e  x  p  normal-:  τ    \;\vdash exp\;:\;\tau   means that the expression    e  x  p      e  x  p    exp   has type    τ    τ   \;\tau   . Similarly,     [   s  c   ]   ⊢  C     proves   delimited-[]    s  c    C    [sc]\vdash C   means that the command   C   C   C   is typable in the security context    s  c      s  c    sc   .       [  E  1  -  2  ]   ⊢  e  x  p  :  h  i  g  h    h  ∉   V  a  r  s   (   e  x  p   )      ⊢  e  x   p   :  l  o  w       fragments   fragments  normal-[  E  1   2  normal-]    proves  e  x  p  normal-:  h  i  g  h  italic-      h    V  a  r  s    e  x  p      fragments  proves  e  x  p  normal-:  l  o  w      [E1-2]\quad\vdash exp:high\qquad\frac{h\notin Vars(exp)}{\vdash exp\;:\;low}         [    C  1   -  3   ]    [   s  c   ]    ⊢   𝐬𝐤𝐢𝐩   [   s  c   ]    ⊢    h   :=    e  x  p     ⊢  e  x   p   :  l  o  w     [   l  o  w   ]   ⊢    l   :=   e  x  p             proves    delimited-[]      C  1   3     delimited-[]    s  c      skip   delimited-[]    s  c       proves     assign  h     e  x  p      fragments  proves  e  x  p  normal-:  l  o  w    proves   delimited-[]    l  o  w     assign  l    e  x  p           [C1-3]\quad[sc]\vdash\textbf{skip}\qquad[sc]\vdash h\;:=\;exp\qquad\frac{%
- \vdash exp\;:\;low}{[low]\vdash l\;:=\;exp}        [    C  4   -  5   ]      [   s  c   ]   ⊢    C  1    [   s  c   ]    ⊢   C  2      [   s  c   ]   ⊢     C  1    ;   C  2        ⊢  e  x   p   :  s  c   [  s  c  ]   ⊢  C     [   s  c   ]   ⊢    𝐰𝐡𝐢𝐥𝐞   e  x   p    𝐝𝐨   C         delimited-[]      C  4   5         proves   delimited-[]    s  c      subscript  C  1    delimited-[]    s  c       proves     subscript  C  2      proves   delimited-[]    s  c      subscript  C  1    subscript  C  2         fragments  proves  e  x  p  normal-:  s  c    fragments  normal-[  s  c  normal-]   proves  C    proves   delimited-[]    s  c      while  e  x  p  do  C       [C4-5]\quad\frac{[sc]\vdash C_{1}\quad[sc]\vdash C_{2}}{[sc]\vdash C_{1}\;;\;C%
- _{2}}\qquad\frac{\vdash exp\;:\;sc\quad[sc]\vdash C}{[sc]\vdash\textbf{while}%
- \ exp\ \textbf{do}\ C}        [    C  6   -  7   ]     ⊢  e  x   p   :  s  c   [  s  c  ]   ⊢   C  1    [  s  c  ]   ⊢   C  2      [   s  c   ]   ⊢    𝐢𝐟   e  x   p    𝐭𝐡𝐞𝐧     C  1     𝐞𝐥𝐬𝐞    C  2         [   h  i  g  h   ]   ⊢  C     [   l  o  w   ]   ⊢  C        delimited-[]      C  6   7       fragments  proves  e  x  p  normal-:  s  c    fragments  normal-[  s  c  normal-]   proves   subscript  C  1     fragments  normal-[  s  c  normal-]   proves   subscript  C  2     proves   delimited-[]    s  c      if  e  x  p  then   subscript  C  1   else   subscript  C  2         proves   delimited-[]    h  i  g  h    C    proves   delimited-[]    l  o  w    C      [C6-7]\quad\frac{\vdash exp\;:\;sc\quad[sc]\vdash C_{1}\quad[sc]\vdash C_{2}}{%
- [sc]\vdash\textbf{if}\ exp\ \textbf{then}\ C_{1}\ \textbf{else}\ C_{2}}\qquad%
- \frac{[high]\vdash C}{[low]\vdash C}     Well-typed commands include, for example,       [   l  o  w   ]   ⊢     𝐢𝐟   l   =    42    𝐭𝐡𝐞𝐧    h    :=    3    𝐞𝐥𝐬𝐞    l    :=  0      proves   delimited-[]    l  o  w          if  l     42  then  h     assign      3  else  l     assign    0      [low]\vdash\ \textbf{if}\ l=42\ \textbf{then}\ h\;:=\;3\ \textbf{else}\ l\;:=\;0   .  Conversely, the program        l   :=   0    ;     𝐰𝐡𝐢𝐥𝐞   l   <    h    𝐝𝐨    l    :=   l  +  1       formulae-sequence   assign  l  0         while  l     h  do  l     assign      l  1       l\;:=\;0\ ;\ \textbf{while}\ l   is ill-typed, as it will disclose the value of variable   h   h   h   into   l   l   l   .  Declassification  As shown previously, non-interference policy is too strict for use in most real-world applications. 9 Therefore, several approaches to allow controlled releases of information have been devised. Such approaches are called information declassification.  Robust declassification requires that an active attacker may not manipulate the system in order to learn more secrets than what passive attackers already know. 10  Information declassification constructs can be classified in four orthogonal dimensions: What information is released, Who is authorized to access the information, Where the information is released, and When is the information released. 11  What  A what declassification policy controls which information (partial or not) may be released to a publicly observable variable.  The following code example shows a declassify construct from. 12 In this code, the value of the variable h is explicitly allowed by the programmer to flow into the publicly observable variable l .  var l, h  if l = 1 then  l := declassify (h)  Who  A who declassification policy controls which principals (i.e., who) can access a given piece of information. This kind of policy has been implemented in the Jif compiler. 13  The following example allows Bob to share its secret contained in the variable b with Alice through the commonly accessible variable ab .  var ab (*  {Alice,  Bob}  *)  var b (*  {Bob}  *)  if ab = 1 then  ab := declassify (b, {Alice, Bob}) (*  {Alice,  Bob}  *)  Where  A where declassification policy regulates where the information can be released, for example, by controlling in which lines of the source code information can be released.  The following example makes use of the flow construct proposed in. 14 This construct takes a flow policy (in this case, variables in H are allowed to flow to variables in L) and a command, which is run under the given flow policy.  var l, h  flow H    ≺   precedes   \prec    L in  l := h  When  A when declassification policy regulates when the information can be released. Policies of this kind can be used to verify programs that implement, for example, controlled release of secret information after payment, or encrypted secrets which should not be released in a certain time given polynomial computational power.  Declassification approaches for implicit flows  An implicit flow occurs when code whose conditional execution is based on private information updates a public variable. This is especially problematic when multiple executions are considered since an attacker could leverage the public variable to infer private information by observing how its value changes over time or with the input.  The naïve approach  The naïve approach consists on enforcing the confidentiality property on all variables whose value is affected by other variables. This method leads to partially leaked information due to on some instances of the application a variable is Low and in others High.  No sensitive upgrade  No sensitive upgrade halts the program whenever a High variable affects the value of a Low variable effectively preventing information leakage. Since it simply looks for expressions where an information leakage might happen without looking at the context it may halt a program that despite having potential information leakage it never actually leaks information.  In the following example x is High and y is Low.  var x, y  y := false  if h = true then  y := true  return true  In this case the program would be halted since it uses the value of a High variable to change a Low variable despite the program never leaking information.  Permissive upgrade  Permissive-upgrade introduces an extra security class P which will identify information leaking variables. When a High variable affects the value of a Low variable, the latter is labeled P. If a P labeled variable affects a Low variable the program would be halted. To prevent the halting the Low and P variables should be converted to High using a privatization function to ensure no information leakage can occur. On subsequent instances the program will run without interruption.  Privatization inference  Privatization inference extends permissive upgrade to automatically apply the privatization function to any variable that might leak information. This method should be used during testing where it will convert most variables. Once the program moves into production the permissive-upgrade should be used to halt the program in case of an information leakage and the privatization functions can be updated to prevent subsequent leaks.  Application in Computer Systems  Beyond applications to programming language, information flow control theories have been applied to OS, 15 Distributed Systems 16 and Cloud Computing. 17  References  "  Category:Information theory     Andrei Sabelfeld and Andrew C. Myers. Language-Based Information-Flow Security. IEEE Journal on Selected Areas in Communications, 21(1), Jan. 2003. ↩   Dorothy Denning. A lattice model of secure information flow. Communications of the ACM, 19(5):236-242, 1976. ↩  ↩   Thomas H. Austin and Cormac Flanagan. Efficient purely-dynamic information flow analysis, Proc. of the ACM SIGPLAN Fourth Workshop on Programming Languages and Analysis for Security, ACM, 2009. ↩  J. S. Fenton. Memoryless Subsystems, Comput. J. 17(2): 143-147 (1974) ↩   S. Zdancewic. Challenges for information-flow security. In Workshop on the Programming Language Interference and Dependence (PLID’04) 2004. ↩  Andrei Sabelfeld and David Sands. Dimensions and Principles of Declassification. In Proc. of the IEEE Computer Security Foundations Workshop, 2005. ↩   A. Sabelfeld and A. C. Myers. A model for delimited information release. In Proc. of International Symposium on Software Security (ISSS) 2003. ↩  Jif: Java information flow ↩  A. Almeida Matos and G. Boudol. On declassification and the non-disclosure policy. In Proc. IEEE Computer Security Foundations Workshop 2005. ↩  M. Krohn, A. Yip, M. Brodsky, N. Cliffer, M. Kaashoek, E. Kohler and R. Morris. Information flow control for standard OS abstractions. In ACM Special Interest Group on Operating Systems (SIGOPS) Symposium on Operating systems principles 2007. ↩  N. Zeldovich, S. Boyd-Wickizer and D. Mazieres. Securing Distributed Systems with Information Flow Control. In USENIX Symposium on Networked Systems Design and Implementation 2008. ↩  J. Bacon, D. Eyers, T. Pasquier, J. Singh, I. Papagiannis and P. Pietzuch. Information Flow Control for secure cloud computing. In IEEE Transaction on Network and Service Management 2014. ↩     
+
+
+
+Information flow (information theory)
+
+
+
+
+Information flow (information theory)
+
+Information flow in an information theoretical context is the transfer of information from a variable
+
+ 
+  to a variable 
+ 
+ 
+ 
+  in a given process. Not all flows may be desirable. For example, a system shouldn't leak any secret (partially or not) to public observers.
+Introduction
+Securing the data manipulated by computing systems has been a challenge in the past years. Several methods to limit the information disclosure exist today, such as access control lists, firewalls, and cryptography. However, although these methods do impose limits on the information that is released by a system, they provide no guarantees about information propagation.1 For example, access control lists of file systems prevent unauthorized file access, but they do not control how the data is used afterwards. Similarly, cryptography provides a means to exchange information privately across a non-secure channel, but no guarantees about the confidentiality of the data are given once it is decrypted.
+In low level information flow analysis, each variable is usually assigned a security level. The basic model comprises two distinct levels: low and high, meaning, respectively, publicly observable information, and secret information. To ensure confidentiality, flowing information from high to low variables should not be allowed. On the other hand, to ensure integrity, flows to high variables should be restricted.2
+More generally, the security levels can be viewed as a lattice with information flowing only upwards in the lattice.3
+For example, considering two security levels 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+  (low and high), if 
+ 
+ 
+ 
+ , flows from 
+ 
+ 
+ 
+  to 
+ 
+ 
+ 
+ , from 
+ 
+ 
+ 
+  to 
+ 
+ 
+ 
+ , and 
+ 
+ 
+ 
+  to 
+ 
+ 
+ 
+  would be allowed, while flows from 
+ 
+ 
+ 
+  to 
+ 
+ 
+ 
+  would not.4
+Preliminaries
+Throughout this article, the following notation is used:
+
+variable 
+ 
+ 
+ 
+  (low) shall denote a publicly observable variable
+variable 
+ 
+ 
+ 
+  (high) shall denote a secret variable
+
+Where 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+  are the only two security levels in the lattice being considered.
+Explicit Flows and Side Channels
+Information flows can be divided in two major categories. The simplest one is explicit flow, where some secret is explicitly leaked to a publicly observable variable. In the following example, the secret in the variable h flows into the publicly observable variable l.
+var l, h
+l := h
+The other flows fall into the side channel category. For example, in the timing attack or in the power analysis attack, the system leaks information through, respectively, the time or power it takes to perform an action depending on a secret value.
+In the following example, the attacker can deduce if the value of h is one or not by the time the program takes to finish:
+var l, h
+if h = 1 then
+  (* do some time-consuming work *)
+l := 0
+Another side channel flow is the implicit information flow, which consists in leakage of information through the program control flow. The following program (implicitly) discloses the value of the secret variable h to the variable l. In this case, since the h variable is boolean, all the bits of the variable of h is disclosed (at the end of the program, l will be 3 if h is true, and 42 otherwise).
+var l, h
+if h = true then
+  l := 3
+else
+  l := 42
+Non-Interference
+Non-interference is a policy that enforces that an attacker should not be able to distinguish two computations from their outputs if they only vary in their secret inputs. However, this policy is too strict to be usable in realistic programs.5 The classic example is a password checker program that, in order to be useful, needs to disclose some secret information: whether the input password is correct or not (note that the information that an attacker learns in case the program rejects the password is that the attempted password is not the valid one).
+Information flow control
+A mechanism for information flow control is one that enforces information flow policies. Several methods to enforce information flow policies have been proposed. Run-time mechanisms that tag data with information flow labels have been employed at the operating system level and at the programming language level. Static program analyses have also been developed that ensure information flows within programs are in accordance with policies.
+Both static and dynamic analysis for current programming languages have been developed. However, static analysis techniques cannot observe all execution paths, and therefore cannot be both sound and precise. In order to guarantee noninterference, they either terminate executions that might release sensitive information6 or they ignore updates that might leak information.7
+A prominent way to enforce information flow policies in a program is through a security type system: that is, a type system that enforces security properties. In such a sound type system, if a program type-checks, it meets the flow policy and therefore contains no improper information flows.
+Security type system
+In a programming language augmented with a security type system every expression carries both a type (such as boolean, or integer) and a security label.
+Following is a simple security type system from 8 that enforces non-interference. The notation 
+ 
+ 
+ 
+  means that the expression 
+ 
+ 
+ 
+  has type 
+ 
+ 
+ 
+ . Similarly, 
+ 
+ 
+ 
+  means that the command 
+ 
+ 
+ 
+  is typable in the security context 
+ 
+ 
+ 
+ .
+
+
+
+
+
+
+Well-typed commands include, for example,
+
+
+ 
+ .
+Conversely, the program
+
+
+ 
+  is ill-typed, as it will disclose the value of variable 
+ 
+ 
+ 
+  into 
+ 
+ 
+ 
+ .
+Declassification
+As shown previously, non-interference policy is too strict for use in most real-world applications.9 Therefore, several approaches to allow controlled releases of information have been devised. Such approaches are called information declassification.
+Robust declassification requires that an active attacker may not manipulate the system in order to learn more secrets than what passive attackers already know.10
+Information declassification constructs can be classified in four orthogonal dimensions: What information is released, Who is authorized to access the information, Where the information is released, and When is the information released.11
+What
+A what declassification policy controls which information (partial or not) may be released to a publicly observable variable.
+The following code example shows a declassify construct from.12 In this code, the value of the variable h is explicitly allowed by the programmer to flow into the publicly observable variable l.
+var l, h
+if l = 1 then
+  l := declassify(h)
+Who
+A who declassification policy controls which principals (i.e., who) can access a given piece of information. This kind of policy has been implemented in the Jif compiler.13
+The following example allows Bob to share its secret contained in the variable b with Alice through the commonly accessible variable ab.
+var ab                                (* {Alice, Bob} *)
+var b                                 (* {Bob} *)
+if ab = 1 then
+  ab := declassify(b, {Alice, Bob})   (* {Alice, Bob} *)
+Where
+A where declassification policy regulates where the information can be released, for example, by controlling in which lines of the source code information can be released.
+The following example makes use of the flow construct proposed in.14 This construct takes a flow policy (in this case, variables in H are allowed to flow to variables in L) and a command, which is run under the given flow policy.
+var l, h
+flow H 
+
+ L in
+  l := h
+When
+A when declassification policy regulates when the information can be released. Policies of this kind can be used to verify programs that implement, for example, controlled release of secret information after payment, or encrypted secrets which should not be released in a certain time given polynomial computational power.
+Declassification approaches for implicit flows
+An implicit flow occurs when code whose conditional execution is based on private information updates a public variable. This is especially problematic when multiple executions are considered since an attacker could leverage the public variable to infer private information by observing how its value changes over time or with the input.
+The naïve approach
+The naïve approach consists on enforcing the confidentiality property on all variables whose value is affected by other variables. This method leads to partially leaked information due to on some instances of the application a variable is Low and in others High.
+No sensitive upgrade
+No sensitive upgrade halts the program whenever a High variable affects the value of a Low variable effectively preventing information leakage. Since it simply looks for expressions where an information leakage might happen without looking at the context it may halt a program that despite having potential information leakage it never actually leaks information.
+In the following example x is High and y is Low.
+var x, y
+y := false
+if h = true then
+  y := true
+return true
+In this case the program would be halted since it uses the value of a High variable to change a Low variable despite the program never leaking information.
+Permissive upgrade
+Permissive-upgrade introduces an extra security class P which will identify information leaking variables. When a High variable affects the value of a Low variable, the latter is labeled P. If a P labeled variable affects a Low variable the program would be halted. To prevent the halting the Low and P variables should be converted to High using a privatization function to ensure no information leakage can occur. On subsequent instances the program will run without interruption.
+Privatization inference
+Privatization inference extends permissive upgrade to automatically apply the privatization function to any variable that might leak information. This method should be used during testing where it will convert most variables. Once the program moves into production the permissive-upgrade should be used to halt the program in case of an information leakage and the privatization functions can be updated to prevent subsequent leaks.
+Application in Computer Systems
+Beyond applications to programming language, information flow control theories have been applied to OS,15 Distributed Systems 16 and Cloud Computing.17
+References
+"
+Category:Information theory
+
+
+
+Andrei Sabelfeld and Andrew C. Myers. Language-Based Information-Flow Security. IEEE Journal on Selected Areas in Communications, 21(1), Jan. 2003.↩
+
+Dorothy Denning. A lattice model of secure information flow. Communications of the ACM, 19(5):236-242, 1976.↩
+↩
+
+Thomas H. Austin and Cormac Flanagan. Efficient purely-dynamic information flow analysis, Proc. of the ACM SIGPLAN Fourth Workshop on Programming Languages and Analysis for Security, ACM, 2009.↩
+J. S. Fenton. Memoryless Subsystems, Comput. J. 17(2): 143-147 (1974)↩
+
+S. Zdancewic. Challenges for information-flow security. In Workshop on the Programming Language Interference and Dependence (PLID’04) 2004.↩
+Andrei Sabelfeld and David Sands. Dimensions and Principles of Declassification. In Proc. of the IEEE Computer Security Foundations Workshop, 2005.↩
+
+A. Sabelfeld and A. C. Myers. A model for delimited information release. In Proc. of International Symposium on Software Security (ISSS) 2003.↩
+Jif: Java information flow↩
+A. Almeida Matos and G. Boudol. On declassification and the non-disclosure policy. In Proc. IEEE Computer Security Foundations Workshop 2005.↩
+M. Krohn, A. Yip, M. Brodsky, N. Cliffer, M. Kaashoek, E. Kohler and R. Morris. Information flow control for standard OS abstractions. In ACM Special Interest Group on Operating Systems (SIGOPS) Symposium on Operating systems principles 2007.↩
+N. Zeldovich, S. Boyd-Wickizer and D. Mazieres. Securing Distributed Systems with Information Flow Control. In USENIX Symposium on Networked Systems Design and Implementation 2008.↩
+J. Bacon, D. Eyers, T. Pasquier, J. Singh, I. Papagiannis and P. Pietzuch. Information Flow Control for secure cloud computing. In IEEE Transaction on Network and Service Management 2014.↩
+
+
+
+

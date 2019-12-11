@@ -1,1 +1,234 @@
-   Timestamp-based concurrency control      Timestamp-based concurrency control   In computer science , a timestamp-based concurrency control algorithm is a non-lock concurrency control method. It is used in some databases to safely handle transactions, using timestamps .  Operation  Assumptions   Every timestamp value is unique and accurately represents an instant in time.  No two timestamps can be the same.  A higher-valued timestamp occurs later in time than a lower-valued timestamp.   Generating a Timestamp  A number of different ways have been used to generate timestamp   Use the value of the system's clock at the start of a transaction as the timestamp.  Use a thread-safe shared counter that is incremental at the start of a transaction as the timestamp.  A combination of the above two methods.   Formal  Each transaction (    T  i     subscript  T  i    T_{i}   ) is an ordered list of actions (    A   i  x      subscript  A    i  x     A_{ix}   ). Before the transaction performs its first action (    A   i  1      subscript  A    i  1     A_{i1}   ), it is marked with the current timestamp , or any other strictly totally ordered sequence     T  S   (   T  i   )    =   N  O  W   (  )          T  S   subscript  T  i      N  O  W      TS(T_{i})=NOW()   . Every transaction is also given an initially empty set of transactions upon which it depends,     D  E  P   (   T  i   )    =   [  ]         D  E  P   subscript  T  i       DEP(T_{i})=[]   , and an initially empty set of old objects which it updated,     O  L  D   (   T  i   )    =   [  ]         O  L  D   subscript  T  i       OLD(T_{i})=[]   .  Each object     (   O  j   )     subscript  O  j    (O_{j})   in the database is given two timestamp fields which are not used other than for concurrency control    R  T  S   (   O  j   )       R  T  S   subscript  O  j     RTS(O_{j})   is the time at which the value of object was last used by a transaction,    W  T  S   (   O  j   )       W  T  S   subscript  O  j     WTS(O_{j})   is the time at which the value of the object was last updated by a transaction.  For all    T  i     subscript  T  i    T_{i}   :   For each action    A   i  x      subscript  A    i  x     A_{ix}   :  If    A   i  x      subscript  A    i  x     A_{ix}   wishes to use the value of    O  j     subscript  O  j    O_{j}   :  If     W  T  S   (   O  j   )    >   T  S   (   T  i   )          W  T  S   subscript  O  j      T  S   subscript  T  i      WTS(O_{j})>TS(T_{i})   then abort (a more recent thread has overwritten the value),  Otherwise update the set of dependencies     D  E  P   (   T  i   )    .   add   (   W  T  S   (   O  j   )    )       formulae-sequence    D  E  P   subscript  T  i      add    W  T  S   subscript  O  j       DEP(T_{i}).\mathrm{add}(WTS(O_{j}))   and set     R  T  S   (   O  j   )    =   max   (   R  T  S   (   O  j   )    ,   T  S   (   T  i   )    )          R  T  S   subscript  O  j        R  T  S   subscript  O  j      T  S   subscript  T  i       RTS(O_{j})=\max(RTS(O_{j}),TS(T_{i}))   ;    If    A   i  x      subscript  A    i  x     A_{ix}   wishes to update the value of    O  j     subscript  O  j    O_{j}   :  If     R  T  S   (   O  j   )    >   T  S   (   T  i   )          R  T  S   subscript  O  j      T  S   subscript  T  i      RTS(O_{j})>TS(T_{i})   then abort (a more recent thread is already relying on the old value),  If     W  T  S   (   O  j   )    >   T  S   (   T  i   )          W  T  S   subscript  O  j      T  S   subscript  T  i      WTS(O_{j})>TS(T_{i})   then skip (the Thomas Write Rule ),  Otherwise store the previous values,     O  L  D   (   T  i   )    .   add   (   O  j   ,   W  T  S   (   O  j   )    )       formulae-sequence    O  L  D   subscript  T  i      add    subscript  O  j     W  T  S   subscript  O  j        OLD(T_{i}).\mathrm{add}(O_{j},WTS(O_{j}))   , set     W  T  S   (   O  j   )    =   T  S   (   T  i   )          W  T  S   subscript  O  j      T  S   subscript  T  i      WTS(O_{j})=TS(T_{i})   , and update the value of    O  j     subscript  O  j    O_{j}   .      While there is a transaction in    D  E  P   (   T  i   )       D  E  P   subscript  T  i     DEP(T_{i})   that has not ended: wait   If there is a transaction in    D  E  P   (   T  i   )       D  E  P   subscript  T  i     DEP(T_{i})   that aborted then abort   Otherwise: commit .   To abort :   For each    (   old   O  j    ,   old  W  T  S   (   O  j   )    )       old   subscript  O  j      old  W  T  S   subscript  O  j      (\mathrm{old}O_{j},\mathrm{old}WTS(O_{j}))   in    O  L  D   (   T  i   )       O  L  D   subscript  T  i     OLD(T_{i})     If    W  T  S   (   O  j   )       W  T  S   subscript  O  j     WTS(O_{j})   equals    T  S   (   T  i   )       T  S   subscript  T  i     TS(T_{i})   then restore     O  j   =   old   O  j         subscript  O  j     old   subscript  O  j      O_{j}=\mathrm{old}O_{j}   and     W  T  S   (   O  j   )    =   old  W  T  S   (   O  j   )          W  T  S   subscript  O  j      old  W  T  S   subscript  O  j      WTS(O_{j})=\mathrm{old}WTS(O_{j})        Informal  Whenever a transaction starts, it is given a timestamp. This is so we can tell which order that the transactions are supposed to be applied in. So given two transactions that affect the same object, the transaction that has the earlier timestamp is meant to be applied before the other one. However, if the wrong transaction is actually presented first, it is aborted and must be restarted.  Every object in the database has a read timestamp , which is updated whenever the object's data is read, and a write timestamp , which is updated whenever the object's data is changed.  If a transaction wants to read an object,   but the transaction started before the object's write timestamp it means that something changed the object's data after the transaction started. In this case, the transaction is canceled and must be restarted.  and the transaction started after the object's write timestamp , it means that it is safe to read the object. In this case, if the transaction timestamp is after the object's read timestamp , the read timestamp is set to the transaction timestamp.   If a transaction wants to write to an object,   but the transaction started before the object's read timestamp it means that something has had a look at the object, and we assume it took a copy of the object's data. So we can't write to the object as that would make any copied data invalid, so the transaction is aborted and must be restarted.  and the transaction started before the object's write timestamp it means that something has changed the object since we started our transaction. In this case we use the Thomas Write Rule and simply skip our write operation and continue as normal; the transaction does not have to be aborted or restarted  otherwise, the transaction writes to the object, and the object's write timestamp is set to the transaction's timestamp.   Recoverability  For an explanation of the terms recoverable (RC), avoids cascading aborts (ACA) and strict (ST) see Schedule (computer science) .  Note that timestamp ordering in its basic form does not produce recoverable histories. Consider for example the following history with transactions    T  1     subscript  T  1    T_{1}   and    T  2     subscript  T  2    T_{2}   :       W  1    (  x  )    R  2    (  x  )    W  2    (  y  )     C  2     R  1    (  z  )    C  1        subscript  W  1   x   subscript  R  2   x   subscript  W  2   y   subscript  C  2    subscript  R  1   z   subscript  C  1     W_{1}(x)\;R_{2}(x)\;W_{2}(y)\;C_{2}\;R_{1}(z)\;C_{1}     This could be produced by a TO scheduler, but is not recoverable, as    T  2     subscript  T  2    T_{2}   commits even though having read from an uncomitted transaction. To make sure the it produces recoverable histories, a scheduler can keep a list of other transactions each transaction has read from , and not let a transaction commit before this list consisted of only committed transactions. To avoid cascading aborts, the scheduler could tag data written by uncommitted transactions as dirty , and never let a read operation commence on such a data item before it was untagged. To get a strict history, the scheduler should not allow any operations on dirty items.  Implementation Issues  Timestamp Resolution  This is the minimum time elapsed between two adjacent timestamps. If the resolution of the timestamp is too large (coarse), the possibility of two or more timestamps being equal is increased and thus enabling some transactions to commit out of correct order. For example, assuming that we have a system that can create one hundred unique timestamps per second, and given two events that occur 2 milliseconds apart, they will probably be given the same timestamp even though they actually occurred at different times.  Timestamp Locking  Even though this technique is a non-locking one, in as much as the Object is not locked from concurrent access for the duration of a transaction, the act of recording each timestamp against the Object requires an extremely short duration lock on the Object or its proxy.  See also   Multiversion concurrency control  Timestamping (computing)   "  Category:Concurrency control  Category:Concurrency control algorithms  Category:Transaction processing   
+
+
+
+Timestamp-based concurrency control
+
+
+
+
+Timestamp-based concurrency control
+
+In computer science, a timestamp-based concurrency control algorithm is a non-lock concurrency control method. It is used in some databases to safely handle transactions, using timestamps.
+Operation
+Assumptions
+
+Every timestamp value is unique and accurately represents an instant in time.
+No two timestamps can be the same.
+A higher-valued timestamp occurs later in time than a lower-valued timestamp.
+
+Generating a Timestamp
+A number of different ways have been used to generate timestamp
+
+Use the value of the system's clock at the start of a transaction as the timestamp.
+Use a thread-safe shared counter that is incremental at the start of a transaction as the timestamp.
+A combination of the above two methods.
+
+Formal
+Each transaction (
+ 
+ 
+ 
+ ) is an ordered list of actions (
+ 
+ 
+ 
+ ). Before the transaction performs its first action (
+ 
+ 
+ 
+ ), it is marked with the current timestamp, or any other strictly totally ordered sequence
+ 
+ 
+ 
+ . Every transaction is also given an initially empty set of transactions upon which it depends, 
+ 
+ 
+ 
+ , and an initially empty set of old objects which it updated, 
+ 
+ 
+ 
+ .
+Each object
+
+ 
+  in the database is given two timestamp fields which are not used other than for concurrency control
+ 
+ 
+ 
+  is the time at which the value of object was last used by a transaction, 
+ 
+ 
+ 
+  is the time at which the value of the object was last updated by a transaction.
+For all 
+ 
+ 
+ 
+ :
+
+For each action 
+ 
+ 
+ 
+ :
+ 
+If 
+ 
+ 
+ 
+  wishes to use the value of 
+ 
+ 
+ 
+ :
+ 
+If 
+ 
+ 
+ 
+  then abort (a more recent thread has overwritten the value),
+ 
+Otherwise update the set of dependencies 
+ 
+ 
+ 
+  and set 
+ 
+ 
+ 
+ ;
+ 
+
+
+If 
+ 
+ 
+ 
+  wishes to update the value of 
+ 
+ 
+ 
+ :
+ 
+If 
+ 
+ 
+ 
+  then abort (a more recent thread is already relying on the old value),
+ 
+If 
+ 
+ 
+ 
+  then skip (the Thomas Write Rule),
+ 
+Otherwise store the previous values, 
+ 
+ 
+ 
+ , set 
+ 
+ 
+ 
+ , and update the value of 
+ 
+ 
+ 
+ .
+ 
+
+
+
+
+While there is a transaction in 
+ 
+ 
+ 
+  that has not ended: wait
+
+If there is a transaction in 
+ 
+ 
+ 
+  that aborted then abort
+
+Otherwise: commit.
+ 
+
+To abort:
+
+For each 
+ 
+ 
+ 
+  in 
+ 
+ 
+
+If 
+ 
+ 
+ 
+  equals 
+ 
+ 
+ 
+  then restore 
+ 
+ 
+ 
+  and 
+ 
+ 
+
+
+
+
+Informal
+Whenever a transaction starts, it is given a timestamp. This is so we can tell which order that the transactions are supposed to be applied in. So given two transactions that affect the same object, the transaction that has the earlier timestamp is meant to be applied before the other one. However, if the wrong transaction is actually presented first, it is aborted and must be restarted.
+Every object in the database has a read timestamp, which is updated whenever the object's data is read, and a write timestamp, which is updated whenever the object's data is changed.
+If a transaction wants to read an object,
+
+but the transaction started before the object's write timestamp it means that something changed the object's data after the transaction started. In this case, the transaction is canceled and must be restarted.
+and the transaction started after the object's write timestamp, it means that it is safe to read the object. In this case, if the transaction timestamp is after the object's read timestamp, the read timestamp is set to the transaction timestamp.
+
+If a transaction wants to write to an object,
+
+but the transaction started before the object's read timestamp it means that something has had a look at the object, and we assume it took a copy of the object's data. So we can't write to the object as that would make any copied data invalid, so the transaction is aborted and must be restarted.
+and the transaction started before the object's write timestamp it means that something has changed the object since we started our transaction. In this case we use the Thomas Write Rule and simply skip our write operation and continue as normal; the transaction does not have to be aborted or restarted
+otherwise, the transaction writes to the object, and the object's write timestamp is set to the transaction's timestamp.
+
+Recoverability
+For an explanation of the terms recoverable (RC), avoids cascading aborts (ACA) and strict (ST) see Schedule (computer science).
+Note that timestamp ordering in its basic form does not produce recoverable histories. Consider for example the following history with transactions 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+ :
+
+
+
+This could be produced by a TO scheduler, but is not recoverable, as 
+ 
+ 
+ 
+  commits even though having read from an uncomitted transaction. To make sure the it produces recoverable histories, a scheduler can keep a list of other transactions each transaction has read from, and not let a transaction commit before this list consisted of only committed transactions. To avoid cascading aborts, the scheduler could tag data written by uncommitted transactions as dirty, and never let a read operation commence on such a data item before it was untagged. To get a strict history, the scheduler should not allow any operations on dirty items.
+Implementation Issues
+Timestamp Resolution
+This is the minimum time elapsed between two adjacent timestamps. If the resolution of the timestamp is too large (coarse), the possibility of two or more timestamps being equal is increased and thus enabling some transactions to commit out of correct order. For example, assuming that we have a system that can create one hundred unique timestamps per second, and given two events that occur 2 milliseconds apart, they will probably be given the same timestamp even though they actually occurred at different times.
+Timestamp Locking
+Even though this technique is a non-locking one, in as much as the Object is not locked from concurrent access for the duration of a transaction, the act of recording each timestamp against the Object requires an extremely short duration lock on the Object or its proxy.
+See also
+
+Multiversion concurrency control
+Timestamping (computing)
+
+"
+Category:Concurrency control Category:Concurrency control algorithms Category:Transaction processing
+
+

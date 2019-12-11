@@ -1,2 +1,206 @@
-   Cell lists      Cell lists   Cell lists (also sometimes referred to as cell linked-lists ) are a tool for finding all atom pairs within a given cut-off distance of each other in molecular dynamics simulations. These pairs are needed to compute the short-range non-bonded interactions in a system, such as Van der Waals forces or the short-range part of the electrostatic interaction when using Ewald summation .  Algorithm  Cell lists work by subdividing the simulation domain into cells with an edge length greater than or equal to the cut-off radius of the interaction to be computed. The particles are sorted into these cells and the interactions are computed between particles in the same or neighbouring cells.  In its most basic form, the non-bonded interactions for a cut-off distance    r  c     subscript  r  c    r_{c}   are computed as follows:   for all neighbouring cell pairs    (   C  α   ,   C  β   )      subscript  C  α    subscript  C  β     (C_{\alpha},C_{\beta})    do   for all      p  α   ∈   C  α        subscript  p  α    subscript  C  α     p_{\alpha}\in C_{\alpha}    do   for all      p  β   ∈   C  β        subscript  p  β    subscript  C  β     p_{\beta}\in C_{\beta}    do       r  2   =    ∥    𝐱   [   p  α   ]    -   𝐱   [   p  β   ]     ∥   2  2        superscript  r  2    superscript   subscript   norm      𝐱   delimited-[]   subscript  p  α       𝐱   delimited-[]   subscript  p  β       2   2     r^{2}=\|\mathbf{x}[p_{\alpha}]-\mathbf{x}[p_{\beta}]\|_{2}^{2}      if      r  2   ≤   r  c  2        superscript  r  2    superscript   subscript  r  c   2     r^{2}\leq r_{c}^{2}    then   Compute the interaction between    p  α     subscript  p  α    p_{\alpha}   and    p  β     subscript  p  β    p_{\beta}   .    end if     end for     end for     end for    Since the cell length is at least    r  c     subscript  r  c    r_{c}   in all dimensions, no particles within    r  c     subscript  r  c    r_{c}   of each other can be missed.  Given a simulation with   N   N   N   particles with a homogeneous particle density, the number of cells   m   m   m   is proportional to   N   N   N   and inversely proportional to the cut-off radius (i.e. if   N   N   N   increases, so does the number of cells). The average number of particles per cell     c  ¯   =   N  /  m        normal-¯  c     N  m     \overline{c}=N/m   therefore does not depend on the total number of particles. The cost of interacting two cells is in    𝒪   (    c  ¯   2   )       𝒪   superscript   normal-¯  c   2     \mathcal{O}(\overline{c}^{2})   . The number of cell pairs is proportional to the number of cells which is again proportional to the number of particles   N   N   N   . The total cost of finding all pairwise distances within a given cut-off is in     𝒪   (   N  c   )    ∈   𝒪   (  N  )          𝒪    N  c      𝒪  N     \mathcal{O}(Nc)\in\mathcal{O}(N)   , which is significantly better than computing the    𝒪   (   N  2   )       𝒪   superscript  N  2     \mathcal{O}(N^{2})   pairwise distances naively.  Periodic boundary conditions  In most simulations, periodic boundary conditions are used to avoid imposing artificial boundary conditions. Using cell lists, these boundaries can be implemented in two ways.  Ghost cells  In the ghost cells approach, the simulation box is wrapped in an additional layer of cells. These cells contain periodically wrapped copies of the corresponding simulation cells inside the domain.  Although the data—and usually also the computational cost—is doubled for interactions over the periodic boundary, this approach has the advantage of being straightforward to implement and very easy to parallelize, since cells will only interact with their geographical neighbours.  Periodic wrapping  Instead of creating ghost cells, cell pairs that interact over a periodic boundary can also use a periodic correction vector    𝐪   α  β      subscript  𝐪    α  β     \mathbf{q}_{\alpha\beta}   . This vector, which can be stored or computed for every cell pair    (   C  α   ,   C  β   )      subscript  C  α    subscript  C  β     (C_{\alpha},C_{\beta})   , contains the correction which needs to be applied to "wrap" one cell around the domain to neighbour the other. The pairwise distance between two particles     p  α   ∈   C  α        subscript  p  α    subscript  C  α     p_{\alpha}\in C_{\alpha}   and     p  β   ∈   C  β        subscript  p  β    subscript  C  β     p_{\beta}\in C_{\beta}   is then computed as       r  2   =    ∥    𝐱   [   p  α   ]    -   𝐱   [   p  β   ]    -   𝐪   α  β     ∥   2  2        superscript  r  2    subscript   superscript   norm      𝐱   delimited-[]   subscript  p  α       𝐱   delimited-[]   subscript  p  β      subscript  𝐪    α  β      2   2     r^{2}=\|\mathbf{x}[p_{\alpha}]-\mathbf{x}[p_{\beta}]-\mathbf{q}_{\alpha\beta}%
- \|^{2}_{2}   .  This approach, although more efficient than using ghost cells, is less straightforward to implement (the cell pairs need to be identified over the periodic boundaries and the vector    𝐪   α  β      subscript  𝐪    α  β     \mathbf{q}_{\alpha\beta}   needs to be computed/stored).  Improvements  Despite reducing the computational cost of finding all pairs within a given cut-off distance from    𝒪   (   N  2   )       𝒪   superscript  N  2     \mathcal{O}(N^{2})   to    𝒪   (  N  )       𝒪  N    \mathcal{O}(N)   , the cell list algorithm listed above still has some inefficiencies.  Consider a computational cell with edge length equal to the cut-off radius    r  c     subscript  r  c    r_{c}   . The pairwise distance between all particles in the cell and in one of the neighbouring cells is computed. The cell has 26 neighbours: 6 sharing a common face, 12 sharing a common edge and 8 sharing a common corner. Of all the pairwise distances computed, only about 16% will actually be less than or equal to    r  c     subscript  r  c    r_{c}   . In other words, 84% of all pairwise distance computations are spurious.  One way of overcoming this inefficiency is to partition the domain into cells of edge length smaller than    r  c     subscript  r  c    r_{c}   . The pairwise interactions are then not just computed between neighboring cells, but between all cells within    r  c     subscript  r  c    r_{c}   of each other (first suggested in 1 and implemented and analysed in 2 3 and 4 ). This approach can be taken to the limit wherein each cell holds at most one single particle, therefore reducing the number of spurious pairwise distance evaluations to zero. This gain in efficiency, however, is quickly offset by the number of cells    C  β     subscript  C  β    C_{\beta}   that need to be inspected for every interaction with a cell    C  α     subscript  C  α    C_{\alpha}   , which, for example in three dimensions, grows cubically with the inverse of the cell edge length. Setting the edge length to     r  c   /  2       subscript  r  c   2    r_{c}/2   , however, already reduces the number of spurious distance evaluations to 63%.  Another approach is outlined and tested in Gonnet, 5 in which the particles are first sorted along the axis connecting the cell centers. This approach generates only about 40% spurious pairwise distance computations, yet carries an additional cost due to sorting the particles.  See also   Verlet list   References    "  Category:Molecular dynamics  Category:Computational chemistry  Category:Molecular physics  Category:Computational physics  Category:Numerical differential equations     ↩  ↩  ↩  ↩  ↩     
+
+
+
+Cell lists
+
+
+
+
+Cell lists
+
+Cell lists (also sometimes referred to as cell linked-lists) are a tool for finding all atom pairs within a given cut-off distance of each other in molecular dynamics simulations. These pairs are needed to compute the short-range non-bonded interactions in a system, such as Van der Waals forces or the short-range part of the electrostatic interaction when using Ewald summation.
+Algorithm
+ Cell lists work by subdividing the simulation domain into cells with an edge length greater than or equal to the cut-off radius of the interaction to be computed. The particles are sorted into these cells and the interactions are computed between particles in the same or neighbouring cells.
+In its most basic form, the non-bonded interactions for a cut-off distance 
+ 
+ 
+ 
+  are computed as follows:
+
+for all neighbouring cell pairs 
+ 
+ 
+do
+
+for all
+
+do
+
+for all
+
+do
+
+
+
+
+if
+
+then
+
+Compute the interaction between 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+ .
+ 
+
+
+end if
+
+
+
+end for
+
+
+
+end for
+
+
+
+end for
+
+
+Since the cell length is at least 
+ 
+ 
+ 
+  in all dimensions, no particles within 
+ 
+ 
+ 
+  of each other can be missed.
+Given a simulation with 
+ 
+ 
+ 
+  particles with a homogeneous particle density, the number of cells 
+ 
+ 
+ 
+  is proportional to 
+ 
+ 
+ 
+  and inversely proportional to the cut-off radius (i.e. if 
+ 
+ 
+ 
+  increases, so does the number of cells). The average number of particles per cell 
+ 
+ 
+ 
+  therefore does not depend on the total number of particles. The cost of interacting two cells is in 
+ 
+ 
+ 
+ . The number of cell pairs is proportional to the number of cells which is again proportional to the number of particles 
+ 
+ 
+ 
+ . The total cost of finding all pairwise distances within a given cut-off is in 
+ 
+ 
+ 
+ , which is significantly better than computing the 
+ 
+ 
+ 
+  pairwise distances naively.
+Periodic boundary conditions
+In most simulations, periodic boundary conditions are used to avoid imposing artificial boundary conditions. Using cell lists, these boundaries can be implemented in two ways.
+Ghost cells
+ In the ghost cells approach, the simulation box is wrapped in an additional layer of cells. These cells contain periodically wrapped copies of the corresponding simulation cells inside the domain.
+Although the data—and usually also the computational cost—is doubled for interactions over the periodic boundary, this approach has the advantage of being straightforward to implement and very easy to parallelize, since cells will only interact with their geographical neighbours.
+Periodic wrapping
+Instead of creating ghost cells, cell pairs that interact over a periodic boundary can also use a periodic correction vector 
+ 
+ 
+ 
+ . This vector, which can be stored or computed for every cell pair 
+ 
+ 
+ 
+ , contains the correction which needs to be applied to "wrap" one cell around the domain to neighbour the other. The pairwise distance between two particles 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+  is then computed as
+
+
+ 
+ .
+This approach, although more efficient than using ghost cells, is less straightforward to implement (the cell pairs need to be identified over the periodic boundaries and the vector 
+ 
+ 
+ 
+  needs to be computed/stored).
+Improvements
+Despite reducing the computational cost of finding all pairs within a given cut-off distance from 
+ 
+ 
+ 
+  to 
+ 
+ 
+ 
+ , the cell list algorithm listed above still has some inefficiencies.
+Consider a computational cell with edge length equal to the cut-off radius 
+ 
+ 
+ 
+ . The pairwise distance between all particles in the cell and in one of the neighbouring cells is computed. The cell has 26 neighbours: 6 sharing a common face, 12 sharing a common edge and 8 sharing a common corner. Of all the pairwise distances computed, only about 16% will actually be less than or equal to 
+ 
+ 
+ 
+ . In other words, 84% of all pairwise distance computations are spurious.
+One way of overcoming this inefficiency is to partition the domain into cells of edge length smaller than 
+ 
+ 
+ 
+ . The pairwise interactions are then not just computed between neighboring cells, but between all cells within 
+ 
+ 
+ 
+  of each other (first suggested in 1 and implemented and analysed in 23 and 4). This approach can be taken to the limit wherein each cell holds at most one single particle, therefore reducing the number of spurious pairwise distance evaluations to zero. This gain in efficiency, however, is quickly offset by the number of cells 
+ 
+ 
+ 
+  that need to be inspected for every interaction with a cell 
+ 
+ 
+ 
+ , which, for example in three dimensions, grows cubically with the inverse of the cell edge length. Setting the edge length to 
+ 
+ 
+ 
+ , however, already reduces the number of spurious distance evaluations to 63%.
+Another approach is outlined and tested in Gonnet,5 in which the particles are first sorted along the axis connecting the cell centers. This approach generates only about 40% spurious pairwise distance computations, yet carries an additional cost due to sorting the particles.
+See also
+
+Verlet list
+
+References
+
+
+"
+Category:Molecular dynamics Category:Computational chemistry Category:Molecular physics Category:Computational physics Category:Numerical differential equations
+
+
+
+↩
+↩
+↩
+↩
+↩
+
+
+
+

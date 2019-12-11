@@ -1,4 +1,14 @@
-   Delimited continuation      Delimited continuation  In [[programming language]]s, a '''delimited continuation''', '''composable continuation''' or '''partial continuation''', is a "slice" of a [[continuation]] [[stack frame|frame]] that has been [[Reification (computer science)|reified]] into a [[function (computer science)|function]]. Unlike regular continuations, delimited continuations [[return statement|return]] a value, and thus may be reused and [[function composition (computer science)|composed]].  Control de table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+
+
+
+Delimited continuation
+
+
+
+
+Delimited continuation
+In [[programming language]]s, a '''delimited continuation''', '''composable continuation''' or '''partial continuation''', is a "slice" of a [[continuation]] [[stack frame|frame]] that has been [[Reification (computer science)|reified]] into a [[function (computer science)|function]]. Unlike regular continuations, delimited continuations [[return statement|return]] a value, and thus may be reused and [[function composition (computer science)|composed]].  Control de
+ table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
    margin: 0; padding: 0; vertical-align: baseline; border: none; }
  <style>
  table.sourceCode { width: 100%; line-height: 100%; }
@@ -32,26 +42,117 @@
  code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
  code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
  code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
- code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */    limiters, the basis of delimited continuations, were introduced by Felleisen 1 though early allusions to composable and delimited continuations can be found in Carolyn Talcott 's Stanford 1984 dissertation, Felleisen and Friedman's PARL 1987 paper, 2 and Felleisen's 1987 dissertation. 3  History  Delimited continuations were first introduced by Felleisen in 1988 4 with an operator called   ℱ   ℱ   \mathcal{F}   , first introduced in a tech report in 87, 5 along with a prompt construct   #   normal-#   \#   . The operator was designed to be a generalization of control operators that had been described in the literature such as call/cc from Scheme , ISWIM 's J operator, John C. Reynolds ' escape operator, and others. Subsequently, many competing delimited control operators were invented by the programming languages research community such as prompt & control , 6  shift & reset , 7  cupto , 8  fcontrol , and others.  Examples  Various operators for delimited continuations have been proposed in the research literature. 9  One proposal 10 offers two control operators: shift and reset . The reset operator sets the limit for the continuation while the shift operator captures or reifies the current continuation up to the innermost enclosing reset . For example, consider the following snippet in Scheme :  (* 2 (reset ( +  1 (shift k (k 5 )))))  The reset delimits the continuation that shift captures (named by k in this example). When this snippet is executed, the use of shift will bind k to the continuation (+ 1 []) where [] represents the part of the computation that is to be filled with a value. This directly corresponds to the code that surrounds the shift up to the reset . Since the body of shift (i.e., (k 5) ) immediately invokes the continuation, this code is equivalent to the following:  (* 2 ( +  1  5 ))  In general, these operators can encode more interesting behavior by, for example, returning the captured continuation as a value or invoking it multiple times. The shift operator passes the captured continuation to the code in its body, which can either invoke the continuation, produce it as a result, or ignore it entirely. Whatever result that shift produces is provided to the innermost reset , discarding the continuation in between the reset and shift . However, if the continuation is invoked, then it effectively re-installs the continuation after returning to the reset . When the entire computation within reset is completed, the result is returned by the delimited continuation. 11 For example, in this Scheme code:  (reset (* 2 (shift k CODE)))  whenever CODE invokes (k N) , (* 2 N) is evaluated and returned.  This is equivalent to the following:  ( let ((k ( lambda (x) (* 2 x)))) CODE)  Furthermore, once the entire computation within shift is completed, the continuation is discarded, and execution restarts outside reset . Therefore,  (reset (* 2 (shift k (k (k 4 )))))  invokes (k 4) first (which returns 8), and then (k 8) (which returns 16). At this point, the shift expression has terminated, and the rest of the reset expression is discarded. Therefore, the final result is 16.  Everything that happens outside the reset expression is hidden, i.e. not influenced by the control transfer. For example, this returns 17:  ( +  1 (reset (* 2 (shift k (k (k 4 ))))))  Delimited continuations were first described independently by Felleisen et al. 12 and Johnson. 13 They have since been used in a large number of domains, particularly in defining new control operators ; see Queinnec 14 for a survey.  Let's take a look at a more complicated example. Let null be the empty list:  (reset
-    ( begin (shift k ( cons  1 (k (void)))) ;; (1) null))  Since the context captured by shift consists of (begin [*] null) (where [*] is the hole for parameter injection), the first call of k inside shift evaluates to null , and the body of shift determines the value of the expression, we get (1) as a result.  Making this example more complicated, add a line:  (reset
-    ( begin (shift k ( cons  1 (k (void))))
-      (shift k ( cons  2 (k (void))))
-      null))  If we comment out the first shift , we already know the result, it is (2) ; so we can as well rewrite the expression like this:  (reset
-    ( begin (shift k ( cons  1 (k (void))))
-      ( list  2 )))  This is pretty familiar, and can be rewritten as (cons 1 (list 2)) , that is, (list 1 2) .  We can define yield using this trick:  (define (yield x) (shift k (cons x (k (void)))))  and use it in building lists:  (reset ( begin (yield 1 )
-           (yield 2 )
-           (yield 3 )
-           null)) ;; (list 1 2 3)  If we replace cons with stream-cons , we can build lazy streams:  ( define  (stream-yield x) (shift k (stream-cons x (k (void)))))
+ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+   
+
+
+limiters, the basis of delimited continuations, were introduced by Felleisen1 though early allusions to composable and delimited continuations can be found in Carolyn Talcott's Stanford 1984 dissertation, Felleisen and Friedman's PARL 1987 paper,2 and Felleisen's 1987 dissertation.3
+History
+Delimited continuations were first introduced by Felleisen in 19884 with an operator called 
  
-   ( define lazy-example (reset ( begin (stream-yield 1 )
-             (stream-yield 2 )
-             (stream-yield 3 )
-             stream-null)))  We can generalize this and convert lists to stream, in one fell swoop:  ( define  (list->stream xs)
-    (reset ( begin ( for-each stream-yield xs)
-             stream-null)))  In a more complicated example below the continuation can be safely wrapped into a body of a lambda, and be used as such:  ( define  (for-each->stream-maker for-each ) 
+ 
+ 
+ , first introduced in a tech report in 87,5 along with a prompt construct 
+ 
+ 
+ 
+ . The operator was designed to be a generalization of control operators that had been described in the literature such as call/cc from Scheme, ISWIM's J operator, John C. Reynolds' escape operator, and others. Subsequently, many competing delimited control operators were invented by the programming languages research community such as prompt & control,6 shift & reset,7 cupto,8 fcontrol, and others.
+Examples
+Various operators for delimited continuations have been proposed in the research literature.9
+One proposal10 offers two control operators: shift and reset. The reset operator sets the limit for the continuation while the shift operator captures or reifies the current continuation up to the innermost enclosing reset. For example, consider the following snippet in Scheme:
+(* 2 (reset (+ 1 (shift k (k 5)))))
+The reset delimits the continuation that shift captures (named by k in this example). When this snippet is executed, the use of shift will bind k to the continuation (+ 1 []) where [] represents the part of the computation that is to be filled with a value. This directly corresponds to the code that surrounds the shift up to the reset. Since the body of shift (i.e., (k 5)) immediately invokes the continuation, this code is equivalent to the following:
+(* 2 (+ 1 5))
+In general, these operators can encode more interesting behavior by, for example, returning the captured continuation as a value or invoking it multiple times. The shift operator passes the captured continuation to the code in its body, which can either invoke the continuation, produce it as a result, or ignore it entirely. Whatever result that shift produces is provided to the innermost reset, discarding the continuation in between the reset and shift. However, if the continuation is invoked, then it effectively re-installs the continuation after returning to the reset. When the entire computation within reset is completed, the result is returned by the delimited continuation.11 For example, in this Scheme code:
+ (reset (* 2 (shift k CODE)))
+whenever CODE invokes (k N), (* 2 N) is evaluated and returned.
+This is equivalent to the following:
+  (let ((k (lambda (x) (* 2 x)))) CODE)
+Furthermore, once the entire computation within shift is completed, the continuation is discarded, and execution restarts outside reset. Therefore,
+ (reset (* 2 (shift k (k (k 4)))))
+invokes (k 4) first (which returns 8), and then (k 8) (which returns 16). At this point, the shift expression has terminated, and the rest of the reset expression is discarded. Therefore, the final result is 16.
+Everything that happens outside the reset expression is hidden, i.e. not influenced by the control transfer. For example, this returns 17:
+ (+ 1 (reset (* 2 (shift k (k (k 4))))))
+Delimited continuations were first described independently by Felleisen et al.12 and Johnson.13 They have since been used in a large number of domains, particularly in defining new control operators; see Queinnec14 for a survey.
+Let's take a look at a more complicated example. Let null be the empty list:
+ (reset
+    (begin
+      (shift k (cons 1 (k (void)))) ;; (1)
+      null))
+Since the context captured by shift consists of  (begin [*] null) (where [*] is the hole for parameter injection), the first call of k inside shift evaluates to null, and the body of shift determines the value of the expression, we get (1) as a result.
+Making this example more complicated, add a line:
+ (reset
+    (begin
+      (shift k (cons 1 (k (void))))
+      (shift k (cons 2 (k (void))))
+      null))
+If we comment out the first shift, we already know the result, it is (2); so we can as well rewrite the expression like this:
+ (reset
+    (begin
+      (shift k (cons 1 (k (void))))
+      (list 2)))
+This is pretty familiar, and can be rewritten as (cons 1 (list 2)), that is, (list 1 2).
+We can define yield using this trick:
+(define (yield x) (shift k (cons x (k (void)))))
+and use it in building lists:
+ (reset (begin
+           (yield 1)
+           (yield 2)
+           (yield 3)
+           null))    ;; (list 1 2 3)
+If we replace cons with stream-cons, we can build lazy streams:
+  (define (stream-yield x) (shift k (stream-cons x (k (void)))))
+ 
+   (define lazy-example
+     (reset (begin
+             (stream-yield 1)
+             (stream-yield 2)
+             (stream-yield 3)
+             stream-null)))
+We can generalize this and convert lists to stream, in one fell swoop:
+ (define (list->stream xs)
+    (reset (begin
+             (for-each stream-yield xs)
+             stream-null)))
+In a more complicated example below the continuation can be safely wrapped into a body of a lambda, and be used as such:
+ (define (for-each->stream-maker for-each) 
     (stream-lambda (collection) 
-      (reset ( begin ( for-each ( lambda (element) 
+      (reset (begin 
+               (for-each (lambda (element) 
                            (shift k 
                              (stream-cons element (k 'ignored)))) 
                          collection) 
-               stream-null))))  The part between reset and shift includes control functions like lambda and for-each ; this is impossible to rephrase using lambdas.  Delimited continuations are also useful in linguistics : see Continuations in linguistics for details.  References  External links   Composable continuations tutorial at SchemeWiki  Delimited continuations in operating systems, by Oleg Kiselyov and Chung-chieh Shan  Native delimited continuations in (byte-code and native-code) OCaml  Shift/reset для самых маленьких   Some nice papers on delimited continuations and first-class macros   "  Category:Control flow  Category:Continuations  Category:Articles with example Racket code     ↩  ↩  ↩    ↩   ↩  See for instance the operators offered by the racket/control  Racket library 1 ; the following examples can run in Racket using (require racket/control) ↩  ↩  ↩  ↩  ↩  ↩    
+               stream-null))))
+The part between reset and shift includes control functions like lambda and for-each; this is impossible to rephrase using lambdas.
+Delimited continuations are also useful in linguistics: see Continuations in linguistics for details.
+References
+External links
+
+Composable continuations tutorial at SchemeWiki
+Delimited continuations in operating systems, by Oleg Kiselyov and Chung-chieh Shan
+Native delimited continuations in (byte-code and native-code) OCaml
+Shift/reset для самых маленьких 
+Some nice papers on delimited continuations and first-class macros
+
+"
+Category:Control flow Category:Continuations Category:Articles with example Racket code
+
+
+
+↩
+↩
+↩
+
+
+↩
+
+↩
+See for instance the operators offered by the racket/control Racket library 1; the following examples can run in Racket using (require racket/control)↩
+↩
+↩
+↩
+↩
+↩
+
+
+

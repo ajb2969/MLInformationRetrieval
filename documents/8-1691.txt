@@ -1,1 +1,232 @@
-   Bulk synchronous parallel      Bulk synchronous parallel   The Bulk Synchronous Parallel (BSP) abstract computer is a bridging model for designing parallel algorithms . It serves a purpose similar to the Parallel Random Access Machine (PRAM) model. BSP differs from PRAM by not taking communication and synchronization for granted. An important part of analyzing a BSP algorithm rests on quantifying the synchronization and communication needed.  History  The BSP model was developed by Leslie Valiant of Harvard University during the 1980s. The definitive article 1 was published in 1990.  Between 1990 and 1992, Leslie Valiant and Bill McColl of Oxford University worked on ideas for a distributed memory BSP programming model, in Princeton and at Harvard. Between 1992 and 1997, McColl led a large research team at Oxford that developed various BSP programming libraries, languages and tools, and also numerous massively parallel BSP algorithms. With interest and momentum growing, McColl then led a group from Oxford, Harvard, Florida, Princeton, Bell Labs, Columbia and Utrecht that developed and published the BSPlib Standard for BSP programming in 1996.  Valiant developed an extension to the BSP model in the 2000s, leading to the publication of the Multi-BSP model 2 in 2011.  The model  A BSP computer consists of   components capable of processing and/or local memory transactions (i.e., processors),  a network that routes messages between pairs of such components, and  a hardware facility that allows for the synchronisation of all or a subset of components.   This is commonly interpreted as a set of processors which may follow different threads of computation, with each processor equipped with fast local memory and interconnected by a communication network. A BSP algorithm relies heavily on the third feature; a computation proceeds in a series of global supersteps , which consists of three components:   Concurrent computation : every participating processor may perform local computations, i.e., each process can only make use of values stored in the local fast memory of the processor. The computations occur asynchronously of all the others but may overlap with communication.  Communication : The processes exchange data between themselves to facilitate remote data storage capabilities.  Barrier synchronisation : When a process reaches this point (the barrier ), it waits until all other processes have reached the same barrier.   The computation and communication actions do not have to be ordered in time. Communication typically takes the form of the one-sided put and get Direct Remote Memory Access (DRMA) calls, rather than paired two-sided send and receive message passing calls. The barrier synchronization concludes the superstep: it ensures that all one-sided communications are properly concluded. Systems based on two-sided communication include this synchronisation cost implicitly for every message sent. The method for barrier synchronisation relies on the hardware facility of the BSP computer. In Valiant's original paper, 3 this facility periodically checks if the end of the current superstep is reached globally. The period of this check is denoted by   L   L   L   .  The figure below shows this in a diagrammatic form. The processes are not regarded as having a particular linear order (from left to right or otherwise), and may be mapped to processors in any way.  (Figure)  bsp.wiki.fig1.svg   The BSP model is also well-suited to enable automatic memory management for distributed-memory computing through overdecomposition of the problem and oversubscription of the processors. The computation is divided into more logical processes than there are physical processors, and processes are randomly assigned to processors. This strategy can be shown statistically to lead to almost perfect load balancing, both of work and communication.  Communication  In many parallel programming systems, communications are considered at the level of individual actions: sending and receiving a message, memory to memory transfer, etc. This is difficult to work with, since there are many simultaneous communication actions in a parallel program, and their interactions are typically complex. In particular, it is difficult to say much about the time any single communication action will take to complete.  The BSP model considers communication actions en masse . This has the effect that an upper bound on the time taken to communicate a set of data can be given. BSP considers all communication actions of a superstep as one unit, and assumes all individual messages sent as part of this unit have a fixed size.  The maximum number of incoming or outgoing messages for a superstep is denoted by   h   h   h   . The ability of a communication network to deliver data is captured by a parameter   g   g   g   , defined such that it takes time    h  g      h  g    hg   for a processor to deliver   h   h   h   messages of size 1.  A message of length   m   m   m   obviously takes longer to send than a message of size 1. However, the BSP model does not make a distinction between a message length of   m   m   m   or   m   m   m   messages of length 1. In either case the cost is said to be    m  g      m  g    mg   .  The parameter   g   g   g   is dependent on the following factors:   The protocols used to interact within the communication network.  Buffer management by both the processors and the communication network.  The routing strategy used in the network.  The BSP runtime system.   In practice,   g   g   g   is determined empirically for each parallel computer. Note that   g   g   g   is not the normalised single-word delivery time, but the single-word delivery time under continuous traffic conditions.  Barriers  The one-sided communication of the BSP model requires barrier synchronization . Barriers are potentially costly, but avoid the possibility of deadlock or livelock , since barriers cannot create circular data dependencies. Tools to detect them and deal with them are unnecessary. Barriers also permit novel forms of fault tolerance .  The cost of barrier synchronization is influenced by a couple of issues:   The cost imposed by the variation in the completion time of the participating concurrent computations. Take the example where all but one of the processes have completed their work for this superstep, and are waiting for the last process, which still has a lot of work to complete. The best that an implementation can do is ensure that each process works on roughly the same problem size.  The cost of reaching a globally consistent state in all of the processors. This depends on the communication network, but also on whether there is special-purpose hardware available for synchronizing, and on the way in which interrupts are handled by processors.   The cost of a barrier synchronization is denoted by   l   l   l   . Note that   p   p   p   is determined empirically.  On large computers barriers are expensive, and this is increasingly so on large scales. There is a large body of literature on removing synchronization points from existing algorithms, both in the context of BSP computing and beyond. For example, many algorithms allow for the local detection of the global end of a superstep simply by comparing local information to the number of messages already received. This drives the cost of a global synchronisation, compared to the minimally required latency of communication, to zero. 4 Yet also this minimal latency is expected to increase further for future supercomputer architectures and network interconnects; the BSP model, along with other models for parallel computation, require adaptation to cope with this trend. Multi-BSP 5 is one BSP-based solution.  The Cost of a BSP algorithm  The cost of a superstep is determined as the sum of three terms; the cost of the longest running local computation, the cost of global communication between the processors, and the cost of the barrier synchronisation at the end of the superstep. The cost of one superstep for     m  a   x   i  =  1   p    (   w  i   )    +   m  a   x   i  =  1   p    (    h  i   g   )    +  l        m  a   superscript   subscript  x    i  1    p    subscript  w  i      m  a   superscript   subscript  x    i  1    p      subscript  h  i   g    l    max_{i=1}^{p}(w_{i})+max_{i=1}^{p}(h_{i}g)+l   processors:      w  i     subscript  w  i    w_{i}   where   i   i   i   is the cost for the local computation in process    h  i     subscript  h  i    h_{i}   , and   i   i   i   is the number of messages sent or received by process    w  +   h  g   +  l      w    h  g   l    w+hg+l   . Note that homogeneous processors are assumed here. It is more common for the expression to be written as   w   w   w   where   h   h   h   and     W  +   H  g   +   S  l    =     ∑   s  =  1   S    w  s    +   g    ∑   s  =  1   S    h  s     +   S  l          W    H  g     S  l        superscript   subscript     s  1    S    subscript  w  s      g    superscript   subscript     s  1    S    subscript  h  s       S  l      W+Hg+Sl=\sum_{s=1}^{S}w_{s}+g\sum_{s=1}^{S}h_{s}+Sl   are maxima. The cost of the algorithm then, is the sum of the costs of each superstep.     S   S   S   where   W   W   W   is the number of supersteps.     H   H   H   ,   S   S   S   , and    H  ∈   O   (   n  /  p   )        H    O    n  p      H\in O(n/p)   are usually modelled as functions, that vary with problem size. These three characteristics of a BSP algorithm are usually described in terms of asymptotic notation , e.g. $H \in O(n/p)$ .  Extensions and uses  Interest in BSP has soared in recent years, with Google adopting it as a major technology for graph analytics at massive scale via technologies like Pregel and MapReduce. Also, with the next generation of Hadoop decoupling the MapReduce model from the rest of the Hadoop infrastructure, there are now active open source projects to add explicit BSP programming, as well as other high performance parallel programming models, on top of Hadoop. Examples are Apache Hama 6 and Apache Giraph .  BSP has been extended by many authors to address concerns about BSP's unsuitability for modelling specific architectures or computational paradigms. One example of this is the decomposable BSP model. The model has also been used in the creation of a number of new programming languages and interfaces, such as Bulk Synchronous Parallel ML (BSML), BSPLib, 7  Apache Hama , 8 and Pregel. 9  Notable implementations of the BSPLib standard are the Paderborn University BSP library 10 and the Oxford BSP Toolset by Jonathan Hill. 11 Modern implementations include BSPonMPI 12 (which simulates BSP on top of the Message Passing Interface ), and MulticoreBSP 13 14 (a novel implementation targeting modern shared-memory architectures). MulticoreBSP for C is especially notable for its capability of starting nested BSP runs, thus allowing for explicit Multi-BSP programming.  See also   Computer cluster  Concurrent computing  Concurrency  Dataflow programming  Grid computing  Parallel computing  ScientificPython  LogP machine  Automatic mutual exclusion  Apache Hama  Apache Giraph   References  External links   Collection of papers on BSP by Bill McColl and others. [ http://paloaltodata.com/index.php?option=com_content&view; ;=article&id;=22 BSP Papers]  BSP topic on Quora. Bulk Synchronous Parallel Computing  D.B. Skillicorn, Jonathan Hill, W. F. McColl, Questions and answers about BSP (1996)  BSP Worldwide  BSP related papers   Bulk Synchronous Parallel ML ( official website )  Apache Hama  Apache Giraph  Paderborn University BSP library  BSPonMPI  MulticoreBSP   "  Category:Models of computation  Category:Parallel computing     Leslie G. Valiant, A bridging model for parallel computation, Communications of the ACM, Volume 33 Issue 8, Aug. 1990 1 ↩  Valiant, L. G. (2011). A bridging model for multi-core computing. Journal of Computer and System Sciences, 77(1), 154-166 2 ↩   Alpert, R., & Philbin, J. (1997). cBSP: Zero-cost synchronization in a modified BSP model. NEC Research Institute, 4 Independence Way, Princeton NJ, 8540, [ http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.36.7784&rep; ;=rep1&type;=pdf]. ↩   Apache Hama ↩  BSPlib ↩   Pregel ↩  The Paderborn University BSP (PUB) Library - Design, Implementation and Performance Heinz Nixdorf Institute, Departement of Computer Science, University of Paderborn, Germany, technical report . ↩  Jonathan Hill: The Oxford BSP Toolset , 1998. ↩  Wijnand J. Suijlen: BSPonMPI , 2006. ↩  MulticoreBSP for C: a high-performance library for shared-memory parallel programming by A. N. Yzelman, R. H. Bisseling, D. Roose, and K. Meerbergen in International Journal of Parallel Programming, in press (2013), doi:10.1109/TPDS.2013.31 . ↩  An Object-Oriented Bulk Synchronous Parallel Library for Multicore Programming by A. N. Yzelman & Rob H. Bisseling in Concurrency and Computation: Practice and Experience 24(5), pp. 533-553 (2012), doi:10.1002/cpe.1843 . ↩     
+
+
+
+Bulk synchronous parallel
+
+
+
+
+Bulk synchronous parallel
+
+The Bulk Synchronous Parallel (BSP) abstract computer is a bridging model for designing parallel algorithms. It serves a purpose similar to the Parallel Random Access Machine (PRAM) model. BSP differs from PRAM by not taking communication and synchronization for granted. An important part of analyzing a BSP algorithm rests on quantifying the synchronization and communication needed.
+History
+The BSP model was developed by Leslie Valiant of Harvard University during the 1980s. The definitive article1 was published in 1990.
+Between 1990 and 1992, Leslie Valiant and Bill McColl of Oxford University worked on ideas for a distributed memory BSP programming model, in Princeton and at Harvard. Between 1992 and 1997, McColl led a large research team at Oxford that developed various BSP programming libraries, languages and tools, and also numerous massively parallel BSP algorithms. With interest and momentum growing, McColl then led a group from Oxford, Harvard, Florida, Princeton, Bell Labs, Columbia and Utrecht that developed and published the BSPlib Standard for BSP programming in 1996.
+Valiant developed an extension to the BSP model in the 2000s, leading to the publication of the Multi-BSP model2 in 2011.
+The model
+A BSP computer consists of
+
+components capable of processing and/or local memory transactions (i.e., processors),
+a network that routes messages between pairs of such components, and
+a hardware facility that allows for the synchronisation of all or a subset of components.
+
+This is commonly interpreted as a set of processors which may follow different threads of computation, with each processor equipped with fast local memory and interconnected by a communication network. A BSP algorithm relies heavily on the third feature; a computation proceeds in a series of global supersteps, which consists of three components:
+
+Concurrent computation: every participating processor may perform local computations, i.e., each process can only make use of values stored in the local fast memory of the processor. The computations occur asynchronously of all the others but may overlap with communication.
+Communication: The processes exchange data between themselves to facilitate remote data storage capabilities.
+Barrier synchronisation: When a process reaches this point (the barrier), it waits until all other processes have reached the same barrier.
+
+The computation and communication actions do not have to be ordered in time. Communication typically takes the form of the one-sided put and get Direct Remote Memory Access (DRMA) calls, rather than paired two-sided send and receive message passing calls. The barrier synchronization concludes the superstep: it ensures that all one-sided communications are properly concluded. Systems based on two-sided communication include this synchronisation cost implicitly for every message sent. The method for barrier synchronisation relies on the hardware facility of the BSP computer. In Valiant's original paper,3 this facility periodically checks if the end of the current superstep is reached globally. The period of this check is denoted by 
+ 
+ 
+ 
+ .
+The figure below shows this in a diagrammatic form. The processes are not regarded as having a particular linear order (from left to right or otherwise), and may be mapped to processors in any way.
+(Figure)
+bsp.wiki.fig1.svg
+
+The BSP model is also well-suited to enable automatic memory management for distributed-memory computing through overdecomposition of the problem and oversubscription of the processors. The computation is divided into more logical processes than there are physical processors, and processes are randomly assigned to processors. This strategy can be shown statistically to lead to almost perfect load balancing, both of work and communication.
+Communication
+In many parallel programming systems, communications are considered at the level of individual actions: sending and receiving a message, memory to memory transfer, etc. This is difficult to work with, since there are many simultaneous communication actions in a parallel program, and their interactions are typically complex. In particular, it is difficult to say much about the time any single communication action will take to complete.
+The BSP model considers communication actions en masse. This has the effect that an upper bound on the time taken to communicate a set of data can be given. BSP considers all communication actions of a superstep as one unit, and assumes all individual messages sent as part of this unit have a fixed size.
+The maximum number of incoming or outgoing messages for a superstep is denoted by 
+ 
+ 
+ 
+ . The ability of a communication network to deliver data is captured by a parameter 
+ 
+ 
+ 
+ , defined such that it takes time 
+ 
+ 
+ 
+  for a processor to deliver 
+ 
+ 
+ 
+ 
+  messages of size 1.
+A message of length 
+ 
+ 
+ 
+  obviously takes longer to send than a message of size 1. However, the BSP model does not make a distinction between a message length of 
+ 
+ 
+ 
+  or 
+ 
+ 
+ 
+  messages of length 1. In either case the cost is said to be 
+ 
+ 
+ 
+ .
+The parameter 
+ 
+ 
+ 
+ 
+  is dependent on the following factors:
+
+The protocols used to interact within the communication network.
+Buffer management by both the processors and the communication network.
+The routing strategy used in the network.
+The BSP runtime system.
+
+In practice, 
+ 
+ 
+ 
+  is determined empirically for each parallel computer. Note that 
+ 
+ 
+ 
+  is not the normalised single-word delivery time, but the single-word delivery time under continuous traffic conditions.
+Barriers
+The one-sided communication of the BSP model requires barrier synchronization. Barriers are potentially costly, but avoid the possibility of deadlock or livelock, since barriers cannot create circular data dependencies. Tools to detect them and deal with them are unnecessary. Barriers also permit novel forms of fault tolerance.
+The cost of barrier synchronization is influenced by a couple of issues:
+
+The cost imposed by the variation in the completion time of the participating concurrent computations. Take the example where all but one of the processes have completed their work for this superstep, and are waiting for the last process, which still has a lot of work to complete. The best that an implementation can do is ensure that each process works on roughly the same problem size.
+The cost of reaching a globally consistent state in all of the processors. This depends on the communication network, but also on whether there is special-purpose hardware available for synchronizing, and on the way in which interrupts are handled by processors.
+
+The cost of a barrier synchronization is denoted by 
+ 
+ 
+ 
+ . Note that 
+ 
+ 
+ 
+  is determined empirically.
+On large computers barriers are expensive, and this is increasingly so on large scales. There is a large body of literature on removing synchronization points from existing algorithms, both in the context of BSP computing and beyond. For example, many algorithms allow for the local detection of the global end of a superstep simply by comparing local information to the number of messages already received. This drives the cost of a global synchronisation, compared to the minimally required latency of communication, to zero.4 Yet also this minimal latency is expected to increase further for future supercomputer architectures and network interconnects; the BSP model, along with other models for parallel computation, require adaptation to cope with this trend. Multi-BSP5 is one BSP-based solution.
+The Cost of a BSP algorithm
+The cost of a superstep is determined as the sum of three terms; the cost of the longest running local computation, the cost of global communication between the processors, and the cost of the barrier synchronisation at the end of the superstep. The cost of one superstep for 
+ 
+ 
+ 
+ 
+  processors:
+
+
+ 
+  where 
+ 
+ 
+ 
+  is the cost for the local computation in process 
+ 
+ 
+ 
+ , and 
+ 
+ 
+ 
+  is the number of messages sent or received by process 
+ 
+ 
+ 
+ 
+ . Note that homogeneous processors are assumed here. It is more common for the expression to be written as 
+ 
+ 
+ 
+  where 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+  are maxima. The cost of the algorithm then, is the sum of the costs of each superstep.
+
+
+ 
+  where 
+ 
+ 
+ 
+ 
+  is the number of supersteps.
+
+
+ 
+ , 
+ 
+ 
+ 
+ , and 
+ 
+ 
+ 
+  are usually modelled as functions, that vary with problem size. These three characteristics of a BSP algorithm are usually described in terms of asymptotic notation, e.g. $H \in O(n/p)$.
+Extensions and uses
+Interest in BSP has soared in recent years, with Google adopting it as a major technology for graph analytics at massive scale via technologies like Pregel and MapReduce. Also, with the next generation of Hadoop decoupling the MapReduce model from the rest of the Hadoop infrastructure, there are now active open source projects to add explicit BSP programming, as well as other high performance parallel programming models, on top of Hadoop. Examples are Apache Hama6 and Apache Giraph.
+BSP has been extended by many authors to address concerns about BSP's unsuitability for modelling specific architectures or computational paradigms. One example of this is the decomposable BSP model. The model has also been used in the creation of a number of new programming languages and interfaces, such as Bulk Synchronous Parallel ML (BSML), BSPLib,7 Apache Hama,8 and Pregel.9
+Notable implementations of the BSPLib standard are the Paderborn University BSP library10 and the Oxford BSP Toolset by Jonathan Hill.11 Modern implementations include BSPonMPI12 (which simulates BSP on top of the Message Passing Interface), and MulticoreBSP1314 (a novel implementation targeting modern shared-memory architectures). MulticoreBSP for C is especially notable for its capability of starting nested BSP runs, thus allowing for explicit Multi-BSP programming.
+See also
+
+Computer cluster
+Concurrent computing
+Concurrency
+Dataflow programming
+Grid computing
+Parallel computing
+ScientificPython
+LogP machine
+Automatic mutual exclusion
+Apache Hama
+Apache Giraph
+
+References
+External links
+
+Collection of papers on BSP by Bill McColl and others. [http://paloaltodata.com/index.php?option=com_content&view;;=article&id;=22 BSP Papers]
+BSP topic on Quora. Bulk Synchronous Parallel Computing
+D.B. Skillicorn, Jonathan Hill, W. F. McColl, Questions and answers about BSP (1996)
+BSP Worldwide
+BSP related papers
+
+Bulk Synchronous Parallel ML ( official website)
+Apache Hama
+Apache Giraph
+Paderborn University BSP library
+BSPonMPI
+MulticoreBSP
+
+"
+Category:Models of computation Category:Parallel computing
+
+
+
+Leslie G. Valiant, A bridging model for parallel computation, Communications of the ACM, Volume 33 Issue 8, Aug. 1990 1↩
+Valiant, L. G. (2011). A bridging model for multi-core computing. Journal of Computer and System Sciences, 77(1), 154-166 2↩
+
+Alpert, R., & Philbin, J. (1997). cBSP: Zero-cost synchronization in a modified BSP model. NEC Research Institute, 4 Independence Way, Princeton NJ, 8540, [http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.36.7784&rep;;=rep1&type;=pdf].↩
+
+Apache Hama↩
+BSPlib↩
+
+Pregel↩
+The Paderborn University BSP (PUB) Library - Design, Implementation and Performance Heinz Nixdorf Institute, Departement of Computer Science, University of Paderborn, Germany, technical report.↩
+Jonathan Hill: The Oxford BSP Toolset, 1998.↩
+Wijnand J. Suijlen: BSPonMPI, 2006.↩
+MulticoreBSP for C: a high-performance library for shared-memory parallel programming by A. N. Yzelman, R. H. Bisseling, D. Roose, and K. Meerbergen in International Journal of Parallel Programming, in press (2013), doi:10.1109/TPDS.2013.31.↩
+An Object-Oriented Bulk Synchronous Parallel Library for Multicore Programming by A. N. Yzelman & Rob H. Bisseling in Concurrency and Computation: Practice and Experience 24(5), pp. 533-553 (2012), doi:10.1002/cpe.1843.↩
+
+
+
+
