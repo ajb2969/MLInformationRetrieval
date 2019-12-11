@@ -31,9 +31,7 @@ def decompose_tags(tags):
         
 def process_file(file, file_number):
     contents = bs.BeautifulSoup(" ".join(open(DOCUMENTS_INPUT_PATH + file).readlines()), 'html.parser')
-    xml_annots = contents.find_all("annotation-xml")
-    math_annots = contents.find_all("annotation")
-    decompose_tags(xml_annots)
+    math_annots = contents.find_all("math")
     decompose_tags(math_annots)
     write_file(file, file_number, "".join(token for token in contents.findAll(text=True)))
 
