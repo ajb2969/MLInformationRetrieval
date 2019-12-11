@@ -1,26 +1,18 @@
 package retrieval;
 
-import com.google.common.io.Files;
-import indexer.Index;
+import query.Application;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.nio.charset.Charset;
+
 import java.util.*;
-import java.util.stream.Collectors;
+
 
 abstract public class Models {
     static final int RESULT_SET_SIZE = 30;
-    public static final HashMap<String, String> HTMLDOCPATHS = parseDocNumMap();
-    private static final String INDICIES_PATH = Index.TOKEN_INDEX_PATH;
-    private static final String FILE_TERM_SIZE_PATH = Index.DOCUMENT_SIZE_PATH;
-    private static final String DOCNUMMAPPATH = "indicies/doc-num-map.tsv";
-    private static final HashMap<String, Integer> FILE_TERM_SIZE = parseDocumentIndexFile(FILE_TERM_SIZE_PATH);
-    private static final HashMap<String, Entry> TOKEN_TO_ENTRY = parseTokenIndexFile();
-    private static final Map<String, Map<String, Integer>> TERM_TO_FILE_AND_OCCURRENCE = collapseIndexIntoMaps();
-    private static final Map<String, Integer> DOCUMENT_SIZES= getSizeIndex();
+    public static final HashMap<String, String> HTMLDOCPATHS = Application.getHTMLDOCPATHS();//parseDocNumMap();
+    private static final HashMap<String, Integer> FILE_TERM_SIZE = Application.getFILE_TERM_SIZE();//parseDocumentIndexFile(FILE_TERM_SIZE_PATH);
+    private static final HashMap<String, Entry> TOKEN_TO_ENTRY = Application.getTOKEN_TO_ENTRY();//parseTokenIndexFile();
+    private static final Map<String, Map<String, Integer>> TERM_TO_FILE_AND_OCCURRENCE = Application.getTERM_TO_FILE_AND_OCCURRENCE();//collapseIndexIntoMaps();
+    private static final Map<String, Integer> DOCUMENT_SIZES= Application.getDOCUMENT_SIZES();//getSizeIndex();
 
     Models() {}
 
@@ -64,7 +56,7 @@ abstract public class Models {
     static String[] extractTerms(String query) {
         return query.toLowerCase().split("\\s+");
     }
-
+    /*
     private static HashMap<String, Integer> parseDocumentIndexFile(String path) {
         System.out.println("Parsing document index file");
         HashMap<String, Integer> docMap = new HashMap<>();
@@ -84,6 +76,7 @@ abstract public class Models {
         }
         return docMap;
     }
+    
 
     private static HashMap<String, Integer> getSizeIndex(){
         File inputFile = new File(Index.DOCUMENT_SIZE_PATH);
@@ -102,6 +95,7 @@ abstract public class Models {
         
         return documentSizes;
     }
+    
 
     private static HashMap<String, Entry> parseTokenIndexFile() {
         System.out.println("Parsing token index file");
@@ -149,6 +143,7 @@ abstract public class Models {
         }
         return siMap;
     }
+    
 
     private static Map<String, Map<String, Integer>> collapseIndexIntoMaps() {
         return TOKEN_TO_ENTRY.entrySet().stream()
@@ -163,7 +158,7 @@ abstract public class Models {
                 FileOccurrence::getFilename,
                 FileOccurrence::getOccurrences));
     }
-
+    */
     static double termFrequency(String term, String document) {
         int totalTerms = getFileTermSize().get(document);
         int occurrences = getTokenToEntryIndex().get(term).getFileOccurrences().stream()
@@ -228,11 +223,11 @@ abstract public class Models {
         }
     }
 
-    static class Entry {
+    public static class Entry {
         private int size;
         private ArrayList<FileOccurrence> fileOccurrences;
 
-        Entry(int size, ArrayList<FileOccurrence> fileOccurrences) {
+        public Entry(int size, ArrayList<FileOccurrence> fileOccurrences) {
             this.size = size;
             this.fileOccurrences = fileOccurrences;
         }
@@ -245,7 +240,7 @@ abstract public class Models {
             this.size = size;
         }
 
-        ArrayList<FileOccurrence> getFileOccurrences() {
+        public ArrayList<FileOccurrence> getFileOccurrences() {
             return fileOccurrences;
         }
     }
