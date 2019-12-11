@@ -33,7 +33,9 @@ def process_file(file, file_number):
     contents = bs.BeautifulSoup(" ".join(open(DOCUMENTS_INPUT_PATH + file).readlines()), 'html.parser')
     math_annots = contents.find_all("math")
     decompose_tags(math_annots)
-    write_file(file, file_number, "".join(token for token in contents.findAll(text=True)))
+    text = "".join(token for token in contents.findAll(text=True))
+    text = text.replace("↩", "")
+    write_file(file, file_number, text)
 
 def parse_html():
     """
@@ -81,6 +83,9 @@ def parse_html():
     with fut.ThreadPoolExecutor(max_workers=16) as tpool:
         for file in os.listdir(DOCUMENTS_INPUT_PATH):
             tpool.submit(process_file, file, DOC_NUMBER_MAP[file])
+        while(tpool._work_queue.qsize() > 0):
+            print("Jobs remaining", tpool._work_queue.qsize())
+            time.sleep(5)
     
         
 if __name__ == "__main__":
