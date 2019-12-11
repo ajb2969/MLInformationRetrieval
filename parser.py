@@ -2,7 +2,6 @@ import os
 
 import bs4 as bs
 import concurrent.futures as fut
-import progressbar
 import time
 
 DOCUMENTS_INPUT_PATH = "html_documents/"
@@ -25,12 +24,18 @@ def write_inverted_index():
         for line in open("indicies/doc-num-map.tsv").readlines():
             split_line = line.split("\t")
             writer.write(line.split("\t")[1].strip() + "\t" + line.split("\t")[0].strip() + "\n")
+
+def decompose_tags(tags):
+    for tag in tags:
+        tag.decompose()
         
 def process_file(file, file_number):
-    ignore_tags = set(["math"])
     contents = bs.BeautifulSoup(" ".join(open(DOCUMENTS_INPUT_PATH + file).readlines()), 'html.parser')
-    document_text = filter(lambda e: e not in ignore_tags, contents.findAll(text=True))
-    write_file(file, file_number, " ".join(token.strip() for token in document_text))
+    xml_annots = contents.find_all("annotation-xml")
+    math_annots = contents.find_all("annotation")
+    decompose_tags(xml_annots)
+    decompose_tags(math_annots)
+    write_file(file, file_number, "".join(token for token in contents.findAll(text=True)))
 
 def parse_html():
     """
@@ -76,7 +81,7 @@ def parse_html():
         DOC_NUMBER_MAP[split_line[0]] = split_line[1]
     
     with fut.ThreadPoolExecutor(max_workers=16) as tpool:
-        for file in progressbar.progressbar(os.listdir(DOCUMENTS_INPUT_PATH)):
+        for file in os.listdir(DOCUMENTS_INPUT_PATH):
             tpool.submit(process_file, file, DOC_NUMBER_MAP[file])
         while(tpool._work_queue.qsize() > 0):
             print("Jobs remaining", tpool._work_queue.qsize())
