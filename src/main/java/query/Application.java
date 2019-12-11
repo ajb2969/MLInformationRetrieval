@@ -38,7 +38,7 @@ public class Application {
 
 
 
-    private static void initialize() {
+    public  static void initialize() {
         HTMLDOCPATHS = parseDocNumMap();
         FILE_TERM_SIZE = parseDocumentIndexFile(FILE_TERM_SIZE_PATH);
         TOKEN_TO_ENTRY = parseTokenIndexFile();
@@ -147,7 +147,7 @@ public class Application {
         return documentSizes;
     }
 
-    private static HashMap<String, Models.Entry> parseTokenIndexFile() {
+    public static HashMap<String, Models.Entry> parseTokenIndexFile() {
         System.out.println("Parsing token index file");
         try {
             HashMap<String, Models.Entry> terms = new HashMap<>();
@@ -179,7 +179,7 @@ public class Application {
         }
     }
 
-    private static Map<String, Map<String, Integer>> collapseIndexIntoMaps() {
+    public static Map<String, Map<String, Integer>> collapseIndexIntoMaps() {
         return TOKEN_TO_ENTRY.entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,

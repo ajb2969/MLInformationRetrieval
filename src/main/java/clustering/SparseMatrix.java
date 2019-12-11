@@ -1,4 +1,4 @@
-package retrieval;
+package clustering;
 
 import java.util.Collections;
 import java.util.ArrayList;
@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.ejml.data.DMatrixSparseCSC;
+
+import retrieval.LDA;
 
 
 class SparseMatrix {

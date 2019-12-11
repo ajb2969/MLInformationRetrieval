@@ -11,18 +11,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class LDA extends Models {
-    final static String vecModelFilePath = "indicies/vecSpaceModel.tsv";
+    public final static String vecModelFilePath = "indicies/vecSpaceModel.tsv";
     public LDA() {
         super();
     }
 
 
     
-    static class Index {
+    public static class Index {
         private int index;
         private double value;
 
-        Index(int index, double value) {
+        public Index(int index, double value) {
             this.index = index;
             this.value = value;
         }
