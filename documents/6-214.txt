@@ -1,1 +1,333 @@
-   Precision Time Protocol      Precision Time Protocol   The Precision Time Protocol ( PTP ) is a protocol used to synchronize clocks throughout a computer network . On a local area network , it achieves clock accuracy in the sub-microsecond range, making it suitable for measurement and control systems. 1  PTP was originally defined in the IEEE 1588-2002 standard, officially entitled "Standard for a Precision Clock Synchronization Protocol for Networked Measurement and Control Systems" and published in 2002. In 2008, IEEE 1588-2008 was released as a revised standard; also known as PTP Version 2, it improves accuracy, precision and robustness but is not backward compatible with the original 2002 version. 2  "IEEE 1588 is designed to fill a niche not well served by either of the two dominant protocols, NTP and GPS . IEEE 1588 is designed for local systems requiring accuracies beyond those attainable using NTP. It is also designed for applications that cannot bear the cost of a GPS receiver at each node, or for which GPS signals are inaccessible." 3  Architecture  The IEEE 1588 standards describe a hierarchical master-slave architecture for clock distribution. Under this architecture, a time distribution system consists of one or more communication media (network segments), and one or more clocks. An ordinary clock is a device with a single network connection and is either the source of (master) or destination for (slave) a synchronization reference. A boundary clock has multiple network connections and can accurately synchronize one network segment to another. A synchronization master is selected for each of the network segments in the system. The root timing reference is called the grandmaster . 4 The grandmaster transmits synchronization information to the clocks residing on its network segment. The boundary clocks with a presence on that segment then relay accurate time to the other segments to which they are also connected.  A simplified PTP system frequently consists of ordinary clocks connected to a single network, and no boundary clocks are used. A grandmaster is elected and all other clocks synchronize directly to it.  IEEE 1588-2008 introduces a clock associated with network equipment used to convey PTP messages. The transparent clock modifies PTP messages as they pass through the device. Timestamps in the messages are corrected for time spent traversing the network equipment. This scheme improves distribution accuracy by compensating for delivery variability across the network.  PTP typically uses the same epoch as Unix time (Midnight, 1 January 1970). {{#tag:ref|The profile capability under IEEE 1588-2008 allows the use of application-specific epochs. 5 |group=note}} While the Unix time is based on Coordinated Universal Time (UTC) and is subject to leap seconds , PTP is based on International Atomic Time (TAI) that moves forward monotonically . The PTP grandmaster communicates the current offset between UTC and TAI, so that UTC can be computed from the received PTP time.  Protocol details  Synchronization and management of a PTP system is achieved through the exchange of messages across the communications medium. To this end, PTP uses the following message types.   Sync , Delay_Req , Follow_Up and Delay_Resp messages are used by ordinary and boundary clocks and communicate time-related information used to synchronize clocks across the network.  Pdelay_Req , Pdelay_Resp and Pdelay_Resp_Follow_Up are used by transparent clocks to measure delays across the communications medium so that they can be compensated for by the system. Transparent clocks and these messages associated with them are not available in IEEE 1588-2002.  Announce messages are used by the best master clock algorithm in IEEE 1588-2008 to build a clock hierarchy and select the grandmaster . 6  Management messages are used by network management to monitor, configure and maintain a PTP system.  Signaling messages are used for non-time-critical communications between clocks. Signaling messages were introduced in IEEE 1588-2008.   Messages are categorized as event and general messages. Event messages are time-critical in that accuracy in transmission and receipt timestamp accuracy directly affects clock distribution accuracy. Sync , Delay_Req , Pdelay_Req and Pdelay_resp are event messages. General messages are more conventional protocol data units in that the data in these messages is of importance to PTP, but their transmission and receipt timestamps are not. Announce , Follow_Up , Delay_Resp , Pdelay_Resp_Follow_Up , Management and Signaling messages are members of the general message class. 7  Message transport  In IEEE 1588-2002, all PTP messages are sent using multicast messaging, while IEEE 1588-2008 introduced an option for devices to negotiate unicast transmission on a port-by-port basis. 8  PTP messages may use the User Datagram Protocol (UDP) over Internet Protocol (IP) for transport. IEEE 1588-2002, the original specification, uses only IPv4 transports, 9 but this has been extended to include IPv6 in IEEE 1588-2008. 10  Datagrams are transmitted using IP multicast addressing, for which multicast group addresses are defined for IPv4 and IPv6 (see table). 11  Event messages are sent to port number 319. General messages use port number 320. Replies to Management messages are always returned to the unicast address of the originator.                In IEEE 1588-2008, encapsulation is also defined for bare IEEE 802.3 Ethernet, 12  DeviceNet , 13  ControlNet 14 and PROFINET . 15 PTP over IEEE 802.3 Ethernet uses Ethertype 0x88F7 and an Ethernet multicast destination address of 01-1B-19-00-00-00 for all but peer delay messages. Peer delay messages are sent to 01-80-C2-00-00-0E. 16 17  Domains  A domain 18 is an interacting set of clocks that synchronize to one another using PTP. Clocks are assigned to a domain by virtue of the contents of the Subdomain name (IEEE 1588-2002) or the domainNumber (IEEE 1588-2008) fields in PTP messages they receive or generate. Subdomains allow multiple clock distribution systems to share the same communications medium.      Subdomain name field contents ()   IPv4 multicast address () 19   domainNumber ()   Notes       _DFLT   224.0.1.129   0   Default domain     _ALT1   224.0.1.130   1   Alternate domain 1     _ALT2   224.0.1.131   2   Alternate domain 2     _ALT3   224.0.1.132   3   Alternate domain 3     Application specific up to 15 octets 20   224.0.1.130, 131 or 132 as per hash function on Subdomain name 21   4 through 127   User-defined domains     Best master clock algorithm  The best master clock (BMC) algorithm performs a distributed selection of the best candidate clock based on the following clock properties:   Identifier  A universally unique numeric identifier for the clock. This is typically constructed based on a device's MAC address .  Quality  Both versions of IEEE 1588 attempt to quantify clock quality based on expected timing deviation, technology used to implement the clock or location in a stratum schema, although only V1 (IEEE 1588-2002) knows a data field stratum . PTP V2 (IEEE 1588-2008) defines the overall quality of a clock by using the data fields clockAccuracy and clockClass.  Priority  An administratively assigned precedence hint used by the BMC to help select a grandmaster for the PTP domain. IEEE 1588-2002 used a single boolean variable to indicate precedence. IEEE 1588-2008 features two 8-bit priority fields.  Variance  A clock's estimate of its stability based on observation of its performance against the PTP reference.   IEEE 1588-2008 uses a hierarchical selection algorithm based on the following properties, in the indicated order: 22   Priority 1: the user can assign a specific static-designed priority to each clock, preemptively defining a priority among them.  Class: each clock is a member of a given class, each class getting its own priority.  Accuracy: precision between clock and UTC, in nanoseconds (ns)  Variance: variability of the clock  Priority 2: final-defined priority, defining backup order in case the other criteria were not sufficient.  Unique identifier (tie breaker): MAC address-based selection   IEEE 1588-2002 uses a selection algorithm based on similar properties.  Synchronization  Through use of the BMC algorithm, PTP selects a master source of time for an IEEE 1588 domain and for each network segment in the domain.  Clocks determine the offset between themselves and their master. 23 Let the variable   t   t   t   represent physical time. For a given slave device, the offset    o   (  t  )       o  t    o(t)   at time   t   t   t   is defined by:        o    (  t  )    =    s   (  t  )    -   m   (  t  )           o  t       s  t     m  t      \ o(t)=s(t)-m(t)     where    s   (  t  )       s  t    s(t)   represents the time measured by the slave clock at physical time   t   t   t   , and    m   (  t  )       m  t    m(t)   represents the time measured by the master clock at physical time   t   t   t   .  The master periodically broadcasts the current time as a message to the other clocks. Under IEEE 1588-2002 broadcasts are up to once per second. Under IEEE 1588-2008, up to 10 per second are permitted.  (Figure)  IEEE 1588 synchronisation mechanism and delay calculation   Each broadcast begins at time    T  1      T  1    T1   with a Sync message sent by the master to all the clocks in the domain. A clock receiving this message takes note of the local time    T   1  ′       T   superscript  1  normal-′     T1^{\prime}   when this message is received.  The master may subsequently send a multicast Follow_Up with accurate    T  1      T  1    T1   timestamp. Not all masters have ability to present an accurate timestamp in the Sync message. It is only after the transmission is complete that they are able to retrieve an accurate timestamp for the Sync transmission from their network hardware. Masters with this limitation use the Follow_Up message to convey    T  1      T  1    T1   . Masters with PTP capabilities built into their network hardware are able to present an accurate timestamp in the Sync message and do not need to send Follow_Up messages.  In order to accurately synchronize to their master, clocks must individually determine the network transit time of the Sync messages. The transit time is determined indirectly by measuring round-trip time from each clock to its master. The clocks initiate an exchange with their master designed to measure the transit time   d   d   d   . The exchange begins with a clock sending a Delay_Req message at time    T  2      T  2    T2   to the master. The master receives and timestamps the Delay_Req at time    T   2  ′       T   superscript  2  normal-′     T2^{\prime}   and responds with a Delay_Resp message. The master includes the timestamp    T   2  ′       T   superscript  2  normal-′     T2^{\prime}   in the Delay_Resp message.  Through these exchanges a clock learns    T  1      T  1    T1   ,    T   1  ′       T   superscript  1  normal-′     T1^{\prime}   ,    T  2      T  2    T2   and    T   2  ′       T   superscript  2  normal-′     T2^{\prime}     If   d   d   d   is the transit time for the Sync message, and    o  ~     normal-~  o    \tilde{o}   is the constant offset between master and slave clocks, then         T    1  ′    -   T  1    =    o  ~   +  d           T   superscript  1  normal-′      T  1       normal-~  o   d     \ T1^{\prime}-T1=\tilde{o}+d   and       T    2  ′    -   T  2    =    -   o  ~    +  d           T   superscript  2  normal-′      T  2         normal-~  o    d     \ T2^{\prime}-T2=-\tilde{o}+d     Combining the above two equations, we find that       o  ~   =    (     T   1  ′    -   T  1   -   T   2  ′     +   T  2    )   /  2        normal-~  o           T   superscript  1  normal-′      T  1     T   superscript  2  normal-′       T  2    2     \tilde{o}=(T1^{\prime}-T1-T2^{\prime}+T2)/2     The clock now knows the offset    o  ~     normal-~  o    \tilde{o}   during this transaction and can correct itself by this amount to bring it into agreement with their master.  One assumption is that this exchange of messages happens over a period of time so small that this offset can safely be considered constant over that period. Another assumption is that the transit time of a message going from the master to a slave is equal to the transit time of a message going from the slave to the master. Finally, it is assumed that both the master and slave can accurately measure the time they send or receive a message. The degree to which these assumptions hold true determines the accuracy of the clock at the slave device. 24  Optional features  IEEE 1588-2008 standard lists the following set of features that implementations may choose to support:   Alternate Time-Scale  Grand Master Cluster  Unicast Masters  Alternate Master  Path Trace   Related initiatives   The Network Time Foundation  The International IEEE Symposium on Precision Clock Synchronization for Measurement, Control and Communication is an IEEE organized annual event that includes a plugfest and a conference program with paper and poster presentations, tutorials and discussions covering several aspects of PTP. 25  The Institute of Embedded Systems (InES) of the University of Winterthur is addressing the practical implementation and application of PTP.  IEEE 1588 is a key technology in the LXI Standard for Test and Measurement communication and control.   IEEE 802.1AS-2011 is part of the IEEE Audio Video Bridging (AVB) group of standards, further extended by the IEEE 802.1 Time Sensitive Networking (TSN) Task Group. It specifies a profile for use of IEEE 1588-2008 for time synchronization over a virtual bridged local area network (as defined by IEEE 802.1Q ). In particular, 802.1AS defines how IEEE 802.3 ( Ethernet ), IEEE 802.11 ( Wi-Fi ), and coordinated shared networks like MoCA can all be parts of the same PTP timing domain.  SMPTE 2059 is a PTP profile for use in synchronization of broadcast media systems 26  The White Rabbit Project   See also   List of PTP implementations  Synchronous Ethernet   Notes  References  External links   NIST IEEE 1588 site  PTP documentation at InES  PTP and Synchronization of LTE mobile networks  Hirschmann PTP Whitepaper  PTP overview in Cisco CGS 2520 Switch Software Configuration Guide  Perspectives and priorities on RuggedCom Smart Grid Research IEC 61850 Technologies  Projects with Smart Substation Solution  [ http://ieeexplore.ieee.org/Xplore/login.jsp?url=http%3A%2F%2Fieeexplore.ieee.org%2Fiel5%2F5619950%2F5621989%2F05622092.pdf%3Farnumber%3D5622092&authDecision; ;=-203 Smart High Voltage Substation Based on IEC 61850 Process Bus and IEEE 1588 Time Synchronization]  Test and evaluation system for multi-protocol sampled value protection schemesby Dave Ingram  PTP explained under the installation / maintenance point of view   "  Category:Synchronization  Category:IEEE standards  Category:Network time-related software  Category:Network protocols  Category:Application layer protocols     ↩  ↩  ↩  ↩  ↩  In IEEE 1588-2002, information carried by Announce messages is carried in the Sync messages. In IEEE 1588-2008, the Sync message has been optimized and this information is no longer carried here. ↩    ↩         In some PTP applications it is permissible to send all PTP messages to 01-1B-19-00-00-00 ↩  IEEE 1588-2002 defined a domain as any interconnected set of clocks (regardless of whether they synchronized to one another) and used subdomain to refer to what is known as a domain in IEEE 1588-2008. ↩  IEEE 1588-2008 uses 224.0.1.129 as the address for all multicast messages. ↩     International standard  IEC 61588: Precision clock synchronization protocol for networked measurement and control systems. 2004. ↩   ISPCS website ↩  ↩     
+
+
+
+Precision Time Protocol
+
+
+
+
+Precision Time Protocol
+
+The Precision Time Protocol (PTP) is a protocol used to synchronize clocks throughout a computer network. On a local area network, it achieves clock accuracy in the sub-microsecond range, making it suitable for measurement and control systems.1
+PTP was originally defined in the IEEE 1588-2002 standard, officially entitled "Standard for a Precision Clock Synchronization Protocol for Networked Measurement and Control Systems" and published in 2002. In 2008, IEEE 1588-2008 was released as a revised standard; also known as PTP Version 2, it improves accuracy, precision and robustness but is not backward compatible with the original 2002 version.2
+"IEEE 1588 is designed to fill a niche not well served by either of the two dominant protocols, NTP and GPS. IEEE 1588 is designed for local systems requiring accuracies beyond those attainable using NTP. It is also designed for applications that cannot bear the cost of a GPS receiver at each node, or for which GPS signals are inaccessible."3
+Architecture
+The IEEE 1588 standards describe a hierarchical master-slave architecture for clock distribution. Under this architecture, a time distribution system consists of one or more communication media (network segments), and one or more clocks. An ordinary clock is a device with a single network connection and is either the source of (master) or destination for (slave) a synchronization reference. A boundary clock has multiple network connections and can accurately synchronize one network segment to another. A synchronization master is selected for each of the network segments in the system. The root timing reference is called the grandmaster.4 The grandmaster transmits synchronization information to the clocks residing on its network segment. The boundary clocks with a presence on that segment then relay accurate time to the other segments to which they are also connected.
+A simplified PTP system frequently consists of ordinary clocks connected to a single network, and no boundary clocks are used. A grandmaster is elected and all other clocks synchronize directly to it.
+IEEE 1588-2008 introduces a clock associated with network equipment used to convey PTP messages. The transparent clock modifies PTP messages as they pass through the device. Timestamps in the messages are corrected for time spent traversing the network equipment. This scheme improves distribution accuracy by compensating for delivery variability across the network.
+PTP typically uses the same epoch as Unix time (Midnight, 1 January 1970).{{#tag:ref|The profile capability under IEEE 1588-2008 allows the use of application-specific epochs.5|group=note}} While the Unix time is based on Coordinated Universal Time (UTC) and is subject to leap seconds, PTP is based on International Atomic Time (TAI) that moves forward monotonically. The PTP grandmaster communicates the current offset between UTC and TAI, so that UTC can be computed from the received PTP time.
+Protocol details
+Synchronization and management of a PTP system is achieved through the exchange of messages across the communications medium. To this end, PTP uses the following message types.
+
+Sync, Delay_Req, Follow_Up and Delay_Resp messages are used by ordinary and boundary clocks and communicate time-related information used to synchronize clocks across the network.
+Pdelay_Req, Pdelay_Resp and Pdelay_Resp_Follow_Up are used by transparent clocks to measure delays across the communications medium so that they can be compensated for by the system. Transparent clocks and these messages associated with them are not available in IEEE 1588-2002.
+Announce messages are used by the best master clock algorithm in IEEE 1588-2008 to build a clock hierarchy and select the grandmaster.6
+Management messages are used by network management to monitor, configure and maintain a PTP system.
+Signaling messages are used for non-time-critical communications between clocks. Signaling messages were introduced in IEEE 1588-2008.
+
+Messages are categorized as event and general messages. Event messages are time-critical in that accuracy in transmission and receipt timestamp accuracy directly affects clock distribution accuracy. Sync, Delay_Req, Pdelay_Req and Pdelay_resp are event messages. General messages are more conventional protocol data units in that the data in these messages is of importance to PTP, but their transmission and receipt timestamps are not. Announce, Follow_Up, Delay_Resp, Pdelay_Resp_Follow_Up, Management and Signaling messages are members of the general message class.7
+Message transport
+In IEEE 1588-2002, all PTP messages are sent using multicast messaging, while IEEE 1588-2008 introduced an option for devices to negotiate unicast transmission on a port-by-port basis.8
+PTP messages may use the User Datagram Protocol (UDP) over Internet Protocol (IP) for transport. IEEE 1588-2002, the original specification, uses only IPv4 transports,9 but this has been extended to include IPv6 in IEEE 1588-2008.10 Datagrams are transmitted using IP multicast addressing, for which multicast group addresses are defined for IPv4 and IPv6 (see table).11 Event messages are sent to port number 319. General messages use port number 320. Replies to Management messages are always returned to the unicast address of the originator.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+In IEEE 1588-2008, encapsulation is also defined for bare IEEE 802.3 Ethernet,12 DeviceNet,13 ControlNet14 and PROFINET.15 PTP over IEEE 802.3 Ethernet uses Ethertype 0x88F7 and an Ethernet multicast destination address of 01-1B-19-00-00-00 for all but peer delay messages. Peer delay messages are sent to 01-80-C2-00-00-0E.1617
+Domains
+A domain18 is an interacting set of clocks that synchronize to one another using PTP. Clocks are assigned to a domain by virtue of the contents of the Subdomain name (IEEE 1588-2002) or the domainNumber (IEEE 1588-2008) fields in PTP messages they receive or generate. Subdomains allow multiple clock distribution systems to share the same communications medium.
+
+
+
+
+Subdomain name field contents ()
+
+IPv4 multicast address
+ ()19
+
+domainNumber
+ ()
+
+Notes
+
+
+
+
+
+_DFLT
+
+224.0.1.129
+
+0
+
+Default domain
+
+
+
+_ALT1
+
+224.0.1.130
+
+1
+
+Alternate domain 1
+
+
+
+_ALT2
+
+224.0.1.131
+
+2
+
+Alternate domain 2
+
+
+
+_ALT3
+
+224.0.1.132
+
+3
+
+Alternate domain 3
+
+
+
+Application specific up to 15 octets20
+
+224.0.1.130, 131 or 132 as per hash function on Subdomain name21
+
+4 through 127
+
+User-defined domains
+
+
+
+Best master clock algorithm
+The best master clock (BMC) algorithm performs a distributed selection of the best candidate clock based on the following clock properties:
+
+Identifier
+A universally unique numeric identifier for the clock. This is typically constructed based on a device's MAC address.
+ 
+Quality
+Both versions of IEEE 1588 attempt to quantify clock quality based on expected timing deviation, technology used to implement the clock or location in a stratum schema, although only V1 (IEEE 1588-2002) knows a data field stratum. PTP V2 (IEEE 1588-2008) defines the overall quality of a clock by using the data fields clockAccuracy and clockClass.
+ 
+Priority
+An administratively assigned precedence hint used by the BMC to help select a grandmaster for the PTP domain. IEEE 1588-2002 used a single boolean variable to indicate precedence. IEEE 1588-2008 features two 8-bit priority fields.
+ 
+Variance
+A clock's estimate of its stability based on observation of its performance against the PTP reference.
+ 
+
+IEEE 1588-2008 uses a hierarchical selection algorithm based on the following properties, in the indicated order:22
+
+Priority 1: the user can assign a specific static-designed priority to each clock, preemptively defining a priority among them.
+Class: each clock is a member of a given class, each class getting its own priority.
+Accuracy: precision between clock and UTC, in nanoseconds (ns)
+Variance: variability of the clock
+Priority 2: final-defined priority, defining backup order in case the other criteria were not sufficient.
+Unique identifier (tie breaker): MAC address-based selection
+
+IEEE 1588-2002 uses a selection algorithm based on similar properties.
+Synchronization
+Through use of the BMC algorithm, PTP selects a master source of time for an IEEE 1588 domain and for each network segment in the domain.
+Clocks determine the offset between themselves and their master.23 Let the variable 
+ 
+ 
+ 
+  represent physical time. For a given slave device, the offset 
+ 
+ 
+ 
+  at time 
+ 
+ 
+ 
+  is defined by:
+
+
+
+where 
+ 
+ 
+ 
+  represents the time measured by the slave clock at physical time 
+ 
+ 
+ 
+ , and 
+ 
+ 
+ 
+  represents the time measured by the master clock at physical time 
+ 
+ 
+ 
+ .
+The master periodically broadcasts the current time as a message to the other clocks. Under IEEE 1588-2002 broadcasts are up to once per second. Under IEEE 1588-2008, up to 10 per second are permitted.
+(Figure)
+IEEE 1588 synchronisation mechanism and delay calculation
+
+Each broadcast begins at time 
+ 
+ 
+ 
+  with a Sync message sent by the master to all the clocks in the domain. A clock receiving this message takes note of the local time 
+ 
+ 
+ 
+  when this message is received.
+The master may subsequently send a multicast Follow_Up with accurate 
+ 
+ 
+ 
+  timestamp. Not all masters have ability to present an accurate timestamp in the Sync message. It is only after the transmission is complete that they are able to retrieve an accurate timestamp for the Sync transmission from their network hardware. Masters with this limitation use the Follow_Up message to convey 
+ 
+ 
+ 
+ . Masters with PTP capabilities built into their network hardware are able to present an accurate timestamp in the Sync message and do not need to send Follow_Up messages.
+In order to accurately synchronize to their master, clocks must individually determine the network transit time of the Sync messages. The transit time is determined indirectly by measuring round-trip time from each clock to its master. The clocks initiate an exchange with their master designed to measure the transit time 
+ 
+ 
+ 
+ . The exchange begins with a clock sending a Delay_Req message at time 
+ 
+ 
+ 
+  to the master. The master receives and timestamps the Delay_Req at time 
+ 
+ 
+ 
+  and responds with a Delay_Resp message. The master includes the timestamp 
+ 
+ 
+ 
+  in the Delay_Resp message.
+Through these exchanges a clock learns 
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+  and 
+ 
+ 
+
+If 
+ 
+ 
+ 
+  is the transit time for the Sync message, and 
+ 
+ 
+ 
+  is the constant offset between master and slave clocks, then
+
+
+ 
+  and 
+ 
+ 
+
+Combining the above two equations, we find that
+
+
+
+The clock now knows the offset 
+ 
+ 
+ 
+  during this transaction and can correct itself by this amount to bring it into agreement with their master.
+One assumption is that this exchange of messages happens over a period of time so small that this offset can safely be considered constant over that period. Another assumption is that the transit time of a message going from the master to a slave is equal to the transit time of a message going from the slave to the master. Finally, it is assumed that both the master and slave can accurately measure the time they send or receive a message. The degree to which these assumptions hold true determines the accuracy of the clock at the slave device.24
+Optional features
+IEEE 1588-2008 standard lists the following set of features that implementations may choose to support:
+
+Alternate Time-Scale
+Grand Master Cluster
+Unicast Masters
+Alternate Master
+Path Trace
+
+Related initiatives
+
+The Network Time Foundation
+The International IEEE Symposium on Precision Clock Synchronization for Measurement, Control and Communication is an IEEE organized annual event that includes a plugfest and a conference program with paper and poster presentations, tutorials and discussions covering several aspects of PTP.25
+The Institute of Embedded Systems (InES) of the University of Winterthur is addressing the practical implementation and application of PTP.
+IEEE 1588 is a key technology in the LXI Standard for Test and Measurement communication and control.
+
+IEEE 802.1AS-2011 is part of the IEEE Audio Video Bridging (AVB) group of standards, further extended by the IEEE 802.1 Time Sensitive Networking (TSN) Task Group. It specifies a profile for use of IEEE 1588-2008 for time synchronization over a virtual bridged local area network (as defined by IEEE 802.1Q). In particular, 802.1AS defines how IEEE 802.3 (Ethernet), IEEE 802.11 (Wi-Fi), and coordinated shared networks like MoCA can all be parts of the same PTP timing domain.
+SMPTE 2059 is a PTP profile for use in synchronization of broadcast media systems26
+The White Rabbit Project
+
+See also
+
+List of PTP implementations
+Synchronous Ethernet
+
+Notes
+References
+External links
+
+NIST IEEE 1588 site
+PTP documentation at InES
+PTP and Synchronization of LTE mobile networks
+Hirschmann PTP Whitepaper
+PTP overview in Cisco CGS 2520 Switch Software Configuration Guide
+Perspectives and priorities on RuggedCom Smart Grid Research IEC 61850 Technologies
+Projects with Smart Substation Solution
+[http://ieeexplore.ieee.org/Xplore/login.jsp?url=http%3A%2F%2Fieeexplore.ieee.org%2Fiel5%2F5619950%2F5621989%2F05622092.pdf%3Farnumber%3D5622092&authDecision;;=-203 Smart High Voltage Substation Based on IEC 61850 Process Bus and IEEE 1588 Time Synchronization]
+Test and evaluation system for multi-protocol sampled value protection schemesby Dave Ingram
+PTP explained under the installation / maintenance point of view
+
+"
+Category:Synchronization Category:IEEE standards Category:Network time-related software Category:Network protocols Category:Application layer protocols
+
+
+
+↩
+↩
+↩
+↩
+↩
+In IEEE 1588-2002, information carried by Announce messages is carried in the Sync messages. In IEEE 1588-2008, the Sync message has been optimized and this information is no longer carried here.↩
+
+
+↩
+
+
+
+
+
+
+
+In some PTP applications it is permissible to send all PTP messages to 01-1B-19-00-00-00↩
+IEEE 1588-2002 defined a domain as any interconnected set of clocks (regardless of whether they synchronized to one another) and used subdomain to refer to what is known as a domain in IEEE 1588-2008.↩
+IEEE 1588-2008 uses 224.0.1.129 as the address for all multicast messages.↩
+
+
+
+International standard IEC 61588: Precision clock synchronization protocol for networked measurement and control systems. 2004.↩
+
+ISPCS website↩
+↩
+
+
+
+

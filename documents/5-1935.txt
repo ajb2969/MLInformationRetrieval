@@ -1,4 +1,14 @@
-   UMAC      UMAC  table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+
+
+
+UMAC
+
+
+
+
+UMAC
+
+ table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
    margin: 0; padding: 0; vertical-align: baseline; border: none; }
  <style>
  table.sourceCode { width: 100%; line-height: 100%; }
@@ -32,28 +42,122 @@
  code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
  code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
  code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
- code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */     In cryptography , a message authentication code based on universal hashing , or UMAC , is a type of message authentication code (MAC) calculated choosing a hash function from a class of hash functions according to some secret (random) process and applying it to the message. The resulting digest or fingerprint is then encrypted to hide the identity of the hash function used. As with any MAC, it may be used to simultaneously verify both the data integrity and the authenticity of a message . UMAC is specified in RFC 4418, it has provable cryptographic strength and is usually a lot less computationally intensive than other MACs. UMAC's design is optimized for 32-bit architectures; a closely related variant of UMAC that is optimized for 64-bit architectures is given by VMAC .  Universal hashing  Let's say the hash function is chosen from a class of hash functions H, which maps messages into D, the set of possible message digests. This class is called universal if, for any distinct pair of messages, there are at most |H|/|D| functions that map them to the same member of D.  This means that if an attacker wants to replace one message with another and, from his point of view the hash function was chosen completely randomly, the probability that the UMAC will not detect his modification is at most 1/|D|.  But this definition is not strong enough — if the possible messages are 0 and 1, D={0,1} and H consists of the identity operation and not , H is universal. But even if the digest is encrypted by modular addition, the attacker can change the message and the digest at the same time and the receiver wouldn't know the difference.  Strongly universal hashing  A class of hash functions H that is good to use will make it difficult for an attacker to guess the correct digest d of a fake message f after intercepting one message a with digest c . In other words       Pr   h  ∈  H     [    h   (  f  )    =  d   |    h   (  a  )    =  c   ]       subscript  Pr    h  H        h  f   d       h  a   c     \Pr_{h\in H}[h(f)=d|h(a)=c]\,     needs to be very small, preferably 1/| D |.  It is easy to construct a class of hash functions when D is field . For example if | D | is prime , all the operations are taken modulo | D |. The message a is then encoded as an n -dimensional vector over D ( a 1 , a 2 , ..., a n ). H then has | D | n +1 members, each corresponding to an ( n + 1)-dimensional vector over D ( h 0 , h 1 , ..., h n ). If we let       h   (  a  )    =    h  0   +    ∑   i  =  1   n     h  i     a  i             h  a      subscript  h  0     superscript   subscript     i  1    n      subscript  h  i    subscript  a  i        h(a)=h_{0}+\sum_{i=1}^{n}h_{i}a_{i}\,     we can use the rules of probabilities and combinatorics to prove that        Pr   h  ∈  H     [    h   (  f  )    =  d   |    h   (  a  )    =  c   ]    =   1   |  D  |          subscript  Pr    h  H        h  f   d       h  a   c      1    D      \Pr_{h\in H}[h(f)=d|h(a)=c]={1\over|D|}     If we properly encrypt all the digests (e.g. with a one-time pad ), an attacker cannot learn anything from them and the same hash function can be used for all communication between the two parties. This may not be true for ECB encryption because it may be quite likely that two messages produce the same hash value. Then some kind of initialization vector should be used, which is often called the nonce . It has become common practice to set h 0 = f (nonce), where f is also secret.  Notice that having massive amounts of computer power does not help the attacker at all. If the recipient limits the amount of forgeries it accepts (by sleeping whenever it detects one), | D | can be 2 32 or smaller.  NH hash-function family  Functions in the above unnamed hash-function family uses n multiplies to compute a hash value.  UMAC is the first MAC specifically designed to use SIMD instructions. 1  For speed, UMAC uses the NH hash-function family. The NH family halves the number of multiplications, which roughly translates to a two-fold speed-up in practice. 2  The following hash family is universal: 3        NH  K    (  M  )    =    (    ∑   i  =  0     (   n  /  2   )   -  1      (    (    m   2  i    +   k   2  i     )   mod   2  w    )   ⋅   (    (    m    2  i   +  1    +   k    2  i   +  1     )   mod   2  w    )     )   mod   2   2  w           subscript  NH  K   M    modulo    superscript   subscript     i  0        n  2   1     normal-⋅   modulo     subscript  m    2  i     subscript  k    2  i      superscript  2  w     modulo     subscript  m      2  i   1     subscript  k      2  i   1      superscript  2  w       superscript  2    2  w       \operatorname{NH}_{K}(M)=\left(\sum_{i=0}^{(n/2)-1}((m_{2i}+k_{2i})\bmod~{}2^{%
- w})\cdot((m_{2i+1}+k_{2i+1})\bmod~{}2^{w})\right)\bmod~{}2^{2w}   .  where   The message M is encoded as an n -dimensional vector of w -bit words ( m 0 , m 1 , m 2 , ..., m n-1 ).  The intermediate key K is encoded as an n+1 -dimensional vector of w -bit words ( k 0 , k 1 , k 2 , ..., k n ). A pseudorandom generator generates K from a shared secret key.   If double-precision operations are not available, one can interpret the input as a vector of half-words (    w  /  2      w  2    w/2   -bit integers). The algorithm will then use    ⌈   k  /  2   ⌉        k  2     \lceil k/2\rceil   multiplications, where   k   k   k   was the number of half-words in the vector. Thus, the algorithm runs at a "rate" of one multiplication per word of input.  Example  The following C function generates a 24 bit UMAC. It assumes that secret is a multiple of 24 bits, msg is not longer than secret and result already contains the 24 secret bits e.g. f(nonce). nonce does not need to be contained in msg .   #define uchar unsigned char  void UHash24 (uchar *msg, uchar *secret, int len, uchar *result)
+ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+   
+
+
+
+In cryptography, a message authentication code based on universal hashing, or UMAC, is a type of message authentication code (MAC) calculated choosing a hash function from a class of hash functions according to some secret (random) process and applying it to the message. The resulting digest or fingerprint is then encrypted to hide the identity of the hash function used. As with any MAC, it may be used to simultaneously verify both the data integrity and the authenticity of a message. UMAC is specified in RFC 4418, it has provable cryptographic strength and is usually a lot less computationally intensive than other MACs. UMAC's design is optimized for 32-bit architectures; a closely related variant of UMAC that is optimized for 64-bit architectures is given by VMAC.
+Universal hashing
+Let's say the hash function is chosen from a class of hash functions H, which maps messages into D, the set of possible message digests. This class is called universal if, for any distinct pair of messages, there are at most |H|/|D| functions that map them to the same member of D.
+This means that if an attacker wants to replace one message with another and, from his point of view the hash function was chosen completely randomly, the probability that the UMAC will not detect his modification is at most 1/|D|.
+But this definition is not strong enough — if the possible messages are 0 and 1, D={0,1} and H consists of the identity operation and not, H is universal. But even if the digest is encrypted by modular addition, the attacker can change the message and the digest at the same time and the receiver wouldn't know the difference.
+Strongly universal hashing
+A class of hash functions H that is good to use will make it difficult for an attacker to guess the correct digest d of a fake message f after intercepting one message a with digest c. In other words
+
+
+
+needs to be very small, preferably 1/|D|.
+It is easy to construct a class of hash functions when D is field. For example if |D| is prime, all the operations are taken modulo |D|. The message a is then encoded as an n-dimensional vector over D (a1, a2, ..., an). H then has |D|n+1 members, each corresponding to an (n + 1)-dimensional vector over D (h0, h1, ..., hn). If we let
+
+
+
+we can use the rules of probabilities and combinatorics to prove that
+
+
+
+If we properly encrypt all the digests (e.g. with a one-time pad), an attacker cannot learn anything from them and the same hash function can be used for all communication between the two parties. This may not be true for ECB encryption because it may be quite likely that two messages produce the same hash value. Then some kind of initialization vector should be used, which is often called the nonce. It has become common practice to set h0 = f(nonce), where f is also secret.
+Notice that having massive amounts of computer power does not help the attacker at all. If the recipient limits the amount of forgeries it accepts (by sleeping whenever it detects one), |D| can be 232 or smaller.
+NH hash-function family
+Functions in the above unnamed hash-function family uses n multiplies to compute a hash value.
+UMAC is the first MAC specifically designed to use SIMD instructions.1
+For speed, UMAC uses the NH hash-function family. The NH family halves the number of multiplications, which roughly translates to a two-fold speed-up in practice.2
+The following hash family is universal:3
+
+
+ 
+ .
+where
+
+The message M is encoded as an n-dimensional vector of w-bit words (m0, m1, m2, ..., mn-1).
+The intermediate key K is encoded as an n+1-dimensional vector of w-bit words (k0, k1, k2, ..., kn). A pseudorandom generator generates K from a shared secret key.
+
+If double-precision operations are not available, one can interpret the input as a vector of half-words (
+ 
+ 
+ 
+ -bit integers). The algorithm will then use 
+ 
+ 
+ 
+  multiplications, where 
+ 
+ 
+ 
+  was the number of half-words in the vector. Thus, the algorithm runs at a "rate" of one multiplication per word of input.
+Example
+The following C function generates a 24 bit UMAC. It assumes that secret is a multiple of 24 bits, msg is not longer than secret and result already contains the 24 secret bits e.g. f(nonce). nonce does not need to be contained in msg.
+  #define uchar unsigned char
+   
+   void UHash24 (uchar *msg, uchar *secret, int len, uchar *result)
    {
-     uchar r1 = 0 , r2 = 0 , r3 = 0 , s1, s2, s3, byteCnt = 0 , bitCnt, byte; while (len-- > 0 ) { if (byteCnt-- == 0 ) {
+     uchar r1 = 0, r2 = 0, r3 = 0, s1, s2, s3, byteCnt = 0, bitCnt, byte;
+      
+     while (len-- > 0) {    
+       if (byteCnt-- == 0) {
          s1 = *secret++;
          s2 = *secret++;
          s3 = *secret++;
-         byteCnt = 2 ;   
+         byteCnt = 2;   
        }             
-       byte = *msg++; for (bitCnt = 0 ; bitCnt < 8 ; bitCnt++) { if (byte & 1 ) { /* msg not divisible by x */ r1 ^= s1; /* so add s * 1 */ r2 ^= s2;
+       byte = *msg++;
+       for (bitCnt = 0; bitCnt < 8; bitCnt++) {
+         if (byte & 1) { /* msg not divisible by x */
+           r1 ^= s1; /* so add s * 1 */                                 
+           r2 ^= s2;
            r3 ^= s3;        
          }
-         byte >>= 1 ; /* divide message by x */  if (s3 & 0x80 ) { /* and multiply secret with x, subtracting  the polynomial when necessary to keep its order under 24 */ s3 <<= 1 ; if (s2 & 0x80 ) s3 |= 1 ;
-           s2 <<= 1 ; if (s1 & 0x80 ) s2 |= 1 ;
-           s1 <<= 1 ;
+         byte >>= 1; /* divide message by x */
+         if (s3 & 0x80) { /* and multiply secret with x, subtracting
+             the polynomial when necessary to keep its order under 24 */
+           s3 <<= 1;
+           if (s2 & 0x80) s3 |= 1;
+           s2 <<= 1;
+           if (s1 & 0x80) s2 |= 1;
+           s1 <<= 1;
          
-           s1 ^= 0x1B ; /* x^24 + x^4 + x^3 + x + 1 */ } else {
-           s3 <<= 1 ; if (s2 & 0x80 ) s3 |= 1 ;
-           s2 <<= 1 ; if (s1 & 0x80 ) s2 |= 1 ;
-           s1 <<= 1 ;
+           s1 ^= 0x1B; /* x^24 + x^4 + x^3 + x + 1 */
          }
-       } /* for each bit in the message */ } /* for each byte in the message */ *result++ ^= r1;
+         else {
+           s3 <<= 1;
+           if (s2 & 0x80) s3 |= 1;
+           s2 <<= 1;
+           if (s1 & 0x80) s2 |= 1;
+           s1 <<= 1;
+         }
+       } /* for each bit in the message */
+     } /* for each byte in the message */ 
+     *result++ ^= r1;
      *result++ ^= r2;
      *result++ ^= r3;
-   }  See also   Poly1305-AES is another fast MAC based on strongly universal hashing and AES .   References   UMAC has been approved by the IETF as an informational RFC. It's fast and based on AES .  A draft specification to use UMAC in the SSH protocols has been implemented by OpenSSH .   "  Category:Message authentication codes      , section 5.3 ↩  , Equation 1 and also section 4.2 "Definition of NH". ↩    
+   }
+See also
+
+Poly1305-AES is another fast MAC based on strongly universal hashing and AES.
+
+References
+
+UMAC has been approved by the IETF as an informational RFC. It's fast and based on AES.
+A draft specification to use UMAC in the SSH protocols has been implemented by OpenSSH.
+
+"
+Category:Message authentication codes
+
+
+
+
+, section 5.3↩
+, Equation 1 and also section 4.2 "Definition of NH".↩
+
+
+

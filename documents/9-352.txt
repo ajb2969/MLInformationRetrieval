@@ -1,1 +1,112 @@
-   Diffusion Monte Carlo      Diffusion Monte Carlo   Diffusion Monte Carlo (DMC) is a quantum Monte Carlo method that uses a Green's function to solve the Schrödinger equation . DMC is potentially numerically exact, meaning that it can find the exact ground state energy within a given error for any quantum system. When actually attempting the calculation, one finds that for bosons , the algorithm scales as a polynomial with the system size, but for fermions , DMC scales exponentially with the system size. This makes exact large-scale DMC simulations for fermions impossible; however, DMC employing a clever approximation known as the fixed-node approximation can still yield very accurate results. 1 What follows is an explanation of the basic algorithm, how it works, why fermions cause a problem, and how the fixed-node approximation resolves this problem.  The Projector Method  To motivate the algorithm, let's look at the Schrödinger equation for a particle in some potential in one dimension:        i    d  Ψ   (  x  ,  t  )     d  t     =    -    1  2      d  2   Ψ   (  x  ,  t  )     d   x  2       +   V   (  x  )   Ψ   (  x  ,  t  )      .        i      d  normal-Ψ   x  t      d  t             1  2        superscript  d  2   normal-Ψ   x  t      d   superscript  x  2         V  x  normal-Ψ   x  t       i\frac{d\Psi(x,t)}{dt}=-\frac{1}{2}\frac{d^{2}\Psi(x,t)}{dx^{2}}+V(x)\Psi(x,t).   We can condense the notation a bit by writing it in terms of an operator equation, with      H  =    -    1  2     d  2    d   x  2       +   V   (  x  )         H          1  2      superscript  d  2     d   superscript  x  2         V  x      H=-\frac{1}{2}\frac{d^{2}}{dx^{2}}+V(x)   . So then we have        i    d  Ψ   (  x  ,  t  )     d  t     =   H  Ψ   (  x  ,  t  )     ,        i      d  normal-Ψ   x  t      d  t       H  normal-Ψ   x  t      i\frac{d\Psi(x,t)}{dt}=H\Psi(x,t),   where we have to keep in mind that H is an operator, not a simple number or function. There are special functions, called eigenfunctions , for which     H  Ψ   (  x  )    =   E  Ψ   (  x  )          H  normal-Ψ  x     E  normal-Ψ  x     H\Psi(x)=E\Psi(x)   , where E is a number. These functions are special because no matter where we evaluate the action of the H operator on the wave function , we always get the same number E. These functions are called stationary states , because the time derivative at any point x is always the same, so the amplitude of the wave function never changes in time. Since the overall phase of a wave function is not measurable, the system does not change in time.  We are usually interested in the wave function with the lowest energy  eigenvalue , the ground state . We're going to write a slightly different version of the Schrödinger equation that will have the same energy eigenvalue, but, instead of being oscillatory, it will be convergent. Here it is:       -    d  Ψ   (  x  ,  t  )     d  t     =    (   H  -   E  0    )   Ψ   (  x  ,  t  )              d  normal-Ψ   x  t      d  t         H   subscript  E  0    normal-Ψ   x  t      -\frac{d\Psi(x,t)}{dt}=(H-E_{0})\Psi(x,t)   . We've removed the imaginary number from the time derivative and added in a constant offset of    E  0     subscript  E  0    E_{0}   , which is the ground state energy. We don't actually know the ground state energy, but there will be a way to determine it self-consistently which we'll introduce later. Our modified equation(some people call it the imaginary-time Schrödinger equation) has some nice properties. The first thing to notice is that if we happen to guess the ground state wave function, then     H   Φ  0    (  x  )    =    E  0    Φ  0    (  x  )          H   subscript  normal-Φ  0   x      subscript  E  0    subscript  normal-Φ  0   x     H\Phi_{0}(x)=E_{0}\Phi_{0}(x)   and the time derivative is zero. Now suppose that we start with another wave function(   Ψ   normal-Ψ   \Psi   ), which is not the ground state but is not orthogonal to it. Then we can write it as a linear sum of eigenfunctions:      Ψ  =     c  0    Φ  0    +    ∑   i  =  1   ∞     c  i    Φ  i          normal-Ψ       subscript  c  0    subscript  normal-Φ  0      superscript   subscript     i  1         subscript  c  i    subscript  normal-Φ  i        \Psi=c_{0}\Phi_{0}+\sum_{i=1}^{\infty}c_{i}\Phi_{i}   Since this is a linear differential equation , we can look at the action of each part separately. We already determined that    Φ  0     subscript  normal-Φ  0    \Phi_{0}   is stationary. Suppose we take    Φ  1     subscript  normal-Φ  1    \Phi_{1}   . Since    Φ  0     subscript  normal-Φ  0    \Phi_{0}   is the lowest-energy eigenfunction, the associate eigenvalue of    Φ  1     subscript  normal-Φ  1    \Phi_{1}   satisfies the property     E  1   >   E  0        subscript  E  1    subscript  E  0     E_{1}>E_{0}   . Thus the time derivative of    c  1     subscript  c  1    c_{1}   is negative, and will eventually go to zero, leaving us with only the ground state. This observation also gives us a way to determine    E  0     subscript  E  0    E_{0}   . We watch the amplitude of the wave function as we propagate through time. If it increases, then decrease the estimation of the offset energy. If the amplitude decreases, then increase the estimate of the offset energy.  Stochastic Implementation  Now we have an equation that, as we propagate it forward in time and adjust    E  0     subscript  E  0    E_{0}   appropriately, we find the ground state of any given Hamiltonian . This is still a harder problem than classical mechanics , though, because instead of propagating single positions of particles, we must propagate entire functions. In classical mechanics, we could simulate the motion of the particles by setting     x   (   t  +  τ   )    =    x   (  t  )    +   τ  v   (  t  )    +   0.5  F   (  t  )    τ  2           x    t  τ        x  t     τ  v  t     0.5  F  t   superscript  τ  2       x(t+\tau)=x(t)+\tau v(t)+0.5F(t)\tau^{2}   , if we assume that the force is constant over the time span of   τ   τ   \tau   . For the imaginary time Schrödinger equation, instead, we propagate forward in time using a convolution integral with a special function called a Green's function . So we get     Ψ   (  x  ,   t  +  τ   )    =   ∫   G   (  x  ,   x  ′   ,  τ  )   Ψ   (   x  ′   ,  t  )   d   x  ′           normal-Ψ   x    t  τ         G   x   superscript  x  normal-′   τ   normal-Ψ    superscript  x  normal-′   t   d   superscript  x  normal-′       \Psi(x,t+\tau)=\int G(x,x^{\prime},\tau)\Psi(x^{\prime},t)dx^{\prime}   . Similarly to classical mechanics, we can only propagate for small slices of time; otherwise the Green's function is inaccurate. As the number of particles increases, the dimensionality of the integral increases as well, since we have to integrate over all coordinates of all particles. We can do these integrals by Monte Carlo integration .  References   2 R.C. Grimm and R.G. Storer, J. Comput. Phys. 7 , 134 (1971)  3 J. Anderson, J. Chem. Phys. 63 , 1499 (1975)  4 B.L. Hammond, W.A Lester, Jr. & P.J. Reynolds "Monte Carlo Methods in Ab Initio Quantum Chemistry" (World Scientific, 1994)s by Monte Carlo.   "  Category:Quantum chemistry  Category:Computational chemistry  Category:Quantum Monte Carlo     1 J. Anderson, J. Chem. Phys. 65 , 4121 (1976) ↩     
+
+
+
+Diffusion Monte Carlo
+
+
+
+
+Diffusion Monte Carlo
+
+Diffusion Monte Carlo (DMC) is a quantum Monte Carlo method that uses a Green's function to solve the Schrödinger equation. DMC is potentially numerically exact, meaning that it can find the exact ground state energy within a given error for any quantum system. When actually attempting the calculation, one finds that for bosons, the algorithm scales as a polynomial with the system size, but for fermions, DMC scales exponentially with the system size. This makes exact large-scale DMC simulations for fermions impossible; however, DMC employing a clever approximation known as the fixed-node approximation can still yield very accurate results.1 What follows is an explanation of the basic algorithm, how it works, why fermions cause a problem, and how the fixed-node approximation resolves this problem.
+The Projector Method
+To motivate the algorithm, let's look at the Schrödinger equation for a particle in some potential in one dimension:
+
+
+ 
+  We can condense the notation a bit by writing it in terms of an operator equation, with
+
+
+ 
+ . So then we have
+
+
+ 
+  where we have to keep in mind that H is an operator, not a simple number or function. There are special functions, called eigenfunctions, for which 
+ 
+ 
+ 
+ , where E is a number. These functions are special because no matter where we evaluate the action of the H operator on the wave function, we always get the same number E. These functions are called stationary states, because the time derivative at any point x is always the same, so the amplitude of the wave function never changes in time. Since the overall phase of a wave function is not measurable, the system does not change in time.
+We are usually interested in the wave function with the lowest energy eigenvalue, the ground state. We're going to write a slightly different version of the Schrödinger equation that will have the same energy eigenvalue, but, instead of being oscillatory, it will be convergent. Here it is:
+
+
+ 
+ . We've removed the imaginary number from the time derivative and added in a constant offset of 
+ 
+ 
+ 
+ , which is the ground state energy. We don't actually know the ground state energy, but there will be a way to determine it self-consistently which we'll introduce later. Our modified equation(some people call it the imaginary-time Schrödinger equation) has some nice properties. The first thing to notice is that if we happen to guess the ground state wave function, then 
+ 
+ 
+ 
+  and the time derivative is zero. Now suppose that we start with another wave function(
+ 
+ 
+ 
+ ), which is not the ground state but is not orthogonal to it. Then we can write it as a linear sum of eigenfunctions:
+
+
+ 
+  Since this is a linear differential equation, we can look at the action of each part separately. We already determined that 
+ 
+ 
+ 
+  is stationary. Suppose we take 
+ 
+ 
+ 
+ . Since 
+ 
+ 
+ 
+  is the lowest-energy eigenfunction, the associate eigenvalue of 
+ 
+ 
+ 
+  satisfies the property 
+ 
+ 
+ 
+ . Thus the time derivative of 
+ 
+ 
+ 
+  is negative, and will eventually go to zero, leaving us with only the ground state. This observation also gives us a way to determine 
+ 
+ 
+ 
+ . We watch the amplitude of the wave function as we propagate through time. If it increases, then decrease the estimation of the offset energy. If the amplitude decreases, then increase the estimate of the offset energy.
+Stochastic Implementation
+Now we have an equation that, as we propagate it forward in time and adjust 
+ 
+ 
+ 
+  appropriately, we find the ground state of any given Hamiltonian. This is still a harder problem than classical mechanics, though, because instead of propagating single positions of particles, we must propagate entire functions. In classical mechanics, we could simulate the motion of the particles by setting 
+ 
+ 
+ 
+ , if we assume that the force is constant over the time span of 
+ 
+ 
+ 
+ . For the imaginary time Schrödinger equation, instead, we propagate forward in time using a convolution integral with a special function called a Green's function. So we get 
+ 
+ 
+ 
+ . Similarly to classical mechanics, we can only propagate for small slices of time; otherwise the Green's function is inaccurate. As the number of particles increases, the dimensionality of the integral increases as well, since we have to integrate over all coordinates of all particles. We can do these integrals by Monte Carlo integration.
+References
+
+2 R.C. Grimm and R.G. Storer, J. Comput. Phys. 7, 134 (1971)
+3 J. Anderson, J. Chem. Phys. 63, 1499 (1975)
+4 B.L. Hammond, W.A Lester, Jr. & P.J. Reynolds "Monte Carlo Methods in Ab Initio Quantum Chemistry" (World Scientific, 1994)s by Monte Carlo.
+
+"
+Category:Quantum chemistry Category:Computational chemistry Category:Quantum Monte Carlo
+
+
+
+1 J. Anderson, J. Chem. Phys. 65, 4121 (1976)↩
+
+
+
+

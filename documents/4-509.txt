@@ -1,21 +1,1143 @@
-   Automatic differentiation      Automatic differentiation  In [[mathematics]] and [[computer algebra]], '''automatic differentiation''' ('''AD'''), also called '''algorith mic differentiation''' or computational differentiation , 1 2 is a set of techniques to numerically evaluate the derivative of a function specified by a computer program. AD exploits the fact that every computer program, no matter how complicated, executes a sequence of elementary arithmetic operations (addition, subtraction, multiplication, division, etc.) and elementary functions (exp, log, sin, cos, etc.). By applying the chain rule repeatedly to these operations, derivatives of arbitrary order can be computed automatically, accurately to working precision, and using at most a small constant factor more arithmetic operations than the original program.  Automatic differentiation is not:   Symbolic differentiation , nor  Numerical differentiation (the method of finite differences).   These classical methods run into problems: symbolic differentiation leads to inefficient code (unless carefully done) and faces the difficulty of converting a computer program into a single expression, while numerical differentiation can introduce round-off errors in the discretization process and cancellation. Both classical methods have problems with calculating higher derivatives, where the complexity and errors increase. Finally, both classical methods are slow at computing the partial derivatives of a function with respect to many inputs, as is needed for gradient -based optimization algorithms. Automatic differentiation solves all of these problems.  The chain rule, forward and reverse accumulation  Fundamental to AD is the decomposition of differentials provided by the chain rule . For the simple composition    y  =   g   (   h   (  x  )    )    =   g   (  w  )          y    g    h  x           g  w      y=g(h(x))=g(w)   the chain rule gives        d  y    d  x    =     d  y    d  w      d  w    d  x             d  y     d  x          d  y     d  w        d  w     d  x       \frac{dy}{dx}=\frac{dy}{dw}\frac{dw}{dx}     Usually, two distinct modes of AD are presented, forward accumulation (or forward mode ) and reverse accumulation (or reverse mode ). Forward accumulation specifies that one traverses the chain rule from inside to outside (that is, first one computes      d  w   /  d   x          d  w   d   x    dw/dx   and then      d  y   /  d   w          d  y   d   w    dy/dw   , while reverse accumulation has the traversal from outside to inside.  Forward accumulation  (Figure)  Figure 2: Example of forward accumulation with computational graph   In forward accumulation AD, one first fixes the independent variable to which differentiation is performed and computes the derivative of each sub- expression recursively. In a pen-and-paper calculation, one can do so by repeatedly substituting the derivative of the inner functions in the chain rule:        ∂  y    ∂  x    =     ∂  y    ∂   w  1       ∂   w  1     ∂  x     =     ∂  y    ∂   w  1      (     ∂   w  1     ∂   w  2       ∂   w  2     ∂  x     )    =     ∂  y    ∂   w  1      (     ∂   w  1     ∂   w  2      (     ∂   w  2     ∂   w  3       ∂   w  3     ∂  x     )    )    =  ⋯            y     x          y      subscript  w  1          subscript  w  1      x                y      subscript  w  1            subscript  w  1       subscript  w  2          subscript  w  2      x                 y      subscript  w  1            subscript  w  1       subscript  w  2            subscript  w  2       subscript  w  3          subscript  w  3      x            normal-⋯     \frac{\partial y}{\partial x}=\frac{\partial y}{\partial w_{1}}\frac{\partial w%
- _{1}}{\partial x}=\frac{\partial y}{\partial w_{1}}\left(\frac{\partial w_{1}}%
- {\partial w_{2}}\frac{\partial w_{2}}{\partial x}\right)=\frac{\partial y}{%
- \partial w_{1}}\left(\frac{\partial w_{1}}{\partial w_{2}}\left(\frac{\partial
- w%
- _{2}}{\partial w_{3}}\frac{\partial w_{3}}{\partial x}\right)\right)=\cdots     This can be generalized to multiple variables as a matrix product of Jacobians .  Compared to reverse accumulation, forward accumulation is very natural and easy to implement as the flow of derivative information coincides with the order of evaluation. One simply augments each variable   w   w   w   with its derivative   ẇ   ẇ   ẇ   (stored as a numerical value, not a symbolic expression),       w  ˙   =    ∂  w    ∂  x         normal-˙  w       w     x      \dot{w}=\frac{\partial w}{\partial x}     as denoted by the dot. The derivatives are then computed in sync with the evaluation steps and combined with other derivatives via the chain rule.  As an example, consider the function:        z      =   f   (   x  1   ,   x  2   )            =     x  1    x  2    +   sin   x  1             =     w  1    w  2    +   sin   w  1             =    w  3   +   w  4            =   w  5          z    absent    f    subscript  x  1    subscript  x  2         missing-subexpression     absent       subscript  x  1    subscript  x  2       subscript  x  1         missing-subexpression     absent       subscript  w  1    subscript  w  2       subscript  w  1         missing-subexpression     absent     subscript  w  3    subscript  w  4        missing-subexpression     absent   subscript  w  5       \begin{aligned}\displaystyle z&\displaystyle=f(x_{1},x_{2})\\
- &\displaystyle=x_{1}x_{2}+\sin x_{1}\\
- &\displaystyle=w_{1}w_{2}+\sin w_{1}\\
- &\displaystyle=w_{3}+w_{4}\\
- &\displaystyle=w_{5}\end{aligned}     For clarity, the individual sub-expressions have been labeled with the variables .  The choice of the independent variable to which differentiation is performed affects the seed values and . Suppose one is interested in the derivative of this function with respect to . In this case, the seed values should be set to:        w  ˙   1   =     ∂   x  1     ∂   x  1      =  1         subscript   normal-˙  w   1        subscript  x  1       subscript  x  1          1     \displaystyle\dot{w}_{1}=\frac{\partial x_{1}}{\partial x_{1}}=1     With the seed values set, one may then propagate the values using the chain rule as shown in both the table below. Figure 2 shows a pictorial depiction of this process as a computational graph.      Operations to compute value   Operations to compute derivative            w  1   =   x  1        subscript  w  1    subscript  x  1     w_{1}=x_{1}            w  ˙   1   =  1       subscript   normal-˙  w   1   1    \dot{w}_{1}=1   (seed)          w  2   =   x  2        subscript  w  2    subscript  x  2     w_{2}=x_{2}            w  ˙   2   =  0       subscript   normal-˙  w   2   0    \dot{w}_{2}=0   (seed)          w  3   =    w  1   ⋅   w  2         subscript  w  3    normal-⋅   subscript  w  1    subscript  w  2      w_{3}=w_{1}\cdot w_{2}            w  ˙   3   =     w  2   ⋅    w  ˙   1    +    w  1   ⋅    w  ˙   2          subscript   normal-˙  w   3      normal-⋅   subscript  w  2    subscript   normal-˙  w   1     normal-⋅   subscript  w  1    subscript   normal-˙  w   2       \dot{w}_{3}=w_{2}\cdot\dot{w}_{1}+w_{1}\cdot\dot{w}_{2}             w  4   =   sin   w  1         subscript  w  4      subscript  w  1      w_{4}=\sin w_{1}            w  ˙   4   =   cos    w  1   ⋅    w  ˙   1          subscript   normal-˙  w   4      normal-⋅   subscript  w  1    subscript   normal-˙  w   1       \dot{w}_{4}=\cos w_{1}\cdot\dot{w}_{1}             w  5   =    w  3   +   w  4         subscript  w  5      subscript  w  3    subscript  w  4      w_{5}=w_{3}+w_{4}            w  ˙   5   =     w  ˙   3   +    w  ˙   4         subscript   normal-˙  w   5      subscript   normal-˙  w   3    subscript   normal-˙  w   4      \dot{w}_{5}=\dot{w}_{3}+\dot{w}_{4}        To compute the gradient of this example function, which requires the derivatives of   f   f   f   with respect to not only but also , one must perform an additional sweep over the computational graph using the seed values       w  ˙   1   =  0   ;     w  ˙   2   =  1      formulae-sequence     subscript   normal-˙  w   1   0      subscript   normal-˙  w   2   1     \dot{w}_{1}=0;\dot{w}_{2}=1   .  The computational complexity of one sweep of forward accumulation is proportional to the complexity of the original code.  Forward accumulation is more efficient than reverse accumulation for functions with    m  ≫  n      m  normal-≫  n    m≫n   as only   n   n   n   sweeps are necessary, compared to   m   m   m   sweeps for reverse accumulation.  Reverse accumulation  (Figure)  Figure 3: Example of reverse accumulation with computational graph   In reverse accumulation AD, one first fixes the dependent variable to be differentiated and computes the derivative with respect to each sub- expression recursively. In a pen-and-paper calculation, one can perform the equivalent by repeatedly substituting the derivative of the outer functions in the chain rule:        ∂  y    ∂  x    =     ∂  y    ∂   w  1       ∂   w  1     ∂  x     =    (     ∂  y    ∂   w  2       ∂   w  2     ∂   w  1      )     ∂   w  1     ∂  x     =    (    (     ∂  y    ∂   w  3       ∂   w  3     ∂   w  2      )     ∂   w  2     ∂   w  1      )     ∂   w  1     ∂  x     =  ⋯            y     x          y      subscript  w  1          subscript  w  1      x                  y      subscript  w  2          subscript  w  2       subscript  w  1           subscript  w  1      x                    y      subscript  w  3          subscript  w  3       subscript  w  2           subscript  w  2       subscript  w  1           subscript  w  1      x          normal-⋯     \frac{\partial y}{\partial x}=\frac{\partial y}{\partial w_{1}}\frac{\partial w%
- _{1}}{\partial x}=\left(\frac{\partial y}{\partial w_{2}}\frac{\partial w_{2}}%
- {\partial w_{1}}\right)\frac{\partial w_{1}}{\partial x}=\left(\left(\frac{%
- \partial y}{\partial w_{3}}\frac{\partial w_{3}}{\partial w_{2}}\right)\frac{%
- \partial w_{2}}{\partial w_{1}}\right)\frac{\partial w_{1}}{\partial x}=\cdots     In reverse accumulation, the quantity of interest is the adjoint , denoted with a bar (   w̄   w̄   w̄   ); it is a derivative of a chosen dependent variable with respect to a subexpression   w   w   w   :       w  ¯   =    ∂  y    ∂  w         normal-¯  w       y     w      \bar{w}=\frac{\partial y}{\partial w}     Reverse accumulation traverses the chain rule from outside to inside, or in the case of the computational graph in Figure 3, from top to bottom. The example function is real-valued, and thus there is only one seed for the derivative computation, and only one sweep of the computational graph is needed in order to calculate the (two-component) gradient. This is only half the work when compared to forward accumulation, but reverse accumulation requires the storage of the intermediate variables as well as the instructions that produced them in a data structure known as a Wengert list (or "tape"), 3 which may represent a significant memory issue if the computational graph is large. This can be mitigated to some extent by storing only a subset of the intermediate variables and then reconstructing the necessary work variables by repeating the evaluations, a technique known as checkpointing .  The operations to compute the derivative using reverse accumulation are shown in the table below (note the reversed order):      Operations to compute derivative             w  ¯   5   =  1       subscript   normal-¯  w   5   1    \bar{w}_{5}=1   (seed)           w  ¯   4   =    w  ¯   5        subscript   normal-¯  w   4    subscript   normal-¯  w   5     \bar{w}_{4}=\bar{w}_{5}              w  ¯   3   =    w  ¯   5        subscript   normal-¯  w   3    subscript   normal-¯  w   5     \bar{w}_{3}=\bar{w}_{5}              w  ¯   2   =     w  ¯   3   ⋅   w  1         subscript   normal-¯  w   2    normal-⋅   subscript   normal-¯  w   3    subscript  w  1      \bar{w}_{2}=\bar{w}_{3}\cdot w_{1}              w  ¯   1   =      w  ¯   3   ⋅   w  2    +     w  ¯   4   ⋅   cos   w  1           subscript   normal-¯  w   1      normal-⋅   subscript   normal-¯  w   3    subscript  w  2     normal-⋅   subscript   normal-¯  w   4      subscript  w  1        \bar{w}_{1}=\bar{w}_{3}\cdot w_{2}+\bar{w}_{4}\cdot\cos w_{1}        The data flow graph of a computation can be manipulated to calculate the gradient of its original calculation. This is done by adding an adjoint node for each primal node, connected by adjoint edges which parallel the primal edges but flow in the opposite direction. The nodes in the adjoint graph represent multiplication by the derivatives of the functions calculated by the nodes in the primal. For instance, addition in the primal causes fanout in the adjoint; fanout in the primal causes addition in the adjoint; a unary function    y  =   f   (  x  )        y    f  x     y=f(x)   in the primal causes    x̄  =   ȳ  f  ′   (  x  )        x̄    ȳ  f  normal-′  x     x̄=ȳf′(x)   in the adjoint; etc.  Reverse accumulation is more efficient than forward accumulation for functions with    m  ≪  n      m  normal-≪  n    m≪n   as only   m   m   m   sweeps are necessary, compared to   n   n   n   sweeps for forward accumulation.  Backpropagation of errors in multilayer perceptrons, a technique used in machine learning , is a special case of reverse mode AD.  Beyond forward and reverse accumulation  Forward and reverse accumulation are just two (extreme) ways of traversing the chain rule. The problem of computing a full Jacobian of with a minimum number of arithmetic operations is known as the optimal Jacobian accumulation (OJA) problem, which is NP-complete . 4 Central to this proof is the idea that there may exist algebraic dependencies between the local partials that label the edges of the graph. In particular, two or more edge labels may be recognized as equal. The complexity of the problem is still open if it is assumed that all edge labels are unique and algebraically independent.  Automatic differentiation using dual numbers  Forward mode automatic differentiation is accomplished by augmenting the algebra of real numbers and obtaining a new arithmetic . An additional component is added to every number which will represent the derivative of a function at the number, and all arithmetic operators are extended for the augmented algebra. The augmented algebra is the algebra of dual numbers .  Replace every number    x    x   \,x   with the number    x  +    x  ′   ε       x     superscript  x  normal-′   ε     x+x^{\prime}\varepsilon   , where    x  ′     superscript  x  normal-′    x^{\prime}   is a real number, but   ε   ε   \varepsilon   is an abstract number with the property     ε  2   =  0       superscript  ε  2   0    \varepsilon^{2}=0   (an infinitesimal ; see Smooth infinitesimal analysis ). Using only this, we get for the regular arithmetic       (   x  +    x  ′   ε    )   +   (   y  +    y  ′   ε    )         x     superscript  x  normal-′   ε      y     superscript  y  normal-′   ε      \displaystyle(x+x^{\prime}\varepsilon)+(y+y^{\prime}\varepsilon)     and likewise for subtraction and division.  Now, we may calculate polynomials in this augmented arithmetic. If     P   (  x  )    =    p  0   +    p  1   x   +    p  2    x  2    +  ⋯  +    p  n    x  n           P  x      subscript  p  0      subscript  p  1   x      subscript  p  2    superscript  x  2    normal-⋯     subscript  p  n    superscript  x  n       P(x)=p_{0}+p_{1}x+p_{2}x^{2}+\cdots+p_{n}x^{n}   , then         P   (   x  +    x  ′   ε    )        =    p  0   +    p  1    (   x  +    x  ′   ε    )    +  ⋯  +    p  n     (   x  +    x  ′   ε    )   n             =    p  0   +    p  1   x   +  ⋯  +    p  n    x  n    +    p  1    x  ′   ε   +   2   p  2   x   x  ′   ε   +  ⋯  +   n   p  n    x   n  -  1     x  ′   ε            =    P   (  x  )    +    P   (  1  )     (  x  )    x  ′   ε             P    x     superscript  x  normal-′   ε       absent     subscript  p  0      subscript  p  1     x     superscript  x  normal-′   ε     normal-⋯     subscript  p  n    superscript    x     superscript  x  normal-′   ε    n         missing-subexpression     absent     subscript  p  0      subscript  p  1   x   normal-⋯     subscript  p  n    superscript  x  n       subscript  p  1    superscript  x  normal-′   ε     2   subscript  p  2   x   superscript  x  normal-′   ε   normal-⋯    n   subscript  p  n    superscript  x    n  1     superscript  x  normal-′   ε        missing-subexpression     absent      P  x      superscript  P  1   x   superscript  x  normal-′   ε        \begin{aligned}\displaystyle P(x+x^{\prime}\varepsilon)&\displaystyle=p_{0}+p_%
- {1}(x+x^{\prime}\varepsilon)+\cdots+p_{n}(x+x^{\prime}\varepsilon)^{n}\\
- &\displaystyle=p_{0}+p_{1}x+\cdots+p_{n}x^{n}+p_{1}x^{\prime}\varepsilon+2p_{2%
- }xx^{\prime}\varepsilon+\cdots+np_{n}x^{n-1}x^{\prime}\varepsilon\\
- &\displaystyle=P(x)+P^{(1)}(x)x^{\prime}\varepsilon\end{aligned}     where    P   (  1  )      superscript  P  1    P^{(1)}   denotes the derivative of   P   P   P   with respect to its first argument, and    x  ′     superscript  x  normal-′    x^{\prime}   , called a seed , can be chosen arbitrarily.  The new arithmetic consists of ordered pairs , elements written    ⟨  x  ,   x  ′   ⟩     x   superscript  x  normal-′     \langle x,x^{\prime}\rangle   , with ordinary arithmetics on the first component, and first order differentiation arithmetic on the second component, as described above. Extending the above results on polynomials to analytic functions we obtain a list of the basic arithmetic and some standard functions for the new arithmetic:       ⟨  u  ,   u  ′   ⟩   +   ⟨  v  ,   v  ′   ⟩        u   superscript  u  normal-′     v   superscript  v  normal-′      \displaystyle\left\langle u,u^{\prime}\right\rangle+\left\langle v,v^{\prime}\right\rangle   and in general for the primitive function   g   g   g   ,       g   (   ⟨  u  ,   u  ′   ⟩   ,   ⟨  v  ,   v  ′   ⟩   )    =   ⟨   g   (  u  ,  v  )    ,     g  u    (  u  ,  v  )    u  ′    +    g  v    (  u  ,  v  )    v  ′     ⟩         g    u   superscript  u  normal-′     v   superscript  v  normal-′         g   u  v         subscript  g  u    u  v    superscript  u  normal-′       subscript  g  v    u  v    superscript  v  normal-′        g(\langle u,u^{\prime}\rangle,\langle v,v^{\prime}\rangle)=\langle g(u,v),g_{u%
- }(u,v)u^{\prime}+g_{v}(u,v)v^{\prime}\rangle   where    g  u     subscript  g  u    g_{u}   and    g  v     subscript  g  v    g_{v}   are the derivatives of   g   g   g   with respect to its first and second arguments, respectively.  When a binary basic arithmetic operation is applied to mixed arguments—the pair    ⟨  u  ,   u  ′   ⟩     u   superscript  u  normal-′     \langle u,u^{\prime}\rangle   and the real number   c   c   c   —the real number is first lifted to    ⟨  c  ,  0  ⟩     c  0    \langle c,0\rangle   . The derivative of a function    f  :   ℝ  →  ℝ      normal-:  f   normal-→  ℝ  ℝ     f:\mathbb{R}\rightarrow\mathbb{R}   at the point    x  0     subscript  x  0    x_{0}   is now found by calculating    f   (   ⟨   x  0   ,  1  ⟩   )       f    subscript  x  0   1     f(\langle x_{0},1\rangle)   using the above arithmetic, which gives    ⟨   f   (   x  0   )    ,    f  ′    (   x  0   )    ⟩       f   subscript  x  0       superscript  f  normal-′    subscript  x  0      \langle f(x_{0}),f^{\prime}(x_{0})\rangle   as the result.  Vector arguments and functions  Multivariate functions can be handled with the same efficiency and mechanisms as univariate functions by adopting a directional derivative operator. That is, if it is sufficient to compute     y  ′   =     ∇  f    (  x  )    ⋅   x  ′         superscript  y  normal-′    normal-⋅     normal-∇  f   x    superscript  x  normal-′      y^{\prime}=\nabla f(x)\cdot x^{\prime}   , the directional derivative     y  ′   ∈   ℝ  m        superscript  y  normal-′    superscript  ℝ  m     y^{\prime}\in\mathbb{R}^{m}   of    f  :    ℝ  n   →   ℝ  m       normal-:  f   normal-→   superscript  ℝ  n    superscript  ℝ  m      f:\mathbb{R}^{n}\rightarrow\mathbb{R}^{m}   at    x  ∈   ℝ  n       x   superscript  ℝ  n     x\in\mathbb{R}^{n}   in the direction     x  ′   ∈   ℝ  n        superscript  x  normal-′    superscript  ℝ  n     x^{\prime}\in\mathbb{R}^{n}   , this may be calculated as     (   ⟨   y  1   ,   y  1  ′   ⟩   ,  …  ,   ⟨   y  m   ,   y  m  ′   ⟩   )   =   f   (   ⟨   x  1   ,   x  1  ′   ⟩   ,  …  ,   ⟨   x  n   ,   x  n  ′   ⟩   )           subscript  y  1    subscript   superscript  y  normal-′   1    normal-…    subscript  y  m    subscript   superscript  y  normal-′   m       f     subscript  x  1    subscript   superscript  x  normal-′   1    normal-…    subscript  x  n    subscript   superscript  x  normal-′   n        (\langle y_{1},y^{\prime}_{1}\rangle,\ldots,\langle y_{m},y^{\prime}_{m}%
- \rangle)=f(\langle x_{1},x^{\prime}_{1}\rangle,\ldots,\langle x_{n},x^{\prime}%
- _{n}\rangle)   using the same arithmetic as above. If all the elements of    ∇  f     normal-∇  f    \nabla f   are desired, then   n   n   n   function evaluations are required. Note that in many optimization applications, the directional derivative is indeed sufficient.  Higher order differentials  The above arithmetic can be generalized, in the natural way, to calculate parts of the second order and higher derivatives. However, the arithmetic rules quickly grow very complicated: complexity will be quadratic in the highest derivative degree. Instead, truncated Taylor series arithmetic is used. This is possible because the Taylor summands in a Taylor series of a function are products of known coefficients and derivatives of the function. Currently, there exists efficient Hessian automatic differentiation methods that calculate the entire Hessian matrix with a single forward and reverse accumulation. There also exist a number of specialized methods for calculating large sparse Hessian matrices.  Implementation  Forward-mode AD is implemented by a nonstandard interpretation of the program in which real numbers are replaced by dual numbers, constants are lifted to dual numbers with a zero epsilon coefficient, and the numeric primitives are lifted to operate on dual numbers. This nonstandard interpretation is generally implemented using one of two strategies: source code transformation or operator overloading .  Source code transformation (SCT)  (Figure)  Figure 4: Example of how source code transformation could work   The source code for a function is replaced by an automatically generated source code that includes statements for calculating the derivatives interleaved with the original instructions.  Source code transformation can be implemented for all programming languages, and it is also easier for the compiler to do compile time optimizations. However, the implementation of the AD tool itself is more difficult.  Operator overloading (OO)   Operator overloading is a possibility for source code written in a language supporting it. Objects for real numbers and elementary mathematical operations must be overloaded to cater for the augmented arithmetic depicted above. This requires no change in the form or sequence of operations in the original source code for the function to be differentiated, but often requires changes in basic data types for numbers and vectors to support overloading and often also involves the insertion of special flagging operations.  Operator overloading for forward accumulation is easy to implement, and also possible for reverse accumulation. However, current compilers lag behind in optimizing the code when compared to forward accumulation.  Software   C/C++         Package   License   Approach   Brief Info       ADC Version 4.0   nonfree   OO      Adept   Apache 2.0   OO   First-order forward and reverse modes. Very fast due to its use of expression templates and an efficient tape structure.     ADIC   free for noncommercial   SCT   forward mode     ADMB    SCT+OO      ADNumber   dual license   OO   arbitrary order forward/reverse     ADOL-C   CPL 1.0 or GPL 2.0   OO   arbitrary order forward/reverse, part of COIN-OR     AMPL   free for students   SCT      FADBAD++   free for noncommercial   OO   uses operator new     CasADi   LGPL   SCT   Forward/reverse modes, matrix-valued atomic operations.     ceres-solver   BSD   OO   A portable C++ library that allows for modeling and solving large complicated nonlinear least squares problems     CppAD   EPL 1.0 or GPL 3.0   OO   arbitrary order forward/reverse, AD for arbitrary Base including AD , part of COIN-OR ; can also be used to produce C source code using the CppADCodeGen library.     Eigen Auto Diff   MPL2   OO      OpenAD   depends on components   SCT      Sacado    OO   A part of the Trilinos collection, forward/reverse modes.     Stan (software)    OO   forward- and reverse-mode automatic differentiation with library of special functions, probability functions, matrix operators, and linear algebra solvers     TAPENADE   Free for noncommercial   SCT      CTaylor   free   OO   truncated taylor series, multi variable, high performance, calculating and storing only potentially nonzero derivatives, calculates higher order derivatives, order of derivatives increases when using matching operations until maximum order (parameter) is reached, example source code and executable available for testing performance         Fortran         Package   License   Approach   Brief Info       ADF Version 4.0   nonfree   OO      ADIFOR   >>> (free for non-commercial)   SCT      AUTO_DERIV   free for non-commercial   OO     OpenAD   depends on components   SCT      TAPENADE   Free for noncommercial   SCT      GADfit   Free ( GPL 3)   OO   First (forward, reverse) and second (forward) order, principal use is nonlinear curve fitting, includes the differentiation of integrals         Matlab         Package   License   Approach   Brief Info       AD for MATLAB    OO   Forward (1st & 2nd derivative, Uses MEX files & Windows DLLs)     Adiff    OO   Forward (1st derivative)     MAD   Proprietary   OO      ADiMat   Proprietary   SCT   Forward (1st & 2nd derivative) & Reverse (1st), proprietary server side transform     MADiff    OO   Reverse        Python         Package   License   Approach   Brief Info       ad    OO   first and second-order, reverse accumulation, transparent on-the-fly calculations, basic NumPy support, written in pure python     FuncDesigner    OO   uses NumPy arrays and SciPy sparse matrices, also allows to solve linear/non-linear/ODE systems and to perform numerical optimizations by OpenOpt     ScientificPython   CeCILL   OO   see modules Scientific.Functions.FirstDerivatives and Scientific.Functions.Derivatives     pycppad    OO   arbitrary order forward/reverse, implemented as wrapper for CppAD including AD and AD >.     pyadolc    OO   wrapper for ADOL-C, hence arbitrary order derivatives in the (combined) forward/reverse mode of AD, supports sparsity pattern propagation and sparse derivative computations     uncertainties    OO   first-order derivatives, reverse mode, transparent calculations     algopy    OO   same approach as pyadolc and thus compatible, support to differentiate through numerical linear algebra functions like the matrix-matrix product, solution of linear systems, QR and Cholesky decomposition, etc.     pyderiv    OO   automatic differentiation and (co)variance calculation     CasADi   LGPL   SCT   Python front-end to CasADi. Forward/reverse modes, matrix-valued atomic operations.     Theano    OO   Theano is a Python library that allows you to define, optimize, and evaluate mathematical expressions involving multi-dimensional arrays both on CPU and GPU efficiently.     Autograd   MIT   OO   Autograd can reverse-mode differentiate native Python and Numpy code. It can handle a large subset of Python's features, including loops, ifs, recursion and closures. It is closed under its own operation and hence can compute derivatives of any order.         Lua         Package   License   Approach   Brief Info       Torch    OO   Torch is a LuaJIT library used for Deep Learning . Its nn package is divided into modular objects that share a common Module interface. Modules have a forward and backward function that allow them to feedforward and backpropagate (first-order derivatives). Modules can be joined together using module composites to create complex task-tailored graphs.     SciLua   MIT   OO   SciLua, a framework for general purpose scientific computing in LuaJIT , features complete and transparent support for forward-mode automatic differentiation.        .NET         Package   License   Approach   Brief Info       AutoDiff    OO   Automatic differentiation with C# operator overloading.     FuncLib   MIT   OO   Automatic differentiation and numerical optimization, operator overloading, unlimited order of differentiation, compilation to IL code for very fast evaluation.     DiffSharp    OO   An automatic differentiation library implemented in the F# language. It supports C# and the other CLI languages. The library provides gradients, Hessians, Jacobians, directional derivatives, and matrix-free Hessian- and Jacobian-vector products, which can be incorporated with minimal change into existing algorithms. Operations can be nested to any level, meaning that you can compute exact higher-order derivatives and differentiate functions that are internally making use of differentiation.        Haskell         Package   License   Approach   Brief Info       ad    OO   Forward Mode (1st derivative or arbitrary order derivatives via lazy lists and sparse tries) Reverse Mode Combined forward-on-reverse Hessians. Uses Quantification to allow the implementation automatically choose appropriate modes. Quantification prevents perturbation/sensitivity confusion at compile time.     fad    OO   Forward Mode (lazy list). Quantification prevents perturbation confusion at compile time.     rad    OO   Reverse Mode. (Subsumed by 'ad'). Quantification prevents sensitivity confusion at compile time.         Java         Package   License   Approach   Brief Info       JAutoDiff   -   OO   Provides a framework to compute derivatives of functions on arbitrary types of field using generics. Coded in 100% pure Java.     Apache Commons Math   Apache License v2   OO   This class is an implementation of the extension to Rall's numbers described in Dan Kalman's paper 5     Deriva   Eclipse Public License v1.0   DSL+Code Generation   Deriva automates algorithmic differentiation in Java and Clojure projects. It defines DSL for building extended arithmetic expressions (the extension being support for conditionals, allowing to express non analytic functions). The DSL is used to generate flat byte-code at runtime, providing implementation without overhead of function calls.     Jap   Public   OO/SCT   Jap is a tools using Virtual Operator Overloading for java class. Jap was developed in the thesis of Phuong PHAM-QUANG 2008-2011.        Clojure         Package   License   Approach   Brief Info       Deriva   Eclipse Public License v1.0   DSL+Code Generation   Deriva automates algorithmic differentiation in Java and Clojure projects. It defines DSL for building extended arithmetic expressions (the extension being support for conditionals, allowing to express non analytic functions). The DSL is used to generate flat byte-code at runtime, providing implementation without overhead of function calls.       References  Literature       External links   www.autodiff.org , An "entry site to everything you want to know about automatic differentiation"  [ http://www.autodiff.org/?module=Applications&application; ;=HC1 Automatic Differentiation of Parallel OpenMP Programs]  Automatic Differentiation, C++ Templates and Photogrammetry  Automatic Differentiation, Operator Overloading Approach  Compute analytic derivatives of any Fortran77, Fortran95, or C program through a web-based interface Automatic Differentiation of Fortran programs  Description and example code for forward Automatic Differentiation in Scala  Adjoint Algorithmic Differentiation: Calibration and Implicit Function Theorem  1 , Exact First- and Second-Order Greeks by Algorithmic Differentiation  2 , Adjoint Algorithmic Differentiation of a GPU Accelerated Application  3 , Adjoint Methods in Computational Finance Software Tool Support for Algorithmic Differentiation   "  Category:Differential calculus  Category:Computer algebra     ↩  http://www.ec-securehost.com/SIAM/SE24.html ↩  ↩  ↩  ↩     
+
+
+
+Automatic differentiation
+
+
+
+
+Automatic differentiation
+In [[mathematics]] and [[computer algebra]], '''automatic differentiation''' ('''AD'''), also called '''algorith
+ mic differentiation''' or computational differentiation,12 is a set of techniques to numerically evaluate the derivative of a function specified by a computer program. AD exploits the fact that every computer program, no matter how complicated, executes a sequence of elementary arithmetic operations (addition, subtraction, multiplication, division, etc.) and elementary functions (exp, log, sin, cos, etc.). By applying the chain rule repeatedly to these operations, derivatives of arbitrary order can be computed automatically, accurately to working precision, and using at most a small constant factor more arithmetic operations than the original program.
+Automatic differentiation is not: 
+
+Symbolic differentiation, nor
+Numerical differentiation (the method of finite differences).
+
+These classical methods run into problems: symbolic differentiation leads to inefficient code (unless carefully done) and faces the difficulty of converting a computer program into a single expression, while numerical differentiation can introduce round-off errors in the discretization process and cancellation. Both classical methods have problems with calculating higher derivatives, where the complexity and errors increase. Finally, both classical methods are slow at computing the partial derivatives of a function with respect to many inputs, as is needed for gradient-based optimization algorithms. Automatic differentiation solves all of these problems.
+The chain rule, forward and reverse accumulation
+Fundamental to AD is the decomposition of differentials provided by the chain rule. For the simple composition 
+ 
+ 
+ 
+  the chain rule gives
+
+
+
+Usually, two distinct modes of AD are presented, forward accumulation (or forward mode) and reverse accumulation (or reverse mode). Forward accumulation specifies that one traverses the chain rule from inside to outside (that is, first one computes 
+ 
+ 
+ 
+  and then 
+ 
+ 
+ 
+ , while reverse accumulation has the traversal from outside to inside.
+Forward accumulation
+(Figure)
+Figure 2: Example of forward accumulation with computational graph
+
+In forward accumulation AD, one first fixes the independent variable to which differentiation is performed and computes the derivative of each sub-expression recursively. In a pen-and-paper calculation, one can do so by repeatedly substituting the derivative of the inner functions in the chain rule:
+
+
+
+This can be generalized to multiple variables as a matrix product of Jacobians.
+Compared to reverse accumulation, forward accumulation is very natural and easy to implement as the flow of derivative information coincides with the order of evaluation. One simply augments each variable 
+ 
+ 
+ 
+  with its derivative 
+ 
+ 
+ 
+  (stored as a numerical value, not a symbolic expression),
+
+
+
+as denoted by the dot. The derivatives are then computed in sync with the evaluation steps and combined with other derivatives via the chain rule.
+As an example, consider the function:
+
+
+
+For clarity, the individual sub-expressions have been labeled with the variables .
+The choice of the independent variable to which differentiation is performed affects the seed values  and . Suppose one is interested in the derivative of this function with respect to . In this case, the seed values should be set to:
+
+
+
+With the seed values set, one may then propagate the values using the chain rule as shown in both the table below. Figure 2 shows a pictorial depiction of this process as a computational graph.
+
+
+
+
+Operations to compute value
+
+Operations to compute derivative
+
+
+
+
+
+
+
+
+
+
+
+ 
+  (seed)
+
+
+
+
+
+
+
+
+
+ 
+  (seed)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+To compute the gradient of this example function, which requires the derivatives of 
+ 
+ 
+ 
+  with respect to not only  but also , one must perform an additional sweep over the computational graph using the seed values 
+ 
+ 
+ 
+ .
+The computational complexity of one sweep of forward accumulation is proportional to the complexity of the original code.
+Forward accumulation is more efficient than reverse accumulation for functions  with 
+ 
+ 
+ 
+  as only 
+ 
+ 
+ 
+  sweeps are necessary, compared to 
+ 
+ 
+ 
+  sweeps for reverse accumulation.
+Reverse accumulation
+(Figure)
+Figure 3: Example of reverse accumulation with computational graph
+
+In reverse accumulation AD, one first fixes the dependent variable to be differentiated and computes the derivative with respect to each sub-expression recursively. In a pen-and-paper calculation, one can perform the equivalent by repeatedly substituting the derivative of the outer functions in the chain rule:
+
+
+
+In reverse accumulation, the quantity of interest is the adjoint, denoted with a bar (
+ 
+ 
+ 
+ ); it is a derivative of a chosen dependent variable with respect to a subexpression 
+ 
+ 
+ 
+ :
+
+
+
+Reverse accumulation traverses the chain rule from outside to inside, or in the case of the computational graph in Figure 3, from top to bottom. The example function is real-valued, and thus there is only one seed for the derivative computation, and only one sweep of the computational graph is needed in order to calculate the (two-component) gradient. This is only half the work when compared to forward accumulation, but reverse accumulation requires the storage of the intermediate variables  as well as the instructions that produced them in a data structure known as a Wengert list (or "tape"),3 which may represent a significant memory issue if the computational graph is large. This can be mitigated to some extent by storing only a subset of the intermediate variables and then reconstructing the necessary work variables by repeating the evaluations, a technique known as checkpointing.
+The operations to compute the derivative using reverse accumulation are shown in the table below (note the reversed order):
+
+
+
+
+Operations to compute derivative
+
+
+
+
+
+
+
+ 
+  (seed)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+The data flow graph of a computation can be manipulated to calculate the gradient of its original calculation. This is done by adding an adjoint node for each primal node, connected by adjoint edges which parallel the primal edges but flow in the opposite direction. The nodes in the adjoint graph represent multiplication by the derivatives of the functions calculated by the nodes in the primal. For instance, addition in the primal causes fanout in the adjoint; fanout in the primal causes addition in the adjoint; a unary function 
+ 
+ 
+ 
+  in the primal causes 
+ 
+ 
+ 
+  in the adjoint; etc.
+Reverse accumulation is more efficient than forward accumulation for functions  with 
+ 
+ 
+ 
+  as only 
+ 
+ 
+ 
+  sweeps are necessary, compared to 
+ 
+ 
+ 
+  sweeps for forward accumulation.
+Backpropagation of errors in multilayer perceptrons, a technique used in machine learning, is a special case of reverse mode AD.
+Beyond forward and reverse accumulation
+Forward and reverse accumulation are just two (extreme) ways of traversing the chain rule. The problem of computing a full Jacobian of  with a minimum number of arithmetic operations is known as the optimal Jacobian accumulation (OJA) problem, which is NP-complete.4 Central to this proof is the idea that there may exist algebraic dependencies between the local partials that label the edges of the graph. In particular, two or more edge labels may be recognized as equal. The complexity of the problem is still open if it is assumed that all edge labels are unique and algebraically independent.
+Automatic differentiation using dual numbers
+Forward mode automatic differentiation is accomplished by augmenting the algebra of real numbers and obtaining a new arithmetic. An additional component is added to every number which will represent the derivative of a function at the number, and all arithmetic operators are extended for the augmented algebra. The augmented algebra is the algebra of dual numbers.
+Replace every number 
+ 
+ 
+ 
+  with the number 
+ 
+ 
+ 
+ , where 
+ 
+ 
+ 
+  is a real number, but 
+ 
+ 
+ 
+  is an abstract number with the property 
+ 
+ 
+ 
+  (an infinitesimal; see Smooth infinitesimal analysis). Using only this, we get for the regular arithmetic
+
+
+
+and likewise for subtraction and division.
+Now, we may calculate polynomials in this augmented arithmetic. If 
+ 
+ 
+ 
+ , then
+
+
+
+where 
+ 
+ 
+ 
+  denotes the derivative of 
+ 
+ 
+ 
+  with respect to its first argument, and 
+ 
+ 
+ 
+ , called a seed, can be chosen arbitrarily.
+The new arithmetic consists of ordered pairs, elements written 
+ 
+ 
+ 
+ , with ordinary arithmetics on the first component, and first order differentiation arithmetic on the second component, as described above. Extending the above results on polynomials to analytic functions we obtain a list of the basic arithmetic and some standard functions for the new arithmetic:
+
+
+ 
+ 
+  and in general for the primitive function 
+ 
+ 
+ 
+ ,
+
+
+ 
+  where 
+ 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+  are the derivatives of 
+ 
+ 
+ 
+  with respect to its first and second arguments, respectively.
+When a binary basic arithmetic operation is applied to mixed arguments—the pair 
+ 
+ 
+ 
+  and the real number 
+ 
+ 
+ 
+ —the real number is first lifted to 
+ 
+ 
+ 
+ 
+ . The derivative of a function 
+ 
+ 
+ 
+  at the point 
+ 
+ 
+ 
+  is now found by calculating 
+ 
+ 
+ 
+  using the above arithmetic, which gives 
+ 
+ 
+ 
+  as the result.
+Vector arguments and functions
+Multivariate functions can be handled with the same efficiency and mechanisms as univariate functions by adopting a directional derivative operator. That is, if it is sufficient to compute 
+ 
+ 
+ 
+ 
+ , the directional derivative 
+ 
+ 
+ 
+  of 
+ 
+ 
+ 
+  at 
+ 
+ 
+ 
+  in the direction 
+ 
+ 
+ 
+ , this may be calculated as 
+ 
+ 
+ 
+ 
+  using the same arithmetic as above. If all the elements of 
+ 
+ 
+ 
+  are desired, then 
+ 
+ 
+ 
+  function evaluations are required. Note that in many optimization applications, the directional derivative is indeed sufficient.
+Higher order differentials
+The above arithmetic can be generalized, in the natural way, to calculate parts of the second order and higher derivatives. However, the arithmetic rules quickly grow very complicated: complexity will be quadratic in the highest derivative degree. Instead, truncated Taylor series arithmetic is used. This is possible because the Taylor summands in a Taylor series of a function are products of known coefficients and derivatives of the function. Currently, there exists efficient Hessian automatic differentiation methods that calculate the entire Hessian matrix with a single forward and reverse accumulation. There also exist a number of specialized methods for calculating large sparse Hessian matrices.
+Implementation
+Forward-mode AD is implemented by a nonstandard interpretation of the program in which real numbers are replaced by dual numbers, constants are lifted to dual numbers with a zero epsilon coefficient, and the numeric primitives are lifted to operate on dual numbers. This nonstandard interpretation is generally implemented using one of two strategies: source code transformation or operator overloading.
+Source code transformation (SCT)
+(Figure)
+Figure 4: Example of how source code transformation could work
+
+The source code for a function is replaced by an automatically generated source code that includes statements for calculating the derivatives interleaved with the original instructions.
+Source code transformation can be implemented for all programming languages, and it is also easier for the compiler to do compile time optimizations. However, the implementation of the AD tool itself is more difficult.
+Operator overloading (OO)
+ Operator overloading is a possibility for source code written in a language supporting it. Objects for real numbers and elementary mathematical operations must be overloaded to cater for the augmented arithmetic depicted above. This requires no change in the form or sequence of operations in the original source code for the function to be differentiated, but often requires changes in basic data types for numbers and vectors to support overloading and often also involves the insertion of special flagging operations.
+Operator overloading for forward accumulation is easy to implement, and also possible for reverse accumulation. However, current compilers lag behind in optimizing the code when compared to forward accumulation.
+Software
+
+C/C++
+
+
+
+
+
+
+
+Package
+
+License
+
+Approach
+
+Brief Info
+
+
+
+
+
+ADC Version 4.0
+
+nonfree
+
+OO
+
+
+
+
+Adept
+
+Apache 2.0
+
+OO
+
+First-order forward and reverse modes. Very fast due to its use of expression templates and an efficient tape structure.
+
+
+
+ADIC
+
+free for noncommercial
+
+SCT
+
+forward mode
+
+
+
+ADMB
+
+
+SCT+OO
+
+
+
+
+ADNumber
+
+dual license
+
+OO
+
+arbitrary order forward/reverse
+
+
+
+ADOL-C
+
+CPL 1.0 or GPL 2.0
+
+OO
+
+arbitrary order forward/reverse, part of COIN-OR
+
+
+
+AMPL
+
+free for students
+
+SCT
+
+
+
+
+FADBAD++
+
+free for
+ noncommercial
+
+OO
+
+uses operator new
+
+
+
+CasADi
+
+LGPL
+
+SCT
+
+Forward/reverse modes, matrix-valued atomic operations.
+
+
+
+ceres-solver
+
+BSD
+
+OO
+
+A portable C++ library that allows for modeling and solving large complicated nonlinear least squares problems
+
+
+
+CppAD
+
+EPL 1.0 or GPL 3.0
+
+OO
+
+arbitrary order forward/reverse, AD for arbitrary Base including AD, part of COIN-OR; can also be used to produce C source code using the CppADCodeGen library.
+
+
+
+Eigen Auto Diff
+
+MPL2
+
+OO
+
+
+
+
+OpenAD
+
+depends on components
+
+SCT
+
+
+
+
+Sacado
+
+
+OO
+
+A part of the Trilinos collection, forward/reverse modes.
+
+
+
+Stan (software)
+
+
+OO
+
+forward- and reverse-mode automatic differentiation with library of special functions, probability functions, matrix operators, and linear algebra solvers
+
+
+
+TAPENADE
+
+Free for noncommercial
+
+SCT
+
+
+
+
+CTaylor
+
+free
+
+OO
+
+truncated taylor series, multi variable, high performance, calculating and storing only potentially nonzero derivatives, calculates higher order derivatives, order of derivatives increases when using matching operations until maximum order (parameter) is reached, example source code and executable available for testing performance
+
+
+
+
+
+
+
+Fortran
+
+
+
+
+
+
+
+Package
+
+License
+
+Approach
+
+Brief Info
+
+
+
+
+
+ADF Version 4.0
+
+nonfree
+
+OO
+
+
+
+
+ADIFOR
+
+>>>
+ (free for non-commercial)
+
+SCT
+
+
+
+
+AUTO_DERIV
+
+free for non-commercial
+
+OO
+
+
+
+OpenAD
+
+depends on components
+
+SCT
+
+
+
+
+TAPENADE
+
+Free for noncommercial
+
+SCT
+
+
+
+
+GADfit
+
+Free (GPL 3)
+
+OO
+
+First (forward, reverse) and second (forward) order, principal use is nonlinear curve fitting, includes the differentiation of integrals
+
+
+
+
+
+
+
+Matlab
+
+
+
+
+
+
+
+Package
+
+License
+
+Approach
+
+Brief Info
+
+
+
+
+
+AD for MATLAB
+
+
+OO
+
+Forward (1st & 2nd derivative, Uses MEX files & Windows DLLs)
+
+
+
+Adiff
+
+
+OO
+
+Forward (1st derivative)
+
+
+
+MAD
+
+Proprietary
+
+OO
+
+
+
+
+ADiMat
+
+Proprietary
+
+SCT
+
+Forward (1st & 2nd derivative) & Reverse (1st), proprietary server side transform
+
+
+
+MADiff
+
+
+OO
+
+Reverse
+
+
+
+
+
+
+Python
+
+
+
+
+
+
+
+Package
+
+License
+
+Approach
+
+Brief Info
+
+
+
+
+
+ad
+
+
+OO
+
+first and second-order, reverse accumulation, transparent on-the-fly calculations, basic NumPy support, written in pure python
+
+
+
+FuncDesigner
+
+
+OO
+
+uses NumPy arrays and SciPy sparse matrices,
+ also allows to solve linear/non-linear/ODE systems and
+  to perform numerical optimizations by OpenOpt
+
+
+
+ScientificPython
+
+CeCILL
+
+OO
+
+see modules Scientific.Functions.FirstDerivatives and
+ Scientific.Functions.Derivatives
+
+
+
+pycppad
+
+
+OO
+
+arbitrary order forward/reverse, implemented as wrapper for CppAD including AD and AD >.
+
+
+
+pyadolc
+
+
+OO
+
+wrapper for ADOL-C, hence arbitrary order derivatives in the (combined) forward/reverse mode of AD, supports sparsity pattern propagation and sparse derivative computations
+
+
+
+uncertainties
+
+
+OO
+
+first-order derivatives, reverse mode, transparent calculations
+
+
+
+algopy
+
+
+OO
+
+same approach as pyadolc and thus compatible, support to differentiate through numerical linear algebra functions like the matrix-matrix product, solution of linear systems, QR and Cholesky decomposition, etc.
+
+
+
+pyderiv
+
+
+OO
+
+automatic differentiation and (co)variance calculation
+
+
+
+CasADi
+
+LGPL
+
+SCT
+
+Python front-end to CasADi. Forward/reverse modes, matrix-valued atomic operations.
+
+
+
+Theano
+
+
+OO
+
+Theano is a Python library that allows you to define, optimize, and evaluate mathematical expressions involving multi-dimensional arrays both on CPU and GPU efficiently.
+
+
+
+Autograd
+
+MIT
+
+OO
+
+Autograd can reverse-mode differentiate native Python and Numpy code. It can handle a large subset of Python's features, including loops, ifs, recursion and closures. It is closed under its own operation and hence can compute derivatives of any order.
+
+
+
+
+
+
+
+Lua
+
+
+
+
+
+
+
+Package
+
+License
+
+Approach
+
+Brief Info
+
+
+
+
+
+Torch
+
+
+OO
+
+Torch is a LuaJIT library used for Deep Learning. Its nn package is divided into modular objects that share a common Module interface. Modules have a forward and backward function that allow them to feedforward and backpropagate (first-order derivatives). Modules can be joined together using module composites to create complex task-tailored graphs.
+
+
+
+SciLua
+
+MIT
+
+OO
+
+SciLua, a framework for general purpose scientific computing in LuaJIT, features complete and transparent support for forward-mode automatic differentiation.
+
+
+
+
+
+
+.NET
+
+
+
+
+
+
+
+Package
+
+License
+
+Approach
+
+Brief Info
+
+
+
+
+
+AutoDiff
+
+
+OO
+
+Automatic differentiation with C# operator overloading.
+
+
+
+FuncLib
+
+MIT
+
+OO
+
+Automatic differentiation and numerical optimization, operator overloading, unlimited order of differentiation, compilation to IL code for very fast evaluation.
+
+
+
+DiffSharp
+
+
+OO
+
+An automatic differentiation library implemented in the F# language. It supports C# and the other CLI languages. The library provides gradients, Hessians, Jacobians, directional derivatives, and matrix-free Hessian- and Jacobian-vector products, which can be incorporated with minimal change into existing algorithms. Operations can be nested to any level, meaning that you can compute exact higher-order derivatives and differentiate functions that are internally making use of differentiation.
+
+
+
+
+
+
+Haskell
+
+
+
+
+
+
+
+Package
+
+License
+
+Approach
+
+Brief Info
+
+
+
+
+
+ad
+
+
+OO
+
+Forward Mode (1st derivative or arbitrary order derivatives via lazy lists and sparse tries)
+ Reverse Mode
+ Combined forward-on-reverse Hessians.
+  Uses Quantification to allow the implementation automatically choose appropriate modes.
+  Quantification prevents perturbation/sensitivity confusion at compile time.
+
+
+
+fad
+
+
+OO
+
+Forward Mode (lazy list). Quantification prevents perturbation confusion at compile time.
+
+
+
+rad
+
+
+OO
+
+Reverse Mode. (Subsumed by 'ad').
+  Quantification prevents sensitivity confusion at compile time.
+
+
+
+
+
+
+
+Java
+
+
+
+
+
+
+
+Package
+
+License
+
+Approach
+
+Brief Info
+
+
+
+
+
+JAutoDiff
+
+-
+
+OO
+
+Provides a framework to compute derivatives of functions on arbitrary types of field using generics. Coded in 100% pure Java.
+
+
+
+Apache Commons Math
+
+Apache License v2
+
+OO
+
+This class is an implementation of the extension to Rall's numbers described in Dan Kalman's paper5
+
+
+
+Deriva
+
+Eclipse Public License v1.0
+
+DSL+Code Generation
+
+Deriva automates algorithmic differentiation in Java and Clojure projects. It defines DSL for building extended arithmetic expressions (the extension being support for conditionals, allowing to express non analytic functions). The DSL is used to generate flat byte-code at runtime, providing implementation without overhead of function calls.
+
+
+
+Jap
+
+Public
+
+OO/SCT
+
+Jap is a tools using Virtual Operator Overloading for java class. Jap was developed in the thesis of Phuong PHAM-QUANG 2008-2011.
+
+
+
+
+
+
+Clojure
+
+
+
+
+
+
+
+Package
+
+License
+
+Approach
+
+Brief Info
+
+
+
+
+
+Deriva
+
+Eclipse Public License v1.0
+
+DSL+Code Generation
+
+Deriva automates algorithmic differentiation in Java and Clojure projects. It defines DSL for building extended arithmetic expressions (the extension being support for conditionals, allowing to express non analytic functions). The DSL is used to generate flat byte-code at runtime, providing implementation without overhead of function calls.
+
+
+
+
+
+References
+Literature
+
+
+
+
+
+External links
+
+www.autodiff.org, An "entry site to everything you want to know about automatic differentiation"
+[http://www.autodiff.org/?module=Applications&application;;=HC1 Automatic Differentiation of Parallel OpenMP Programs]
+Automatic Differentiation, C++ Templates and Photogrammetry
+Automatic Differentiation, Operator Overloading Approach
+Compute analytic derivatives of any Fortran77, Fortran95, or C program through a web-based interface Automatic Differentiation of Fortran programs
+Description and example code for forward Automatic Differentiation in Scala
+Adjoint Algorithmic Differentiation: Calibration and Implicit Function Theorem
+1, Exact First- and Second-Order Greeks by Algorithmic Differentiation
+2, Adjoint Algorithmic Differentiation of a GPU Accelerated Application
+3, Adjoint Methods in Computational Finance Software Tool Support for Algorithmic Differentiation
+
+"
+Category:Differential calculus Category:Computer algebra
+
+
+
+↩
+http://www.ec-securehost.com/SIAM/SE24.html↩
+↩
+↩
+↩
+
+
+
+

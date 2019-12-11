@@ -1,1 +1,126 @@
-   CoDel      CoDel   In network routing , CoDel (pronounced " coddle ") for controlled delay is a scheduling algorithm for the network scheduler developed by Van Jacobson and Kathleen Nichols . 1 2 It is designed to overcome bufferbloat in network links (such as routers ) by setting limits on the delay network packets suffer due to passing through the buffer being managed by CoDel.  CoDel aims at improving on the overall performance of the RED algorithm by addressing some fundamental misconceptions in the algorithm (as perceived by Jacobson) and by being easier to manage (since, unlike RED, CoDel does not require manual configuration). 3  An implementation of CoDel was written by Dave Täht and Eric Dumazet for the Linux kernel 4 and dual licensed under the GNU General Public License and the 3-clause BSD license . Dave Täht back-ported CoDel to Linux kernel 3.3 for project CeroWrt , which concerns itself among other things with bufferbloat, 5 where it was exhaustively tested. It was then pushed into OpenWrt . 6 Dumazet's variant of CoDel is called fq_codel, standing for " fair queuing controlled delay"; in 2012 it was adopted as the standard active queue management (AQM) and packet scheduling solution in the OpenWrt "Barrier Breaker". 7 From there, CoDel and fq_codel have migrated into various downstream projects such as dd-wrt , IPFire , and technologies like StreamBoost .  Theoretical underpinnings  The theory behind CoDel is based on a number of observations of packet behavior in packet-switched networks under the influence of data buffers . Some of these observations are about the fundamental nature of queueing and the causes of bufferbloat, others relate to weaknesses of alternative queue management algorithms. CoDel was developed as an attempt to address the problem of bufferbloat. 8  Bufferbloat  The flow of packets slows down while travelling through a network link between a fast and a slow network, especially at the start of a TCP session, when there is a sudden burst of packets and link to the slower network may not be able to process the burst quickly enough. Buffers exist to ease this problem by giving the fast network a place to push packets, to be read by the slower network as fast as it can. 9 In other words, buffers act like shock absorbers to convert bursty arrivals into smooth, steady departures. However, a buffer has a finite size, and it can hold only a specific maximum number of packets. The ideal buffer is sized so it can handle a sudden burst of communication and match the speed of that burst to the speed of the slower network. Ideally, the "shock absorbing" situation is characterized by a temporary delay for packets in the buffer during the transmission burst, after which the delay rapidly disappears and the network reaches a balance in offering and handling packets. 10  The TCP congestion avoidance algorithm relies on packet drops to determine the available bandwidth . It speeds up the data transfer until packets start to drop, and then slows down the transmission rate. Ideally it keeps speeding up and slowing down the transmission rate, until it finds an equilibrium to the speed of the link. However, for this to work the packet drops must occur in a timely manner, so that the algorithm can select a suitable transfer speed. With a large buffer that has been filled, the packets will arrive at their destination, but with a higher latency. The packet is not dropped, so TCP does not slow down once the uplink has been saturated, further filling the buffer. Newly arriving packets are dropped only when the buffer is fully saturated. TCP may even decide that the path of the connection has changed, and again go into the more aggressive search for a new operating point. 11 12  In the problematic situation, packets queued in a network buffer are only dropped if the buffer is full. Having a big and constantly full buffer which causes increased transmission delays and reduced interactivity, especially when looking at two or more simultaneous transmissions over the same channel, is called bufferbloat . Available channel bandwidth can also end up being unused, as some fast destinations may not be reached due to buffers clogged with data awaiting delivery to slow destinations, what is caused by contention between simultaneous transmissions competing for some space in an already full buffer.  Good and bad queues  CoDel distinguishes between two "types" of a queue (or rather, the effects produced by a queue): 13 14   Good queue  Defined as a queue that exhibits no buffer bloat, i.e. catches and handles communications bursts with no more than a temporary increase in queue delay and which maximizes utilization of the network link.  Bad queue  Defined as a queue that exhibits buffer bloat, i.e. where a communications burst has caused the buffer to fill up and stay filled, resulting in low utilization and a constantly high buffer delay.   In order to be effective against bufferbloat, a solution in form of an Active queue management (AQM) algorithm must be able to recognize an occurrence of bufferbloat and react with deploying effective countermeasures.  Regarding the recognition of an unwanted situation, Van Jacobson asserted in 2006 that existing algorithms have been using incorrect means of recognizing bufferbloat. 15 In an attempt to recognize the telltale standing queue of bufferbloat, algorithms like RED measure the average queue length (in packets or stored bytes) and consider it a case of bufferbloat if the average grows too large. However, Jacobson demonstrated in 2006 that this measurement is not a good metric, as the average queue length rises sharply in case of a communications burst. But this can then dissipate quickly (good queue) or develop a standing queue (bad queue). Also, other factors in network traffic can cause false positives or negatives, causing countermeasures to be deployed unnecessarily; Jacobson suggested therefore that average queue length actually contains no information at all about packet demand or network load. 16 17 He then suggested that a better metric might be the minimum amount of delay experienced by any packet in the sliding window of the buffer.  The CoDel algorithm  Based on Jacobson's notion from 2006, CoDel was developed to manage queues under control of the minimum delay experienced by packets in the running buffer window. The goal is to keep this minimum delay below 5 milliseconds. If the minimum delay rises to too high a value, packets are dropped from the window until the delay drops below the maximum level. 18  Nichols and Jacobson cite several advantages to using nothing more than this metric: 19   CoDel is parameterless. One of the weaknesses in the RED algorithm (according to Jacobson) is that it is too difficult to configure (and too difficult to configure correctly, especially in an environment with dynamic link rates). CoDel has no parameters to set at all.  CoDel treats good queue and bad queue differently. A good queue has low delays by nature, so the management algorithm can ignore it, while a bad queue is susceptible to management intervention in the form of dropping packets.  CoDel works off of a parameter that is determined completely locally, so it is independent of round-trip delays, link rates, traffic loads and other factors that cannot be controlled or predicted by the local buffer.  The local minimum delay can only be determined when a packet leaves the buffer, so no extra delay is needed to run the queue to collect statistics to manage the queue.  CoDel adapts to dynamically changing link rates with no negative impact on utilization.  CoDel can be implemented relatively simply and therefore can span the spectrum from low-end home routers to high-end routing solutions.   CoDel does nothing to manage the buffer if the minimum delay for the buffer window is below the maximum allowed value. It also does nothing if the buffer is relatively empty (if there are fewer than one MTU 's worth of bytes in the buffer). 20 If these conditions do not hold, then CoDel drops packets probabilistically. 21  Description  The algorithm is independently computed at each hop . The algorithm operates over an interval . The initial interval is 100 milliseconds. Per-packet queuing delay is monitored through the hop. As each packet is dequeued for forwarding , the queuing delay (amount of time the packet spent waiting in the queue) is calculated. The lowest queuing delay for the interval is stored. When the last packet of the interval is dequeued, if the lowest queuing delay for the interval is greater than 5 milliseconds, this single packet is dropped and the interval used for the next group of packets is shortened. If the lowest queuing delay for the interval is less than 5 milliseconds, the packet is forwarded and interval is reset to 100 milliseconds.  When the interval is shortened, it is done so in accordance with the inverse square root of the number of successive intervals in which packets were dropped due to excessive queuing delay. The sequence of intervals is   100   100   100   ,    100   2       100    2     {100\over\sqrt{2}}   ,    100   3       100    3     {100\over\sqrt{3}}   ,    100   4       100    4     {100\over\sqrt{4}}   ,    100   5       100    5     {100\over\sqrt{5}}   ...  Simulation results  CoDel has been tested in simulation tests by Nichols and Jacobson, at different MTUs and link rates and other variations of conditions. In general, results indicate: 22 23   In comparison to RED, CoDel keeps the packet delay closer to the target value across the full range of bandwidths (from 3 to 100 Mbit/s). This seems to result in good queue, since the measured link utilizations are consistently near 100% of link bandwidth.  At lower MTU, packet delays are lower than at higher MTU. Higher MTU results in good link utilization, lower MTU results in good link utilizations at lower bandwidth, degrading to fair utilization at high bandwidth.   Simulation was also performed by Greg White and Joey Padden at CableLabs . 24  CoDel in use  A full implementation of CoDel was realized in May 2012 and is available as open-source software to all interested parties. This implementation will be used by different parties to study CoDel in actual use. 25  As of 21 May 2012, CoDel has been implemented within the Linux kernel (starting with the 3.5 mainline). 26  CoDel began to appear as an option in some proprietary/turnkey bandwidth management platforms in 2013. 27  See also   Bufferbloat  TCP window size  TCP tuning   References  External links   CoDel pseudocode  Bufferbloat demystified  Mitigations and Solutions of Bufferbloat in Home Routers and Operating Systems   "  Category:Packets (information technology)  Category:Network performance     ↩  ↩   ↩  ↩  ↩  ↩  ↩    ↩  ↩   ↩          ↩  ↩   ↩  ↩     
+
+
+
+CoDel
+
+
+
+
+CoDel
+
+In network routing, CoDel (pronounced "coddle") for controlled delay is a scheduling algorithm for the network scheduler developed by Van Jacobson and Kathleen Nichols.12 It is designed to overcome bufferbloat in network links (such as routers) by setting limits on the delay network packets suffer due to passing through the buffer being managed by CoDel.
+CoDel aims at improving on the overall performance of the RED algorithm by addressing some fundamental misconceptions in the algorithm (as perceived by Jacobson) and by being easier to manage (since, unlike RED, CoDel does not require manual configuration).3
+An implementation of CoDel was written by Dave Täht and Eric Dumazet for the Linux kernel4 and dual licensed under the GNU General Public License and the 3-clause BSD license. Dave Täht back-ported CoDel to Linux kernel 3.3 for project CeroWrt, which concerns itself among other things with bufferbloat,5 where it was exhaustively tested. It was then pushed into OpenWrt.6 Dumazet's variant of CoDel is called fq_codel, standing for "fair queuing controlled delay"; in 2012 it was adopted as the standard active queue management (AQM) and packet scheduling solution in the OpenWrt "Barrier Breaker".7 From there, CoDel and fq_codel have migrated into various downstream projects such as dd-wrt, IPFire, and technologies like StreamBoost.
+Theoretical underpinnings
+The theory behind CoDel is based on a number of observations of packet behavior in packet-switched networks under the influence of data buffers. Some of these observations are about the fundamental nature of queueing and the causes of bufferbloat, others relate to weaknesses of alternative queue management algorithms. CoDel was developed as an attempt to address the problem of bufferbloat.8
+Bufferbloat
+The flow of packets slows down while travelling through a network link between a fast and a slow network, especially at the start of a TCP session, when there is a sudden burst of packets and link to the slower network may not be able to process the burst quickly enough. Buffers exist to ease this problem by giving the fast network a place to push packets, to be read by the slower network as fast as it can.9 In other words, buffers act like shock absorbers to convert bursty arrivals into smooth, steady departures. However, a buffer has a finite size, and it can hold only a specific maximum number of packets. The ideal buffer is sized so it can handle a sudden burst of communication and match the speed of that burst to the speed of the slower network. Ideally, the "shock absorbing" situation is characterized by a temporary delay for packets in the buffer during the transmission burst, after which the delay rapidly disappears and the network reaches a balance in offering and handling packets.10
+The TCP congestion avoidance algorithm relies on packet drops to determine the available bandwidth. It speeds up the data transfer until packets start to drop, and then slows down the transmission rate. Ideally it keeps speeding up and slowing down the transmission rate, until it finds an equilibrium to the speed of the link. However, for this to work the packet drops must occur in a timely manner, so that the algorithm can select a suitable transfer speed. With a large buffer that has been filled, the packets will arrive at their destination, but with a higher latency. The packet is not dropped, so TCP does not slow down once the uplink has been saturated, further filling the buffer. Newly arriving packets are dropped only when the buffer is fully saturated. TCP may even decide that the path of the connection has changed, and again go into the more aggressive search for a new operating point.1112
+In the problematic situation, packets queued in a network buffer are only dropped if the buffer is full. Having a big and constantly full buffer which causes increased transmission delays and reduced interactivity, especially when looking at two or more simultaneous transmissions over the same channel, is called bufferbloat. Available channel bandwidth can also end up being unused, as some fast destinations may not be reached due to buffers clogged with data awaiting delivery to slow destinations, what is caused by contention between simultaneous transmissions competing for some space in an already full buffer.
+Good and bad queues
+CoDel distinguishes between two "types" of a queue (or rather, the effects produced by a queue):1314
+
+Good queue
+Defined as a queue that exhibits no buffer bloat, i.e. catches and handles communications bursts with no more than a temporary increase in queue delay and which maximizes utilization of the network link.
+ 
+Bad queue
+Defined as a queue that exhibits buffer bloat, i.e. where a communications burst has caused the buffer to fill up and stay filled, resulting in low utilization and a constantly high buffer delay.
+ 
+
+In order to be effective against bufferbloat, a solution in form of an Active queue management (AQM) algorithm must be able to recognize an occurrence of bufferbloat and react with deploying effective countermeasures.
+Regarding the recognition of an unwanted situation, Van Jacobson asserted in 2006 that existing algorithms have been using incorrect means of recognizing bufferbloat.15 In an attempt to recognize the telltale standing queue of bufferbloat, algorithms like RED measure the average queue length (in packets or stored bytes) and consider it a case of bufferbloat if the average grows too large. However, Jacobson demonstrated in 2006 that this measurement is not a good metric, as the average queue length rises sharply in case of a communications burst. But this can then dissipate quickly (good queue) or develop a standing queue (bad queue). Also, other factors in network traffic can cause false positives or negatives, causing countermeasures to be deployed unnecessarily; Jacobson suggested therefore that average queue length actually contains no information at all about packet demand or network load.1617 He then suggested that a better metric might be the minimum amount of delay experienced by any packet in the sliding window of the buffer.
+The CoDel algorithm
+Based on Jacobson's notion from 2006, CoDel was developed to manage queues under control of the minimum delay experienced by packets in the running buffer window. The goal is to keep this minimum delay below 5 milliseconds. If the minimum delay rises to too high a value, packets are dropped from the window until the delay drops below the maximum level.18
+Nichols and Jacobson cite several advantages to using nothing more than this metric:19
+
+CoDel is parameterless. One of the weaknesses in the RED algorithm (according to Jacobson) is that it is too difficult to configure (and too difficult to configure correctly, especially in an environment with dynamic link rates). CoDel has no parameters to set at all.
+CoDel treats good queue and bad queue differently. A good queue has low delays by nature, so the management algorithm can ignore it, while a bad queue is susceptible to management intervention in the form of dropping packets.
+CoDel works off of a parameter that is determined completely locally, so it is independent of round-trip delays, link rates, traffic loads and other factors that cannot be controlled or predicted by the local buffer.
+The local minimum delay can only be determined when a packet leaves the buffer, so no extra delay is needed to run the queue to collect statistics to manage the queue.
+CoDel adapts to dynamically changing link rates with no negative impact on utilization.
+CoDel can be implemented relatively simply and therefore can span the spectrum from low-end home routers to high-end routing solutions.
+
+CoDel does nothing to manage the buffer if the minimum delay for the buffer window is below the maximum allowed value. It also does nothing if the buffer is relatively empty (if there are fewer than one MTU's worth of bytes in the buffer).20 If these conditions do not hold, then CoDel drops packets probabilistically.21
+Description
+The algorithm is independently computed at each hop. The algorithm operates over an interval. The initial interval is 100 milliseconds. Per-packet queuing delay is monitored through the hop. As each packet is dequeued for forwarding, the queuing delay (amount of time the packet spent waiting in the queue) is calculated. The lowest queuing delay for the interval is stored. When the last packet of the interval is dequeued, if the lowest queuing delay for the interval is greater than 5 milliseconds, this single packet is dropped and the interval used for the next group of packets is shortened. If the lowest queuing delay for the interval is less than 5 milliseconds, the packet is forwarded and interval is reset to 100 milliseconds.
+When the interval is shortened, it is done so in accordance with the inverse square root of the number of successive intervals in which packets were dropped due to excessive queuing delay. The sequence of intervals is 
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+ , 
+ 
+ 
+ 
+  ...
+Simulation results
+CoDel has been tested in simulation tests by Nichols and Jacobson, at different MTUs and link rates and other variations of conditions. In general, results indicate:2223
+
+In comparison to RED, CoDel keeps the packet delay closer to the target value across the full range of bandwidths (from 3 to 100 Mbit/s). This seems to result in good queue, since the measured link utilizations are consistently near 100% of link bandwidth.
+At lower MTU, packet delays are lower than at higher MTU. Higher MTU results in good link utilization, lower MTU results in good link utilizations at lower bandwidth, degrading to fair utilization at high bandwidth.
+
+Simulation was also performed by Greg White and Joey Padden at CableLabs.24
+CoDel in use
+A full implementation of CoDel was realized in May 2012 and is available as open-source software to all interested parties. This implementation will be used by different parties to study CoDel in actual use.25
+As of 21 May 2012, CoDel has been implemented within the Linux kernel (starting with the 3.5 mainline).26
+CoDel began to appear as an option in some proprietary/turnkey bandwidth management platforms in 2013.27
+See also
+
+Bufferbloat
+TCP window size
+TCP tuning
+
+References
+External links
+
+CoDel pseudocode
+Bufferbloat demystified
+Mitigations and Solutions of Bufferbloat in Home Routers and Operating Systems
+
+"
+Category:Packets (information technology) Category:Network performance
+
+
+
+↩
+↩
+
+↩
+↩
+↩
+↩
+↩
+
+
+↩
+↩
+
+↩
+
+
+
+
+
+
+
+
+↩
+↩
+
+↩
+↩
+
+
+
+

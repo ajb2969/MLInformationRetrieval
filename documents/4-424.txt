@@ -1,1 +1,326 @@
-   Files-11      Files-11   Files-11 , also known as on-disk structure , is the file system used by Digital Equipment Corporation  OpenVMS  operating system , and also (in a simpler form) by the older RSX-11 . It is a hierarchical file system, with support for access control lists , record -oriented I/O , remote network access, and file versioning .  Files-11 is similar to, but significantly more advanced than, the file systems used in previous Digital Equipment Corporation operating systems such as TOPS-20 and RSTS/E .  History  The native OpenVMS file system is descended from older DEC operating systems, and is similar in many ways. A major difference is the layout of directories. These file systems all provided some form of rudimentary non-hierarchical directory structure, typically based on assigning one directory per user account. Under RSTS/E, each user account was represented by two numbers, a [ project , programmer ] pair, and had one associated directory. Special system files, such as program executables and the OS itself, were stored in the directory of a reserved system account.  While this was suitable for PDP-11 systems, which possessed limited permanent storage capacity, VAX systems with much larger hard drives required a more flexible method of file storage: hierarchical directory layout in particular, the most notable improvement in ODS-2.  They are "similar" because they had the same designer Dave Cutler , originally from Digital Equipment Corporation. Dave later went to Microsoft.  Overview  "Files-11" is the general term for five separate file systems, known as on-disk structure (ODS) levels 1 through 5.  ODS-1 is the flat file system used by the RSX-11 OS, supported by older VMS systems for RSX compatibility, but never used to support VMS itself; it has been largely superseded by ODS-2 and ODS-5.  ODS-2 is the standard VMS file system, and remains the most common file system for system disks (the disk on which the operating system is installed).  Although seldom referred to by their ODS level designations, ODS-3 and ODS-4 are the Files-11 support for the CD-ROM ISO 9660 and High Sierra Format file systems, respectively.  ODS-5 is an extended version of ODS-2 available on Alpha and IA-64 platforms which adds support for case-preserving filenames with non- ASCII characters and improvements to the hierarchical directory support. It was originally intended for file serving to Microsoft Windows or other non-VMS systems as part of the " NT affinity " project, but is also used on user disks and Internet servers.  Directory layout  (Figure)  A typical Files-11 directory hierarchy: all files are rooted in the Master File Directory; File2 is in two directories   All files and directories in a Files-11 file system are contained inside one or more parent directories , and eventually under the root directory, the master file directory (see below). The file system is therefore organised in a directed acyclic graph ( DAG ) structure.  In this example ( see right ), File 2 has a directory entry under both Dir 2 and Dir 3 ; it is "in" both directories simultaneously. Even if removed from one, it would still exist in the other directory until removed from there also. This is similar to the concept of hard links in UNIX , although care must be taken that the file is not actually deleted on disks that are not set up for hard links (only available on ODS-5 disks, and then only if the disk has hard links enabled).  Disk organization and naming  An operational VMS system has access to one or more online disks, each of which contains a complete, independent file system. These are either local storage or, in the case of a cluster, storage shared with remote systems.  (Figure)  Figure 1'': Sample OpenVMS cluster disk configuration   In an OpenVMS cluster configuration, non-private disks are shared between all nodes in the cluster (see figure 1) . In this configuration, the two system disks are accessible to both nodes via the network, but the private disk is not shared: it is mounted for use only by a particular user or process on that machine. Access to files across a cluster is managed by the OpenVMS Distributed Lock Manager, an integral part of the file system.  Multiple disks can be combined to form a single large logical disk, or volume set . Disks can also be automatically replicated into shadow sets for data security or faster read performance.  A disk is identified by either its physical name or (more often) by a user-defined logical name. For example, the boot device (system disk) may have the physical name $3$DKA100 , but it is generally referred to by the logical name  SYS$SYSDEVICE .  File systems on each disk (with the exception of ODS-1) are hierarchical. A fully specified filename consists of a nodename, a username and password, a device name, directory, filename, file type, and a version number, in the format:  NODE"accountname password"::device:[directory.subdirectory]filename.type;ver  For example, [DIR1.DIR2.DIR3]FILE.EXT refers to the latest version of FILE.EXT , on the current default disk, in directory [DIR1.DIR2.DIR3] .  DIR1 is a subdirectory of the master file directory (MFD), or root directory , and DIR2 is a subdirectory of DIR1 . A disk's MFD is identified by [000000] .  Most parts of the filename can be omitted, in which case they are taken from the current default file specification . The default file specification replaces the concept of "current directory" in other operating systems by providing a set of defaults for node, device name and directory. All processes have a default file specification which includes disk name and directory, and most VMS file system routines accept a default file specification which can also include the file type; the TYPE command, for example, defaults to " .LIS " as the file type, so the command TYPE F , with no extension, attempts to open the file F.LIS .  Every file has a version number, which defaults to 1 if no other versions of the same filename are present (otherwise one higher than the greatest version). Every time a file is saved, rather than overwriting the existing version, a new file with the same name but an incremented version number is created. Old versions can be deleted explicitly, with the DELETE or the PURGE command, or optionally, older versions of a file can be deleted automatically when the file's version limit is reached (set by SET FILE/VERSION_LIMIT ). Old versions are thus not overwritten, but are kept on disk and may be retrieved at any time. The architectural limit on version numbers is 32767. The versioning behavior is easily overridden if it is unwanted. In particular, files which are directly updated, such as databases, do not create new versions unless explicitly programmed.  ODS-2 is limited to eight levels of subdirectories, and only uppercase, alphanumeric names (plus the underscore, dash, and dollar sign) up to 39.39 characters (39 for the filename and another 39 for the extension). ODS-5 expands the character set to lowercase letters and most other printable ASCII characters, as well as ISO  Latin-1 and Unicode characters, increases the maximum filename length and allows unlimited levels of subdirectories. When constructing a pathname for an ODS-5 file which uses characters not allowed under ODS-2, a special "^" syntax is used to preserve backwards compatibility; the file " file.tar.gz;1 " on an ODS-5 disk, for example, would be referred to as " file^.tar.gz "—the file's name is " file.tar ", and the extension is " .gz ".  File security: protection and ACLs  VMS file security is defined by two mechanisms, UIC-based access control and ACL -based access control. UIC access control is based on the owner of the file and the UIC, or user, accessing the file. Access is determined by four groups of permissions:  (Figure)  Format of file protection display; permissions not granted are not displayed    System  Owner  Group  World   And four permission bits:   Read  Write  Execute  Delete   The "system" access applies to any user whose UIC group code is less than or equal to the SYSGEN parameter MAXSYSGROUP (typically 8, or 10 octal ) (for example the SYSTEM user); "owner" and "group" apply to the owner of the file and that user's user group, and "world" applies to any other user. There is also a fifth permission bit, "Control", which is used to determine access to change file metadata such as protection. This group cannot be set explicitly; it is always set for System and Owner, and never for Group or World.  UIC-based access control is also affected by four system privileges , which allow users holding them to override access controls:   BYPASS : user implicitly has RWED access to all files, regardless of file protection;  READALL : user implicitly has R access to all files;  SYSPRV : user may access files based on System protection;  GRPPRV : user may access files based on System protection if their UIC group matches the file's group.   ACLs allow additional privileges to be assigned on a user– or group–specific basis; for example, a web server's UIC could be granted read access to all files in a particular directory. ACLs can be marked as inherited , where a directory file's ACL applies to all files underneath it. ACLs are modified using the EDIT/ACL command, and take the form of identifier/access pairs. For example, the ACL entry  (IDENTIFIER=HTTP$SERVER,ACCESS=READ+EXECUTE)  would allow the user HTTP$SERVER to read and execute the file.  Logical names  A logical name is a system variable which may reference a disk, directory or file, or contain other program-specific information. For example, the logical SYS$SYSDEVICE contains the system's boot device. A logical name normally refers to a single directory or disk, e.g.  SYS$LOGIN: which is the user's login (home) directory (or directories); these logicals cannot be used as true disk names— SYS$LOGIN:[DIR]FILE is not a valid file specification. However, concealed logical names, defined by DEFINE/TRANSLATION=CONCEALED , can be used in that way; these rooted directories are defined with a trailing "." on the directory specification, hence  $ DEFINE/TRANS=CONCEAL HOME DISK$USERS:[ username .]  would allow HOME:[DIR]FILE to be used. More common are simple logicals which point to specific directories associated with some application software which may be located in on any disk or any directory. Hence logical ABC_EXE may point to a directory of executable programs for application ABC and ABC_TEMP may point to a directory of temporary files for that same application and this directory may be on the same disk and in the same directory tree as ABC_EXE or could be somewhere on another disk (and in a different directory tree).  Logical names do not have a close equivalent in POSIX operating systems. They resemble Unix environment variables , except they are expanded by the file system, instead of the command shell or application program. They must be defined before use, so it is common for many logical names to be defined in the system startup command file, as well as user login command files.  The closest non-DEC operating system to support the concept of logical names is AmigaOS , through the ASSIGN command. AmigaOS's disk operating system, AmigaDOS , which is a port of TRIPOS , bears some resemblance to DEC operating systems. For example, physical device names follow a pattern like DF0: for the first floppy disk, CDROM2: for the 3rd CD-ROM drive, etc. However, since the system can boot from any attached drive, the operating system creates the SYS: assignment to automatically reference the boot device used. Other assignments, LIBS:, PREFS:, C:, S:, et al. are also made, themselves referenced off SYS:. Users are, of course, allowed to create and destroy their own assignments too.  In VMS, logical names may reference other logical names (up to a predefined nesting limit of 10), and may contain lists of names to search for an existing filename. Some frequently referenced logical names are:      logical name   meaning       SYS$INPUT   equivalent of standard input , program data source     SYS$OUTPUT   equivalent of standard output , program data destination     SYS$ERROR   equivalent of standard error , program error message destination     SYS$COMMAND   source of batch file (that is, .COM command file) commands     TT   the terminal associated with the process     SYS$PRINT   the default printer or print queue     SYS$LOGIN   home directory for each user     SYS$SCRATCH   temporary folder , directory for temporary files     SYS$SYSTEM   directory containing most system programs and a few vital data files, such as the system authorization file (accounts and passwords)     SYS$SHARE   shared runtime libraries, executables, etc.     SYS$LIBRARY   system and added libraries     Record-oriented I/O: Record Management Services  Record Management Services is the structured I/O layer of the VMS operating system. RMS provides comprehensive program support for managing structured  files , such as record-based and indexed database files. The VMS file system, in conjunction with RMS, extends files access past simple byte -streams and allows OS-level support for a variety of rich files types. Each file in the VMS file system may be thought of as a database , containing a series of records , each of which has one of more individual fields . A text file, for example, is a list of records (lines) separated by a newline character. RMS is an example of a record-oriented filesystem .  There are four record formats defined by RMS:   Fixed length - all records in the file have the same length.  Variable length - records vary in length, and every record is prefixed by a count byte giving its length.  Variable record length with fixed-length control - records vary in length, but are preceded by a fixed-length control block.  Stream - record vary in length, and every record is separated from the next one by a termination character. A text file is an example of a stream-format file using line feed or carriage return to separate records.   There are four record access methods , or methods to retrieve extant records from files:   Sequential Access - starting with a particular records, subsequent records are retrieved in order until the end of the file.  Relative Record Number Access - records are retrieved via a record number relative to the beginning of the file.  Record File Address Access - records are retrieved directly by their location in the file (RFA, or Record File Address).  Indexed Access - records are retrieved via a key, in a form of key-value mapping .   Physical layout: the On-Disk Structure  At the disk level, ODS represents the file system as an array of blocks , a block being 512 contiguous bytes on one physical disk ( volume ). Disk blocks are assigned in clusters (originally 3 contiguous blocks but later increased with larger disk sizes). A file on the disk will ideally be entirely contiguous, i.e. the blocks which contain the file will be sequential, but disk fragmentation will sometimes require the file to located in discontiguous clusters in which case the fragments are called 'extents'. Disks may be combined with other disks to form a volume set and files stored anywhere across that set of disks, but larger disk sizes have reduced the use of volume sets because management of a single physical disk is simpler.  Every file on a Files-11 disk (or volume set) has a unique file identification (FID), composed of three numbers: the file number (NUM), the file sequence number (SEQ), and the relative volume number (RVN). The NUM indicates where in the INDEXF.SYS file (see below) the metadata for the file is located; the SEQ is a generation number which incremented when the file is deleted and another file is created reusing the same INDEXF.SYS entry (so any dangling references to the old file do not accidentally point to the new one); and the RVN indicates the volume number on which the file is stored when using a volume set.  Directories  The structural support of an ODS volume is provided by a directory file —a special file containing a list of file names, file version numbers and their associated FIDs, similar to VSAM catalogs on MVS . At the root of the directory structure is the master file directory (MFD), the root directory which contains (directly or indirectly) every file on the volume.    This diagram shows an example directory containing 3 files, and the way each filename is mapped to the INDEXF.SYS entry (each INDEXF entry contains more information; only the first few items are shown here).   The Master File Directory  At the top level of an ODS file system is the master file directory (MFD), which contains all top-level directory files (including itself), and several system files used to store file system information. On ODS-1 volumes, a two-level directory structure is used: each user identification code (UIC) has an associated user file directory (UFD), of the form [GROUP.USER] . On ODS-2 and later volumes, the layout of directories under the MFD is free-form, subject to a limit on the nesting of directories (8 levels on ODS-2 and unlimited on ODS-5). On multi-volume sets, the MFD is always stored on the first volume, and contains the subdirectories of all volumes.  The following system files are present in the ODS MFD:   INDEXF.SYS;1 —Index file  BITMAP.SYS;1 —Storage bitmap file  BADBLK.SYS;1 —Bad block file  000000.DIR;1 —The MFD directory file itself  CORIMG.SYS;1 —Core image file  VOLSET.SYS;1 —Volume set list file (ODS-2/5 only)  CONTIN.SYS;1 —Continuation file (ODS-2/5 only)  BACKUP.SYS;1 —Backup log file (ODS-2/5 only)  BADLOG.SYS;1 —Pending bad block (ODS-2/5 only)  SECURITY.SYS;1 —Volume security profile (ODS-2/5 only)  QUOTA.SYS;1 —Quota file (optional and available under ODS-2/5 only)  GPT.SYS;1 —GUID Partitioning Table (GPT) (OpenVMS I64 EFI boot structures, optional on OpenVMS Alpha)   Note that the file system implementation itself does not refer to these files by name, but by their file IDs, which always have the same values. Thus, INDEXF.SYS is always the file with NUM = 1 and SEQ = 1.  Index file: INDEXF.SYS  The index file contains the most basic information about a Files-11 volume set.  There are two organizations of INDEXF.SYS, the traditional organization and the organization used on disks with GPT.SYS; with the GUID Partition Table (GPT) structures.  With the traditional organization, block 1 is the boot block , which contains the location of the primary bootstrap image , used to load the VMS operating system. This is always located at logical block 0 on the disk, so that the hardware firmware can read it. This block is always present, even on non-system (non-bootable) volumes.  After the boot block is the primary home block . This contains the volume name , the location of the extents comprising the remainder of the index file, the volume owner's UIC, and the volume protection information. There are normally several additional copies of the home block, known as the secondary home blocks , to allow recovery of the volume if it is lost or damaged.  On disks with GPT.SYS, GPT.SYS contains the equivalent of the boot block (known as the Master Boot Record (MBR)), and there is no primary home block. All home blocks present on a GPT-based disk are alternate home blocks. These structures are not included in INDEXF.SYS, and the blocks of the INDEXF.SYS file are unused.  The rest of the index file is composed of file headers , which describe the extents allocated to the files residing on the volume, and file metadata such as the owner UIC, ACLs and protection information. Each file is described by one or more file headers—more than one can be required when a file has a large number of extents. The file header is a fixed-length block, but contains both fixed– and variable–length sections:   The header contains the NUM and SEQ, the protection (security) information, and the location(s) of the rest of the file header.  The ident section contains the accounting metadata: the filename, creation and modification times, and the time of the last backup.  The map describes which physical disk blocks (extents) map to each virtual block of the file.  The access control list contains the ACL information for the file.  The reserved area is space at the end of the file header which is not used by the operating system. This can be used by for customer- or vendor-specific information.  The last two bytes of the header are a checksum of the previous 255 words, to verify the validity of the header.   If possible, the map and ACL sections of the header are contained completely in the primary header . However, if the ACL is too long, or the file contains too many extents, there will not be enough space in the primary header to store them. In this case, an extension header is allocated to store the overflow information.    Layout of the INDEXF.SYS header.   The file header begins with 4 offsets ( IDOFFSET , MPOFFSET , ACOFFSET and ROFFSET ). Since the size of the areas after the fixed-length header may vary (such as the map and ACL areas), the offsets are required to locate these additional areas. Each offset is the number of 16-bit words from the beginning of the file header to the beginning of that area.  If the file requires multiple headers, the extension segment number ( SEGNUM ) contains the sequence number of this header, beginning at 0 in the first entry in INDEXF.SYS.  STRUCLEV contains the current structure level (in the high byte) and version (in the low byte) of the file system; ODS-2 being structure level 2. An increase in the version number indicates a backwards-compatible change that older software may ignore; changes in the structure level itself are incompatible.  W_FID (containing three values: FID_NUM , FID_SEQ and FID_RVN , corresponding to the file, sequence, and relative volume number) contains the ID of this file; EXT_FID (again composed of three values) holds the location of the next extension header, if any. In both of these values, the RVN is specified as 0 to represent the "current" volume (0 is not normally a valid RVN).  FILECHAR contains several flags which affect how the file is handled or organised:   NOBACKUP causes this file to be ignored when a backup is run.  WRITEBACK enables cached (delayed) writes to the file.  READCHECK causes all reads of the file to be done twice, and compared to ensure data integrity.  WRITCHECK results in all writes being verified by a subsequent read and compare.  CONTIGB causes the OS to attempt to allocate storage for the file in as contiguous a manner as possible.  LOCKED is set if the file is deaccess-locked. If set, this indicates that the file was not properly closed after its last use, and the contents may be inconsistent.  CONTIG indicates that the file is stored contiguously on disk; that is, each virtual block   i   i   i   is mapped to the logical (physical) block    i  +  k      i  k    i+k   , for some constant   k   k   k   .  BADACL is set if the file has an invalid access control list.  SPOOL is set if the file is a spool file, such as an intermediate file used during printing.  DIRECTORY is set if the file is a directory.  BADBLOCK is set if the file contains bad blocks.  MARKDEL is set if the file has been marked for deletion, but is still in use; it will be deleted once closed by the last user.  NOCHARGE , if set, causes space used by the file to not be taken from the owner's storage quota.  ERASE causes the file's contents to be overwritten when it is deleted.   ACCMODE describes the privilege level at which a process must be running in order to access the file. VMS defines four privilege levels: user, supervisor, exec, and kernel. Each type of access - read, write, execute and delete - is encoded as a 2-bit integer.  FILEPROT contains the discretionary access control information for the file. It is divided into 4 groups of 4 bits each: system, owner, group and world. Bit 0 corresponds to read access, 1 to write, 2 to execute and 3 to delete. Setting a bit denies a particular access to a group; clearing it allows it.  If the file header is an extension header, BACKLINK contains the file ID of the primary header; otherwise, it contains the file ID of the directory file containing the primary entry for the file.  Other files   Storage bitmap file: BITMAP.SYS    The bitmap file is responsible for storing information regarding used and available space on a volume. It contains the storage control block (SCB), which includes summary information detailing ???, and the bitmap, an array of bits to indicate if a cluster of blocks on the disk is free or allocated. In early versions of VMS the cluster comprised 3 blocks but as disk sizes have increased, so has the cluster size.    Bad block file: BADBLK.SYS    The bad block file contains all of the known bad blocks on the physical volume. The purpose is to prevent the system from allocating them to files. This file was used more in the early days when disks were typically manufactured with more bad patches on the surface.    Volume set list file: VOLSET.SYS    The volume set list is located on volume 1 of a volume set, and contains a list of labels of all volumes in the set, and the set's volume name.    Continuation file: CONTIN.SYS    When a file on a multi-volume set crosses the boundary of two constituent volumes, the continuation file is used as its extension header and describes the volume where the rest of the file can be found.    Quota file: QUOTA.SYS    The quota file contains information of each UIC's disk space usage on a volume. It contains a record for each UIC with space allocated to it on a volume, along with information on how much space is being used by that UIC. NOTE: The DISK QUOTA feature is optional and the file will only exist if the feature was ever enabled.     Volume security profile: SECURITY.SYS    The volume security profile contains the volume's owner UIC, the volume protection mask, and its access control list.    GUID Partitioning Table: GPT.SYS    This file overlays and protects the MBR (Master Boot Record) and GPT (GUID Partitioning Table) disk structures utilized for and by the Extensible Firmware Interface -compliant firmware. This file is created by default during OpenVMS I64 disk initialization, and is optionally created (with INITIALIZE/GPT) on OpenVMS Alpha.   See also   Comparison of file systems  NTFS - Has many structural and metadata similarities with Files-11 and is almost certainly derived from it.   References       External links   OpenVMS documentation: Guide to OpenVMS File Applications  http://www.vms2linux.de   "  Category:Disk file systems  Category:Network file systems  Category:OpenVMS  Category:PDP-11   
+
+
+
+Files-11
+
+
+
+
+Files-11
+
+Files-11, also known as on-disk structure, is the file system used by Digital Equipment Corporation OpenVMS operating system, and also (in a simpler form) by the older RSX-11. It is a hierarchical file system, with support for access control lists, record-oriented I/O, remote network access, and file versioning.
+Files-11 is similar to, but significantly more advanced than, the file systems used in previous Digital Equipment Corporation operating systems such as TOPS-20 and RSTS/E.
+History
+The native OpenVMS file system is descended from older DEC operating systems, and is similar in many ways. A major difference is the layout of directories. These file systems all provided some form of rudimentary non-hierarchical directory structure, typically based on assigning one directory per user account. Under RSTS/E, each user account was represented by two numbers, a [project,programmer] pair, and had one associated directory. Special system files, such as program executables and the OS itself, were stored in the directory of a reserved system account.
+While this was suitable for PDP-11 systems, which possessed limited permanent storage capacity, VAX systems with much larger hard drives required a more flexible method of file storage: hierarchical directory layout in particular, the most notable improvement in ODS-2.
+They are "similar" because they had the same designer Dave Cutler, originally from Digital Equipment Corporation. Dave later went to Microsoft.
+Overview
+"Files-11" is the general term for five separate file systems, known as on-disk structure (ODS) levels 1 through 5.
+ODS-1 is the flat file system used by the RSX-11 OS, supported by older VMS systems for RSX compatibility, but never used to support VMS itself; it has been largely superseded by ODS-2 and ODS-5.
+ODS-2 is the standard VMS file system, and remains the most common file system for system disks (the disk on which the operating system is installed).
+Although seldom referred to by their ODS level designations, ODS-3 and ODS-4 are the Files-11 support for the CD-ROM ISO 9660 and High Sierra Format file systems, respectively.
+ODS-5 is an extended version of ODS-2 available on Alpha and IA-64 platforms which adds support for case-preserving filenames with non-ASCII characters and improvements to the hierarchical directory support. It was originally intended for file serving to Microsoft Windows or other non-VMS systems as part of the "NT affinity" project, but is also used on user disks and Internet servers.
+Directory layout
+(Figure)
+A typical Files-11 directory hierarchy: all files are rooted in the Master File Directory; File2 is in two directories
+
+All files and directories in a Files-11 file system are contained inside one or more parent directories, and eventually under the root directory, the master file directory (see below). The file system is therefore organised in a directed acyclic graph (DAG) structure.
+In this example (see right), File 2 has a directory entry under both Dir 2 and Dir 3; it is "in" both directories simultaneously. Even if removed from one, it would still exist in the other directory until removed from there also. This is similar to the concept of hard links in UNIX, although care must be taken that the file is not actually deleted on disks that are not set up for hard links (only available on ODS-5 disks, and then only if the disk has hard links enabled). 
+Disk organization and naming
+An operational VMS system has access to one or more online disks, each of which contains a complete, independent file system. These are either local storage or, in the case of a cluster, storage shared with remote systems.
+(Figure)
+Figure 1'': Sample OpenVMS cluster disk configuration
+
+In an OpenVMS cluster configuration, non-private disks are shared between all nodes in the cluster (see figure 1). In this configuration, the two system disks are accessible to both nodes via the network, but the private disk is not shared: it is mounted for use only by a particular user or process on that machine. Access to files across a cluster is managed by the OpenVMS Distributed Lock Manager, an integral part of the file system.
+Multiple disks can be combined to form a single large logical disk, or volume set. Disks can also be automatically replicated into shadow sets for data security or faster read performance.
+A disk is identified by either its physical name or (more often) by a user-defined logical name. For example, the boot device (system disk) may have the physical name $3$DKA100, but it is generally referred to by the logical name SYS$SYSDEVICE.
+File systems on each disk (with the exception of ODS-1) are hierarchical. A fully specified filename consists of a nodename, a username and password, a device name, directory, filename, file type, and a version number, in the format:
+NODE"accountname password"::device:[directory.subdirectory]filename.type;ver
+For example, [DIR1.DIR2.DIR3]FILE.EXT refers to the latest version of FILE.EXT, on the current default disk, in directory [DIR1.DIR2.DIR3].
+DIR1 is a subdirectory of the master file directory (MFD), or root directory, and DIR2 is a subdirectory of DIR1. A disk's MFD is identified by [000000].
+Most parts of the filename can be omitted, in which case they are taken from the current default file specification. The default file specification replaces the concept of "current directory" in other operating systems by providing a set of defaults for node, device name and directory. All processes have a default file specification which includes disk name and directory, and most VMS file system routines accept a default file specification which can also include the file type; the TYPE command, for example, defaults to ".LIS" as the file type, so the command TYPE F, with no extension, attempts to open the file F.LIS.
+Every file has a version number, which defaults to 1 if no other versions of the same filename are present (otherwise one higher than the greatest version). Every time a file is saved, rather than overwriting the existing version, a new file with the same name but an incremented version number is created. Old versions can be deleted explicitly, with the DELETE or the PURGE command, or optionally, older versions of a file can be deleted automatically when the file's version limit is reached (set by SET FILE/VERSION_LIMIT). Old versions are thus not overwritten, but are kept on disk and may be retrieved at any time. The architectural limit on version numbers is 32767. The versioning behavior is easily overridden if it is unwanted. In particular, files which are directly updated, such as databases, do not create new versions unless explicitly programmed.
+ODS-2 is limited to eight levels of subdirectories, and only uppercase, alphanumeric names (plus the underscore, dash, and dollar sign) up to 39.39 characters (39 for the filename and another 39 for the extension). ODS-5 expands the character set to lowercase letters and most other printable ASCII characters, as well as ISO Latin-1 and Unicode characters, increases the maximum filename length and allows unlimited levels of subdirectories. When constructing a pathname for an ODS-5 file which uses characters not allowed under ODS-2, a special "^" syntax is used to preserve backwards compatibility; the file "file.tar.gz;1" on an ODS-5 disk, for example, would be referred to as "file^.tar.gz"—the file's name is "file.tar", and the extension is ".gz".
+File security: protection and ACLs
+VMS file security is defined by two mechanisms, UIC-based access control and ACL-based access control. UIC access control is based on the owner of the file and the UIC, or user, accessing the file. Access is determined by four groups of permissions:
+(Figure)
+Format of file protection display; permissions not granted are not displayed
+
+
+System
+Owner
+Group
+World
+
+And four permission bits:
+
+Read
+Write
+Execute
+Delete
+
+The "system" access applies to any user whose UIC group code is less than or equal to the SYSGEN parameter MAXSYSGROUP (typically 8, or 10 octal) (for example the SYSTEM user); "owner" and "group" apply to the owner of the file and that user's user group, and "world" applies to any other user. There is also a fifth permission bit, "Control", which is used to determine access to change file metadata such as protection. This group cannot be set explicitly; it is always set for System and Owner, and never for Group or World.
+UIC-based access control is also affected by four system privileges, which allow users holding them to override access controls:
+
+BYPASS: user implicitly has RWED access to all files, regardless of file protection;
+READALL: user implicitly has R access to all files;
+SYSPRV: user may access files based on System protection;
+GRPPRV: user may access files based on System protection if their UIC group matches the file's group.
+
+ACLs allow additional privileges to be assigned on a user– or group–specific basis; for example, a web server's UIC could be granted read access to all files in a particular directory. ACLs can be marked as inherited, where a directory file's ACL applies to all files underneath it. ACLs are modified using the EDIT/ACL command, and take the form of identifier/access pairs. For example, the ACL entry
+(IDENTIFIER=HTTP$SERVER,ACCESS=READ+EXECUTE)
+would allow the user HTTP$SERVER to read and execute the file.
+Logical names
+A logical name is a system variable which may reference a disk, directory or file, or contain other program-specific information. For example, the logical SYS$SYSDEVICE contains the system's boot device. A logical name normally refers to a single directory or disk, e.g. SYS$LOGIN: which is the user's login (home) directory (or directories); these logicals cannot be used as true disk names—SYS$LOGIN:[DIR]FILE is not a valid file specification. However, concealed logical names, defined by DEFINE/TRANSLATION=CONCEALED, can be used in that way; these rooted directories are defined with a trailing "." on the directory specification, hence
+$ DEFINE/TRANS=CONCEAL HOME DISK$USERS:[username.]
+would allow HOME:[DIR]FILE to be used. More common are simple logicals which point to specific directories associated with some application software which may be located in on any disk or any directory. Hence logical ABC_EXE may point to a directory of executable programs for application ABC and ABC_TEMP may point to a directory of temporary files for that same application and this directory may be on the same disk and in the same directory tree as ABC_EXE or could be somewhere on another disk (and in a different directory tree).
+Logical names do not have a close equivalent in POSIX operating systems. They resemble Unix environment variables, except they are expanded by the file system, instead of the command shell or application program. They must be defined before use, so it is common for many logical names to be defined in the system startup command file, as well as user login command files.
+The closest non-DEC operating system to support the concept of logical names is AmigaOS, through the ASSIGN command. AmigaOS's disk operating system, AmigaDOS, which is a port of TRIPOS, bears some resemblance to DEC operating systems. For example, physical device names follow a pattern like DF0: for the first floppy disk, CDROM2: for the 3rd CD-ROM drive, etc. However, since the system can boot from any attached drive, the operating system creates the SYS: assignment to automatically reference the boot device used. Other assignments, LIBS:, PREFS:, C:, S:, et al. are also made, themselves referenced off SYS:. Users are, of course, allowed to create and destroy their own assignments too.
+In VMS, logical names may reference other logical names (up to a predefined nesting limit of 10), and may contain lists of names to search for an existing filename. Some frequently referenced logical names are:
+
+
+
+
+logical name
+
+meaning
+
+
+
+
+
+SYS$INPUT
+
+equivalent of standard input, program data source
+
+
+
+SYS$OUTPUT
+
+equivalent of standard output, program data destination
+
+
+
+SYS$ERROR
+
+equivalent of standard error, program error message destination
+
+
+
+SYS$COMMAND
+
+source of batch file (that is, .COM command file) commands
+
+
+
+TT
+
+the terminal associated with the process
+
+
+
+SYS$PRINT
+
+the default printer or print queue
+
+
+
+SYS$LOGIN
+
+home directory for each user
+
+
+
+SYS$SCRATCH
+
+temporary folder, directory for temporary files
+
+
+
+SYS$SYSTEM
+
+directory containing most system programs and a few vital data files, such as the system authorization file (accounts and passwords)
+
+
+
+SYS$SHARE
+
+shared runtime libraries, executables, etc.
+
+
+
+SYS$LIBRARY
+
+system and added libraries
+
+
+
+Record-oriented I/O: Record Management Services
+Record Management Services is the structured I/O layer of the VMS operating system. RMS provides comprehensive program support for managing structured files, such as record-based and indexed database files. The VMS file system, in conjunction with RMS, extends files access past simple byte-streams and allows OS-level support for a variety of rich files types. Each file in the VMS file system may be thought of as a database, containing a series of records, each of which has one of more individual fields. A text file, for example, is a list of records (lines) separated by a newline character. RMS is an example of a record-oriented filesystem.
+There are four record formats defined by RMS:
+
+Fixed length - all records in the file have the same length.
+Variable length - records vary in length, and every record is prefixed by a count byte giving its length.
+Variable record length with fixed-length control - records vary in length, but are preceded by a fixed-length control block.
+Stream - record vary in length, and every record is separated from the next one by a termination character. A text file is an example of a stream-format file using line feed or carriage return to separate records.
+
+There are four record access methods, or methods to retrieve extant records from files:
+
+Sequential Access - starting with a particular records, subsequent records are retrieved in order until the end of the file.
+Relative Record Number Access - records are retrieved via a record number relative to the beginning of the file.
+Record File Address Access - records are retrieved directly by their location in the file (RFA, or Record File Address).
+Indexed Access - records are retrieved via a key, in a form of key-value mapping.
+
+Physical layout: the On-Disk Structure
+At the disk level, ODS represents the file system as an array of blocks, a block being 512 contiguous bytes on one physical disk (volume). Disk blocks are assigned in clusters (originally 3 contiguous blocks but later increased with larger disk sizes). A file on the disk will ideally be entirely contiguous, i.e. the blocks which contain the file will be sequential, but disk fragmentation will sometimes require the file to located in discontiguous clusters in which case the fragments are called 'extents'. Disks may be combined with other disks to form a volume set and files stored anywhere across that set of disks, but larger disk sizes have reduced the use of volume sets because management of a single physical disk is simpler.
+Every file on a Files-11 disk (or volume set) has a unique file identification (FID), composed of three numbers: the file number (NUM), the file sequence number (SEQ), and the relative volume number (RVN). The NUM indicates where in the INDEXF.SYS file (see below) the metadata for the file is located; the SEQ is a generation number which incremented when the file is deleted and another file is created reusing the same INDEXF.SYS entry (so any dangling references to the old file do not accidentally point to the new one); and the RVN indicates the volume number on which the file is stored when using a volume set.
+Directories
+The structural support of an ODS volume is provided by a directory file—a special file containing a list of file names, file version numbers and their associated FIDs, similar to VSAM catalogs on MVS. At the root of the directory structure is the master file directory (MFD), the root directory which contains (directly or indirectly) every file on the volume.
+
+
+This diagram shows an example directory containing 3 files, and the way each filename is mapped to the INDEXF.SYS entry (each INDEXF entry contains more information; only the first few items are shown here).
+
+The Master File Directory
+At the top level of an ODS file system is the master file directory (MFD), which contains all top-level directory files (including itself), and several system files used to store file system information. On ODS-1 volumes, a two-level directory structure is used: each user identification code (UIC) has an associated user file directory (UFD), of the form [GROUP.USER]. On ODS-2 and later volumes, the layout of directories under the MFD is free-form, subject to a limit on the nesting of directories (8 levels on ODS-2 and unlimited on ODS-5). On multi-volume sets, the MFD is always stored on the first volume, and contains the subdirectories of all volumes.
+The following system files are present in the ODS MFD:
+
+INDEXF.SYS;1—Index file
+BITMAP.SYS;1—Storage bitmap file
+BADBLK.SYS;1—Bad block file
+000000.DIR;1—The MFD directory file itself
+CORIMG.SYS;1—Core image file
+VOLSET.SYS;1—Volume set list file (ODS-2/5 only)
+CONTIN.SYS;1—Continuation file (ODS-2/5 only)
+BACKUP.SYS;1—Backup log file (ODS-2/5 only)
+BADLOG.SYS;1—Pending bad block (ODS-2/5 only)
+SECURITY.SYS;1—Volume security profile (ODS-2/5 only)
+QUOTA.SYS;1—Quota file (optional and available under ODS-2/5 only)
+GPT.SYS;1—GUID Partitioning Table (GPT) (OpenVMS I64 EFI boot structures, optional on OpenVMS Alpha)
+
+Note that the file system implementation itself does not refer to these files by name, but by their file IDs, which always have the same values. Thus, INDEXF.SYS is always the file with NUM = 1 and SEQ = 1.
+Index file: INDEXF.SYS
+The index file contains the most basic information about a Files-11 volume set.
+There are two organizations of INDEXF.SYS, the traditional organization and the organization used on disks with GPT.SYS; with the GUID Partition Table (GPT) structures.
+With the traditional organization, block 1 is the boot block, which contains the location of the primary bootstrap image, used to load the VMS operating system. This is always located at logical block 0 on the disk, so that the hardware firmware can read it. This block is always present, even on non-system (non-bootable) volumes.
+After the boot block is the primary home block. This contains the volume name, the location of the extents comprising the remainder of the index file, the volume owner's UIC, and the volume protection information. There are normally several additional copies of the home block, known as the secondary home blocks, to allow recovery of the volume if it is lost or damaged.
+On disks with GPT.SYS, GPT.SYS contains the equivalent of the boot block (known as the Master Boot Record (MBR)), and there is no primary home block. All home blocks present on a GPT-based disk are alternate home blocks. These structures are not included in INDEXF.SYS, and the blocks of the INDEXF.SYS file are unused.
+The rest of the index file is composed of file headers, which describe the extents allocated to the files residing on the volume, and file metadata such as the owner UIC, ACLs and protection information. Each file is described by one or more file headers—more than one can be required when a file has a large number of extents. The file header is a fixed-length block, but contains both fixed– and variable–length sections:
+
+The header contains the NUM and SEQ, the protection (security) information, and the location(s) of the rest of the file header.
+The ident section contains the accounting metadata: the filename, creation and modification times, and the time of the last backup.
+The map describes which physical disk blocks (extents) map to each virtual block of the file.
+The access control list contains the ACL information for the file.
+The reserved area is space at the end of the file header which is not used by the operating system. This can be used by for customer- or vendor-specific information.
+The last two bytes of the header are a checksum of the previous 255 words, to verify the validity of the header.
+
+If possible, the map and ACL sections of the header are contained completely in the primary header. However, if the ACL is too long, or the file contains too many extents, there will not be enough space in the primary header to store them. In this case, an extension header is allocated to store the overflow information.
+
+
+Layout of the INDEXF.SYS header.
+
+The file header begins with 4 offsets (IDOFFSET, MPOFFSET, ACOFFSET and ROFFSET). Since the size of the areas after the fixed-length header may vary (such as the map and ACL areas), the offsets are required to locate these additional areas. Each offset is the number of 16-bit words from the beginning of the file header to the beginning of that area.
+If the file requires multiple headers, the extension segment number (SEGNUM) contains the sequence number of this header, beginning at 0 in the first entry in INDEXF.SYS.
+STRUCLEV contains the current structure level (in the high byte) and version (in the low byte) of the file system; ODS-2 being structure level 2. An increase in the version number indicates a backwards-compatible change that older software may ignore; changes in the structure level itself are incompatible.
+W_FID (containing three values: FID_NUM, FID_SEQ and FID_RVN, corresponding to the file, sequence, and relative volume number) contains the ID of this file; EXT_FID (again composed of three values) holds the location of the next extension header, if any. In both of these values, the RVN is specified as 0 to represent the "current" volume (0 is not normally a valid RVN).
+FILECHAR contains several flags which affect how the file is handled or organised:
+
+NOBACKUP causes this file to be ignored when a backup is run.
+WRITEBACK enables cached (delayed) writes to the file.
+READCHECK causes all reads of the file to be done twice, and compared to ensure data integrity.
+WRITCHECK results in all writes being verified by a subsequent read and compare.
+CONTIGB causes the OS to attempt to allocate storage for the file in as contiguous a manner as possible.
+LOCKED is set if the file is deaccess-locked. If set, this indicates that the file was not properly closed after its last use, and the contents may be inconsistent.
+CONTIG indicates that the file is stored contiguously on disk; that is, each virtual block 
+ 
+ 
+ 
+  is mapped to the logical (physical) block 
+ 
+ 
+ 
+ , for some constant 
+ 
+ 
+ 
+ .
+BADACL is set if the file has an invalid access control list.
+SPOOL is set if the file is a spool file, such as an intermediate file used during printing.
+DIRECTORY is set if the file is a directory.
+BADBLOCK is set if the file contains bad blocks.
+MARKDEL is set if the file has been marked for deletion, but is still in use; it will be deleted once closed by the last user.
+NOCHARGE, if set, causes space used by the file to not be taken from the owner's storage quota.
+ERASE causes the file's contents to be overwritten when it is deleted.
+
+ACCMODE describes the privilege level at which a process must be running in order to access the file. VMS defines four privilege levels: user, supervisor, exec, and kernel. Each type of access - read, write, execute and delete - is encoded as a 2-bit integer.
+FILEPROT contains the discretionary access control information for the file. It is divided into 4 groups of 4 bits each: system, owner, group and world. Bit 0 corresponds to read access, 1 to write, 2 to execute and 3 to delete. Setting a bit denies a particular access to a group; clearing it allows it.
+If the file header is an extension header, BACKLINK contains the file ID of the primary header; otherwise, it contains the file ID of the directory file containing the primary entry for the file.
+Other files
+
+Storage bitmap file: BITMAP.SYS
+
+
+The bitmap file is responsible for storing information regarding used and available space on a volume. It contains the storage control block (SCB), which includes summary information detailing ???, and the bitmap, an array of bits to indicate if a cluster of blocks on the disk is free or allocated. In early versions of VMS the cluster comprised 3 blocks but as disk sizes have increased, so has the cluster size.
+ 
+
+
+Bad block file: BADBLK.SYS
+
+
+The bad block file contains all of the known bad blocks on the physical volume. The purpose is to prevent the system from allocating them to files. This file was used more in the early days when disks were typically manufactured with more bad patches on the surface.
+ 
+
+
+Volume set list file: VOLSET.SYS
+
+
+The volume set list is located on volume 1 of a volume set, and contains a list of labels of all volumes in the set, and the set's volume name.
+ 
+
+
+Continuation file: CONTIN.SYS
+
+
+When a file on a multi-volume set crosses the boundary of two constituent volumes, the continuation file is used as its extension header and describes the volume where the rest of the file can be found.
+ 
+
+
+Quota file: QUOTA.SYS
+
+
+The quota file contains information of each UIC's disk space usage on a volume. It contains a record for each UIC with space allocated to it on a volume, along with information on how much space is being used by that UIC. NOTE: The DISK QUOTA feature is optional and the file will only exist if the feature was ever enabled.
+
+
+
+Volume security profile: SECURITY.SYS
+
+
+The volume security profile contains the volume's owner UIC, the volume protection mask, and its access control list.
+ 
+
+
+GUID Partitioning Table: GPT.SYS
+
+
+This file overlays and protects the MBR (Master Boot Record) and GPT (GUID Partitioning Table) disk structures utilized for and by the Extensible Firmware Interface-compliant firmware. This file is created by default during OpenVMS I64 disk initialization, and is optionally created (with INITIALIZE/GPT) on OpenVMS Alpha.
+ 
+
+See also
+
+Comparison of file systems
+NTFS - Has many structural and metadata similarities with Files-11 and is almost certainly derived from it.
+
+References
+
+
+
+
+
+External links
+
+OpenVMS documentation: Guide to OpenVMS File Applications
+http://www.vms2linux.de
+
+"
+Category:Disk file systems Category:Network file systems Category:OpenVMS Category:PDP-11
+
+
