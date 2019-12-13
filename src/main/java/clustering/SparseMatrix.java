@@ -31,7 +31,7 @@ class SparseMatrix {
     /**
      * @return the csc
      */
-    public DMatrixSparseCSC getCsc() {
+    public synchronized DMatrixSparseCSC getCsc() {
         return csc;
     }
 }

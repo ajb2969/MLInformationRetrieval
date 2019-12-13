@@ -89,7 +89,7 @@ public class LDA extends Models {
                         TFSmoothing termTF = Models.termFreqencySmoothing(term, document);
                         termTF.setMu(mu);
                         termTF.setSmoothing(collectionTermsQuantity, totalCollectionTokens);
-                        termTF.setScore(termTF.getScore() * ranking.get(document).getScore());
+                        termTF.setScore(ranking.get(document).getScore());
                         ranking.put(document, termTF);
                     }
                 }

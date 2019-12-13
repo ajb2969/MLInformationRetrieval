@@ -210,7 +210,7 @@ abstract public class Models {
         }
 
         public void setScore(double newScore) {
-            this.score = this.score * score;
+            this.score = Math.log10(this.score) + newScore;
         }
 
         
