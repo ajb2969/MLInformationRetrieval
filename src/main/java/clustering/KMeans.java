@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -64,7 +65,7 @@ public class KMeans {
         return parsedDocs;
     }
 
-    private static double klDivergence(List<Double> clusterCenter, List<Double> currentDocument) {
+    private static double klDivergence(List<Double> clusterCenter, List<SimpleEntry> currentDocument) {
         // TODO compute KL Divergence
         double dirchletPriorWeight = 0.001;
         // TODO for each value, add dirchlet prior weight to it, removes 0 values and scales everything by small value
@@ -93,13 +94,13 @@ public class KMeans {
             // while there are changes to data points
             change = false;
             System.out.println("Building proper histogram for each document");
-            IntStream.range(0, sm.getCsc().numCols).boxed().parallel().forEach(document -> {
+            IntStream.range(0, sm.getCsc().numCols).boxed().forEach(document -> {
                 final int documentColumn = document;
 
-                List<Double> documentHistogram = (List<Double>) IntStream.range(0, sm.getCsc().numRows)
-                                                .parallel()
-                                                .mapToDouble(index -> Double.valueOf(sm.getCsc().get(index, documentColumn)))
-                                                .boxed()
+                List<SimpleEntry> documentHistogram = (List<SimpleEntry>) IntStream
+                                                .range(0, sm.getCsc().numRows)
+                                                .filter(index -> sm.getCsc().get(index, documentColumn) != 0)
+                                                .mapToObj(index -> new SimpleEntry(index, (sm.getCsc().get(index, documentColumn))))
                                                 .collect(Collectors.toList());
 
 
