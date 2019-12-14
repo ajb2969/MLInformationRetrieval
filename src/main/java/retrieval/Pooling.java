@@ -31,6 +31,7 @@ public class Pooling {
         } else if(this.currModel == QueryController.ModelTypes.BM25) {
             ArrayList<Similarity> bm25Results = this.bm25.retrieve(this.query);
             for(int i = 0; i < RESULT_SET_SIZE; i++) {
+                System.out.println(bm25Results.get(i).getDocumentName());
                 returnedResults.add(bm25Results.get(i));
             }
         } else {
