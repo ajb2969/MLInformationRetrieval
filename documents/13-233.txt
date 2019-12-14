@@ -1,1 +1,785 @@
-   FM-index      FM-index   In computer science , an FM-index is a compressed full-text substring index based on the Burrows-Wheeler transform , with some similarities to the suffix array . It was created by Paolo Ferragina and Giovanni Manzini, 1 who describe it as an opportunistic data structure as it allows compression of the input text while still permitting fast substring queries. The name stands for Full-text index in Minute space. 2  It can be used to efficiently find the number of occurrences of a pattern within the compressed text, as well as locate the position of each occurrence. Both the query time and storage space requirements are sublinear with respect to the size of the input data.  The original authors have devised improvements to their original approach and dubbed it "FM-Index version 2". 3 A further improvement, the alphabet-friendly FM-index, combines the use of compression boosting and wavelet trees  4 to significantly reduce the space usage for large alphabets.  The FM-index has found use in, among other places, bioinformatics . 5  Background  Using an index is a common strategy to efficiently search a large body of text. When the text is larger than what reasonably fits within a computer's main memory, there is a need to compress not only the text but also the index. When the FM-index was introduced, there were several suggested solutions that were based on traditional compression methods and tried to solve the compressed matching problem. In contrast, the FM-index is a compressed self-index, which means that it compresses the data and indexes it at the same time.  FM-index data structure  An FM-index is created by first taking the Burrows-Wheeler transform (BWT) of the input text. For example, the BWT of the string    T  =       T  absent    T=   "abracadabra" is "ard$rcaaaabb", and here it is represented by the matrix   M   M   M   where each row is a rotation of the text, and the rows have been sorted lexicographically. The transform corresponds to the last column labeled   L   L   L   .         I   I   I         F   F   F          L   L   L          1   $   abracadabr   a     2   a   $abracadab   r     3   a   bra$abraca   d     4   a   bracadabra   $     5   a   cadabra$ab   r     6   a   dabra$abra   c     7   b   ra$abracad   a     8   b   racadabra$   a     9   c   adabra$abr   a     10   d   abra$abrac   a     11   r   a$abracada   b     12   r   acadabra$a   b     The BWT in itself allows for some compression with, for instance, move to front and Huffman encoding , but the transform has even more uses. The rows in the matrix are essentially the sorted suffixes of the text and the first column F of the matrix shares similarities with suffix arrays . How the suffix array relates to the BWT lies at the heart of the FM-index.      It is possible to make a last-to-first column mapping    L  F   (  i  )       L  F  i    LF(i)   from a an index   i   i   i   to an index   j   j   j   , such that    F  j  j      F  j  j    Fjj   =    L  i  i      L  i  i    Lii   , with the help of a table    C  c  c      C  c  c    Ccc   and a function    O  c  c   (  c  ,  k  )       O  c  c   c  k     Occ(c,k)   .       C  c  c      C  c  c    Ccc   is a table that, for each character   c   c   c   in the alphabet, contains the number of occurrences of lexically smaller characters in the text.  The function    O  c  c   (  c  ,  k  )       O  c  c   c  k     Occ(c,k)   is the number of occurrences of character   c   c   c   in the prefix    L  1..  k  k      L  1..  k  k    L1..kk   . Ferragina and Manzini showed 6 that it is possible to compute    O  c  c   (  c  ,  k  )       O  c  c   c  k     Occ(c,k)   in constant time.           C  c  c      C  c  c    Ccc   of "ard$rcaaaabb"      c   c   c      $   a   b   c   d   r         C  c  c      C  c  c    Ccc      0   1   6   8   9   10            The last-to-first mapping can now be defined as     L  F   (  i  )    =   C  L  L  i  i         L  F  i     C  L  L  i  i     LF(i)=CLLii   . For instance, on row 9,   L   L   L   is   a   a   a   and the same   a   a   a   can be found on row 5 in the first column   F   F   F   , so    L  F   (  9  )       L  F  9    LF(9)   should be 5 and     L  F   (  9  )    =    C  a  a   +   O  c  c   (  a  ,  9  )     =  5          L  F  9       C  a  a     O  c  c   a  9          5     LF(9)=Caa+Occ(a,9)=5   . For any row   i   i   i   of the matrix, the character in the last column    L  i  i      L  i  i    Lii   precedes the character in the first column    F  i  i      F  i  i    Fii   also in T. Finally, if     L  i  i   =   T  k  k         L  i  i     T  k  k     Lii=Tkk   , then    L  L  F   (  i  )   )  =  T  k  -  11     fragments  L  L  F   fragments  normal-(  i  normal-)   normal-)   T  k   11    LLF(i))=Tk-11   , and using the equality it is possible to extract a string of   T   T   T   from   L   L   L   . The FM-index itself is a compression of the string   L   L   L   together with   C   C   C   and    O  c  c      O  c  c    Occ   in some form, as well as information that maps a selection of indices in   L   L   L   to positions in the original string   T   T   T   .          O  c  c   (  c  ,  k  )       O  c  c   c  k     Occ(c,k)   of "ard$rcaaaabb"    a   r   d   $   r   c   a   a   a   a   b   b      1   2   3   4   5   6   7   8   9   10   11   12     $   0   0   0   1   1   1   1   1   1   1   1   1     a   1   1   1   1   1   1   2   3   4   5   5   5     b   0   0   0   0   0   0   0   0   0   0   1   2     c   0   0   0   0   0   1   1   1   1   1   1   1     d   0   0   1   1   1   1   1   1   1   1   1   1     r   0   1   1   1   2   2   2   2   2   2   2   2        Count  The operation count takes a pattern    P  1..  p  p      P  1..  p  p    P1..pp   and returns the number of occurrences of that pattern in the original text   T   T   T   . Since the rows of matrix   M   M   M   are sorted, and it contains every suffix of   T   T   T   , the occurrences of pattern   P   P   P   will be next to each other in a single continuous range. The operation iterates backwards over the pattern. For every character in the pattern, the range that has the character as a suffix is found. For example, the count of the pattern "bra" in "abracadabra" follows these steps:   The first character we look for is   a   a   a   , the last character in the pattern. The initial range is set to      C  C  a  a   +   1..  C  C  a   +  11   =  2..66          C  C  a  a     1..  C  C  a   11   2..66    CCaa+1..CCa+11=2..66   . This range over   L   L   L   represents every character of   T   T   T   that has a suffix beginning with a .  The next character to look for is   r   r   r   . The new range is    C  C  r  r  +  O  c  c   (  r  ,  s  t  a  r  t  -  1  )   +  1..  C  C  r  r  +  O  c  c   (  r  ,  e  n  d  )   )  =     fragments  C  C  r  r   O  c  c   fragments  normal-(  r  normal-,  s  t  a  r  t   1  normal-)    1..  C  C  r  r   O  c  c   fragments  normal-(  r  normal-,  e  n  d  normal-)   normal-)     CCrr+Occ(r,start-1)+1..CCrr+Occ(r,end))=        10  +  0  +  1..10  +  22   =         10  0  1..10  22   absent    10+0+1..10+22=      11..122   11..122   11..122   , if    s  t  a  r  t      s  t  a  r  t    start   is the index of the beginning of the range and    e  n  d      e  n  d    end   is the end. This range over   L   L   L   is all the characters of   T   T   T   that have suffixes beginning with ra .  The last character to look at is   b   b   b   . The new range is    C  C  b  b  +  O  c  c   (  b  ,  s  t  a  r  t  -  1  )   +  1..  C  C  b  b  +  O  c  c   (  b  ,  e  n  d  )   )  =     fragments  C  C  b  b   O  c  c   fragments  normal-(  b  normal-,  s  t  a  r  t   1  normal-)    1..  C  C  b  b   O  c  c   fragments  normal-(  b  normal-,  e  n  d  normal-)   normal-)     CCbb+Occ(b,start-1)+1..CCbb+Occ(b,end))=        6  +  0  +  1..6  +  22   =         6  0  1..6  22   absent    6+0+1..6+22=      7..88   7..88   7..88   . This range over   L   L   L   is all the characters that have a suffix that begins with bra . Now that the whole pattern has been processed, the count is the same as the size of the range:      8  -  7   +  1   =  2          8  7   1   2    8-7+1=2   .   If the range at becomes empty or the range boundaries cross each other before the whole pattern has been looked up, the pattern does not occur in   T   T   T   . Because    O  c  c   (  c  ,  k  )       O  c  c   c  k     Occ(c,k)   can be performed in constant time, count can complete in linear time in the length of the pattern:    O   (  p  )       O  p    O(p)   time.  Locate  The operation locate takes as input an index of a character in   L   L   L   and returns its position   i   i   i   in   T   T   T   . For instance     l  o  c  a  t  e   (  7  )    =  8        l  o  c  a  t  e  7   8    locate(7)=8   . To locate every occurrence of a pattern, first the range of character is found whose suffix is the pattern in the same way the count operation found the range. Then the position of every character in the range can be located.  To map an index in   L   L   L   to one in   T   T   T   , a subset of the indices in   L   L   L   are associated with a position in   T   T   T   . If    L  j  j      L  j  j    Ljj   has a position associated with it,    l  o  c  a  t  e   (  j  )       l  o  c  a  t  e  j    locate(j)   is trivial. If it's not associated, the string is followed with    L  F   (  i  )       L  F  i    LF(i)   until an associated index is found. By associating a suitable number of indices, an upper bound can be found. Locate can be implemented to find occ occurrences of a pattern    P  1..  p  p      P  1..  p  p    P1..pp   in a text    T  1..  u  u      T  1..  u  u    T1..uu   in time with    O   (     H  k    (  T  )    +    log   log  u      log  ϵ   u     )       O       subscript  H  k   T         u      superscript   ϵ   u       O(H_{k}(T)+{{\log\log u}\over{\log^{\epsilon}u}})   bits per input symbol for any    k  ≥  0      k  normal-≥  0    k≥0   . 7  Applications  DNA read mapping  FM index with Backtracking has been successfully (>2000 citations) applied to approximate string matching/sequence alignment, See Bowtie http://bowtie-bio.sourceforge.net/index.shtml  See also   Burrows–Wheeler transform  Suffix array  Compressed suffix array  Sequence alignment   References  "  Category:Substring indices  Category:String data structures     Paolo Ferragina and Giovanni Manzini (2000). "Opportunistic Data Structures with Applications". Proceedings of the 41st Annual Symposium on Foundations of Computer Science. p.390. ↩  Paolo Ferragina and Giovanni Manzini (2005). "Indexing Compressed Text". Journal of the ACM (JACM), 52, 4 (Jul. 2005). p. 553 ↩  Paolo Ferragina and Rossano Venturini "FM-Index version 2" ↩  P. Ferragina, G. Manzini, V. Mäkinen and G. Navarro. An Alphabet-Friendly FM-index. In Proc. SPIRE'04 , pages 150-160. LNCS 3246. ↩  Simpson, Jared T. and Durbin, Richard (2010). "Efficient construction of an assembly string graph using the FM-index". Bioinformatics, 26, 12 (Jun. 17). p. i367 ↩       
+
+
+
+FM-index
+
+
+
+
+FM-index
+
+In computer science, an FM-index is a compressed full-text substring index based on the Burrows-Wheeler transform, with some similarities to the suffix array. It was created by Paolo Ferragina and Giovanni Manzini,1 who describe it as an opportunistic data structure as it allows compression of the input text while still permitting fast substring queries. The name stands for Full-text index in Minute space.2
+It can be used to efficiently find the number of occurrences of a pattern within the compressed text, as well as locate the position of each occurrence. Both the query time and storage space requirements are sublinear with respect to the size of the input data.
+The original authors have devised improvements to their original approach and dubbed it "FM-Index version 2".3 A further improvement, the alphabet-friendly FM-index, combines the use of compression boosting and wavelet trees 4 to significantly reduce the space usage for large alphabets.
+The FM-index has found use in, among other places, bioinformatics.5
+Background
+Using an index is a common strategy to efficiently search a large body of text. When the text is larger than what reasonably fits within a computer's main memory, there is a need to compress not only the text but also the index. When the FM-index was introduced, there were several suggested solutions that were based on traditional compression methods and tried to solve the compressed matching problem. In contrast, the FM-index is a compressed self-index, which means that it compresses the data and indexes it at the same time.
+FM-index data structure
+An FM-index is created by first taking the Burrows-Wheeler transform (BWT) of the input text. For example, the BWT of the string 
+ 
+ 
+ 
+ "abracadabra" is "ard$rcaaaabb", and here it is represented by the matrix 
+ 
+ 
+ 
+  where each row is a rotation of the text, and the rows have been sorted lexicographically. The transform corresponds to the last column labeled 
+ 
+ 
+ 
+ .
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1
+
+$
+
+abracadabr
+
+a
+
+
+
+2
+
+a
+
+$abracadab
+
+r
+
+
+
+3
+
+a
+
+bra$abraca
+
+d
+
+
+
+4
+
+a
+
+bracadabra
+
+$
+
+
+
+5
+
+a
+
+cadabra$ab
+
+r
+
+
+
+6
+
+a
+
+dabra$abra
+
+c
+
+
+
+7
+
+b
+
+ra$abracad
+
+a
+
+
+
+8
+
+b
+
+racadabra$
+
+a
+
+
+
+9
+
+c
+
+adabra$abr
+
+a
+
+
+
+10
+
+d
+
+abra$abrac
+
+a
+
+
+
+11
+
+r
+
+a$abracada
+
+b
+
+
+
+12
+
+r
+
+acadabra$a
+
+b
+
+
+
+The BWT in itself allows for some compression with, for instance, move to front and Huffman encoding, but the transform has even more uses. The rows in the matrix are essentially the sorted suffixes of the text and the first column F of the matrix shares similarities with suffix arrays. How the suffix array relates to the BWT lies at the heart of the FM-index.
+
+
+
+
+It is possible to make a last-to-first column mapping 
+ 
+ 
+ 
+  from a an index 
+ 
+ 
+ 
+  to an index 
+ 
+ 
+ 
+ , such that 
+ 
+ 
+ 
+  = 
+ 
+ 
+ 
+ , with the help of a table 
+ 
+ 
+ 
+  and a function 
+ 
+ 
+ 
+ .
+
+
+
+ 
+  is a table that, for each character 
+ 
+ 
+ 
+  in the alphabet, contains the number of occurrences of lexically smaller characters in the text.
+The function 
+ 
+ 
+ 
+  is the number of occurrences of character 
+ 
+ 
+ 
+  in the prefix 
+ 
+ 
+ 
+ . Ferragina and Manzini showed6 that it is possible to compute 
+ 
+ 
+ 
+  in constant time.
+
+
+
+
+
+
+
+ 
+  of "ard$rcaaaabb"
+
+
+
+
+
+$
+
+a
+
+b
+
+c
+
+d
+
+r
+
+
+
+
+
+
+
+0
+
+1
+
+6
+
+8
+
+9
+
+10
+
+
+
+
+
+
+
+
+
+
+The last-to-first mapping can now be defined as 
+ 
+ 
+ 
+ . For instance, on row 9, 
+ 
+ 
+ 
+  is 
+ 
+ 
+ 
+  and the same 
+ 
+ 
+ 
+  can be found on row 5 in the first column 
+ 
+ 
+ 
+ , so 
+ 
+ 
+ 
+  should be 5 and 
+ 
+ 
+ 
+ . For any row 
+ 
+ 
+ 
+  of the matrix, the character in the last column 
+ 
+ 
+ 
+  precedes the character in the first column 
+ 
+ 
+ 
+  also in T. Finally, if 
+ 
+ 
+ 
+ , then 
+ 
+ 
+ 
+ , and using the equality it is possible to extract a string of 
+ 
+ 
+ 
+  from 
+ 
+ 
+ 
+ . The FM-index itself is a compression of the string 
+ 
+ 
+ 
+  together with 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+  in some form, as well as information that maps a selection of indices in 
+ 
+ 
+ 
+  to positions in the original string 
+ 
+ 
+ 
+ .
+
+
+
+
+
+
+ 
+  of "ard$rcaaaabb"
+
+
+a
+
+r
+
+d
+
+$
+
+r
+
+c
+
+a
+
+a
+
+a
+
+a
+
+b
+
+b
+
+
+
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+9
+
+10
+
+11
+
+12
+
+
+
+$
+
+0
+
+0
+
+0
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+
+
+a
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+2
+
+3
+
+4
+
+5
+
+5
+
+5
+
+
+
+b
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+1
+
+2
+
+
+
+c
+
+0
+
+0
+
+0
+
+0
+
+0
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+
+
+d
+
+0
+
+0
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+
+
+r
+
+0
+
+1
+
+1
+
+1
+
+2
+
+2
+
+2
+
+2
+
+2
+
+2
+
+2
+
+2
+
+
+
+
+
+
+Count
+The operation count takes a pattern 
+ 
+ 
+ 
+  and returns the number of occurrences of that pattern in the original text 
+ 
+ 
+ 
+ . Since the rows of matrix 
+ 
+ 
+ 
+  are sorted, and it contains every suffix of 
+ 
+ 
+ 
+ , the occurrences of pattern 
+ 
+ 
+ 
+  will be next to each other in a single continuous range. The operation iterates backwards over the pattern. For every character in the pattern, the range that has the character as a suffix is found. For example, the count of the pattern "bra" in "abracadabra" follows these steps:
+
+The first character we look for is 
+ 
+ 
+ 
+ , the last character in the pattern. The initial range is set to 
+ 
+ 
+ 
+ . This range over 
+ 
+ 
+ 
+  represents every character of 
+ 
+ 
+ 
+  that has a suffix beginning with a.
+The next character to look for is 
+ 
+ 
+ 
+ . The new range is 
+ 
+ 
+
+
+ 
+ , if 
+ 
+ 
+ 
+  is the index of the beginning of the range and 
+ 
+ 
+ 
+  is the end. This range over 
+ 
+ 
+ 
+  is all the characters of 
+ 
+ 
+ 
+  that have suffixes beginning with ra.
+The last character to look at is 
+ 
+ 
+ 
+ . The new range is 
+ 
+ 
+
+
+ 
+ . This range over 
+ 
+ 
+ 
+  is all the characters that have a suffix that begins with bra. Now that the whole pattern has been processed, the count is the same as the size of the range: 
+ 
+ 
+ 
+ .
+
+If the range at becomes empty or the range boundaries cross each other before the whole pattern has been looked up, the pattern does not occur in 
+ 
+ 
+ 
+ . Because 
+ 
+ 
+ 
+  can be performed in constant time, count can complete in linear time in the length of the pattern: 
+ 
+ 
+ 
+  time.
+Locate
+The operation locate takes as input an index of a character in 
+ 
+ 
+ 
+  and returns its position 
+ 
+ 
+ 
+  in 
+ 
+ 
+ 
+ . For instance 
+ 
+ 
+ 
+ . To locate every occurrence of a pattern, first the range of character is found whose suffix is the pattern in the same way the count operation found the range. Then the position of every character in the range can be located.
+To map an index in 
+ 
+ 
+ 
+  to one in 
+ 
+ 
+ 
+ , a subset of the indices in 
+ 
+ 
+ 
+  are associated with a position in 
+ 
+ 
+ 
+ . If 
+ 
+ 
+ 
+  has a position associated with it, 
+ 
+ 
+ 
+  is trivial. If it's not associated, the string is followed with 
+ 
+ 
+ 
+  until an associated index is found. By associating a suitable number of indices, an upper bound can be found. Locate can be implemented to find occ occurrences of a pattern 
+ 
+ 
+ 
+  in a text 
+ 
+ 
+ 
+  in  time with 
+ 
+ 
+ 
+  bits per input symbol for any 
+ 
+ 
+ 
+ .7
+Applications
+DNA read mapping
+FM index with Backtracking has been successfully (>2000 citations) applied to approximate string matching/sequence alignment, See Bowtie http://bowtie-bio.sourceforge.net/index.shtml
+See also
+
+Burrows–Wheeler transform
+Suffix array
+Compressed suffix array
+Sequence alignment
+
+References
+"
+Category:Substring indices Category:String data structures
+
+
+
+Paolo Ferragina and Giovanni Manzini (2000). "Opportunistic Data Structures with Applications". Proceedings of the 41st Annual Symposium on Foundations of Computer Science. p.390.↩
+Paolo Ferragina and Giovanni Manzini (2005). "Indexing Compressed Text". Journal of the ACM (JACM), 52, 4 (Jul. 2005). p. 553↩
+Paolo Ferragina and Rossano Venturini "FM-Index version 2"↩
+P. Ferragina, G. Manzini, V. Mäkinen and G. Navarro. An Alphabet-Friendly FM-index. In Proc. SPIRE'04, pages 150-160. LNCS 3246.↩
+Simpson, Jared T. and Durbin, Richard (2010). "Efficient construction of an assembly string graph using the FM-index". Bioinformatics, 26, 12 (Jun. 17). p. i367↩
+
+
+
+
+
+

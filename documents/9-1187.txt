@@ -1,1 +1,211 @@
-   Publius Publishing System      Publius Publishing System   Publius is (was?) a web protocol developed by Waldman , Rubin & Cranor for allowing individuals the ability to publish information on the web anonymously and with a high guarantee that their publications will not be censored or modified by a third party.  The nine design goals of the Publius development team are:   Censorship resistance - decreasing the chance that a third party will manage to modify or delete the published materials.  Tamper evident - unauthorized changes are traceable.  Source Anonymous - there is no way to tell who published the material once it is available on the web.  Updatable - publishers are allowed to modify or delete their material.  Deniable - third parties participating in publishing the materials lacks the responsibility for the hosted content.  Fault tolerant - system should function even when some involved third parties are faulty or malicious.  Persistent - there is no expiration date for published materials.  Extensible - support for future protocol extensions or growth in the number of publishers.  Freely available - all software tools required for the system should be out of charge.   Overview  The Publius web system consists of the following agents:   Publishers - participants who publish their contents on the web.  Servers - which host the publishers' contents on the web (considered as part of the third parties).  Retrievers - participants who browse the web contents published by the publishers.   The Publius system relies on a static list of m  web servers . When a publisher wishes to add a contents M to the web, it first encrypts M using some random symmetric key  K . Then K is split into n shares (parts) where at least k When a retriever wishes to obtain the original contents M , it follows a generated URL which corresponds to the contents M combined with the portion of K as it appears on a subset of servers from the list. Gathering k different shares and a copy of E(M,K) allows the retriever to reconstruct the key K out of the shares and decrypt E(M,K) back into M . Modification or removal of the server hosted contents can be issued only by the original publishers using a combination of password and the hosting server domain name.  At present, Publius supports the hosting of HTML pages, images and other file formats such as PDFs and PostScripts .  Detailed View  This section covers the Publius protocol in greater details.  Operations  The Publius protocol allows the following operations:   Publish - in which a publisher spreads its contents across the Publius web servers.  Retrieve - in which a retriever follows a specific URL to gather desired contents.  Update - in which a publisher replaces its server hosted contents file by another.  Delete - in which a publisher removes its server hosted file.   When a publisher wishes to add a web contents in the Publius web, its Publius client software (Publius Client Proxy) executes the following steps:   Random symmetric key  K is generated.  The original content M is encrypted under Symmetric-key algorithm with the key K . Resulting with the encryption E(M,K) .  K is split into n shares using Shamir's Secret Sharing method in such that at least k < n shares are required for the reconstruction of K under the method of interpolation .  For each of the n shares, the following computation takes place     n  a  m    e  i     =   w  r  a  p   (   H   (    M  *  s   h  a  r   e  i    )    )          n  a  m   subscript  e  i      w  r  a  p    H      M  s   h  a  r   subscript  e  i        name_{i}\ =wrap(H(M*share_{i}))   where     M  *  s   h  a  r   e  i         M  s   h  a  r   subscript  e  i     M*share_{i}   is the concatenation result of the original contents M with the key share    s  h  a  r   e  i       s  h  a  r   subscript  e  i     share_{i}   ; H is the MD5  cryptographic hash function and wrap is the bitwise xor result of the two halves of the string which returned by H .  The hosting servers are chosen out of the servers list; the chosen locations in the servers list are determined by     l  o  c  a  t  i  o   n  i    =    (   n  a  m    e  i    m  o   d   m   )   +  1         l  o  c  a  t  i  o   subscript  n  i        n  a  m   subscript  e  i   m  o  d  m   1     location_{i}=(name_{i}\ mod\ m)+1   in order to obtain n values in the range [1,m]. If less than k unique locations were found, this step is repeated till    d  ≥  k      d  k    d>=k   unique locations are found.  In each server which appears in the servers list at    l  o  c  a  t  i  o   n  i       l  o  c  a  t  i  o   subscript  n  i     location_{i}   a directory named    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   is created containing the encrypted contents    E   (  M  ,  K  )       E   M  K     E(M,K)   , the chosen server's share of key K (namely,    s  h  a  r   e  i       s  h  a  r   subscript  e  i     share_{i}   ) and additional information(a password file containing the MD5 hash value of the chosen server domain name concatenated with a user chosen password used for authentication when a publisher wishes to update or remove its contents from the server).  A unique Publius URL is constructed by concatenation of the d different    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   identifiers of the servers containing the encrypted contents M and a key share of K .    Diagram describing the selection of servers out of the servers list to hold encrypted contents under hashed directory names .  After the publish operation is done, each chosen server at location    l  o  c  a  t  i  o   n  i       l  o  c  a  t  i  o   subscript  n  i     location_{i}   at the servers list holds the following files under a directory named    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   :   file - which contains encrypted E(M,K) contents of the original contents M .  share - which holds the share of the chosen server of the encryption key K (namely,    s  h  a  r   e  i       s  h  a  r   subscript  e  i     share_{i}   ).  password - which holds the MD5 hash value for the concatenation of the server domain name with a user chosen password. This is used for authentication for delete or update operations initiated by the publisher for the contents hosted by the chosen server.   When a retriever wishes to browse for a web contents in the Publius web, its Publius client software (Publius Client Proxy)executes the following steps:   The URL is parsed back into 8 bytes units (which are the    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   units which were concatenated during the publish process).  For each    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   unit parsed out of the Publius URL , the hosting server is located from the servers list by computing     l  o  c  a  t  i  o   n  i    =    (   n  a  m    e  i    m  o   d   m   )   +  1         l  o  c  a  t  i  o   subscript  n  i        n  a  m   subscript  e  i   m  o  d  m   1     location_{i}=(name_{i}\ mod\ m)+1   which indicates on the server's location in the list.  k servers are chosen arbitrarily out of the located servers in order to reconstruct the key K using an interpolation over the retrieved k shares, one from each chosen server.  Among those k chosen servers, one is chosen for retrieving the encrypted contents E(M,K) . This is issued using an HTTP GET request to the server for a file named file stored in the server directory named    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   .  The k shares of the key K are fetched in a similar way, known to be located in a server file named share under the    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   directory.  The original message is decrypted from E(M,K) using the reconstructed key K .  The retriever then verifies that the contents M wasn't modified nor did the key share    s  h  a  r   e  i       s  h  a  r   subscript  e  i     share_{i}   by recomputing    w  r  a  p   (   H   (    M  *  s   h  a  r   e  i    )    )       w  r  a  p    H      M  s   h  a  r   subscript  e  i       wrap(H(M*share_{i}))   and comparing it with the corresponding    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   chunk which was parsed from the Publius URL .  If a mismatch was found, another set of k servers can be tried, or maybe the contents should have been downloaded from another server.  If verified successfully, the original contents M can be viewed by the web browser.    The delete operation is implemented by invoking a CGI script running over the servers. To each server the hash result of    H   (     S  D  N   *  P   A  S  S  W  D   )       H        S  D  N   P   A  S  S  W  D     H(SDN*PASSWD)   (namely, the MD5 hash result for the concatenation of the server domain name with the publisher's password) is sent along with the corresponding    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   string and compared with the one already stored in the password file under the directory    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   ; if there is a match, the file file is removed from that directory.  The update operation similarly uses the hashed concatenation of the server domain name with publisher's password in order to authenticate the original ownership of the hosted contents. Under this operation, the update itself is done by adding additional update file under the    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   which contains the new Publius URL matching for the updated contents (recall that the Publius URL is tied with the published contents and the share of the encryption key and is verified against the contents when retrieved). In fact, the update operation is equivalent to the publish operation with the addition of adding the update file to the old    n  a  m   e  i       n  a  m   subscript  e  i     name_{i}   directory for redirecting future retrieve request to the new URL . When a retrieve operation will be issued for the old URL , the Publius proxy client will be redirected to fetch the new URL , the same will be done with the rest of the k -1 chosen servers; if the k resulting URLs do not match, then another set of k servers will be chosen for retrieval.  Publius URLs  Encrypted web contents in the Publius protocol are traceable by their Publius URLs . Those have the following format:      h  t  t  p  :  /  /  !  a  n  o  n  !  /  o  p  t  i  o  n   s   n  a  m    e  1    n  a  m    e  2     …   n  a  m   e  n      fragments  h  t  t  p  normal-:     a  n  o  n    o  p  t  i  o  n  s  n  a  m   subscript  e  1   n  a  m   subscript  e  2   normal-…  n  a  m   subscript  e  n     http://!anon!/\ options\ name_{1}\ name_{2}\ ...\ name_{n}     Where    n  a  m   e  1   n  a  m   e  2   …  n  a  m   e  n       n  a  m   subscript  e  1   n  a  m   subscript  e  2   normal-…  n  a  m   subscript  e  n     name_{1}name_{2}...name_{n}   is the concatenation of the hash results of the original contents combined with some key share, as were described for the publish operation in the previous section. The options section of the URL is 16 bits represented by a two characters ASCII string, containing:   version number - which allows the extension of the protocol and backwards compatibility when interacting between different versions.  number of shares required for key reconstruction.  update flag - which its purpose will be mentioned in the next section.   Security Analysis   In order for a Publius contents (or its update) to become inaccessible, it is required that all of the n copies of the encrypted contents will be deleted or corrupted so they will fail the verification against their URL . Another possibility is by losing more than n - k of the encryption key K shares; leaving us with less than k shares which are insufficient for the reconstruction of K . Choosing high values for n and low values for k guarantees low chance of inaccessible contents to occur.  Tampering in the form of inserting false updates by third parties can become unlikely as the value for k increases. Larger value for k means that more shares will participate in the verification of the retrieved contetnts and by doing so, increasing the chance that such modification will be noticed.  The update flag field in the Publius URL is useful for prevention from redirecting to a false updates; even if a false update was added by a third party, it will be ignored as long as the update flag in the URL is set to zero.   External links   "Publius Home Page"  "Publius: A robust, tamper-evident, censorship-resistant web publishing system"   See also: Gibbs, W. Wayt: "Speech Without Accountability", Scientific American 283:4 (Oct 2000)  "  Category:Cryptographic protocols   
+
+
+
+Publius Publishing System
+
+
+
+
+Publius Publishing System
+
+Publius is (was?) a web protocol developed by Waldman, Rubin & Cranor for allowing individuals the ability to publish information on the web anonymously and with a high guarantee that their publications will not be censored or modified by a third party.
+The nine design goals of the Publius development team are:
+
+Censorship resistance - decreasing the chance that a third party will manage to modify or delete the published materials.
+Tamper evident - unauthorized changes are traceable.
+Source Anonymous - there is no way to tell who published the material once it is available on the web.
+Updatable - publishers are allowed to modify or delete their material.
+Deniable - third parties participating in publishing the materials lacks the responsibility for the hosted content.
+Fault tolerant - system should function even when some involved third parties are faulty or malicious.
+Persistent - there is no expiration date for published materials.
+Extensible - support for future protocol extensions or growth in the number of publishers.
+Freely available - all software tools required for the system should be out of charge.
+
+Overview
+The Publius web system consists of the following agents:
+
+Publishers - participants who publish their contents on the web.
+Servers - which host the publishers' contents on the web (considered as part of the third parties).
+Retrievers - participants who browse the web contents published by the publishers.
+
+The Publius system relies on a static list of m web servers. When a publisher wishes to add a contents M to the web, it first encrypts M using some random symmetric key K. Then K is split into n shares (parts) where at least kWhen a retriever wishes to obtain the original contents M, it follows a generated URL which corresponds to the contents M combined with the portion of K as it appears on a subset of servers from the list. Gathering k different shares and a copy of E(M,K) allows the retriever to reconstruct the key K out of the shares and decrypt E(M,K) back into M. Modification or removal of the server hosted contents can be issued only by the original publishers using a combination of password and the hosting server domain name.
+At present, Publius supports the hosting of HTML pages, images and other file formats such as PDFs and PostScripts.
+Detailed View
+This section covers the Publius protocol in greater details.
+Operations
+The Publius protocol allows the following operations:
+
+Publish - in which a publisher spreads its contents across the Publius web servers.
+Retrieve - in which a retriever follows a specific URL to gather desired contents.
+Update - in which a publisher replaces its server hosted contents file by another.
+Delete - in which a publisher removes its server hosted file.
+
+When a publisher wishes to add a web contents in the Publius web, its Publius client software (Publius Client Proxy) executes the following steps:
+
+Random symmetric key K is generated.
+The original content M is encrypted under Symmetric-key algorithm with the key K. Resulting with the encryption E(M,K).
+K is split into n shares using Shamir's Secret Sharing method in such that at least k<n shares are required for the reconstruction of K under the method of interpolation.
+For each of the n shares, the following computation takes place
+ 
+ 
+ 
+  where 
+ 
+ 
+ 
+  is the concatenation result of the original contents M with the key share 
+ 
+ 
+ 
+ ; H is the MD5 cryptographic hash function and wrap is the bitwise xor result of the two halves of the string which returned by H.
+The hosting servers are chosen out of the servers list; the chosen locations in the servers list are determined by 
+ 
+ 
+ 
+  in order to obtain n values in the range [1,m]. If less than k unique locations were found, this step is repeated till 
+ 
+ 
+ 
+  unique locations are found.
+In each server which appears in the servers list at 
+ 
+ 
+ 
+  a directory named 
+ 
+ 
+ 
+  is created containing the encrypted contents 
+ 
+ 
+ 
+ , the chosen server's share of key K (namely, 
+ 
+ 
+ 
+ ) and additional information(a password file containing the MD5 hash value of the chosen server domain name concatenated with a user chosen password used for authentication when a publisher wishes to update or remove its contents from the server).
+A unique Publius URL is constructed by concatenation of the d different 
+ 
+ 
+ 
+  identifiers of the servers containing the encrypted contents M and a key share of K.
+
+
+Diagram describing the selection of servers out of the servers list to hold encrypted contents under hashed directory names.
+After the publish operation is done, each chosen server at location 
+ 
+ 
+ 
+  at the servers list holds the following files under a directory named 
+ 
+ 
+ 
+ :
+
+file - which contains encrypted E(M,K) contents of the original contents M.
+share - which holds the share of the chosen server of the encryption key K (namely, 
+ 
+ 
+ 
+ ).
+password - which holds the MD5 hash value for the concatenation of the server domain name with a user chosen password. This is used for authentication for delete or update operations initiated by the publisher for the contents hosted by the chosen server.
+
+When a retriever wishes to browse for a web contents in the Publius web, its Publius client software (Publius Client Proxy)executes the following steps:
+
+The URL is parsed back into 8 bytes units (which are the 
+ 
+ 
+ 
+  units which were concatenated during the publish process).
+For each 
+ 
+ 
+ 
+  unit parsed out of the Publius URL, the hosting server is located from the servers list by computing 
+ 
+ 
+ 
+  which indicates on the server's location in the list.
+k servers are chosen arbitrarily out of the located servers in order to reconstruct the key K using an interpolation over the retrieved k shares, one from each chosen server.
+Among those k chosen servers, one is chosen for retrieving the encrypted contents E(M,K). This is issued using an HTTP GET request to the server for a file named file stored in the server directory named 
+ 
+ 
+ 
+ .
+The k shares of the key K are fetched in a similar way, known to be located in a server file named share under the 
+ 
+ 
+ 
+  directory.
+The original message is decrypted from E(M,K) using the reconstructed key K.
+The retriever then verifies that the contents M wasn't modified nor did the key share 
+ 
+ 
+ 
+  by recomputing 
+ 
+ 
+ 
+  and comparing it with the corresponding 
+ 
+ 
+ 
+  chunk which was parsed from the Publius URL.
+ 
+If a mismatch was found, another set of k servers can be tried, or maybe the contents should have been downloaded from another server.
+If verified successfully, the original contents M can be viewed by the web browser.
+
+
+The delete operation is implemented by invoking a CGI script running over the servers. To each server the hash result of 
+ 
+ 
+ 
+  (namely, the MD5 hash result for the concatenation of the server domain name with the publisher's password) is sent along with the corresponding 
+ 
+ 
+ 
+  string and compared with the one already stored in the password file under the directory 
+ 
+ 
+ 
+ ; if there is a match, the file file is removed from that directory.
+The update operation similarly uses the hashed concatenation of the server domain name with publisher's password in order to authenticate the original ownership of the hosted contents. Under this operation, the update itself is done by adding additional update file under the 
+ 
+ 
+ 
+  which contains the new Publius URL matching for the updated contents (recall that the Publius URL is tied with the published contents and the share of the encryption key and is verified against the contents when retrieved). In fact, the update operation is equivalent to the publish operation with the addition of adding the update file to the old 
+ 
+ 
+ 
+  directory for redirecting future retrieve request to the new URL. When a retrieve operation will be issued for the old URL, the Publius proxy client will be redirected to fetch the new URL, the same will be done with the rest of the k-1 chosen servers; if the k resulting URLs do not match, then another set of k servers will be chosen for retrieval.
+Publius URLs
+Encrypted web contents in the Publius protocol are traceable by their Publius URLs. Those have the following format:
+
+
+
+Where 
+ 
+ 
+ 
+  is the concatenation of the hash results of the original contents combined with some key share, as were described for the publish operation in the previous section. The options section of the URL is 16 bits represented by a two characters ASCII string, containing:
+
+version number - which allows the extension of the protocol and backwards compatibility when interacting between different versions.
+number of shares required for key reconstruction.
+update flag - which its purpose will be mentioned in the next section.
+
+Security Analysis
+
+In order for a Publius contents (or its update) to become inaccessible, it is required that all of the n copies of the encrypted contents will be deleted or corrupted so they will fail the verification against their URL. Another possibility is by losing more than n-k of the encryption key K shares; leaving us with less than k shares which are insufficient for the reconstruction of K. Choosing high values for n and low values for k guarantees low chance of inaccessible contents to occur.
+Tampering in the form of inserting false updates by third parties can become unlikely as the value for k increases. Larger value for k means that more shares will participate in the verification of the retrieved contetnts and by doing so, increasing the chance that such modification will be noticed.
+The update flag field in the Publius URL is useful for prevention from redirecting to a false updates; even if a false update was added by a third party, it will be ignored as long as the update flag in the URL is set to zero.
+
+External links
+
+"Publius Home Page"
+"Publius: A robust, tamper-evident, censorship-resistant web publishing system"
+
+See also: Gibbs, W. Wayt: "Speech Without Accountability", Scientific American 283:4 (Oct 2000)
+"
+Category:Cryptographic protocols
+
+

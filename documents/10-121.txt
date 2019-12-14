@@ -1,1 +1,103 @@
-   MagmaFS      MagmaFS   Magma is a network file system based on a distributed hash table , written in C , compatible with Linux and BSD kernels using FUSE .  Terminology and basic principles  Magma binds several hosts interconnected by a TCP/IP network to form a common storage space called a lava ring . Each host (or node) is called a vulcano . Each vulcano hosts a portion of a common key space, delimited by two SHA1 keys. Each vulcano is also in charge of mirroring the key space of the previous node, to ensure data redundancy . Each key can represent one or more object inside the storage space. These objects are called flares .  Magma can store a different range of objects: files, directories, symbolic links, block and characted devices, FIFO pipes. Each object is bound to a flare and vice versa. A flare of any type in the six listed above is described by some basic properties common to all flares, like a path and a hash key. But each of the six types has also its own specific properties. For example, directory flares will have some specific information that don't apply to symbolic links. A flare with only generic information is called uncast while a complete flare is called cast .  An uncast flare does not contain enough information to operate on data, but has enough information to be moved as a sort of opaque container between vulcano nodes. To be easily movable, each type of flare, including directories, has been reimplemented as a two files set, the first containing flare information (metadata) and the second containing flare content. Moving flares across lava ring is called load balancing and is done to leverage load inequalities between nodes in the attempt to provide best performance.  Flare system  The internal engine of Magma is called flare system and is implemented as a layered stack.       Flare system layers       1.   Public API: flare_system_init(), magma_open(), magma_mknod(), magma_lstat(), ...     2.   Lava network: magma_new_node(), route_key(), join_network()     3.   Flare objects: magma_new_flare(), magma_search_or_create(), magma_add_to_cache(), ...     magma_mkdir() can be used as an example of layer traversing. In this paragraph will be assumed that a directory called /example will be created. magma_mkdir() is part of Public API layer. It is used to create a new directory, as done by standard Libc counterpart mkdir().  magma_mkdir() first route the request to decide if it can be locally managed or will require network operations. To perform routing, path /example is translated in corresponding SHA1 hash key 81f762fd59d88768b06b8e9de56aef8a95962045 . If routing determines the need to contact another vulcano node, request will not leave this layer. Lava network layer will forward the request to node owning the key, continuing the flow of operations on remote node. Routing is half the role of Lava network layer, which also includes network monitoring and vulcano nodes creation, update and removal.  Both being a local or a remote request, the last step is performed by Flare layer . Flare corresponding to key 81f762fd59d88768b06b8e9de56aef8a95962045 will be searched inside the cache. If not found, it will be created and loaded from disk, if already existing. On resulting flare object are first applied permission checking tests. If permission to operate is granted, initial request is fulfilled: in this example, flare is cast to directory if it wasn't already and is saved to disk.  Routing  Since each vulcano node has complete network topology available, routing is just a matter of matching flare keys with nodes key-space and find the node holding the flare. Network topology is also saved in the distributed directory  inside magma filesystem. Vulcano nodes can periodically check their information against contents of  directory to know if something has changed. Nodes also periodically save their own information inside  directory.  Load balancing  Each vulcano node has some parameters declared at boot, like bandwidth and storage available. A separate thread called balancer is devoted to distribute keys to avoid nodes overloading or underloading. Each node has a dynamic load value associated, which is computed by the formula:       l  n   =    k   l  n    ⋅    b  n    b  a    ⋅    s  n    s  a          subscript  l  n    normal-⋅    k   subscript  l  n       subscript  b  n    subscript  b  a       subscript  s  n    subscript  s  a       l_{n}=kl_{n}\cdot\frac{b_{n}}{b_{a}}\cdot\frac{s_{n}}{s_{a}}     where    k   l  n       k   subscript  l  n     kl_{n}   is the node key load calculated on logarithmic scale;    b  n     subscript  b  n    b_{n}   is node bandwidth and    b  a     subscript  b  a    b_{a}   is average bandwidth;    s  n     subscript  s  n    s_{n}   is node storage and    s  a     subscript  s  a    s_{a}   is average storage  Magma software distribution  Magma is distributed in the form of a server called magmad and a client called mount.magma .  Magma server  Magma server  manages intercommunication between DHT nodes and magma clients. Flare system provides a network event loop that accept incoming connections. Three kind of connection are accepted.   A flare protocol connection is used to operate on flares: opening files and directory, reading and writing, getting information and exchange flares during balancing operations. Flare protocol is a binary protocol.    An internode protocol connection is used to exchange DHT information and to join new nodes. Internode protocol is a binary protocol.    A console protocol connection is used to let administrators query lava network, perform simple operations like listing directory contents and show file content and finally issue some administrative commands to the nodes (an example of an administrative command is: shutting down). Console protocol is a text based protocol accessible via Telnet .   Magma client  Magma client  is based on FUSE , being compatible with Linux and BSD kernels. Magma client uses a flare protocol connection to contact and operate with a near Magma server. Network topology and flare location is totally transparent to clients. The client simply query one server in the exact manner as all information were located on that host only.  A cryptographic layer is planned for Magma client, allowing file contents only encryption. Implementing cryptography on client side is due to scalability (computational power will increase at same rate of computational request) and cryptographic key privacy (keys or passphrases will never reach the server).  Alternative NFS interface  As an alternative to Magma client, which is supported only by Linux and BSD kernels, Magma server plans to offer a NFS interface for other Unices. Since NFS is an established standard, no new features can be added. For example, cryptographic layer will be unavailable to client mounting Magma shares through NFS.  External links   1 - MagmaFS home site.   "  Category:User space file systems  Category:Distributed data storage  Category:Network file systems   
+
+
+
+MagmaFS
+
+
+
+
+MagmaFS
+
+Magma is a network file system based on a distributed hash table, written in C, compatible with Linux and BSD kernels using FUSE.
+Terminology and basic principles
+Magma binds several hosts interconnected by a TCP/IP network to form a common storage space called a lava ring. Each host (or node) is called a vulcano. Each vulcano hosts a portion of a common key space, delimited by two SHA1 keys. Each vulcano is also in charge of mirroring the key space of the previous node, to ensure data redundancy. Each key can represent one or more object inside the storage space. These objects are called flares.
+Magma can store a different range of objects: files, directories, symbolic links, block and characted devices, FIFO pipes. Each object is bound to a flare and vice versa. A flare of any type in the six listed above is described by some basic properties common to all flares, like a path and a hash key. But each of the six types has also its own specific properties. For example, directory flares will have some specific information that don't apply to symbolic links. A flare with only generic information is called uncast while a complete flare is called cast.
+An uncast flare does not contain enough information to operate on data, but has enough information to be moved as a sort of opaque container between vulcano nodes. To be easily movable, each type of flare, including directories, has been reimplemented as a two files set, the first containing flare information (metadata) and the second containing flare content. Moving flares across lava ring is called load balancing and is done to leverage load inequalities between nodes in the attempt to provide best performance.
+Flare system
+The internal engine of Magma is called flare system and is implemented as a layered stack.
+
+
+
+
+
+Flare system layers
+
+
+
+
+
+1.
+
+Public API: flare_system_init(), magma_open(), magma_mknod(), magma_lstat(), ...
+
+
+
+2.
+
+Lava network: magma_new_node(), route_key(), join_network()
+
+
+
+3.
+
+Flare objects: magma_new_flare(), magma_search_or_create(), magma_add_to_cache(), ...
+
+
+
+magma_mkdir() can be used as an example of layer traversing. In this paragraph will be assumed that a directory called /example will be created. magma_mkdir() is part of Public API layer. It is used to create a new directory, as done by standard Libc counterpart mkdir().
+magma_mkdir() first route the request to decide if it can be locally managed or will require network operations. To perform routing, path /example is translated in corresponding SHA1 hash key 81f762fd59d88768b06b8e9de56aef8a95962045. If routing determines the need to contact another vulcano node, request will not leave this layer. Lava network layer will forward the request to node owning the key, continuing the flow of operations on remote node. Routing is half the role of Lava network layer, which also includes network monitoring and vulcano nodes creation, update and removal.
+Both being a local or a remote request, the last step is performed by Flare layer. Flare corresponding to key 81f762fd59d88768b06b8e9de56aef8a95962045 will be searched inside the cache. If not found, it will be created and loaded from disk, if already existing. On resulting flare object are first applied permission checking tests. If permission to operate is granted, initial request is fulfilled: in this example, flare is cast to directory if it wasn't already and is saved to disk.
+Routing
+Since each vulcano node has complete network topology available, routing is just a matter of matching flare keys with nodes key-space and find the node holding the flare. Network topology is also saved in the distributed directory  inside magma filesystem. Vulcano nodes can periodically check their information against contents of  directory to know if something has changed. Nodes also periodically save their own information inside  directory.
+Load balancing
+Each vulcano node has some parameters declared at boot, like bandwidth and storage available. A separate thread called balancer is devoted to distribute keys to avoid nodes overloading or underloading. Each node has a dynamic load value associated, which is computed by the formula:
+
+
+
+where 
+ 
+ 
+ 
+  is the node key load calculated on logarithmic scale; 
+ 
+ 
+ 
+  is node bandwidth and 
+ 
+ 
+ 
+  is average bandwidth; 
+ 
+ 
+ 
+  is node storage and 
+ 
+ 
+ 
+  is average storage
+Magma software distribution
+Magma is distributed in the form of a server called magmad and a client called mount.magma.
+Magma server
+Magma server  manages intercommunication between DHT nodes and magma clients. Flare system provides a network event loop that accept incoming connections. Three kind of connection are accepted.
+
+A flare protocol connection is used to operate on flares: opening files and directory, reading and writing, getting information and exchange flares during balancing operations. Flare protocol is a binary protocol.
+
+
+An internode protocol connection is used to exchange DHT information and to join new nodes. Internode protocol is a binary protocol.
+
+
+A console protocol connection is used to let administrators query lava network, perform simple operations like listing directory contents and show file content and finally issue some administrative commands to the nodes (an example of an administrative command is: shutting down). Console protocol is a text based protocol accessible via Telnet.
+
+Magma client
+Magma client  is based on FUSE, being compatible with Linux and BSD kernels. Magma client uses a flare protocol connection to contact and operate with a near Magma server. Network topology and flare location is totally transparent to clients. The client simply query one server in the exact manner as all information were located on that host only.
+A cryptographic layer is planned for Magma client, allowing file contents only encryption. Implementing cryptography on client side is due to scalability (computational power will increase at same rate of computational request) and cryptographic key privacy (keys or passphrases will never reach the server).
+Alternative NFS interface
+As an alternative to Magma client, which is supported only by Linux and BSD kernels, Magma server plans to offer a NFS interface for other Unices. Since NFS is an established standard, no new features can be added. For example, cryptographic layer will be unavailable to client mounting Magma shares through NFS.
+External links
+
+1 - MagmaFS home site.
+
+"
+Category:User space file systems Category:Distributed data storage Category:Network file systems
+
+

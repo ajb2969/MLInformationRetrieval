@@ -1,2 +1,262 @@
-   Rolling hash      Rolling hash   A rolling hash is a hash function where the input is hashed in a window that moves through the input.  A few hash functions allow a rolling hash to be computed very quickly—the new hash value is rapidly calculated given only the old hash value, the old value removed from the window, and the new value added to the window—similar to the way a moving average function can be computed much more quickly than other low-pass filters.  One of the main applications is the Rabin-Karp string search algorithm , which uses the rolling hash described below.  Another popular application is rsync program which uses a checksum based on Mark Adler's adler-32 as its rolling hash.  Another application is the Low Bandwidth Network Filesystem (LBFS), which uses a Rabin fingerprint as its rolling hash.  At best, rolling hash values are pairwise independent 1 or strongly universal . They cannot be 3-wise independent , for example.  Rabin-Karp rolling hash  The Rabin-Karp string search algorithm is normally used with a very simple rolling hash function that only uses multiplications and additions:      H  =     c  1    a   k  -  1     +    c  2    a   k  -  2     +    c  3    a   k  -  3     +  …  +    c  k    a  0         H       subscript  c  1    superscript  a    k  1        subscript  c  2    superscript  a    k  2        subscript  c  3    superscript  a    k  3     normal-…     subscript  c  k    superscript  a  0       H=c_{1}a^{k-1}+c_{2}a^{k-2}+c_{3}a^{k-3}+...+c_{k}a^{0}   where   a   a   a   is a constant and     c  1   ,  …  ,   c  k       subscript  c  1   normal-…   subscript  c  k     c_{1},...,c_{k}   are the input characters.  In order to avoid manipulating huge   H   H   H   values, all math is done modulo    n   n   n   . The choice of   a   a   a   and   n   n   n   is critical to get good hashing; see linear congruential generator for more discussion.  Removing and adding characters simply involves adding or subtracting the first or last term. Shifting all characters by one position to the left requires multiplying the entire sum   H   H   H   by   a   a   a   . Shifting all characters by one position to the right requires dividing the entire sum   H   H   H   by   a   a   a   . Note that in modulo arithmetic,   a   a   a   can be chosen to have a multiplicative inverse     a   -  1      superscript  a    1     a^{-1}   by which   H   H   H   can be multiplied to get the result of the division without actually performing a division.  Content based slicing using Rabin-Karp hash  One of the interesting use cases of the rolling hash function is that it can create dynamic, content-based chunks of a stream or file. This is especially useful when it is required to send only the changed chunks of a large file over a network and a simple byte addition at the front of the file would cause all the fixed size windows to become updated, while in reality, only the first ‘chunk’ has been modified.  The simplest approach to calculate the dynamic chunks is to calculate the rolling hash and if it matches a pattern (like the lower N bits are all zeroes) then it’s a chunk boundary. This approach will ensure that any change in the file will only affect its current and possibly the next chunk, but nothing else.  When the boundaries are known, the chunks need to be compared by their hash values to detect which one was modified and needs transfer across the network. 2  Cyclic polynomial  Hashing by cyclic polynomial 3 —sometimes called Buzhash—is also simple, but it has the benefit of avoiding multiplications, using barrel shifts instead. It is a form of tabulation hashing : it presumes that there is some hash function   h   h   h   from characters to integers in the interval    [  0  ,   2  L   )     0   superscript  2  L     [0,2^{L})   . This hash function might be simply an array or a hash table mapping characters to random integers. Let the function   s   s   s   be a cyclic binary rotation (or barrel shift ): it rotates the bits by 1 to the left, pushing the latest bit in the first position. E.g.,     s   (  10011  )    =  00111        s  10011   00111    s(10011)=00111   . Let   ⊕   direct-sum   \oplus   be the bit-wise exclusive or . The hash values are defined as      H  =     s   k  -  1     (   h   (   c  1   )    )    ⊕    s   k  -  2     (   h   (   c  2   )    )    ⊕  …  ⊕   s   (   h   (   c   k  -  1    )    )    ⊕   h   (   c  k   )         H   direct-sum     superscript  s    k  1      h   subscript  c  1        superscript  s    k  2      h   subscript  c  2     normal-…    s    h   subscript  c    k  1        h   subscript  c  k       H=s^{k-1}(h(c_{1}))\oplus s^{k-2}(h(c_{2}))\oplus\ldots\oplus s(h(c_{k-1}))%
- \oplus h(c_{k})     where the multiplications by powers of two can be implemented by binary shifts. The result is a number in    [  0  ,   2  L   )     0   superscript  2  L     [0,2^{L})   .  Computing the hash values in a rolling fashion is done as follows. Let   H   H   H   be the previous hash value. Rotate   H   H   H   once    H  ←   s   (  H  )       normal-←  H    s  H     H\leftarrow s(H)   . If    c  1     subscript  c  1    c_{1}   is the character to be removed, rotate it   k   k   k   times     s  k    (   h   (   c  1   )    )        superscript  s  k     h   subscript  c  1      s^{k}(h(c_{1}))   . Then simply set      H  ←    s   (  H  )    ⊕    s  k    (   h   (   c  1   )    )    ⊕   h   (   c   k  +  1    )        normal-←  H   direct-sum    s  H      superscript  s  k     h   subscript  c  1       h   subscript  c    k  1        H\leftarrow s(H)\oplus s^{k}(h(c_{1}))\oplus h(c_{k+1})     where    c   k  +  1      subscript  c    k  1     c_{k+1}   is the new character.  Hashing by cyclic polynomials is strongly universal or pairwise independent: simply keep the first     L  -  k   +  1        L  k   1    L-k+1   bits. That is, take the result   H   H   H   and dismiss any    k  -  1      k  1    k-1   consecutive bits. 4 In practice, this can be achieved by an integer division    H  →   H  ÷   2   k  -  1        normal-→  H    H   superscript  2    k  1       H\rightarrow H\div 2^{k-1}   .  Content based slicing using moving average  Several programs including gzip (with the --rsyncable option) and rsyncrypto do content-based slicing based on an this specific (unweighted) moving average: 5      S   (  n  )    =    ∑   i  =   n  -  8196    n    c  i          S  n     superscript   subscript     i    n  8196     n    subscript  c  i      S(n)=\sum_{i=n-8196}^{n}c_{i}        A   (  n  )    =    S   (  n  )    8196         A  n       S  n   8196     A(n)=\frac{S(n)}{8196}        H   (  n  )    =    S   (  n  )    mod  4096         H  n    modulo    S  n   4096     H(n)=S(n)\mod 4096     where       S   (  n  )       S  n    S(n)   is the sum of 8196 consecutive bytes ending with byte   n   n   n         c  i     subscript  c  i    c_{i}   is byte   i   i   i   of the file      A   (  n  )       A  n    A(n)   is the (causal, unweighted) moving average at byte   n   n   n   of the file      H   (  n  )       H  n    H(n)   is a "hash value" consisting of the bottom 12 bits of    S   (  n  )       S  n    S(n)      Shifting the window by one byte simply involves adding the new character to the sum and subtracting the oldest character (no longer in the window) from the sum.  For every   n   n   n   where    H   (  n  )   =  =  0     fragments  H   fragments  normal-(  n  normal-)     0    H(n)==0   , these programs cut the file between   n   n   n   and    n  +  1      n  1    n+1   . This approach will ensure that any change in the file will only affect its current and possibly the next chunk, but no other chunk.  Computational complexity  All rolling hash functions are linear in the number of characters, but their complexity with respect to the length of the window (   k   k   k   ) varies. Rabin-Karp rolling hash requires the multiplications of two   k   k   k   -bit numbers, integer multiplication is in    O   (   k   log   k   2   O   (    log  *   k   )        )       O    k      k   superscript  2    O    superscript     k          O(k\log k2^{O(\log^{*}k)})   . 6 Hashing ngrams by cyclic polynomials can be done in linear time. 7  Software   rollinghashcpp is a Free software C++ implementation of several rolling hash functions  rollinghashjava is an Apache licensed Java implementation of rolling hash functions   See also   MinHash  w-shingling   External links   MIT 6.006: Introduction to Algorithms 2011- Lecture Notes - Rolling Hash   Footnotes    "  Category:Hash functions     Daniel Lemire, Owen Kaser: Recursive n-gram hashing is pairwise independent, at best, Computer Speech & Language 24 (4), pages 698-710, 2010. arXiv:0705.4676 ↩  ↩  Jonathan D. Cohen, Recursive Hashing Functions for n-Grams , ACM Trans. Inf. Syst. 15 (3), 1997 ↩   "Rsyncrypto Algorithm" . ↩  M. Fürer, Faster integer multiplication, in: STOC ’07, 2007, pp. 57–66. ↩      
+
+
+
+Rolling hash
+
+
+
+
+Rolling hash
+
+A rolling hash is a hash function where the input is hashed in a window that moves through the input.
+A few hash functions allow a rolling hash to be computed very quickly—the new hash value is rapidly calculated given only the old hash value, the old value removed from the window, and the new value added to the window—similar to the way a moving average function can be computed much more quickly than other low-pass filters.
+One of the main applications is the Rabin-Karp string search algorithm, which uses the rolling hash described below.
+Another popular application is rsync program which uses a checksum based on Mark Adler's adler-32 as its rolling hash.
+Another application is the Low Bandwidth Network Filesystem (LBFS), which uses a Rabin fingerprint as its rolling hash.
+At best, rolling hash values are pairwise independent1 or strongly universal. They cannot be 3-wise independent, for example.
+Rabin-Karp rolling hash
+The Rabin-Karp string search algorithm is normally used with a very simple rolling hash function that only uses multiplications and additions:
+
+
+ 
+  where 
+ 
+ 
+ 
+  is a constant and 
+ 
+ 
+ 
+  are the input characters.
+In order to avoid manipulating huge 
+ 
+ 
+ 
+  values, all math is done modulo
+
+ 
+ . The choice of 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+  is critical to get good hashing; see linear congruential generator for more discussion.
+Removing and adding characters simply involves adding or subtracting the first or last term. Shifting all characters by one position to the left requires multiplying the entire sum 
+ 
+ 
+ 
+  by 
+ 
+ 
+ 
+ . Shifting all characters by one position to the right requires dividing the entire sum 
+ 
+ 
+ 
+  by 
+ 
+ 
+ 
+ . Note that in modulo arithmetic, 
+ 
+ 
+ 
+  can be chosen to have a multiplicative inverse
+
+ 
+  by which 
+ 
+ 
+ 
+  can be multiplied to get the result of the division without actually performing a division.
+Content based slicing using Rabin-Karp hash
+One of the interesting use cases of the rolling hash function is that it can create dynamic, content-based chunks of a stream or file. This is especially useful when it is required to send only the changed chunks of a large file over a network and a simple byte addition at the front of the file would cause all the fixed size windows to become updated, while in reality, only the first ‘chunk’ has been modified.
+The simplest approach to calculate the dynamic chunks is to calculate the rolling hash and if it matches a pattern (like the lower N bits are all zeroes) then it’s a chunk boundary. This approach will ensure that any change in the file will only affect its current and possibly the next chunk, but nothing else.
+When the boundaries are known, the chunks need to be compared by their hash values to detect which one was modified and needs transfer across the network.2
+Cyclic polynomial
+Hashing by cyclic polynomial3—sometimes called Buzhash—is also simple, but it has the benefit of avoiding multiplications, using barrel shifts instead. It is a form of tabulation hashing: it presumes that there is some hash function 
+ 
+ 
+ 
+  from characters to integers in the interval 
+ 
+ 
+ 
+ . This hash function might be simply an array or a hash table mapping characters to random integers. Let the function 
+ 
+ 
+ 
+  be a cyclic binary rotation (or barrel shift): it rotates the bits by 1 to the left, pushing the latest bit in the first position. E.g., 
+ 
+ 
+ 
+ . Let 
+ 
+ 
+ 
+  be the bit-wise exclusive or. The hash values are defined as
+
+
+
+where the multiplications by powers of two can be implemented by binary shifts. The result is a number in 
+ 
+ 
+ 
+ .
+Computing the hash values in a rolling fashion is done as follows. Let 
+ 
+ 
+ 
+  be the previous hash value. Rotate 
+ 
+ 
+ 
+  once
+ 
+ 
+ 
+ . If 
+ 
+ 
+ 
+  is the character to be removed, rotate it 
+ 
+ 
+ 
+  times
+ 
+ 
+ 
+ . Then simply set
+
+
+
+where 
+ 
+ 
+ 
+  is the new character.
+Hashing by cyclic polynomials is strongly universal or pairwise independent: simply keep the first 
+ 
+ 
+ 
+  bits. That is, take the result 
+ 
+ 
+ 
+  and dismiss any 
+ 
+ 
+ 
+  consecutive bits.4 In practice, this can be achieved by an integer division 
+ 
+ 
+ 
+ .
+Content based slicing using moving average
+Several programs including gzip (with the --rsyncable option) and rsyncrypto do content-based slicing based on an this specific (unweighted) moving average:5
+
+
+
+
+where
+
+
+
+ 
+  is the sum of 8196 consecutive bytes ending with byte 
+ 
+ 
+
+
+
+ 
+  is byte 
+ 
+ 
+ 
+  of the file
+
+
+ 
+  is the (causal, unweighted) moving average at byte 
+ 
+ 
+ 
+  of the file
+
+
+ 
+  is a "hash value" consisting of the bottom 12 bits of 
+ 
+ 
+
+
+Shifting the window by one byte simply involves adding the new character to the sum and subtracting the oldest character (no longer in the window) from the sum.
+For every 
+ 
+ 
+ 
+  where 
+ 
+ 
+ 
+ , these programs cut the file between 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+ . This approach will ensure that any change in the file will only affect its current and possibly the next chunk, but no other chunk.
+Computational complexity
+All rolling hash functions are linear in the number of characters, but their complexity with respect to the length of the window (
+ 
+ 
+ 
+ ) varies. Rabin-Karp rolling hash requires the multiplications of two 
+ 
+ 
+ 
+ -bit numbers, integer multiplication is in 
+ 
+ 
+ 
+ .6 Hashing ngrams by cyclic polynomials can be done in linear time.7
+Software
+
+rollinghashcpp is a Free software C++ implementation of several rolling hash functions
+rollinghashjava is an Apache licensed Java implementation of rolling hash functions
+
+See also
+
+MinHash
+w-shingling
+
+External links
+
+MIT 6.006: Introduction to Algorithms 2011- Lecture Notes - Rolling Hash
+
+Footnotes
+
+
+"
+Category:Hash functions
+
+
+
+Daniel Lemire, Owen Kaser: Recursive n-gram hashing is pairwise independent, at best, Computer Speech & Language 24 (4), pages 698-710, 2010. arXiv:0705.4676↩
+↩
+Jonathan D. Cohen, Recursive Hashing Functions for n-Grams, ACM Trans. Inf. Syst. 15 (3), 1997↩
+
+"Rsyncrypto Algorithm".↩
+M. Fürer, Faster integer multiplication, in: STOC ’07, 2007, pp. 57–66.↩
+
+
+
+
+

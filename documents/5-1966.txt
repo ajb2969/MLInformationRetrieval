@@ -1,2 +1,154 @@
-   Bitmap index      Bitmap index   A bitmap index is a special kind of database index that uses bitmaps .  Bitmap indexes have traditionally been considered to work well for low-cardinality columns , which have a modest number of distinct values, either absolutely, or relative to the number of records that contain the data. The extreme case of low cardinality is Boolean data (e.g., does a resident in a city have internet access?), which has two values, True and False. Bitmap indexes use bit arrays (commonly called bitmaps) and answer queries by performing bitwise logical operations on these bitmaps. Bitmap indexes have a significant space and performance advantage over other structures for query of such data. Their drawback is they are less efficient than the traditional B-tree indexes for columns whose data is frequently updated: consequently, they are more often employed in read-only systems that are specialized for fast query - e.g., data warehouses, and generally unsuitable for online transaction processing applications.  Some researchers argue that bitmap indexes are also useful for moderate or even high-cardinality data (e.g., unique-valued data) which is accessed in a read-only manner, and queries access multiple bitmap-indexed columns using the AND, OR or XOR operators extensively. 1  Bitmap indexes are also useful in data warehousing applications for joining a large fact table to smaller dimension tables such as those arranged in a star schema .  Example  Continuing the internet access example, a bitmap index may be logically viewed as follows:      Identifier   HasInternet   Bitmaps       Y   N     1   Yes   1     2   No   0     3   No   0     4   Unspecified   0     5   Yes   1     On the left, Identifier refers to the unique number assigned to each resident, HasInternet is the data to be indexed, the content of the bitmap index is shown as two columns under the heading bitmaps . Each column in the left illustration is a bitmap in the bitmap index. In this case, there are two such bitmaps, one for "has internet" Yes and one for "has internet" No . It is easy to see that each bit in bitmap Y shows whether a particular row refers to a person who has internet access. This is the simplest form of bitmap index. Most columns will have more distinct values. For example, the sales amount is likely to have a much larger number of distinct values. Variations on the bitmap index can effectively index this data as well. We briefly review three such variations.  Note: Many of the references cited here are reviewed at ( John Wu (2007) ). 2 For those who might be interested in experimenting with some of the ideas mentioned here, many of them are implemented in open source software such as FastBit, 3 the Lemur Bitmap Index C++ Library, 4 the Roaring Bitmap Java library, 5 the Apache Hive Data Warehouse system and LucidDB .  {{-}}  Compression  Software can compress each bitmap in a bitmap index to save spaces. There has been considerable amount of work on this subject. 6 7 Bitmap compression algorithms typically employ run-length encoding , such as the Byte-aligned Bitmap Code, 8 the Word-Aligned Hybrid code, 9 the Partitioned Word-Aligned Hybrid (PWAH) compression, 10 the Position List Word Aligned Hybrid, 11 the Compressed Adaptive Index (COMPAX), 12 Enhanced Word-Aligned Hybrid (EWAH) 13 and the COmpressed 'N' Composable Integer SEt. 14 15 These compression methods require very little effort to compress and decompress. More importantly, bitmaps compressed with BBC, WAH, COMPAX, PLWAH, EWAH and CONCISE can directly participate in bitwise operations without decompression. This gives them considerable advantages over generic compression techniques such as LZ77 . BBC compression and its derivatives are used in a commercial database management system . BBC is effective in both reducing index sizes and maintaining query performance. BBC encodes the bitmaps in bytes , while WAH encodes in words, better matching current CPUs . "On both synthetic data and real application data, the new word aligned schemes use only 50% more space, but perform logical operations on compressed data 12 times faster than BBC." 16 PLWAH bitmaps were reported to take 50% of the storage space consumed by WAH bitmaps and offer up to 20% faster performance on logical operations . 17 Similar considerations can be done for CONCISE 18 and Enhanced Word-Aligned Hybrid. 19  The performance of schemes such as BBC, WAH, PLWAH, EWAH, COMPAX and CONCISE is dependent on the order of the rows. A simple lexicographical sort can divide the index size by 9 and make indexes several times faster. 20 The larger the table, the more important it is to sort the rows. Reshuffling techniques have also been proposed to achieve the same results of sorting when indexing streaming data. 21  Encoding  Basic bitmap indexes use one bitmap for each distinct value. It is possible to reduce the number of bitmaps used by using a different encoding method. 22 23 For example, it is possible to encode C distinct values using log(C) bitmaps with binary encoding. 24  This reduces the number of bitmaps, further saving space, but to answer any query, most of the bitmaps have to be accessed. This makes it potentially not as effective as scanning a vertical projection of the base data, also known as a materialized view or projection index. Finding the optimal encoding method that balances (arbitrary) query performance, index size and index maintenance remains a challenge.  Without considering compression, Chan and Ioannidis analyzed a class of multi-component encoding methods and came to the conclusion that two-component encoding sits at the kink of the performance vs. index size curve and therefore represents the best trade-off between index size and query performance. 25  Binning  For high-cardinality columns, it is useful to bin the values, where each bin covers multiple values and build the bitmaps to represent the values in each bin. This approach reduces the number of bitmaps used regardless of encoding method. 26 However, binned indexes can only answer some queries without examining the base data. For example, if a bin covers the range from 0.1 to 0.2, then when the user asks for all values less than 0.15, all rows that fall in the bin are possible hits and have to be checked to verify whether they are actually less than 0.15. The process of checking the base data is known as the candidate check. In most cases, the time used by the candidate check is significantly longer than the time needed to work with the bitmap index. Therefore, binned indexes exhibit irregular performance. They can be very fast for some queries, but much slower if the query does not exactly match a bin.  History  The concept of bitmap index was first introduced by Professor Israel Spiegler and Rafi Maayan in their research "Storage and Retrieval Considerations of Binary Data Bases", published in 1985. 27 The first commercial database product to implement a bitmap index was Computer Corporation of America's Model 204 . Patrick O'Neil published a paper about this implementation in 1987. 28 This implementation is a hybrid between the basic bitmap index (without compression) and the list of Row Identifiers (RID-list). Overall, the index is organized as a B+tree . When the column cardinality is low, each leaf node of the B-tree would contain long list of RIDs. In this case, it requires less space to represent the RID-lists as bitmaps. Since each bitmap represents one distinct value, this is the basic bitmap index. As the column cardinality increases, each bitmap becomes sparse and it may take more disk space to store the bitmaps than to store the same content as RID-lists. In this case, it switches to use the RID-lists, which makes it a B+tree index. 29 30  In-memory bitmaps  One of the strongest reasons for using bitmap indexes is that the intermediate results produced from them are also bitmaps and can be efficiently reused in further operations to answer more complex queries. Many programming languages support this as a bit array data structure. For example, Java has the [http://download.oracle.com/javase/6/docs/api/java/util/BitSet.html BitSet] class.  Some database systems that do not offer persistent bitmap indexes use bitmaps internally to speed up query processing. For example, PostgreSQL versions 8.1 and later implement a "bitmap index scan" optimization to speed up arbitrarily complex logical operations between available indexes on a single table.  For tables with many columns, the total number of distinct indexes to satisfy all possible queries (with equality filtering conditions on either of the fields) grows very fast, being defined by this formula:       𝐂  n  [    n  2   ]  ≡    n  !      (   n  -   [   n  2   ]    )   !     [   n  2   ]   !        fragments   superscript   subscript  𝐂  n   normal-[     n  2   normal-]       n         n   delimited-[]    n  2         delimited-[]    n  2         \mathbf{C}_{n}^{\left[}\frac{n}{2}\right]\equiv\frac{n!}{(n-\left[\frac{n}{2}%
- \right])!\left[\frac{n}{2}\right]!}   . 31  32  A bitmap index scan combines expressions on different indexes, thus requiring only one index per column to support all possible queries on a table.  Applying this access strategy to B-tree indexes can also combine range queries on multiple columns. In this approach, a temporary in-memory bitmap is created with one bit for each row in the table (1 MiB can thus store over 8 million entries). Next, the results from each index are combined into the bitmap using bitwise operations . After all conditions are evaluated, the bitmap contains a "1" for rows that matched the expression. Finally, the bitmap is traversed and matching rows are retrieved. In addition to efficiently combining indexes, this also improves locality of reference of table accesses, because all rows are fetched sequentially from the main table. 33 The internal bitmap is discarded after the query. If there are too many rows in the table to use 1 bit per row, a "lossy" bitmap is created instead, with a single bit per disk page. In this case, the bitmap is just used to determine which pages to fetch; the filter criteria are then applied to all rows in matching pages.  References   Notes    Bibliography        "  Index  Category:Data management  Category:Database index techniques     Bitmap Index vs. B-tree Index: Which and When? , Vivek Sharma, Oracle Technical Network. ↩  ↩  FastBit ↩  Lemur Bitmap Index C++ Library ↩  Roaring bitmaps ↩  ↩  ↩  ↩  ↩  ↩   ↩  ↩  Concise: Compressed 'n' Composable Integer Set ↩   ↩     ↩   ↩  ↩  ↩   ↩  ↩  ↩  ↩  ↩  ↩  ↩  ↩     
+
+
+
+Bitmap index
+
+
+
+
+Bitmap index
+
+A bitmap index is a special kind of database index that uses bitmaps.
+Bitmap indexes have traditionally been considered to work well for low-cardinality columns, which have a modest number of distinct values, either absolutely, or relative to the number of records that contain the data. The extreme case of low cardinality is Boolean data (e.g., does a resident in a city have internet access?), which has two values, True and False. Bitmap indexes use bit arrays (commonly called bitmaps) and answer queries by performing bitwise logical operations on these bitmaps. Bitmap indexes have a significant space and performance advantage over other structures for query of such data. Their drawback is they are less efficient than the traditional B-tree indexes for columns whose data is frequently updated: consequently, they are more often employed in read-only systems that are specialized for fast query - e.g., data warehouses, and generally unsuitable for online transaction processing applications.
+Some researchers argue that bitmap indexes are also useful for moderate or even high-cardinality data (e.g., unique-valued data) which is accessed in a read-only manner, and queries access multiple bitmap-indexed columns using the AND, OR or XOR operators extensively.1
+Bitmap indexes are also useful in data warehousing applications for joining a large fact table to smaller dimension tables such as those arranged in a star schema.
+Example
+Continuing the internet access example, a bitmap index may be logically viewed as follows:
+
+
+
+
+Identifier
+
+HasInternet
+
+Bitmaps
+
+
+
+
+
+Y
+
+N
+
+
+
+1
+
+Yes
+
+1
+
+
+
+2
+
+No
+
+0
+
+
+
+3
+
+No
+
+0
+
+
+
+4
+
+Unspecified
+
+0
+
+
+
+5
+
+Yes
+
+1
+
+
+
+On the left, Identifier refers to the unique number assigned to each resident, HasInternet is the data to be indexed, the content of the bitmap index is shown as two columns under the heading bitmaps. Each column in the left illustration is a bitmap in the bitmap index. In this case, there are two such bitmaps, one for "has internet" Yes and one for "has internet" No. It is easy to see that each bit in bitmap Y shows whether a particular row refers to a person who has internet access. This is the simplest form of bitmap index. Most columns will have more distinct values. For example, the sales amount is likely to have a much larger number of distinct values. Variations on the bitmap index can effectively index this data as well. We briefly review three such variations.
+Note: Many of the references cited here are reviewed at (John Wu (2007)).2 For those who might be interested in experimenting with some of the ideas mentioned here, many of them are implemented in open source software such as FastBit,3 the Lemur Bitmap Index C++ Library,4 the Roaring Bitmap Java library,5 the Apache Hive Data Warehouse system and LucidDB.
+{{-}}
+Compression
+Software can compress each bitmap in a bitmap index to save spaces. There has been considerable amount of work on this subject.67 Bitmap compression algorithms typically employ run-length encoding, such as the Byte-aligned Bitmap Code,8 the Word-Aligned Hybrid code,9 the Partitioned Word-Aligned Hybrid (PWAH) compression,10 the Position List Word Aligned Hybrid,11 the Compressed Adaptive Index (COMPAX),12 Enhanced Word-Aligned Hybrid (EWAH) 13 and the COmpressed 'N' Composable Integer SEt.1415 These compression methods require very little effort to compress and decompress. More importantly, bitmaps compressed with BBC, WAH, COMPAX, PLWAH, EWAH and CONCISE can directly participate in bitwise operations without decompression. This gives them considerable advantages over generic compression techniques such as LZ77. BBC compression and its derivatives are used in a commercial database management system. BBC is effective in both reducing index sizes and maintaining query performance. BBC encodes the bitmaps in bytes, while WAH encodes in words, better matching current CPUs. "On both synthetic data and real application data, the new word aligned schemes use only 50% more space, but perform logical operations on compressed data 12 times faster than BBC."16 PLWAH bitmaps were reported to take 50% of the storage space consumed by WAH bitmaps and offer up to 20% faster performance on logical operations.17 Similar considerations can be done for CONCISE 18 and Enhanced Word-Aligned Hybrid.19
+The performance of schemes such as BBC, WAH, PLWAH, EWAH, COMPAX and CONCISE is dependent on the order of the rows. A simple lexicographical sort can divide the index size by 9 and make indexes several times faster.20 The larger the table, the more important it is to sort the rows. Reshuffling techniques have also been proposed to achieve the same results of sorting when indexing streaming data.21
+Encoding
+Basic bitmap indexes use one bitmap for each distinct value. It is possible to reduce the number of bitmaps used by using a different encoding method.2223 For example, it is possible to encode C distinct values using log(C) bitmaps with binary encoding.24
+This reduces the number of bitmaps, further saving space, but to answer any query, most of the bitmaps have to be accessed. This makes it potentially not as effective as scanning a vertical projection of the base data, also known as a materialized view or projection index. Finding the optimal encoding method that balances (arbitrary) query performance, index size and index maintenance remains a challenge.
+Without considering compression, Chan and Ioannidis analyzed a class of multi-component encoding methods and came to the conclusion that two-component encoding sits at the kink of the performance vs. index size curve and therefore represents the best trade-off between index size and query performance.25
+Binning
+For high-cardinality columns, it is useful to bin the values, where each bin covers multiple values and build the bitmaps to represent the values in each bin. This approach reduces the number of bitmaps used regardless of encoding method.26 However, binned indexes can only answer some queries without examining the base data. For example, if a bin covers the range from 0.1 to 0.2, then when the user asks for all values less than 0.15, all rows that fall in the bin are possible hits and have to be checked to verify whether they are actually less than 0.15. The process of checking the base data is known as the candidate check. In most cases, the time used by the candidate check is significantly longer than the time needed to work with the bitmap index. Therefore, binned indexes exhibit irregular performance. They can be very fast for some queries, but much slower if the query does not exactly match a bin.
+History
+The concept of bitmap index was first introduced by Professor Israel Spiegler and Rafi Maayan in their research "Storage and Retrieval Considerations of Binary Data Bases", published in 1985.27 The first commercial database product to implement a bitmap index was Computer Corporation of America's Model 204. Patrick O'Neil published a paper about this implementation in 1987.28 This implementation is a hybrid between the basic bitmap index (without compression) and the list of Row Identifiers (RID-list). Overall, the index is organized as a B+tree. When the column cardinality is low, each leaf node of the B-tree would contain long list of RIDs. In this case, it requires less space to represent the RID-lists as bitmaps. Since each bitmap represents one distinct value, this is the basic bitmap index. As the column cardinality increases, each bitmap becomes sparse and it may take more disk space to store the bitmaps than to store the same content as RID-lists. In this case, it switches to use the RID-lists, which makes it a B+tree index.2930
+In-memory bitmaps
+One of the strongest reasons for using bitmap indexes is that the intermediate results produced from them are also bitmaps and can be efficiently reused in further operations to answer more complex queries. Many programming languages support this as a bit array data structure. For example, Java has the [http://download.oracle.com/javase/6/docs/api/java/util/BitSet.html BitSet] class.
+Some database systems that do not offer persistent bitmap indexes use bitmaps internally to speed up query processing. For example, PostgreSQL versions 8.1 and later implement a "bitmap index scan" optimization to speed up arbitrarily complex logical operations between available indexes on a single table.
+For tables with many columns, the total number of distinct indexes to satisfy all possible queries (with equality filtering conditions on either of the fields) grows very fast, being defined by this formula:
+
+
+ 
+ .31 32
+A bitmap index scan combines expressions on different indexes, thus requiring only one index per column to support all possible queries on a table.
+Applying this access strategy to B-tree indexes can also combine range queries on multiple columns. In this approach, a temporary in-memory bitmap is created with one bit for each row in the table (1 MiB can thus store over 8 million entries). Next, the results from each index are combined into the bitmap using bitwise operations. After all conditions are evaluated, the bitmap contains a "1" for rows that matched the expression. Finally, the bitmap is traversed and matching rows are retrieved. In addition to efficiently combining indexes, this also improves locality of reference of table accesses, because all rows are fetched sequentially from the main table.33 The internal bitmap is discarded after the query. If there are too many rows in the table to use 1 bit per row, a "lossy" bitmap is created instead, with a single bit per disk page. In this case, the bitmap is just used to determine which pages to fetch; the filter criteria are then applied to all rows in matching pages.
+References
+
+Notes
+
+
+Bibliography
+
+
+
+
+
+
+"
+Index Category:Data management Category:Database index techniques
+
+
+
+Bitmap Index vs. B-tree Index: Which and When?, Vivek Sharma, Oracle Technical Network.↩
+↩
+FastBit↩
+Lemur Bitmap Index C++ Library↩
+Roaring bitmaps↩
+↩
+↩
+↩
+↩
+↩
+
+↩
+↩
+Concise: Compressed 'n' Composable Integer Set↩
+
+↩
+
+
+
+↩
+
+↩
+↩
+↩
+
+↩
+↩
+↩
+↩
+↩
+↩
+↩
+↩
+
+
+
+

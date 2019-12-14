@@ -1,2 +1,175 @@
-   Mix network      Mix network   thumb | Simple decryption mix net. Messages are encrypted under a sequence of public keys. Each mix node removes a layer of encryption using its own private key. The node shuffles the message order, and transmits the result to the next node.  Mix networks 1 are routing protocols that create hard-to-trace communications by using a chain of proxy servers known as mixes which take in messages from multiple senders, shuffle them, and send them back out in random order to the next destination (possibly another mix node). This breaks the link between the source of the request and the destination, making it harder for eavesdroppers to trace end-to-end communications. Furthermore, mixes only know the node that it immediately received the message from, and the immediate destination to send the shuffled messages to, making the network resistant to malicious mix nodes. 2 3  Each message is encrypted to each proxy using public key cryptography ; the resulting encryption is layered like a Russian doll (except that each "doll" is of the same size) with the message as the innermost layer. Each proxy server strips off its own layer of encryption to reveal where to send the message next. If all but one of the proxy servers are compromised by the tracer, untraceability can still be achieved against some weaker adversaries.  The concept of mix networks first described by David Chaum in 1981. 4 Applications that are based on this concept include anonymous remailers (such as Mixmaster ) and onion routing (including Tor ).  How it works  Participant A prepares a message for delivery to participant B by appending a random value R to the message, sealing it with the addressee's public key    K  b     subscript  K  b    K_{b}   , appending B’s address, and then sealing the result with the mix's public key    K  m     subscript  K  m    K_{m}   . M opens it with his private key, now he knows B’s address, and he sends     K  b    (   m  e  s  s  a  g  e   ,  R  )        subscript  K  b      m  e  s  s  a  g  e   R     K_{b}(message,R)   to B.  Message format        K  m    (   R  1   ,    K  b    (   R  0   ,   m  e  s  s  a  g  e   )    ,  B  )    ⟶   (    K  b    (   R  0   ,   m  e  s  s  a  g  e   )    ,  B  )      normal-⟶     subscript  K  m      R  1      subscript  K  b      R  0     m  e  s  s  a  g  e     B        subscript  K  b      R  0     m  e  s  s  a  g  e     B     K_{m}(R1,K_{b}(R0,message),B)\longrightarrow(K_{b}(R0,message),B)     To accomplish this, the sender takes the mix’s public key (    K  m     subscript  K  m    K_{m}   ), and uses it to encrypt an envelope containing a random string (    R  1      R  1    R1   ), a nested envelope addressed to the recipient, and the email address of the recipient ( B ). This nested envelope is encrypted with the recipient’s public key (    K  b     subscript  K  b    K_{b}   ), and contains another random string ( R0 ), along with the body of the message being sent. Upon receipt of the encrypted top-level envelope, the mix uses its secret key to open it. Inside, it finds the address of the recipient ( B ) and an encrypted message bound for B . The random string (    R  1      R  1    R1   ) is discarded.      R  0      R  0    R0   is needed in the message in order to prevent an attacker from guessing messages. It is assumed that the attacker can observe all incoming and outgoing messages. If the random string is not used (i.e. only    (    K  b    (   m  e  s  s  a  g  e   )    )       subscript  K  b     m  e  s  s  a  g  e     (K_{b}(message))   is sent to   B   B   B   ) and an attacker has a good guess that the message    m  e  s  s  a  g   e  ′       m  e  s  s  a  g   superscript  e  normal-′     message^{\prime}   was sent, he can test whether      K  b    (   m  e  s  s  a  g   e  ′    )    =    K  b    (   m  e  s  s  a  g  e   )           subscript  K  b     m  e  s  s  a  g   superscript  e  normal-′        subscript  K  b     m  e  s  s  a  g  e      K_{b}(message^{\prime})=K_{b}(message)   holds, whereby he can learn the content of the message. By appending the random string    R  0      R  0    R0   the attacker is prevented from performing this kind of attack; even if he should guess the correct message (i.e.     m  e  s  s  a  g   e  ′    =   m  e  s  s  a  g  e         m  e  s  s  a  g   superscript  e  normal-′      m  e  s  s  a  g  e     message^{\prime}=message   is true) he won't learn if he is right since he doesn't know the secret value    R  0      R  0    R0   . Practically,    R  0      R  0    R0   functions as a salt .  Return Addresses  What is needed now is a way for B to respond to A while still keeping the identity of A secret from B .  A solution is for A to form an untraceable return address      K  m    (   S  1   ,  A  )    ,   K  x         subscript  K  m      S  1   A     subscript  K  x     K_{m}(S1,A),K_{x}   where   A   A   A   is its own real address,    K  x     subscript  K  x    K_{x}   is a public one-time key chosen for the current occasion only, and    S  1      S  1    S1   is a key that will also act as a random string for purposes of sealing. Then, A can send this return address to B as part of a message sent by the techniques already described.  B sends      K  m    (   S  1   ,  A  )    ,    K  x    (   S  0   ,   r  e  s  p  o  n  s  e   )          subscript  K  m      S  1   A       subscript  K  x      S  0     r  e  s  p  o  n  s  e       K_{m}(S1,A),K_{x}(S0,response)   to M, and M transforms it to    A  ,  S  1   (   K  x    (  S  0  ,  r  e  s  p  o  n  s  e  )       fragments  A  normal-,  S  1   fragments  normal-(   subscript  K  x    fragments  normal-(  S  0  normal-,  r  e  s  p  o  n  s  e  normal-)      A,S1(K_{x}(S0,response)   .  This mix uses the string of bits    S  1      S  1    S1   that it finds after decrypting the address part     K  m    (   S  1   ,  A  )        subscript  K  m      S  1   A     K_{m}(S1,A)   as a key to re-encrypt the message part     K  x    (   S  0   ,   r  e  s  p  o  n  s  e   )        subscript  K  x      S  0     r  e  s  p  o  n  s  e      K_{x}(S0,response)   . Only the addressee, A , can decrypt the resulting output because A created both    S  1      S  1    S1   and    K  x     subscript  K  x    K_{x}   . The additional key    K  x     subscript  K  x    K_{x}   assures that the mix cannot see the content of the reply-message.  The following indicates how B uses this untraceable return address to form a response to A , via a new kind of mix:  The message from A    ⟶   normal-⟶   \longrightarrow    B :        K  m    (   R  1   ,    K  b    (   R  0   ,   m  e  s  s  a  g  e   ,    K  m    (   S  1   ,  A  )    ,   K  x   )    ,  B  )    ⟶    K  b    (   R  0   ,   m  e  s  s  a  g  e   ,    K  m    (   S  1   ,  A  )    ,   K  x   )       normal-⟶     subscript  K  m      R  1      subscript  K  b      R  0     m  e  s  s  a  g  e      subscript  K  m      S  1   A     subscript  K  x     B       subscript  K  b      R  0     m  e  s  s  a  g  e      subscript  K  m      S  1   A     subscript  K  x       K_{m}(R1,K_{b}(R0,message,K_{m}(S1,A),K_{x}),B)\longrightarrow K_{b}(R0,%
- message,K_{m}(S1,A),K_{x})     Reply message from B    ⟶   normal-⟶   \longrightarrow    A :          K  m    (   S  1   ,  A  )    ,    K  x    (   S  0   ,   r  e  s  p  o  n  s  e   )     ⟶  A   ,   S  1   (    K  x    (   S  0   ,   r  e  s  p  o  n  s  e   )    )       formulae-sequence   normal-⟶      subscript  K  m      S  1   A       subscript  K  x      S  0     r  e  s  p  o  n  s  e      A     S  1     subscript  K  x      S  0     r  e  s  p  o  n  s  e        K_{m}(S1,A),K_{x}(S0,response)\longrightarrow A,S1(K_{x}(S0,response))     Where    K  b     subscript  K  b    K_{b}   = B ’s public key,    K  m     subscript  K  m    K_{m}   = the mix’s public key.  A destination can reply to a source without sacrificing source anonymity. The reply message shares all of the performance and security benefits with the anonymous messages from source to destination.  References  "  Category:Cryptography     Also known as "digital mixes" ↩  ↩  ↩  David Chaum, Untraceable electronic mail, return addresses, and digital pseudonyms, Comm. ACM , 24, 2 (Feb. 1981); 84-90 ↩     
+
+
+
+Mix network
+
+
+
+
+Mix network
+
+thumb | Simple decryption mix net. Messages are encrypted under a sequence of public keys. Each mix node removes a layer of encryption using its own private key. The node shuffles the message order, and transmits the result to the next node.
+Mix networks1 are routing protocols that create hard-to-trace communications by using a chain of proxy servers known as mixes which take in messages from multiple senders, shuffle them, and send them back out in random order to the next destination (possibly another mix node). This breaks the link between the source of the request and the destination, making it harder for eavesdroppers to trace end-to-end communications. Furthermore, mixes only know the node that it immediately received the message from, and the immediate destination to send the shuffled messages to, making the network resistant to malicious mix nodes.23
+Each message is encrypted to each proxy using public key cryptography; the resulting encryption is layered like a Russian doll (except that each "doll" is of the same size) with the message as the innermost layer. Each proxy server strips off its own layer of encryption to reveal where to send the message next. If all but one of the proxy servers are compromised by the tracer, untraceability can still be achieved against some weaker adversaries.
+The concept of mix networks first described by David Chaum in 1981.4 Applications that are based on this concept include anonymous remailers (such as Mixmaster) and onion routing (including Tor).
+How it works
+ Participant A prepares a message for delivery to participant B by appending a random value R to the message, sealing it with the addressee's public key 
+ 
+ 
+ 
+ , appending B’s address, and then sealing the result with the mix's public key 
+ 
+ 
+ 
+ . M opens it with his private key, now he knows B’s address, and he sends 
+ 
+ 
+ 
+  to B.
+Message format
+
+
+
+To accomplish this, the sender takes the mix’s public key (
+ 
+ 
+ 
+ ), and uses it to encrypt an envelope containing a random string (
+ 
+ 
+ 
+ ), a nested envelope addressed to the recipient, and the email address of the recipient (B). This nested envelope is encrypted with the recipient’s public key (
+ 
+ 
+ 
+ ), and contains another random string (R0), along with the body of the message being sent. Upon receipt of the encrypted top-level envelope, the mix uses its secret key to open it. Inside, it finds the address of the recipient (B) and an encrypted message bound for B. The random string (
+ 
+ 
+ 
+ ) is discarded.
+
+
+ 
+  is needed in the message in order to prevent an attacker from guessing messages. It is assumed that the attacker can observe all incoming and outgoing messages. If the random string is not used (i.e. only 
+ 
+ 
+ 
+  is sent to 
+ 
+ 
+ 
+ ) and an attacker has a good guess that the message 
+ 
+ 
+ 
+  was sent, he can test whether 
+ 
+ 
+ 
+  holds, whereby he can learn the content of the message. By appending the random string 
+ 
+ 
+ 
+  the attacker is prevented from performing this kind of attack; even if he should guess the correct message (i.e. 
+ 
+ 
+ 
+  is true) he won't learn if he is right since he doesn't know the secret value 
+ 
+ 
+ 
+ . Practically, 
+ 
+ 
+ 
+  functions as a salt.
+Return Addresses
+What is needed now is a way for B to respond to A while still keeping the identity of A secret from B.
+A solution is for A to form an untraceable return address 
+ 
+ 
+ 
+  where 
+ 
+ 
+ 
+  is its own real address, 
+ 
+ 
+ 
+  is a public one-time key chosen for the current occasion only, and 
+ 
+ 
+ 
+  is a key that will also act as a random string for purposes of sealing. Then, A can send this return address to B as part of a message sent by the techniques already described.
+B sends 
+ 
+ 
+ 
+  to M, and M transforms it to 
+ 
+ 
+ 
+ .
+This mix uses the string of bits 
+ 
+ 
+ 
+  that it finds after decrypting the address part 
+ 
+ 
+ 
+  as a key to re-encrypt the message part 
+ 
+ 
+ 
+ . Only the addressee, A, can decrypt the resulting output because A created both 
+ 
+ 
+ 
+  and 
+ 
+ 
+ 
+ . The additional key 
+ 
+ 
+ 
+  assures that the mix cannot see the content of the reply-message.
+The following indicates how B uses this untraceable return address to form a response to A, via a new kind of mix:
+The message from A
+
+B:
+
+
+
+Reply message from B
+
+A:
+
+
+
+Where
+ 
+ 
+ 
+  = B’s public key, 
+ 
+ 
+ 
+  = the mix’s public key.
+A destination can reply to a source without sacrificing source anonymity. The reply message shares all of the performance and security benefits with the anonymous messages from source to destination.
+References
+"
+Category:Cryptography
+
+
+
+Also known as "digital mixes"↩
+↩
+↩
+David Chaum, Untraceable electronic mail, return addresses, and digital pseudonyms, Comm. ACM, 24, 2 (Feb. 1981); 84-90↩
+
+
+
+

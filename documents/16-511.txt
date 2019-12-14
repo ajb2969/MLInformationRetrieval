@@ -1,1 +1,201 @@
-   Rendezvous hashing      Rendezvous hashing   '''Rendezvous '''or Highest Random Weight (HRW) hashing 1 2 is an algorithm that allows clients to achieve distributed agreement on which site (or proxy) a given object is to be placed in. It accomplishes goals similar to consistent hashing , using an entirely different method.  History  '''Rendezvous '''or Highest Random Weight (HRW) hashing 3 4 was invented in 1996 by David Thaler and Chinya Ravishankar at the University of Michigan. Consistent hashing appears to have been devised independently and simultaneously at MIT. One of the first applications of rendezvous hashing was to enable multicast clients on the Internet (in contexts such as the MBONE ) to identify multicast rendezvous points in a distributed fashion. 5 6 It was used in 1998 by Microsoft's Cache Array Routing Protocol (CARP) for distributed cache coordination and routing. 7 8 It has also been used in applications such as mobile caching, 9 router design, 10 and secure key establishment . 11  Some Protocol Independent Multicast routing protocols use rendezvous hashing to pick a rendezvous point. 12  The HRW Algorithm For Rendezvous Hashing  Rendezvous hashing solves the distributed hash table problem: How can a set of clients, given an object O , agree on where in a set of n sites (servers, say) to place O ? Each client is to select a site independently, but all clients must end up picking the same site. This is trivial if the sites   O   O   O   is assigned to can be shuffled around every time   n   n   n   changes (divide the set of possible hash values into   n   n   n   equally sized pieces). However, to allow sites to be added or removed with minimal disruption we add the additional constraints that if   n   n   n   drops from    n  +  1      n  1    n+1   to   n   n   n   only those objects assigned to site    n  +  1      n  1    n+1   are assigned to a different site and if   n   n   n   increases to    n  +  1      n  1    n+1   only those objects that get assigned to site    n  +  1      n  1    n+1   change their assignment.  The basic idea is to give each possible site a score (called the weight) for each object   O   O   O   and assign the object to the highest scoring site from our set. Adding or removing a site   S   S   S   then only requires shifting those objects on which   S   S   S   beats all the other sites. In particular given a hash function h() and object   O   O   O   let the score (i.e. weight)    w  i     subscript  w  i    w_{i}   for    S  i     subscript  S  i    S_{i}   be    h   (   S  i   ,  O  )       h    subscript  S  i   O     h(S_{i},O)   . Assign   O   O   O   to the site (in our set of   n   n   n   sites) with the largest score (weight). Should    S  k     subscript  S  k    S_{k}   removed the objects assigned to it are moved to the site with the next highest weight.  Any time a site   S   S   S   is added or removed only those objects for which    w  =   h   (  S  ,  O  )        w    h   S  O      w=h(S,O)   is larger than all other weights for   O   O   O   are shifted to a different site satisfying the constraint above. This assignment depends only on the set of sites and the object being assigned so can be computed independently by any client with this information.  Properties  It might first appear sufficient to treat the n sites as buckets in a hash table and hash the object name O into this table. However, if any of the sites fails or is unreachable, the hash table size changes, requiring all objects to be remapped. This massive disruption makes such direct hashing unworkable. Under rendezvous hashing, however, clients handle site failures by picking the site that yields the next largest weight. Remapping is required only for objects currently mapped to the failed site, and as proved in, 13 14 disruption is minimal. Rendezvous hashing has the following properties.   Low overhead: The hash function used is efficient, so overhead at the clients is very low.  Load balancing : Since the hash function is randomizing, each of the ''n ''sites is equally likely to receive the object O . Loads are uniform across the sites.  High hit rate : Since all clients agree on placing an object O into the same site S O , each fetch or placement of O into S O yields the maximum utility in terms of hit rate. The object O will always be found unless it is evicted by some replacement algorithm at S O .  Minimal disruption: When a site fails, only the objects mapped to that site need to be remapped. Disruption is at the minimal possible level, as proved in. 15 16  Distributed k -agreement: Clients can reach distributed agreement on k sites simply by selecting the top k sites in the ordering, as in. 17   Comparison With Consistent Hashing  Consistent hashing operates by mapping sites uniformly and randomly to points on a unit circle called tokens. Objects are also mapped to the unit circle and placed in the site whose token is first encountered traveling clockwise from the object's location. When a site is removed the objects it owns are transfered to the site owning the next token encountered moving clockwise. Provided each site is mapped to a large number (100-200, say) of tokens this will reassign objects in a relatively uniform fashion among the remaining sites.  If sites are mapped to points on the circle randomly, e.g., hashing 200 variants of the site ID, this requires storing (or recalculating) many (200 if we assume 200 tokens per site) hash values for each site to compute the assignment of any object. However, the tokens associated with a given site can be precomputed and stored in a sorted list requiring only a single application of the hash function (to the object) and a binary search to compute the assignment. While HRW stores only a single site ID for each site every assignment requires applying the hash function once for every site. Most significantly, however, when a new node is added to HRW every object in the entire system must be hashed with the ID of this new node if the existing load is to be balanced (and compared with the existing highest weight which must be somehow cached).  However, even with many tokens per site the basic version of consistent hashing may not balance objects as uniformly over sites since when a site is removed each object assigned to it is distributed only over as many other sites as the site has tokens (say 100-200) while HRW distributes objects uniformly (given a uniform hash function) over all sites. How significant this is in practice is unclear. Whether or not this is a feature of consistent hashing (new sites and gracefully dying sites only affect a limited number of other sites) or a bug no doubt depends on your point of view.  Variants of consistent hashing (see amazon dynamo paper from consistent hashing page) that use more complex logic to distribute tokens on the unit circle offer better load balancing, further reduce the overhead of adding new sites, and reduce metadata overhead while offering other benefits. Variants of the HRW algorithm, such as the use of a skeleton described below, can ameliorate the disadvantages mentioned above (    l  o  g   (  n  )       l  o  g  n    log(n)   hash functions for assignments and lower expected (but not worst case) cost for adding a node) but at the cost of the superior uniformity claimed for flat HRW.  Rendezvous hashing has the considerable advantage of working well without the complexity of correctly handling multiple tokens for each site and associated metadata. Rendezvous hashing can provide simple solutions to other problems such as k -agreement.  Ultimately, however, the comparison is somewhat academic as an appropriate choice of a two place hash function reduces consistent hashing to an instance of HRW. From the site identifier   S   S   S   the simplest version of consistent hashing computes a list of token positions, e.g.,     t  i   =    h  c    (   S    ^   i   )         subscript  t  i      subscript  h  c     S   normal-^  absent   i      t_{i}=h_{c}(S\hat{}i)   where    h  c     subscript  h  c    h_{c}   hashes values to locations on the unit circle. Define the two place hash function    h   (  S  ,  O  )       h   S  O     h(S,O)   to be    1      min  i    h  c     (  O  )    -   t  i        1        subscript   i    subscript  h  c    O    subscript  t  i      \frac{1}{\min_{i}h_{c}(O)-t_{i}}   where      h  c    (  O  )    -   t  i          subscript  h  c   O    subscript  t  i     h_{c}(O)-t_{i}   denotes the distance along the unit circle from     h  c    (  O  )        subscript  h  c   O    h_{c}(O)   to    t  i     subscript  t  i    t_{i}   (since      h  c    (  O  )    -   t  i          subscript  h  c   O    subscript  t  i     h_{c}(O)-t_{i}   has some minimal non-zero value there is no problem translating this value to a unique integer in some bounded range). This will duplicate exactly the assignment produced by consistent hashing. It is not possible to duplicate HRW via consistent hashing (assuming the number of tokens per site is bounded) as HRW potentially reassigns the objects from a removed site to an unbounded number of other sites.  Implementation  Implementation is straightforward once a hash function h() is chosen (the original work on the HRW method 18 19 makes a hash function recommendation). Each client only needs to compute a hash value for each of the n sites, and then pick the largest. While it might first appear that the HRW algorithm runs in O(n) time, this is not the case. A virtual hierarchical structure (called a skeleton ) can be created, and HRW applied at each level as one descends the hierarchy, leading to O(log n) running time, as in. 20 21 To see this, choose some constant m and organize the n sites into c = ceiling (n/m) clusters C 1, = {S 1 , S 2 , ... ,S m }, C 2 = {S m+1 , S m+2 , ... ,S 2m }, ... Now build a virtual hierarchy as follows. Choose a constant d and imagine these c clusters placed at the leaves of a tree T of virtual nodes, each with fanout d . Clearly, T has height h = O (log c) = O (log n) , since m and d are both constants. To process an object request O , descend T from the root, using Rendezvous Hashing to select one of the d branches at each level. It is not necessary to construct T . It suffices to assign the names 1, 2,...,d to the virtual nodes at each level, and just repeat Rendezvous Hashing h = O (log n) times to simulate descending the tree. The work done at each level is O (1) , since d is a constant.  At this point, we will have effectively arrived at a cluster. We now select a site within this cluster by applying Rendezvous Hashing to its m sites. If we chose virtual nodes v 1 , v 2 , ..., v h as we descended T , the index of this leaf-level cluster will have the radix- d representation v 1 v 2 ...v h . For any given object O , it is clear that the method chooses each of the clusters, and hence each of the n sites, with equal probability. If the site finally selected is unavailable, Rendezvous Hashing leads us to a different site within its cluster. Thus, the load corresponding to any inactive site is shared equally among the active nodes within its cluster. If all nodes in the cluster are unavailable, we go up one level in the virtual hierarchy and select a sibling cluster, in the usual manner.  The value of m can be chosen based upon such factors as the anticipated failure rate and the degree of load balancing desired. A higher value of m leads to less load skew in the event of failure, at the cost of somewhat higher search overhead. The choice m = n is equivalent to non-hierarchical Rendezvous Hashing. In practice, the hash h() is very cheap, so m = n can work quite well unless n is very high.  References  "  Category:Algorithms  Category:Hashing       ↩  ↩  ↩  ↩  ↩  ↩  ↩  ↩  ↩          ↩  ↩     
+
+
+
+Rendezvous hashing
+
+
+
+
+Rendezvous hashing
+
+'''Rendezvous '''or Highest Random Weight (HRW) hashing12 is an algorithm that allows clients to achieve distributed agreement on which site (or proxy) a given object is to be placed in. It accomplishes goals similar to consistent hashing, using an entirely different method.
+History
+'''Rendezvous '''or Highest Random Weight (HRW) hashing34 was invented in 1996 by David Thaler and Chinya Ravishankar at the University of Michigan. Consistent hashing appears to have been devised independently and simultaneously at MIT. One of the first applications of rendezvous hashing was to enable multicast clients on the Internet (in contexts such as the MBONE) to identify multicast rendezvous points in a distributed fashion.56 It was used in 1998 by Microsoft's Cache Array Routing Protocol (CARP) for distributed cache coordination and routing.78 It has also been used in applications such as mobile caching,9 router design,10 and secure key establishment.11
+Some Protocol Independent Multicast routing protocols use rendezvous hashing to pick a rendezvous point.12
+The HRW Algorithm For Rendezvous Hashing
+Rendezvous hashing solves the distributed hash table problem: How can a set of clients, given an object O, agree on where in a set of n sites (servers, say) to place O? Each client is to select a site independently, but all clients must end up picking the same site. This is trivial if the sites 
+ 
+ 
+ 
+  is assigned to can be shuffled around every time 
+ 
+ 
+ 
+  changes (divide the set of possible hash values into 
+ 
+ 
+ 
+  equally sized pieces). However, to allow sites to be added or removed with minimal disruption we add the additional constraints that if 
+ 
+ 
+ 
+  drops from 
+ 
+ 
+ 
+  to 
+ 
+ 
+ 
+  only those objects assigned to site 
+ 
+ 
+ 
+  are assigned to a different site and if 
+ 
+ 
+ 
+  increases to 
+ 
+ 
+ 
+  only those objects that get assigned to site 
+ 
+ 
+ 
+  change their assignment.
+The basic idea is to give each possible site a score (called the weight) for each object 
+ 
+ 
+ 
+  and assign the object to the highest scoring site from our set. Adding or removing a site 
+ 
+ 
+ 
+  then only requires shifting those objects on which 
+ 
+ 
+ 
+  beats all the other sites. In particular given a hash function h() and object 
+ 
+ 
+ 
+  let the score (i.e. weight) 
+ 
+ 
+ 
+  for 
+ 
+ 
+ 
+  be 
+ 
+ 
+ 
+ . Assign 
+ 
+ 
+ 
+  to the site (in our set of 
+ 
+ 
+ 
+  sites) with the largest score (weight). Should 
+ 
+ 
+ 
+  removed the objects assigned to it are moved to the site with the next highest weight.
+Any time a site 
+ 
+ 
+ 
+  is added or removed only those objects for which 
+ 
+ 
+ 
+  is larger than all other weights for 
+ 
+ 
+ 
+  are shifted to a different site satisfying the constraint above. This assignment depends only on the set of sites and the object being assigned so can be computed independently by any client with this information.
+Properties
+It might first appear sufficient to treat the n sites as buckets in a hash table and hash the object name O into this table. However, if any of the sites fails or is unreachable, the hash table size changes, requiring all objects to be remapped. This massive disruption makes such direct hashing unworkable. Under rendezvous hashing, however, clients handle site failures by picking the site that yields the next largest weight. Remapping is required only for objects currently mapped to the failed site, and as proved in,1314 disruption is minimal. Rendezvous hashing has the following properties.
+
+Low overhead: The hash function used is efficient, so overhead at the clients is very low.
+Load balancing: Since the hash function is randomizing, each of the ''n ''sites is equally likely to receive the object O. Loads are uniform across the sites.
+High hit rate: Since all clients agree on placing an object O into the same site SO , each fetch or placement of O into SO yields the maximum utility in terms of hit rate. The object O will always be found unless it is evicted by some replacement algorithm at SO .
+Minimal disruption: When a site fails, only the objects mapped to that site need to be remapped. Disruption is at the minimal possible level, as proved in.1516
+Distributed k-agreement: Clients can reach distributed agreement on k sites simply by selecting the top k sites in the ordering, as in.17
+
+Comparison With Consistent Hashing
+Consistent hashing operates by mapping sites uniformly and randomly to points on a unit circle called tokens. Objects are also mapped to the unit circle and placed in the site whose token is first encountered traveling clockwise from the object's location. When a site is removed the objects it owns are transfered to the site owning the next token encountered moving clockwise. Provided each site is mapped to a large number (100-200, say) of tokens this will reassign objects in a relatively uniform fashion among the remaining sites.
+If sites are mapped to points on the circle randomly, e.g., hashing 200 variants of the site ID, this requires storing (or recalculating) many (200 if we assume 200 tokens per site) hash values for each site to compute the assignment of any object. However, the tokens associated with a given site can be precomputed and stored in a sorted list requiring only a single application of the hash function (to the object) and a binary search to compute the assignment. While HRW stores only a single site ID for each site every assignment requires applying the hash function once for every site. Most significantly, however, when a new node is added to HRW every object in the entire system must be hashed with the ID of this new node if the existing load is to be balanced (and compared with the existing highest weight which must be somehow cached).
+However, even with many tokens per site the basic version of consistent hashing may not balance objects as uniformly over sites since when a site is removed each object assigned to it is distributed only over as many other sites as the site has tokens (say 100-200) while HRW distributes objects uniformly (given a uniform hash function) over all sites. How significant this is in practice is unclear. Whether or not this is a feature of consistent hashing (new sites and gracefully dying sites only affect a limited number of other sites) or a bug no doubt depends on your point of view.
+Variants of consistent hashing (see amazon dynamo paper from consistent hashing page) that use more complex logic to distribute tokens on the unit circle offer better load balancing, further reduce the overhead of adding new sites, and reduce metadata overhead while offering other benefits. Variants of the HRW algorithm, such as the use of a skeleton described below, can ameliorate the disadvantages mentioned above (
+ 
+ 
+ 
+  hash functions for assignments and lower expected (but not worst case) cost for adding a node) but at the cost of the superior uniformity claimed for flat HRW.
+Rendezvous hashing has the considerable advantage of working well without the complexity of correctly handling multiple tokens for each site and associated metadata. Rendezvous hashing can provide simple solutions to other problems such as k-agreement.
+Ultimately, however, the comparison is somewhat academic as an appropriate choice of a two place hash function reduces consistent hashing to an instance of HRW. From the site identifier 
+ 
+ 
+ 
+  the simplest version of consistent hashing computes a list of token positions, e.g., 
+ 
+ 
+ 
+  where 
+ 
+ 
+ 
+  hashes values to locations on the unit circle. Define the two place hash function 
+ 
+ 
+ 
+  to be 
+ 
+ 
+ 
+  where 
+ 
+ 
+ 
+  denotes the distance along the unit circle from 
+ 
+ 
+ 
+  to 
+ 
+ 
+ 
+  (since 
+ 
+ 
+ 
+  has some minimal non-zero value there is no problem translating this value to a unique integer in some bounded range). This will duplicate exactly the assignment produced by consistent hashing. It is not possible to duplicate HRW via consistent hashing (assuming the number of tokens per site is bounded) as HRW potentially reassigns the objects from a removed site to an unbounded number of other sites.
+Implementation
+Implementation is straightforward once a hash function h() is chosen (the original work on the HRW method1819 makes a hash function recommendation). Each client only needs to compute a hash value for each of the n sites, and then pick the largest. While it might first appear that the HRW algorithm runs in O(n) time, this is not the case. A virtual hierarchical structure (called a skeleton) can be created, and HRW applied at each level as one descends the hierarchy, leading to O(log n) running time, as in.2021 To see this, choose some constant m and organize the n sites into c = ceiling(n/m) clusters C1, = {S1, S2, ... ,Sm}, C2 = {Sm+1, Sm+2, ... ,S2m}, ... Now build a virtual hierarchy as follows. Choose a constant d and imagine these c clusters placed at the leaves of a tree T of virtual nodes, each with fanout d. Clearly, T has height h = O (log c) = O (log n), since m and d are both constants. To process an object request O, descend T from the root, using Rendezvous Hashing to select one of the d branches at each level. It is not necessary to construct T. It suffices to assign the names 1, 2,...,d to the virtual nodes at each level, and just repeat Rendezvous Hashing h = O (log n) times to simulate descending the tree. The work done at each level is O (1), since d is a constant.
+At this point, we will have effectively arrived at a cluster. We now select a site within this cluster by applying Rendezvous Hashing to its m sites. If we chose virtual nodes v1, v2, ..., vh as we descended T, the index of this leaf-level cluster will have the radix-d representation v1 v2...vh. For any given object O, it is clear that the method chooses each of the clusters, and hence each of the n sites, with equal probability. If the site finally selected is unavailable, Rendezvous Hashing leads us to a different site within its cluster. Thus, the load corresponding to any inactive site is shared equally among the active nodes within its cluster. If all nodes in the cluster are unavailable, we go up one level in the virtual hierarchy and select a sibling cluster, in the usual manner.
+The value of m can be chosen based upon such factors as the anticipated failure rate and the degree of load balancing desired. A higher value of m leads to less load skew in the event of failure, at the cost of somewhat higher search overhead. The choice m = n is equivalent to non-hierarchical Rendezvous Hashing. In practice, the hash h() is very cheap, so m = n can work quite well unless n is very high.
+References
+"
+Category:Algorithms Category:Hashing
+
+
+
+
+
+↩
+↩
+↩
+↩
+↩
+↩
+↩
+↩
+↩
+
+
+
+
+
+
+
+
+↩
+↩
+
+
+
+
