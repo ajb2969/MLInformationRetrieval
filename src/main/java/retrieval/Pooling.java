@@ -49,4 +49,8 @@ public class Pooling {
         }
         return returnedResults;
     }
+
+    public void setQuery(String query) {
+        this.query = query;
+    }
 }
