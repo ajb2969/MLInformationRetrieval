@@ -19,7 +19,7 @@ public class CombineQrelFilesRunner {
         List<String> qrels = new ArrayList<>();
         File[] groupDirectories = new File(GridSearch.TRAINING_QUERIES_BASE_PATH).listFiles();
         for (File group : groupDirectories) {
-            if (!group.getName().equals("training.qrels")) {
+            if (!group.getName().equals("results") && !group.getName().equals("training.qrels")) {
                 List<String> groupQrels = getGroupContents(group);
                 qrels.addAll(groupQrels);
             }
