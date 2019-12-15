@@ -4,27 +4,23 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
+
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class LDA extends Models {
-    final String vecModelFilePath = "indicies/vecSpaceModel.tsv";
+    public final static String vecModelFilePath = "indicies/vecSpaceModel.tsv";
     public LDA() {
         super();
     }
-
-
     
-    static class Index {
+    public static class Index {
         private int index;
         private double value;
 
-        Index(int index, double value) {
+        public Index(int index, double value) {
             this.index = index;
             this.value = value;
         }
@@ -55,19 +51,14 @@ public class LDA extends Models {
         ConcurrentHashMap<String, List<Index>> parsedDocs;
         File outputFile = new File(vecModelFilePath);
         List<String> docTokens;
+        List<String> documents = new ArrayList<>(Models.getAllDocuments());
+        Collections.sort(documents);
         if(!outputFile.exists()) {
-            List<String> documents = new ArrayList<>(Models.getAllDocuments());
-            Collections.sort(documents);
-            System.out.println("There are " + documents.size() + " documents");
             docTokens = new ArrayList<>(Models.getTokenToEntryIndex().keySet());
             Collections.sort(docTokens);
-            System.out.println("There are " + docTokens.size() + " tokens");
-        
             try {
                 Scheduler schedule = new Scheduler(documents, docTokens, outputFile);
                 parsedDocs = schedule.executeParse();
-                System.out.println("The hashmap has a size of " + parsedDocs.keySet().size());
-                System.out.println("Finished lda");
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } catch (IOException e) {
@@ -75,42 +66,26 @@ public class LDA extends Models {
             }
             
         } else {
-            
-            parsedDocs = new ConcurrentHashMap<>();
             System.out.println("Reading in compressed sparse matrix");
-            try {
-                BufferedReader reader = new BufferedReader(new FileReader(outputFile));
-                String line;
-                while((line = reader.readLine()) != null) {
-                    String [] entries = line.split("\t");
-                    String key = entries[0];
-                    ArrayList<LDA.Index> values = new ArrayList<>();
-                    for(int index = 1; index < entries.length; index++) {
-                        String [] column = entries[index].split(",");
-                        values.add(new LDA.Index(Integer.parseInt(column[0]), Double.parseDouble(column[1])));
-                    }
-                    parsedDocs.put(key, values);
-                }
-                reader.close();            
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
             //http://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf
-            double mu = 1000;
             HashMap<String, TFSmoothing> ranking = new HashMap<>();
             int totalCollectionTokens = Models.getDocumentTokenSizes().keySet().stream().mapToInt(key -> Models.getDocumentTokenSizes().get(key)).sum();
+            double mu = (double)totalCollectionTokens / documents.size();
             for(String term: terms) {
                 int collectionTermsQuantity = Models.getTermToFileAndOccurrence().get(term).values().stream().reduce(0, Integer::sum);
-                for(String document: parsedDocs.keySet()) {
+                for(String document: documents) {
+                    //need to add P_LDA
                     if(!ranking.containsKey(document)) {
                         TFSmoothing termTF = Models.termFreqencySmoothing(term, document);
                         termTF.setMu(mu);
                         termTF.setSmoothing(collectionTermsQuantity, totalCollectionTokens);
                         ranking.put(document, termTF);
                     } else {
-                        
+                        TFSmoothing termTF = Models.termFreqencySmoothing(term, document);
+                        termTF.setMu(mu);
+                        termTF.setSmoothing(collectionTermsQuantity, totalCollectionTokens);
+                        termTF.setScore(ranking.get(document).getScore());
+                        ranking.put(document, termTF);
                     }
                 }
             }
@@ -123,9 +98,7 @@ public class LDA extends Models {
                   
         }
 
-        
             //DoubleVector tfidfTerms = new DoubleVector();
-
             //build a matrix with every row = document, column = element in index;
         return null;
     }
