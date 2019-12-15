@@ -21,20 +21,22 @@ public class Pooling {
 
 
     public ArrayList<Similarity> retrieve() {
-        ArrayList<Similarity> ldaResults = this.lda.retrieve(this.query);
-        ArrayList<Similarity> bm25Results = this.bm25.retrieve(this.query);
         ArrayList<Similarity> returnedResults = new ArrayList<>();
         System.out.println("Retrieving results for model " + this.currModel.toString());
-
         if(this.currModel == QueryController.ModelTypes.LDA) {
+            ArrayList<Similarity> ldaResults = this.lda.retrieve(this.query);
             for(int i = 0; i < RESULT_SET_SIZE; i++) {
                 returnedResults.add(ldaResults.get(i));
             }
         } else if(this.currModel == QueryController.ModelTypes.BM25) {
+            ArrayList<Similarity> bm25Results = this.bm25.retrieve(this.query);
             for(int i = 0; i < RESULT_SET_SIZE; i++) {
+                System.out.println(bm25Results.get(i).getDocumentName());
                 returnedResults.add(bm25Results.get(i));
             }
         } else {
+            ArrayList<Similarity> ldaResults = this.lda.retrieve(this.query);
+            ArrayList<Similarity> bm25Results = this.bm25.retrieve(this.query);
             for (int i = 0; i < RESULT_SET_SIZE; ) {
                 if (i % 2 == 0 && !returnedResults.contains(bm25Results.get(i))) {
                     returnedResults.add(bm25Results.get(i));
