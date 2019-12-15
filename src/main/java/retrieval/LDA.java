@@ -103,9 +103,7 @@ public class LDA extends Models {
                   
         }
 
-        
             //DoubleVector tfidfTerms = new DoubleVector();
-
             //build a matrix with every row = document, column = element in index;
         return null;
     }
