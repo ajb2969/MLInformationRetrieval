@@ -12,8 +12,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class TrainingRunner {
-    private static final String TRAINING_QUERIES_BASE_PATH = "queries/training";
-    private static final String TRAINING_RESULTS_FILENAME = "training.results";
+    private static final String TRAINING_RESULTS_FILENAME = "/training.results";
     private static final int RESULT_COUNT = 10;
 
     private final Pooling pooling;
@@ -23,13 +22,13 @@ public class TrainingRunner {
     }
 
     public void runTrainingQueries() throws IOException {
-        StringBuilder trecResults = new StringBuilder();
-        File[] groupDirectories = new File(TRAINING_QUERIES_BASE_PATH).listFiles();
+        List<String> trecResults = new ArrayList<>();
+        File[] groupDirectories = new File(GridSearch.TRAINING_QUERIES_BASE_PATH).listFiles();
         for (File group : groupDirectories) {
             List<String> groupTrecResults = runGroupQueries(group);
-            trecResults.append(String.join("", groupTrecResults));
+            trecResults.addAll(groupTrecResults);
         }
-        writeToResultsFile(trecResults.toString());
+        writeToResultsFile(String.join("\n", trecResults));
     }
 
     private List<String> runGroupQueries(File groupDirectory) throws IOException {
@@ -37,12 +36,12 @@ public class TrainingRunner {
         System.out.println("Running queries for Group " + groupNumber);
 
         // get queries
-        File queriesFile = new File(TRAINING_QUERIES_BASE_PATH + "/" + groupNumber + "/queries.txt");
+        File queriesFile = new File(GridSearch.TRAINING_QUERIES_BASE_PATH + "/" + groupNumber + "/queries.txt");
         BufferedReader queriesBr = new BufferedReader(new FileReader(queriesFile));
         ArrayList<String> queries = new ArrayList<>();
         String line;
         while ((line = queriesBr.readLine()) != null) {
-            line = line.replace("\n", "");
+            line = line.trim();
             queries.add(line);
         }
         queriesBr.close();
@@ -70,11 +69,11 @@ public class TrainingRunner {
     }
 
     private String convertToTrecResult(Similarity document, String groupNum, String queryNum, int score) {
-        return groupNum + queryNum + " Q0 " + document.getDocumentName() + " 0 " + String.valueOf(score) + " STANDARD\n";
+        return groupNum + queryNum + " Q0 " + document.getDocumentName() + " 0 " + String.valueOf(score) + " STANDARD";
     }
 
     private void writeToResultsFile(String trecResults) throws IOException {
-        File resultsFile = new File(TRAINING_QUERIES_BASE_PATH + TRAINING_RESULTS_FILENAME);
+        File resultsFile = new File(GridSearch.TRAINING_QUERIES_BASE_PATH + TRAINING_RESULTS_FILENAME);
         BufferedWriter bw = new BufferedWriter(new FileWriter(resultsFile));
         bw.write(trecResults);
         bw.flush();
