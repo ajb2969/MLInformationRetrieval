@@ -15,8 +15,6 @@ public class LDA extends Models {
     public LDA() {
         super();
     }
-
-
     
     public static class Index {
         private int index;
@@ -68,11 +66,8 @@ public class LDA extends Models {
             }
             
         } else {
-            
-            parsedDocs = new ConcurrentHashMap<>();
             System.out.println("Reading in compressed sparse matrix");
             //http://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf
-            double lambda = .06;
             HashMap<String, TFSmoothing> ranking = new HashMap<>();
             int totalCollectionTokens = Models.getDocumentTokenSizes().keySet().stream().mapToInt(key -> Models.getDocumentTokenSizes().get(key)).sum();
             double mu = (double)totalCollectionTokens / documents.size();
