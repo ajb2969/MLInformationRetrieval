@@ -15,17 +15,16 @@ public class TrainingRunner {
     private static final int RESULT_COUNT = 10;
 
     private final Pooling pooling;
-    private int mu;
 
     public TrainingRunner(QueryController.ModelTypes model) {
         this.pooling = new Pooling("", model);
     }
 
-    public void setMu(int mu) {
-        this.mu = mu;
+    public void setMu(double mu) {
+        this.pooling.setMu(mu);
     }
 
-    public void runTrainingQueries() throws IOException {
+    public void runTrainingQueries(int iter) throws IOException {
         List<String> trecResults = new ArrayList<>();
         File[] groupDirectories = new File(GridSearch.TRAINING_QUERIES_BASE_PATH).listFiles();
         for (File group : groupDirectories) {
@@ -34,7 +33,7 @@ public class TrainingRunner {
                 trecResults.addAll(groupTrecResults);
             }
         }
-        writeToResultsFile(String.join("\n", trecResults));
+        writeToResultsFile(String.join("\n", trecResults), iter);
     }
 
     private List<String> runGroupQueries(File groupDirectory) throws IOException {
@@ -78,8 +77,8 @@ public class TrainingRunner {
         return groupNum + queryNum + " Q0 " + document.getDocumentName() + " 0 " + String.valueOf(score) + " STANDARD";
     }
 
-    private void writeToResultsFile(String trecResults) throws IOException {
-        File resultsFile = new File(GridSearch.TRAINING_QUERIES_BASE_PATH + "/results/training" + String.valueOf(this.mu) + ".results");
+    private void writeToResultsFile(String trecResults, int iter) throws IOException {
+        File resultsFile = new File(GridSearch.TRAINING_RESULTS_PATH + "/" + String.valueOf(iter) + ".results");
         BufferedWriter bw = new BufferedWriter(new FileWriter(resultsFile));
         bw.write(trecResults);
         bw.flush();

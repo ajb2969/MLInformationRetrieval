@@ -8,7 +8,7 @@ import static retrieval.Models.RESULT_SET_SIZE;
 
 public class Pooling {
     private Models bm25;
-    private Models lda;
+    private LDA lda;
     private String query;
     private QueryController.ModelTypes currModel;
 
@@ -54,5 +54,9 @@ public class Pooling {
 
     public void setQuery(String query) {
         this.query = query;
+    }
+
+    public void setMu(double mu) {
+        this.lda.setMu(mu);
     }
 }

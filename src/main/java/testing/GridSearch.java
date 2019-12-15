@@ -2,11 +2,14 @@ package testing;
 
 import query.QueryController;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 
 public class GridSearch {
     static final String TRAINING_QUERIES_BASE_PATH = "queries/training";
-    private static final String TREC_EVAL_PATH = "queries/trec_eval";
+    static final String TRAINING_RESULTS_PATH = TRAINING_QUERIES_BASE_PATH + "/results";
+    private static final String TREC_EVAL_PATH = "./queries/trec_eval";
     private static final int MU_START = 100;
     private static final int MU_DIFFERENCE = 5;
     private static final int MU_ITERATIONS = 5;
@@ -18,39 +21,53 @@ public class GridSearch {
     }
 
     public static void main(String[] args) {
-        try {
-            new TrainingRunner(QueryController.ModelTypes.BM25).runTrainingQueries();
-
-            if (false) {
-                new GridSearch(new TrainingRunner(QueryController.ModelTypes.LDA)).runGridSearch();
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        new GridSearch(new TrainingRunner(QueryController.ModelTypes.LDA)).runGridSearch();
     }
 
     private void runGridSearch() {
-        double[] ndcgValues = new double[MU_ITERATIONS];
 
+        int bestNdcgIndex = -1;
+        double bestNdcg = -1;
         for (int iter = 0; iter < MU_ITERATIONS; iter++) {
-            int mu = MU_START + (iter * MU_DIFFERENCE);
-            ndcgValues[iter] = getNDCG(mu);
+            double mu = MU_START + (iter * MU_DIFFERENCE);
+            double ndcg = getNDCG(mu, iter);
+
+            if (bestNdcg < ndcg) {
+                bestNdcg = ndcg;
+                bestNdcgIndex = iter;
+            }
         }
+
+        double bestMu = MU_START + (bestNdcgIndex * MU_DIFFERENCE);
+        System.out.println("Best NDCG : " + String.valueOf(bestNdcg) +
+                           ", Best Mu : " + String.valueOf(bestMu));
     }
 
-    private double getNDCG(int mu) {
+    private double getNDCG(double mu, int iter) {
+        System.out.println("Running training queries for iteration " + String.valueOf(iter) +
+                           " and mu " + String.valueOf(mu));
+
         this.trainingRunner.setMu(mu);
         try {
-            this.trainingRunner.runTrainingQueries();
+            this.trainingRunner.runTrainingQueries(iter);
+            return runTrecEval(iter);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return runTrecEval(mu);
     }
 
-    private double runTrecEval(int mu) {
+    private double runTrecEval(int iter) throws IOException {
+        System.out.println("\tRunning trec_eval on iteration " + String.valueOf(iter));
 
+        String resultsPath = TRAINING_RESULTS_PATH + "/" + String.valueOf(iter) + ".results";
+        String qrelsPath = TRAINING_QUERIES_BASE_PATH + "/training.qrels";
 
-        return 0.0;
+        Runtime cl = Runtime.getRuntime();
+        Process trec = cl.exec(TREC_EVAL_PATH + " -m ndcg " + qrelsPath + " " + resultsPath);
+        BufferedReader br = new BufferedReader(new InputStreamReader(trec.getInputStream()));
+        String output = br.readLine();
+        String[] split = output.split("\\s+");
+
+        return Double.valueOf(split[2]);
     }
 }
