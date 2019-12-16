@@ -12,8 +12,20 @@ import java.util.stream.Collectors;
 
 public class LDA extends Models {
     public final static String vecModelFilePath = "indicies/vecSpaceModel.tsv";
+
+    private double mu = 0.0; // TODO change with best mu value
+
     public LDA() {
         super();
+    }
+
+    public LDA(double mu) {
+        super();
+        this.mu = mu;
+    }
+
+    public void setMu(double mu) {
+        this.mu = mu;
     }
     
     public static class Index {
@@ -70,7 +82,6 @@ public class LDA extends Models {
             //http://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf
             HashMap<String, TFSmoothing> ranking = new HashMap<>();
             int totalCollectionTokens = Models.getDocumentTokenSizes().keySet().stream().mapToInt(key -> Models.getDocumentTokenSizes().get(key)).sum();
-            double mu = (double)totalCollectionTokens / documents.size();
             for(String term: terms) {
                 int collectionTermsQuantity = Models.getTermToFileAndOccurrence().get(term).values().stream().reduce(0, Integer::sum);
                 for(String document: documents) {
