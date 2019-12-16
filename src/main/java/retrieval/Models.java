@@ -68,9 +68,9 @@ abstract public class Models {
 
     static TFSmoothing termFreqencySmoothing(String term, String document) {
         int totalTerms = getFileTermSize().get(document);
-        int occurrences = getTokenToEntryIndex().get(term).getFileOccurrences().stream()
+        int occurrences = occursInDocuments(term) ? getTokenToEntryIndex().get(term).getFileOccurrences().stream()
             .filter(e -> e.getFilename().equals(document)).findFirst().orElse(new FileOccurrence("", 0))
-            .getOccurrences();
+            .getOccurrences(): 0;
 
         return new TFSmoothing(totalTerms, occurrences);
     }

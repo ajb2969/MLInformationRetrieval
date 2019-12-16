@@ -1,5 +1,6 @@
 package testing;
 
+import query.Application;
 import query.QueryController;
 import retrieval.Pooling;
 import retrieval.Similarity;
@@ -13,7 +14,7 @@ import java.util.stream.IntStream;
 
 public class TrainingRunner {
     private static final int RESULT_COUNT = 10;
-
+    public static final Application app = new Application();
     private final Pooling pooling;
 
     public TrainingRunner(QueryController.ModelTypes model) {

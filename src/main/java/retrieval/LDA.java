@@ -10,10 +10,12 @@ import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import query.Application;
+
 public class LDA extends Models {
     public final static String vecModelFilePath = "indicies/vecSpaceModel.tsv";
 
-    private double mu = 0.0; // TODO change with best mu value
+    private double mu = 1900.0;
 
     public LDA() {
         super();
@@ -63,10 +65,10 @@ public class LDA extends Models {
         ConcurrentHashMap<String, List<Index>> parsedDocs;
         File outputFile = new File(vecModelFilePath);
         List<String> docTokens;
-        List<String> documents = new ArrayList<>(Models.getAllDocuments());
+        List<String> documents = new ArrayList<>(Application.getFILE_TERM_SIZE().keySet());
         Collections.sort(documents);
         if(!outputFile.exists()) {
-            docTokens = new ArrayList<>(Models.getTokenToEntryIndex().keySet());
+            docTokens = new ArrayList<>(Application.getTOKEN_TO_ENTRY().keySet());
             Collections.sort(docTokens);
             try {
                 Scheduler schedule = new Scheduler(documents, docTokens, outputFile);
@@ -81,9 +83,9 @@ public class LDA extends Models {
             System.out.println("Reading in compressed sparse matrix");
             //http://www.jmlr.org/papers/volume3/blei03a/blei03a.pdf
             HashMap<String, TFSmoothing> ranking = new HashMap<>();
-            int totalCollectionTokens = Models.getDocumentTokenSizes().keySet().stream().mapToInt(key -> Models.getDocumentTokenSizes().get(key)).sum();
+            int totalCollectionTokens = Application.getDOCUMENT_SIZES().keySet().stream().mapToInt(key -> Models.getDocumentTokenSizes().get(key)).sum();
             for(String term: terms) {
-                int collectionTermsQuantity = Models.getTermToFileAndOccurrence().get(term).values().stream().reduce(0, Integer::sum);
+                int collectionTermsQuantity = occursInDocuments(term)? Application.getTERM_TO_FILE_AND_OCCURRENCE().get(term).values().stream().reduce(0, Integer::sum) : 0;
                 for(String document: documents) {
                     //need to add P_LDA
                     if(!ranking.containsKey(document)) {
