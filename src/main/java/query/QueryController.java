@@ -52,23 +52,24 @@ public class QueryController {
             // temp.delete();
             // }
 
+            String queryContents = query.getContent().replaceAll("\\p" + "{Punct}", "");
             if (query.getModel().equals("Pool")) {
                 System.out.println("Pooling");
                 this.currModel = ModelTypes.Pool;
-                m = new Pooling(query.getContent(), ModelTypes.Pool);
+                m = new Pooling(queryContents, ModelTypes.Pool);
             } else if (query.getModel().equals("LDA")) {
                 System.out.println("LDA");
                 this.currModel = ModelTypes.LDA;
-                m = new Pooling(query.getContent(), ModelTypes.LDA);
+                m = new Pooling(queryContents, ModelTypes.LDA);
             } else if (query.getModel().equals("BM25")) {
                 this.currModel = ModelTypes.BM25;
                 System.out.println("BM25");
-                m = new Pooling(query.getContent(), ModelTypes.BM25);
+                m = new Pooling(queryContents, ModelTypes.BM25);
             } else {
                 System.out.println("The current model is " + this.currModel.toString());
-                m = new Pooling(query.getContent(), this.currModel);
+                m = new Pooling(queryContents, this.currModel);
             }
-            currQuery = query.getContent();
+            currQuery = queryContents;
             ArrayList<Similarity> documents = m.retrieve();
 
             System.out.println("parsing results");

@@ -26,6 +26,7 @@ public class Pooling {
         if(this.currModel == QueryController.ModelTypes.LDA) {
             ArrayList<Similarity> ldaResults = this.lda.retrieve(this.query);
             for(int i = 0; i < RESULT_SET_SIZE; i++) {
+                System.out.println(ldaResults.get(i).getDocumentName());
                 returnedResults.add(ldaResults.get(i));
             }
         } else if(this.currModel == QueryController.ModelTypes.BM25) {
