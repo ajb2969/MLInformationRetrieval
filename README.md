@@ -26,6 +26,7 @@ The code is organized into 4 modules
 * Parser - The Java code to turn the HTML file into documents  
 * Query - The controller for the web server  
 * Retrieval - Where the IR retrieval algorithms are stored  
+* Testing - Where retrieval metrics and tuning are computed and performed for hyperparameter tuning  
 
 ### Resources:  
 The front-end UI code is stored under `src/resources`, which is then broken into 4 directories  
