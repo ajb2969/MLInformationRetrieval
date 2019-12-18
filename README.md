@@ -34,3 +34,9 @@ The front-end UI code is stored under `src/resources`, which is then broken into
 * IMG - Where the images are stored
 * JS - Where the Javascript code is stored
 * Templates - Where the HTML files that get rendered are stored
+
+### Java Configuration:  
+* HeapSizePerGCThread: 88MB  
+* InitialHeapSize: 268MB  
+* LargePageHeapSizeThreshold: 135MB  
+* MaxHeapSize: 4GB  
