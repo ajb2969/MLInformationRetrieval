@@ -41,4 +41,4 @@ The front-end UI code is stored under `src/resources`, which is then broken into
 * LargePageHeapSizeThreshold: 135MB  
 * MaxHeapSize: 4GB  
 
-* Note: If the java configuration above is not configured, an out of memory error will occur *  
+*Note: If the java configuration above is not configured, an out of memory error will occur*  
