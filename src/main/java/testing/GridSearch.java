@@ -11,8 +11,9 @@ public class GridSearch {
     static final String TRAINING_RESULTS_PATH = TRAINING_QUERIES_BASE_PATH + "/results";
     private static final String TREC_EVAL_PATH = "./queries/trec_eval";
     private static final int MU_START = 100;
-    private static final int MU_DIFFERENCE = 50;
-    private static final int MU_ITERATIONS = 70;
+    private static final int MU_DIFFERENCE = 200;
+    private static final int MU_ITERATIONS = 20;
+    private static final boolean RESULTS_EXIST = true;
 
     private TrainingRunner trainingRunner;
 
@@ -31,7 +32,14 @@ public class GridSearch {
         double bestNdcg = -1;
         for (int iter = 0; iter < MU_ITERATIONS; iter++) {
             double mu = MU_START + (iter * MU_DIFFERENCE);
-            double ndcg = getNDCG(mu, iter);
+            
+            double ndcg;
+			try {
+				ndcg = RESULTS_EXIST ? runTrecEval(iter) : getNDCG(mu, iter);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				throw new RuntimeException(e);
+			}
             ndcgValues[iter] = ndcg;
 
             if (bestNdcg < ndcg) {
@@ -49,6 +57,7 @@ public class GridSearch {
             System.out.println("Mu=" + String.valueOf(mu) + " NDCG=" + String.valueOf(ndcgValues[iter]));
         }
     }
+    
 
     private double getNDCG(double mu, int iter) {
         System.out.println("Running training queries for iteration " + String.valueOf(iter) +

@@ -31,6 +31,10 @@ public class Application {
     private static Map<String, Map<String, Integer>> TERM_TO_FILE_AND_OCCURRENCE;
     private static Map<String, Integer> DOCUMENT_SIZES;
 
+
+    public Application() {
+        initialize();
+    }
     public static void main(String[] args) {
         initialize();
         SpringApplication.run(Application.class, args);
